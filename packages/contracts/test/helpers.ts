@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js"
-import addFormatsModule from "ajv-formats"
+import addFormats from "ajv-formats"
 import type { z } from "zod"
 import { CONTRACT_SCHEMAS, type ContractSchemaName } from "../src/index"
 import type { FixtureManifest } from "../scripts/fixtures/build"
@@ -54,13 +54,6 @@ export function rulesOf(schema: z.ZodType, data: unknown): string[] {
     .map((k) => /\[(.+)\]$/.exec(k)?.[1])
     .filter((r): r is string => r !== undefined)
 }
-
-// ajv-formats é CommonJS; o default pode vir embrulhado conforme o carregador.
-type AddFormats = (ajv: Ajv2020) => Ajv2020
-const addFormats: AddFormats =
-  typeof addFormatsModule === "function"
-    ? (addFormatsModule as unknown as AddFormats)
-    : (addFormatsModule as unknown as { default: AddFormats }).default
 
 function compileAll(flavor: "tolerant" | "strict"): Map<ContractSchemaName, ValidateFunction> {
   const ajv = new Ajv2020({ allErrors: true, strict: true, strictTypes: false })

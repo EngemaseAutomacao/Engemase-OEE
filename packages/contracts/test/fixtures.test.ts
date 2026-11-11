@@ -1,4 +1,4 @@
-import { createPublicKey, verify } from "node:crypto"
+import { type JsonWebKey, createPublicKey, verify } from "node:crypto"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -100,10 +100,10 @@ describe.each(invalid)("inválida ($layer): $file", (fixture) => {
 })
 
 describe("fixtures: aprovações assinadas", () => {
-  const keys = readFixture("test-keys.json") as { keys: Record<string, unknown>[]; approval_kid: string }
+  const keys = readFixture("test-keys.json") as { keys: JsonWebKey[]; approval_kid: string }
   const jwk = keys.keys[0]
   if (jwk === undefined) throw new Error("test-keys.json sem chave")
-  const publicKey = createPublicKey({ key: jwk as never, format: "jwk" })
+  const publicKey = createPublicKey({ key: jwk, format: "jwk" })
   const response = SyncResponseSchema.parse(readFixture("sync-response.valid.all-command-types.json"))
 
   function decode(jws: string): { header: Record<string, unknown>; claims: unknown; valid: boolean } {

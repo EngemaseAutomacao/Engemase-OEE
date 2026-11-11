@@ -80,7 +80,9 @@ function engemaseAccessFor(client: Client): EngemaseAccessRow[] {
         reason: "Comissionamento: gateways, conexões Modbus, máquinas e tags",
         ticket: null,
         ...period(start, end),
-        remaining: end > now ? `válida até ${date(iso(end))}` : null,
+        startLabel: date(client.createdAt),
+        endLabel: date(iso(end)),
+        remaining: end > now ? `válida por mais ${Math.ceil((end - now) / (24 * HOUR))} dias` : null,
       })
     }
   }

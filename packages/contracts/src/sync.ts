@@ -187,9 +187,10 @@ export const AgentStopEventSchema = z.object({
   detail: ShortTextSchema.optional(),
 })
 
-export const PowerFailEventSchema = z.object({
+/** Falta de energia detectada (sinal do UPS) ou deduzida no boot seguinte. */
+export const PowerLossEventSchema = z.object({
   ...eventBase,
-  type: z.literal("power_fail"),
+  type: z.literal("power_loss"),
 })
 
 export const PowerRestoredEventSchema = z.object({
@@ -271,7 +272,7 @@ export const EventSchema = z.discriminatedUnion("type", [
   CounterRebaselineEventSchema,
   AgentStartEventSchema,
   AgentStopEventSchema,
-  PowerFailEventSchema,
+  PowerLossEventSchema,
   PowerRestoredEventSchema,
   ClockJumpEventSchema,
   DataLossEventSchema,

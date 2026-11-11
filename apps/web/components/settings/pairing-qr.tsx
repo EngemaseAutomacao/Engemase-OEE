@@ -2,36 +2,33 @@
  * QR ilustrativo do pareamento (protótipo): desenho determinístico a partir do código,
  * com os três quadrados de posição de um QR real. Não é um QR válido para leitura.
  */
-export function PairingQr({ code, size = 168 }: { code: string; size?: number }) {
-  const n = 25
+const N = 25
+
+/** Módulos "escuros" do desenho, a partir do código (gerador congruente simples). */
+function modulesFor(code: string) {
   const digits = code.replace(/\D/g, "") || "0"
   let seed = Number(digits) % 2147483647 || 7
-  const next = () => {
-    seed = (seed * 48271) % 2147483647
-    return seed / 2147483647
-  }
-
-  const inFinder = (x: number, y: number) => {
-    const corners = [
-      [0, 0],
-      [n - 7, 0],
-      [0, n - 7],
-    ]
-    return corners.some(([cx, cy]) => x >= cx - 1 && x <= cx + 7 && y >= cy - 1 && y <= cy + 7)
-  }
-
+  const corners = [
+    [0, 0],
+    [N - 7, 0],
+    [0, N - 7],
+  ]
+  const inFinder = (x: number, y: number) => corners.some(([cx, cy]) => x >= cx - 1 && x <= cx + 7 && y >= cy - 1 && y <= cy + 7)
   const cells: { x: number; y: number }[] = []
-  for (let y = 0; y < n; y++) {
-    for (let x = 0; x < n; x++) {
-      const v = next()
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      seed = (seed * 48271) % 2147483647
       if (inFinder(x, y)) continue
-      if ((x === 6 || y === 6) && (x + y) % 2 === 0) {
-        cells.push({ x, y })
-        continue
-      }
-      if (v > 0.52) cells.push({ x, y })
+      if ((x === 6 || y === 6) && (x + y) % 2 === 0) cells.push({ x, y })
+      else if (seed / 2147483647 > 0.52) cells.push({ x, y })
     }
   }
+  return cells
+}
+
+export function PairingQr({ code, size = 168 }: { code: string; size?: number }) {
+  const n = N
+  const cells = modulesFor(code)
 
   const finder = (cx: number, cy: number) => (
     <g key={`${cx}-${cy}`}>

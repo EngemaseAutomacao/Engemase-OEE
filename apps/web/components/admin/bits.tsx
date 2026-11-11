@@ -66,7 +66,7 @@ export function PlanBadge({ plan }: { plan: ClientPlan }) {
 }
 
 export function ManagementBadge({ management, short = false }: { management: ClientManagement; short?: boolean }) {
-  return <SoftBadge tone={management === "engemase" ? "teal" : "violet"}>{short ? MANAGEMENT_SHORT[management] : MANAGEMENT_LABEL[management]}</SoftBadge>
+  return <SoftBadge tone={management === "engemase" ? "teal" : "navy"}>{short ? MANAGEMENT_SHORT[management] : MANAGEMENT_LABEL[management]}</SoftBadge>
 }
 
 export const GATEWAY_TONE: Record<GatewayStatus, SoftTone> = { online: "green", degraded: "amber", offline: "red", pending: "slate" }

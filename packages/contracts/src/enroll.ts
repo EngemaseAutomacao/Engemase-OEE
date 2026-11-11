@@ -24,9 +24,10 @@ export const HardwareInfoSchema = z.object({
   arch: CpuArchSchema,
   model: z.string().min(1).max(120),
   mem_mb: z.int().min(1),
-  // Opcionais (gravados na preparação em bancada, /etc/oee-gateway/hw.json)
-  serial_number: z.string().min(1).max(64).optional(),
+  // Opcionais (identidade gravada na bancada, /data/identity/hw.json; ver docs/16)
+  serial_number: z.string().min(1).max(64).optional().describe("Número de série Engemase (ex.: EGW-00042)"),
   board_revision: z.string().min(1).max(32).optional(),
+  image_version: z.string().min(1).max(32).optional().describe("Versão da imagem do sistema gravada na bancada"),
   profile: z
     .string()
     .regex(/^[a-z0-9][a-z0-9-]{0,63}$/)

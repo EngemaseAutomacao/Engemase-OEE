@@ -42,11 +42,18 @@
           "maximum": 9007199254740991
         },
         "serial_number": {
+          "description": "Número de série Engemase (ex.: EGW-00042)",
           "type": "string",
           "minLength": 1,
           "maxLength": 64
         },
         "board_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "image_version": {
+          "description": "Versão da imagem do sistema gravada na bancada",
           "type": "string",
           "minLength": 1,
           "maxLength": 32

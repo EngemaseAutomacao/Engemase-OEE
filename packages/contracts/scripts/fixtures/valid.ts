@@ -30,14 +30,15 @@ export interface ValidFixture {
 
 export const enrollRequest = {
   code: "ABCD-1234",
-  hostname: "gw-planta1-linhaA",
+  hostname: "egw-00042",
   agent_version: "1.0.0",
   hw: {
     arch: "arm64",
     model: "reComputer R1000",
     mem_mb: 2048,
-    serial_number: "R1000-2611-00427",
+    serial_number: "EGW-00042",
     board_revision: "v1.1",
+    image_version: "2026.11.0",
     profile: "recomputer-r1000",
     serial_ports: ["rs485-1", "rs485-2", "rs485-3"],
   },
@@ -616,7 +617,7 @@ const allEventTypes: Event[] = (() => {
       session_id: ID.vpnSession,
       actor: "suporte-engemase:ana",
     },
-    { ...base(14, "59:58.000"), type: "power_fail" },
+    { ...base(14, "59:58.000"), type: "power_loss" },
     { ...base(15, "59:59.500"), type: "agent_stop", reason: "shutdown", detail: "Falta de energia (UPS)." },
   ]
 })()

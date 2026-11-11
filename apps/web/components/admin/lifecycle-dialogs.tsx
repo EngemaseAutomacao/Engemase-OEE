@@ -75,21 +75,26 @@ function Effects({ items, tone }: { items: string[]; tone: "amber" | "red" | "gr
  * `onConfirm` recebe o motivo escolhido (quando houver); o protótipo só muda o estado local.
  */
 export function LifecycleDialog({
+  open,
   action,
   client,
+  nonce = 0,
   onOpenChange,
   onConfirm,
 }: {
+  open: boolean
+  /** Mantido pelo pai mesmo depois de fechar, para o texto não sumir durante a animação. */
   action: LifecycleAction | null
   client: { name: string; slug: string }
+  /** Muda a cada abertura para zerar o formulário. */
+  nonce?: number
   onOpenChange: (open: boolean) => void
   onConfirm: (action: LifecycleAction, reason: string | null) => void
 }) {
   return (
-    <AlertDialog open={action !== null} onOpenChange={onOpenChange}>
+    <AlertDialog open={open && action !== null} onOpenChange={onOpenChange}>
       <AlertDialogContent className="sm:max-w-lg">
-        {/* `key` zera o formulário a cada abertura */}
-        {action && <DialogBody key={action + client.slug} action={action} client={client} onConfirm={onConfirm} />}
+        {action && <DialogBody key={`${action}-${client.slug}-${nonce}`} action={action} client={client} onConfirm={onConfirm} />}
       </AlertDialogContent>
     </AlertDialog>
   )

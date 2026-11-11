@@ -36,8 +36,7 @@ import {
   type RemoteAccessStatus,
   type UserStatus,
 } from "@/lib/mock"
-import { ago, date, dateTime, dec, num, shortDate } from "@/lib/format"
-import { PLATFORM_ROLE_LABEL } from "@/lib/roles"
+import { ago, date, dateTime, dec, num, shortDate, time } from "@/lib/format"
 import { PLATFORM_HOST, plural, timezoneLabel } from "./labels"
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -143,14 +142,16 @@ export function implementationChecklist(clientId: string): ChecklistItem[] {
   const pendingGw = gws.filter((g) => g.status === "pending")
   const noPlc = machines.filter((m) => !m.deviceId)
   const paired = terminals.filter((t) => t.status !== "pending")
+  const activeAdmin = admins.find((a) => a.status === "active")
+  const invitedAdmin = admins.find((a) => a.status === "invited")
   return [
     { key: "unit", label: "Primeira unidade e fuso", hint: units.length ? plural(units.length, "unidade", "unidades") : "Nenhuma unidade", done: units.length > 0 },
     { key: "shifts", label: "Turnos configurados", hint: shifts.length ? plural(shifts.length, "turno", "turnos") : "Nenhum turno", done: shifts.length > 0 },
     {
       key: "admin",
       label: "Admin do cliente definiu a senha",
-      hint: admins.some((a) => a.status === "active") ? admins.find((a) => a.status === "active")!.name : admins[0] ? `${admins[0].name} · e-mail "definir senha" pendente` : "Sem admin",
-      done: admins.some((a) => a.status === "active"),
+      hint: activeAdmin ? activeAdmin.name : invitedAdmin ? `${invitedAdmin.name} · e-mail “Definir senha” pendente` : admins[0] ? `${admins[0].name} · acesso desativado` : "Nenhum admin",
+      done: Boolean(activeAdmin),
     },
     {
       key: "gateway",
@@ -320,6 +321,9 @@ export function buildPlatformOverview() {
       machinesLimit: clients.reduce((s, c) => s + c.limits.machines, 0),
       gateways: gateways.length,
       gatewaysOnline: gwBy("online"),
+      gatewaysOffline: gwBy("offline"),
+      gatewaysDegraded: gwBy("degraded"),
+      gatewaysPending: gwBy("pending"),
       alerts: alerts.length,
       alertsCritical: alerts.filter((a) => a.severity === "critical").length,
       alertsUnacked: alerts.filter((a) => a.status === "open").length,
@@ -580,7 +584,7 @@ export function buildClientDetail(clientId: string) {
       action: a.action,
       title: ACTION_LABEL[a.action] ?? a.action,
       subtitle: `${a.actorName}${a.impersonatedBy ? " (Engemase)" : ""} · ${a.details ?? a.entityName}`,
-      at: dateTime(a.at),
+      at: `${date(a.at)} ${time(a.at)}`,
     }))
   if (!audit.some((a) => a.action === "client.create")) {
     lifecycle.unshift({
@@ -588,7 +592,7 @@ export function buildClientDetail(clientId: string) {
       action: "client.create",
       title: "Cliente criado",
       subtitle: `Plano ${c.plan === "starter" ? "Starter" : c.plan === "pro" ? "Pro" : "Enterprise"} · ${c.management === "engemase" ? "gerenciado pela Engemase" : "autogestão"}`,
-      at: dateTime(c.createdAt),
+      at: `${date(c.createdAt)} ${time(c.createdAt)}`,
     })
   }
 
@@ -652,7 +656,6 @@ export function buildClientDetail(clientId: string) {
     platformSupport: platform.filter((u) => u.platformRole === "support").map((u) => u.name),
     platformField: fieldEngineers.map((u) => u.name),
     unitOptions: units.map((u) => ({ id: u.id, name: u.name })),
-    platformRoleLabel: PLATFORM_ROLE_LABEL,
     branding,
     checklist: implementationChecklist(c.id),
     lifecycle,

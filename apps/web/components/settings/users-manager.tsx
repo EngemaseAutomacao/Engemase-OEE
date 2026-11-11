@@ -290,7 +290,7 @@ export function UsersManager({
                       <td className="px-3 py-3">
                         {u.twoFactor ? (
                           <span className="inline-flex items-center gap-1 text-xs font-medium text-state-running">
-                            <ShieldCheckIcon className="size-4" /> Ativo
+                            <ShieldCheckIcon className="size-4" /> Sim
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
@@ -427,7 +427,7 @@ function UserMenu({
   terminalsHref: string
 }) {
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"

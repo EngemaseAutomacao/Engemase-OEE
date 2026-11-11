@@ -230,20 +230,20 @@ describe("GatewayConfigSchema: regras", () => {
     expect(rulesOf(GatewayConfigSchema, c)).toEqual(["machine.comm_loss"])
   })
 
-  it(`mais de ${MAX_TAGS} tags no gateway`, () => {
-    const c = variant((cfg) => {
-      const d = device(cfg, 0)
-      d.blocks = []
-      d.tags = Array.from({ length: MAX_TAGS + 1 }, (_, i) => ({
-        id: uuidv7At("2026-11-01T00:00:00Z", `many-${i}`),
-        address: { area: "input_register", offset: i },
+  it(`mais de ${MAX_TAGS} tags no gateway (somando os dispositivos)`, () => {
+    const customTags = (from: number, count: number): Tag[] =>
+      Array.from({ length: count }, (_, i) => ({
+        id: uuidv7At("2026-11-01T00:00:00Z", `many-${from + i}`),
+        address: { area: "input_register", offset: from + i },
         type: "uint16",
         poll_ms: 1000,
         role: "custom",
       }))
+    const c = variant((cfg) => {
+      device(cfg, 1).tags.push(...customTags(1000, 1000))
+      device(cfg, 2).tags.push(...customTags(3000, 1000))
     })
-    const rules = rulesOf(GatewayConfigSchema, c)
-    expect(rules).toContain("limits.tags")
+    expect(rulesOf(GatewayConfigSchema, c)).toEqual(["limits.tags"])
   })
 
   it("todas as regras usadas no código estão documentadas em RULES", () => {

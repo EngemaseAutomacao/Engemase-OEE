@@ -1,13 +1,17 @@
-import { PageBody, PageHeader } from "@/components/shell/page-header"
-import { Placeholder } from "@/components/shell/placeholder"
+import { notFound } from "next/navigation"
+
+import { getClientBySlug } from "@/lib/mock"
+import { buildAudit } from "@/components/settings/audit-data"
+import { AuditLog } from "@/components/settings/audit-log"
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/auditoria">) {
   const { cliente } = await params
-  void [cliente]
+  const client = getClientBySlug(cliente)
+  if (!client) notFound()
+
   return (
-    <PageBody>
-      <PageHeader title="Auditoria" description="Histórico de alterações" />
-      <Placeholder title="Auditoria" />
-    </PageBody>
+    <div className="flex flex-col gap-5 p-4 md:p-6">
+      <AuditLog clientName={client.name} clientSlug={client.slug} rows={buildAudit(client)} />
+    </div>
   )
 }

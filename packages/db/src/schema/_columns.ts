@@ -17,7 +17,9 @@ export function tstz(name: string) {
 
 /** Chave primária UUIDv7 gerada pelo banco. */
 export function pk() {
-  return uuid("id").primaryKey().default(sql`uuidv7()`)
+  return uuid("id")
+    .primaryKey()
+    .default(sql`uuidv7()`)
 }
 
 export function createdAt() {

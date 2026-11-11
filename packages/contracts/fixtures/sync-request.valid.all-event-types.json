@@ -139,7 +139,7 @@
       "id": "01a1c967-fdb0-7453-95bf-28f6a90ff51e",
       "seq": 14,
       "at": "2026-11-11T06:59:58.000Z",
-      "type": "power_fail"
+      "type": "power_loss"
     },
     {
       "id": "01a1c968-038c-7fe1-9608-4797db91e22c",

@@ -970,6 +970,7 @@
                 "expired",
                 "timeout",
                 "device_not_found",
+                "target_not_allowed",
                 "bus_not_found",
                 "bus_pause_required",
                 "port_unavailable",

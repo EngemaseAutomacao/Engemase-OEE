@@ -113,7 +113,7 @@ export interface PreviewMachine {
 // Auditoria
 // ---------------------------------------------------------------------------
 export type AuditActorKind = "client" | "engemase" | "support" | "terminal" | "system"
-export type AuditCategory = "config" | "users" | "production" | "engemase" | "remote" | "terminals" | "branding"
+export type AuditCategory = "config" | "users" | "production" | "support" | "remote" | "terminals" | "lifecycle" | "branding"
 
 export interface AuditRow {
   id: string
@@ -133,4 +133,6 @@ export interface AuditRow {
   entityName: string
   details: string | null
   ticket: string | null
+  /** Dias desde o evento (em relação ao "agora" do protótipo). */
+  daysAgo: number
 }

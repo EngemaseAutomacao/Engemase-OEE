@@ -76,14 +76,16 @@ export const TagReadPayloadSchema = z
 export type TagReadPayload = z.infer<typeof TagReadPayloadSchema>
 
 /**
- * device.test — testa a conexão com um CLP cadastrado na nuvem (ainda que fora da config
- * aplicada). O alvo é sempre um dispositivo cadastrado (docs/15, item 13).
+ * device.test — testa a conexão com um CLP. Com `device_id`, é um dispositivo cadastrado
+ * (ainda que fora da config aplicada). Sem `device_id`, é um IP ainda não cadastrado, que
+ * precisa estar na sub-rede OT do gateway: o agente libera o firewall por 5 min, com limite
+ * de taxa e auditoria (docs/15 item 13, docs/16 §5).
  * Em RTU, `serial_bus` só é enviado quando o barramento ainda não existe na config aplicada
  * ou tem parâmetros diferentes; nesse caso o agente exige `allow_bus_pause: true`.
  */
 export const DeviceTestPayloadSchema = z
   .object({
-    device_id: EntityIdSchema,
+    device_id: EntityIdSchema.optional().describe("Ausente = IP ainda não cadastrado (só na sub-rede OT)"),
     connection: DeviceConnectionSchema,
     serial_bus: SerialBusSchema.optional(),
     allow_bus_pause: z.boolean().optional(),
@@ -326,6 +328,7 @@ export const COMMAND_ERROR_CODES = {
   expired: "O comando chegou depois de expires_at.",
   timeout: "O comando passou do prazo de execução.",
   device_not_found: "Dispositivo não existe na config aplicada nem no comando.",
+  target_not_allowed: "Alvo fora da sub-rede OT ou acima do limite de taxa de testes.",
   bus_not_found: "Barramento não existe na config aplicada.",
   bus_pause_required: "Teste com parâmetros seriais diferentes exige allow_bus_pause.",
   port_unavailable: "Porta serial ausente ou ocupada.",

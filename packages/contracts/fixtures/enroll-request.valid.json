@@ -1,13 +1,14 @@
 {
   "code": "ABCD-1234",
-  "hostname": "gw-planta1-linhaA",
+  "hostname": "egw-00042",
   "agent_version": "1.0.0",
   "hw": {
     "arch": "arm64",
     "model": "reComputer R1000",
     "mem_mb": 2048,
-    "serial_number": "R1000-2611-00427",
+    "serial_number": "EGW-00042",
     "board_revision": "v1.1",
+    "image_version": "2026.11.0",
     "profile": "recomputer-r1000",
     "serial_ports": [
       "rs485-1",
