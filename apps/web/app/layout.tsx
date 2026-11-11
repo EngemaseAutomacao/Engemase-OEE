@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 
 import { ThemeProvider } from "@/components/theme-provider"
@@ -12,7 +12,15 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata: Metadata = {
   title: { default: "Engemase OEE", template: "%s · Engemase OEE" },
-  description: "Monitoramento de OEE de máquinas industriais",
+  description: "Monitoramento de OEE de máquinas industriais — Engemase Engenharia",
+  applicationName: "Engemase OEE",
+}
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#2c4e73" },
+    { media: "(prefers-color-scheme: dark)", color: "#172b42" },
+  ],
 }
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

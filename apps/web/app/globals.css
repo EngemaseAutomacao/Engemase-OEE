@@ -4,45 +4,51 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Tokens de tema (padrão shadcn/ui) + cores de estado de máquina.
- * As cores de estado são usadas em badges, cards, timeline e gráficos:
- *   running  = Produzindo            stopped = Parada não planejada
- *   fault    = Falha                 setup   = Setup / troca
- *   planned  = Parada planejada      nocomm  = Sem comunicação
+ * Paleta oficial Engemase (extraída do logotipo):
+ *   azul #257BB4 · azul escuro #275993 · azul-marinho #2C4E73 · laranja #CF5539 · laranja claro #E96549
+ * O laranja fica restrito à marca (logo, ilustrações) para não competir com as cores de alerta.
+ * As cores de ESTADO de máquina são fixas e não mudam com a marca do cliente.
  */
 :root {
   --radius: 0.625rem;
-  --background: oklch(0.985 0.002 247.839);
-  --foreground: oklch(0.145 0.01 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0.01 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0.01 260);
-  --primary: oklch(0.488 0.217 264.376);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.967 0.003 264.542);
-  --secondary-foreground: oklch(0.21 0.034 264.665);
-  --muted: oklch(0.967 0.003 264.542);
-  --muted-foreground: oklch(0.551 0.027 264.364);
-  --accent: oklch(0.955 0.012 264.542);
-  --accent-foreground: oklch(0.21 0.034 264.665);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.928 0.006 264.531);
-  --input: oklch(0.928 0.006 264.531);
-  --ring: oklch(0.623 0.214 259.815);
-  --chart-1: oklch(0.546 0.245 262.881);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.606 0.25 292.717);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.21 0.034 264.665);
-  --sidebar-foreground: oklch(0.928 0.006 264.531);
-  --sidebar-primary: oklch(0.623 0.214 259.815);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.278 0.033 256.848);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.278 0.033 256.848);
-  --sidebar-ring: oklch(0.623 0.214 259.815);
+
+  --brand-blue: #257bb4;
+  --brand-blue-dark: #275993;
+  --brand-navy: #2c4e73;
+  --brand-orange: #cf5539;
+  --brand-orange-light: #e96549;
+
+  --background: #f5f8fb;
+  --foreground: #13253a;
+  --card: #ffffff;
+  --card-foreground: #13253a;
+  --popover: #ffffff;
+  --popover-foreground: #13253a;
+  --primary: var(--brand-blue);
+  --primary-foreground: #ffffff;
+  --secondary: #edf2f7;
+  --secondary-foreground: #1f3a57;
+  --muted: #edf2f7;
+  --muted-foreground: #5a6b7e;
+  --accent: #e4eff8;
+  --accent-foreground: #1f3a57;
+  --destructive: #c8341f;
+  --border: #dbe4ee;
+  --input: #d2dde8;
+  --ring: #5b9fd0;
+  --chart-1: #257bb4;
+  --chart-2: #2c4e73;
+  --chart-3: #0e9384;
+  --chart-4: #e96549;
+  --chart-5: #8b5cf6;
+  --sidebar: var(--brand-navy);
+  --sidebar-foreground: #dbe6f1;
+  --sidebar-primary: var(--brand-blue);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #375f8b;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #3d648e;
+  --sidebar-ring: #7fb4dc;
 
   --state-running: oklch(0.627 0.194 149.214);
   --state-stopped: oklch(0.769 0.188 70.08);
@@ -53,37 +59,37 @@
 }
 
 .dark {
-  --background: oklch(0.13 0.028 261.692);
-  --foreground: oklch(0.985 0.002 247.839);
-  --card: oklch(0.18 0.03 264.665);
-  --card-foreground: oklch(0.985 0.002 247.839);
-  --popover: oklch(0.18 0.03 264.665);
-  --popover-foreground: oklch(0.985 0.002 247.839);
-  --primary: oklch(0.707 0.165 254.624);
-  --primary-foreground: oklch(0.13 0.028 261.692);
-  --secondary: oklch(0.278 0.033 256.848);
-  --secondary-foreground: oklch(0.985 0.002 247.839);
-  --muted: oklch(0.278 0.033 256.848);
-  --muted-foreground: oklch(0.707 0.022 261.325);
-  --accent: oklch(0.278 0.033 256.848);
-  --accent-foreground: oklch(0.985 0.002 247.839);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.707 0.165 254.624);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.16 0.03 264.665);
-  --sidebar-foreground: oklch(0.928 0.006 264.531);
-  --sidebar-primary: oklch(0.707 0.165 254.624);
-  --sidebar-primary-foreground: oklch(0.13 0.028 261.692);
-  --sidebar-accent: oklch(0.278 0.033 256.848);
-  --sidebar-accent-foreground: oklch(0.985 0.002 247.839);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
+  --background: #0d1723;
+  --foreground: #e7eef6;
+  --card: #132131;
+  --card-foreground: #e7eef6;
+  --popover: #132131;
+  --popover-foreground: #e7eef6;
+  --primary: #4a9fd6;
+  --primary-foreground: #0a1622;
+  --secondary: #1c2f45;
+  --secondary-foreground: #e7eef6;
+  --muted: #1c2f45;
+  --muted-foreground: #93a5b9;
+  --accent: #1f3651;
+  --accent-foreground: #e7eef6;
+  --destructive: #ef5a43;
+  --border: rgb(255 255 255 / 9%);
+  --input: rgb(255 255 255 / 14%);
+  --ring: #4a9fd6;
+  --chart-1: #4a9fd6;
+  --chart-2: #8fb3d9;
+  --chart-3: #2dd4bf;
+  --chart-4: #f08a6f;
+  --chart-5: #a78bfa;
+  --sidebar: #172b42;
+  --sidebar-foreground: #d3dfeb;
+  --sidebar-primary: #4a9fd6;
+  --sidebar-primary-foreground: #0a1622;
+  --sidebar-accent: #223b58;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 8%);
+  --sidebar-ring: #4a9fd6;
 
   --state-running: oklch(0.723 0.219 149.579);
   --state-stopped: oklch(0.828 0.189 84.429);
@@ -131,6 +137,12 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-blue-dark: var(--brand-blue-dark);
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-orange-light: var(--brand-orange-light);
 
   --color-state-running: var(--state-running);
   --color-state-stopped: var(--state-stopped);
