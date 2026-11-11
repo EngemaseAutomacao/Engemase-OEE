@@ -57,6 +57,9 @@ gantt
 - [ ] Linha do tempo de estados (ECharts).
 - [ ] `@engemase/oee-core` com testes golden. OEE do turno ao vivo.
 - [ ] Tela do operador: classificar paradas.
+- [ ] Identidade visual Engemase e seletor de tema Claro/Escuro/Automático (padrão Automático).
+- [ ] Central de notificações (sino) com alertas avaliados pelo cron e preferências básicas.
+- [ ] Central de ajuda: guias, perguntas frequentes, abertura de chamado e ajuda contextual.
 - [ ] Relatório de OEE por período, turno, máquina e produto.
 - [ ] Cron: `close-shifts`, `recompute-dirty`, `gateway-watchdog`, `expire-commands`.
 - [ ] Usuários, convites, papéis e auditoria básica.
@@ -75,6 +78,9 @@ gantt
 - Relatórios: Pareto, MTBF/MTTR, tendências, exportação CSV/Excel. **Modo TV/Andon**.
 - **Alertas** (e-mail; avaliar WhatsApp/Telegram): máquina parada > X min, gateway offline, OEE abaixo da meta.
 - 2FA obrigatório para perfis administrativos. Avaliar RLS.
+- **Acesso remoto (VPN) aos gateways** sob demanda, com aprovação do cliente e auditoria ([12](12-acesso-remoto-vpn.md)), depois da PoC com o Tailscale.
+- **Web Push** e escalonamento por e-mail ([13](13-notificacoes-e-alertas.md)); app instalável (PWA).
+- **Cores e logotipos por cliente** com editor e prévia ([14](14-identidade-visual-e-temas.md)).
 - Painel de super admin: frota de gateways de todos os clientes.
 
 ## Fase 3: escala e integrações (~10 semanas)

@@ -34,7 +34,7 @@ flowchart LR
 | Credencial | Arquivo 0600, de propriedade do `oee`. Token revogável pela web |
 | TLS | TLS 1.2+ com validação de certificado. Suporte a CA corporativa e `HTTPS_PROXY` |
 | Atualizações | Agente com binário assinado (Ed25519) e rollback. SO com `unattended-upgrades` para correções de segurança |
-| Acesso remoto de suporte | Nenhuma porta aberta. Se necessário, VPN de saída (WireGuard/Tailscale) **acordada com o TI do cliente** e desligada por padrão |
+| Acesso remoto de suporte | Nenhuma porta aberta. **VPN de manutenção sob demanda** (saída 443), desligada por padrão, ativada só com **aprovação do cliente**, com prazo, sem roteamento para a rede OT e auditada. Ver [12](12-acesso-remoto-vpn.md) |
 | Página local (F2) | Escuta só na interface OT ou localhost, com senha |
 
 ### Plataforma web

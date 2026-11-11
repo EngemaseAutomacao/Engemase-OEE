@@ -16,6 +16,9 @@ Registro curto das decisões. Para mudar uma decisão, adicione uma nova ADR que
 | 010 | Better Auth para autenticação e organizações | Proposta |
 | 011 | Modbus TCP e RTU como únicos protocolos do MVP | **Aceita** (decisão do dono do produto) |
 | 012 | Hardware padrão do gateway: Seeed reComputer R1000 sem rádio | Proposta (validar em bancada) |
+| 013 | VPN de manutenção sob demanda (Tailscale com helper separado) | Proposta (validar na PoC) |
+| 014 | Alertas: central no app + Web Push próprio | Proposta |
+| 015 | Cores por cliente calculadas no servidor, com cores de estado travadas | Proposta |
 
 ---
 
@@ -174,3 +177,43 @@ Registro curto das decisões. Para mudar uma decisão, adicione uma nova ADR que
 - **Sem rádio**, para não depender de homologação ANATEL do produto final. A necessidade de anuência para equipamento só com Ethernet/RS-485 deve ser confirmada com um OCD e com o despachante (NCM).
 - O resistor de terminação RS-485 não vem montado (resistor externo no borne). Pedir à Seeed confirmação de que o lote é a revisão **v1.1** da placa.
 - **Validação obrigatória na Fase 0:** 2 unidades em bancada, testando as 3 RS-485 com o agente Go (modo RS-485 do kernel, 9600–115200 bps), consumo, temperatura e queda de energia com o buffer SQLite.
+
+---
+
+## ADR-013 — VPN de manutenção sob demanda (Tailscale com helper separado)
+
+**Contexto.** A Engemase precisa de acesso remoto aos gateways para manutenção, sem abrir portas na fábrica e sem expor a rede industrial. Firewalls de clientes costumam liberar só TCP 443 de saída.
+
+**Decisão.** VPN **desligada por padrão**, ativada só em sessão **aprovada pelo cliente**, com prazo. Tailscale (Standard) como transporte (relay em 443); um **helper separado** no gateway (`tsnet`, systemd próprio); SSH só via localhost com **certificados de curta duração** (CA em KMS); acesso a CLP só por **encaminhamento de um IP:porta** aprovado; o gateway continua sem rotear. Governança (pedido, aprovação, auditoria) na nossa plataforma. Detalhes em [12](12-acesso-remoto-vpn.md).
+
+**Alternativas.** NetBird (plano B, inclusive self-hosted no Brasil), Headscale (saída do Tailscale), WireGuard puro (só UDP), Cloudflare Tunnel (porta 7844), OpenVPN AS (licença por conexão), túnel SSH reverso próprio, soluções de fabricante.
+
+**Consequências.**
+- Custo baixo e quase fixo **se** os nós forem tagged não efêmeros apagados no fim da sessão (confirmar cobrança com a Tailscale).
+- **FortiGate com inspeção SSL bloqueia a conexão**: a ficha para o TI do cliente exige exceção.
+- A plataforma vira ponto sensível: aprovação assinada verificada pelo gateway e CA em KMS são obrigatórias.
+- Gravação de sessão à prova de adulteração fica para uma fase posterior (ou vira requisito de venda em clientes que exigirem).
+
+---
+
+## ADR-014 — Alertas: central no app + Web Push próprio
+
+**Contexto.** O dono do produto quer notificações push. O push não chega em todos os aparelhos (iPhone só com o app instalado; desktop só com o navegador aberto) e o chão de fábrica precisa de alertas confiáveis.
+
+**Decisão.** **Central de notificações no app** como fonte da verdade; **Web Push padrão** (VAPID, biblioteca `web-push`, envio pelas Vercel Functions, inscrições no Neon) como canal; e-mail para resumos e escalonamento; WhatsApp para escalonamento de críticos na F2b. Alertas avaliados na ingestão e por cron de 1 minuto, com deduplicação, histerese, agrupamento, horário de silêncio e escalonamento. Detalhes em [13](13-notificacoes-e-alertas.md).
+
+**Alternativas.** Firebase Cloud Messaging, OneSignal, Novu, Knock, Courier: úteis em escala ou para apps nativos, mas adicionam dependência e custo sem necessidade agora.
+
+**Consequências.** Sem custo por mensagem. O app vira PWA. A interface precisa ensinar a instalação no iPhone. TV/Andon não usa push (alarme na própria tela). Tablets de operador preferencialmente Android.
+
+---
+
+## ADR-015 — Cores por cliente calculadas no servidor, com cores de estado travadas
+
+**Contexto.** Cada cliente quer a interface com a sua marca. A Engemase quer a própria marca como padrão. Cores de marca não podem prejudicar a leitura dos estados de máquina nem a acessibilidade.
+
+**Decisão.** Identidade Engemase como padrão (azul como primária, azul-marinho no menu, laranja só na marca). Cor de cada cliente convertida em tokens por um **algoritmo no servidor** (OKLCH + contraste WCAG ≥ 4,5:1 + distância para as cores de estado, com bloqueio), salva em `client_branding` e injetada como variáveis CSS no layout do cliente. Cores de estado, faixas de OEE e cor de erro **nunca mudam**. Tema do usuário claro/escuro/automático (padrão automático), com tema próprio para TV e tablet. Detalhes em [14](14-identidade-visual-e-temas.md).
+
+**Alternativas.** Calcular no CSS (`oklch(from …)`, `contrast-color()`): suporte recente demais para TVs e tablets de fábrica e não atende os gráficos. Temas pré-compilados por cliente: exigiria rebuild.
+
+**Consequências.** Sem rebuild por cliente, com resultado auditável. Algumas marcas (verde, vermelho, laranja) não podem ser a cor primária: a cor original fica como detalhe decorativo. O PWA por cliente leva naturalmente ao subdomínio por cliente.
