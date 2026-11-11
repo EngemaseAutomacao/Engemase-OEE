@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation"
-import { PauseCircleIcon, ShieldCheckIcon } from "lucide-react"
+import { PauseCircleIcon } from "lucide-react"
 
 import {
   clientParams,
@@ -7,14 +7,13 @@ import {
   getClientBranding,
   getClientBySlug,
   getCurrentUser,
+  getGateways,
   getLines,
   getMachines,
   getNotifications,
-  getUnits,
 } from "@/lib/mock"
 import { ago, initials } from "@/lib/format"
 import { CLIENT_ROLE_LABEL, PLATFORM_ROLE_LABEL } from "@/lib/roles"
-import { Separator } from "@/components/ui/separator"
 import {
   Sidebar,
   SidebarContent,
@@ -23,19 +22,18 @@ import {
   SidebarInset,
   SidebarProvider,
   SidebarRail,
-  SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { AppHeader } from "@/components/shell/app-header"
 import { ClientSwitcher } from "@/components/shell/client-switcher"
-import { HelpButton } from "@/components/shell/help-button"
+import { HelpCard } from "@/components/shell/help-card"
 import { ClientNavMenu } from "@/components/shell/nav-menu"
-import { NotificationBell } from "@/components/shell/notification-bell"
-import { UnitSelector } from "@/components/shell/unit-selector"
-import { UserMenu } from "@/components/shell/user-menu"
-import { ThemeToggle } from "@/components/theme-toggle"
 
 export function generateStaticParams() {
   return clientParams()
 }
+
+/** Protótipo com dados simulados: navegação pode bloquear (a versão real usará <Suspense>). */
+export const instant = false
 
 export default async function ClientLayout({ children, params }: LayoutProps<"/[cliente]">) {
   const { cliente } = await params
@@ -45,7 +43,6 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/[
   const me = getCurrentUser()
   const membership = me.memberships.find((m) => m.clientId === client.id)
   const roleLabel = me.platformRole ? `Engemase · ${PLATFORM_ROLE_LABEL[me.platformRole]}` : membership ? CLIENT_ROLE_LABEL[membership.role] : ""
-  const units = getUnits(client.id)
   const branding = getClientBranding(client.id)
   const firstMachine = getMachines(client.id)[0]
   const firstLine = getLines(client.id)[0]
@@ -58,6 +55,10 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/[
     ago: ago(n.at),
     read: n.read,
   }))
+  const entities = [
+    ...getMachines(client.id).map((m) => ({ kind: "machine" as const, label: m.name, hint: m.code, href: `/${client.slug}/maquinas/${m.id}` })),
+    ...getGateways(client.id).map((g) => ({ kind: "gateway" as const, label: g.name, hint: g.hostname, href: `/${client.slug}/config/gateways/${g.id}` })),
+  ]
 
   return (
     <SidebarProvider>
@@ -76,37 +77,30 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/[
         <SidebarContent>
           <ClientNavMenu slug={client.slug} machineId={firstMachine?.id} lineId={firstLine?.id} />
         </SidebarContent>
-        <SidebarFooter>
-          <UserMenu name={me.name} email={me.email ?? me.username ?? ""} roleLabel={roleLabel} initials={initials(me.name)} isPlatform={Boolean(me.platformRole)} />
+        <SidebarFooter className="p-3">
+          <HelpCard href={`/${client.slug}/ajuda`} />
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
-      <SidebarInset>
-        {me.platformRole && (
-          <div className="flex items-center gap-2 bg-primary px-4 py-1.5 text-xs text-primary-foreground">
-            <ShieldCheckIcon className="size-3.5 shrink-0" />
-            <span className="truncate">
-              Você está acessando <strong>{client.name}</strong> como equipe Engemase ({PLATFORM_ROLE_LABEL[me.platformRole]}). As ações ficam registradas na auditoria.
-            </span>
-          </div>
-        )}
+      <SidebarInset className="bg-background">
         {client.status === "suspended" && (
           <div className="flex items-center gap-2 bg-state-fault px-4 py-1.5 text-xs text-white">
             <PauseCircleIcon className="size-3.5 shrink-0" />
             Cliente suspenso: usuários do cliente não conseguem entrar. Os dados e os gateways continuam preservados.
           </div>
         )}
-        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-5" />
-          <span className="truncate text-sm font-medium">{client.name}</span>
-          <div className="ml-auto flex items-center gap-1.5">
-            <UnitSelector units={units.map((u) => ({ id: u.id, name: u.name }))} />
-            <HelpButton href={`/${client.slug}/ajuda`} />
-            <NotificationBell items={bellItems} allHref={`/${client.slug}/notificacoes`} />
-            <ThemeToggle />
-          </div>
-        </header>
+        <AppHeader
+          slug={client.slug}
+          kiosk={{ machineId: firstMachine?.id, lineId: firstLine?.id }}
+          user={{ name: me.name, email: me.email ?? me.username ?? "", roleLabel, initials: initials(me.name), isPlatform: Boolean(me.platformRole) }}
+          bell={bellItems}
+          entities={entities}
+          platformNotice={
+            me.platformRole
+              ? `Você está acessando ${client.name} como equipe Engemase (${PLATFORM_ROLE_LABEL[me.platformRole]}). As ações ficam registradas na auditoria visível ao cliente.`
+              : undefined
+          }
+        />
         <main className="flex-1">{children}</main>
       </SidebarInset>
     </SidebarProvider>

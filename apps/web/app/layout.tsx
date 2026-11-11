@@ -16,6 +16,12 @@ export const metadata: Metadata = {
   applicationName: "Engemase OEE",
 }
 
+/**
+ * Protótipo com dados simulados: desliga a validação de navegação instantânea.
+ * A implementação real lerá dados de cliente dentro de <Suspense> (docs/15, seção 4).
+ */
+export const instant = false
+
 export const viewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#2c4e73" },

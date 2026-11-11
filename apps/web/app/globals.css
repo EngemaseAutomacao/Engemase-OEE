@@ -18,7 +18,7 @@
   --brand-orange: #cf5539;
   --brand-orange-light: #e96549;
 
-  --background: #f5f8fb;
+  --background: #f3f6f9;
   --foreground: #13253a;
   --card: #ffffff;
   --card-foreground: #13253a;
@@ -169,4 +169,28 @@
     transparent 0 6px,
     color-mix(in oklch, var(--foreground) 12%, transparent) 6px 12px
   );
+}
+
+/* ------------------------------------------------------------------------
+ * Barras de rolagem ocultas em toda a interface (a rolagem continua
+ * funcionando com roda do mouse, toque e teclado).
+ * ---------------------------------------------------------------------- */
+html,
+body,
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Menu lateral em degradê azul-marinho (identidade Engemase). */
+[data-slot="sidebar-inner"],
+[data-slot="sidebar"][data-sidebar="sidebar"] {
+  background-image: linear-gradient(180deg, color-mix(in oklab, var(--sidebar) 92%, white) 0%, var(--sidebar) 38%, color-mix(in oklab, var(--sidebar) 78%, black) 100%);
 }

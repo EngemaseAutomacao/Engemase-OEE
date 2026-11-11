@@ -7,6 +7,9 @@ export function generateStaticParams() {
 }
 
 /** Layout de tela cheia (TV/Andon e tablet do operador): sem menu lateral. */
+/** Protótipo com dados simulados: navegação pode bloquear (a versão real usará <Suspense>). */
+export const instant = false
+
 export default async function KioskLayout({ children, params }: LayoutProps<"/[cliente]">) {
   const { cliente } = await params
   if (!getClientBySlug(cliente)) notFound()
