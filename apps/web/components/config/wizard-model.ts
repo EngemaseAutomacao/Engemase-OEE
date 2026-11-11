@@ -177,21 +177,47 @@ export function tagFromSpec(spec: TagSpec, key: string): TagDraft {
 // Templates prontos
 // ---------------------------------------------------------------------------
 
-/** Bloco OEE padrão Engemase (docs/11, seção 3): 32 holding registers a partir do HR 1000. */
-export const ENGEMASE_BLOCK: MachineTemplate = {
-  id: "tpl_engemase_block",
-  label: "Bloco OEE padrão Engemase",
-  description: "Holding registers contíguos a partir do HR 1000 (1 leitura por máquina). Modo código de estado.",
-  stateMode: "state_code",
-  tags: [
-    { name: "Heartbeat do CLP", role: "custom", area: "holding_register", address: 1001, dataType: "uint16", byteOrder: "ABCD", pollMs: 1000 },
-    { name: "Estado da máquina", role: "state.code", area: "holding_register", address: 1002, dataType: "uint16", byteOrder: "ABCD", pollMs: 500 },
-    { name: "Código do alarme", role: "fault.code", area: "holding_register", address: 1003, dataType: "uint16", byteOrder: "ABCD", pollMs: 500 },
-    { name: "Contador total", role: "count.total", area: "holding_register", address: 1004, dataType: "uint32", byteOrder: "CDAB", pollMs: 500 },
-    { name: "Contador de refugo", role: "count.reject", area: "holding_register", address: 1006, dataType: "uint32", byteOrder: "CDAB", pollMs: 500 },
-    { name: "Produto / receita", role: "product.code", area: "holding_register", address: 1010, dataType: "uint16", byteOrder: "ABCD", pollMs: 1000 },
-  ],
+/** Bloco OEE padrão Engemase (docs/11, seção 3): offsets 0–13 lidos numa única transação FC03. */
+export const BLOCK_REGISTERS = 14
+export const DEFAULT_BLOCK_BASE = 1000
+/** Maior endereço base que ainda comporta os 14 registradores. */
+export const MAX_BLOCK_BASE = 65535 - (BLOCK_REGISTERS - 1)
+
+/** Layout do bloco: offset, papel, nome e tipo de cada campo. */
+export const ENGEMASE_BLOCK_LAYOUT: { offset: number; field: string; name: string; role: TagRole; dataType: DataType }[] = [
+  { offset: 0, field: "versao_bloco", name: "Versão do bloco", role: "custom", dataType: "uint16" },
+  { offset: 1, field: "heartbeat", name: "Heartbeat do CLP", role: "custom", dataType: "uint16" },
+  { offset: 2, field: "estado", name: "Estado da máquina", role: "state.code", dataType: "uint16" },
+  { offset: 3, field: "codigo_falha", name: "Código do alarme", role: "fault.code", dataType: "uint16" },
+  { offset: 4, field: "contador_total", name: "Contador total", role: "count.total", dataType: "uint32" },
+  { offset: 6, field: "contador_refugo", name: "Contador de refugo", role: "count.reject", dataType: "uint32" },
+  { offset: 8, field: "contador_bons", name: "Contador de peças boas", role: "count.good", dataType: "uint32" },
+  { offset: 10, field: "produto", name: "Produto / receita", role: "product.code", dataType: "uint16" },
+  { offset: 11, field: "velocidade", name: "Velocidade atual", role: "speed.actual", dataType: "uint16" },
+  { offset: 12, field: "ciclo_ultimo_ms", name: "Duração do último ciclo (ms)", role: "custom", dataType: "uint16" },
+  { offset: 13, field: "bits_status", name: "Bits de status", role: "custom", dataType: "uint16" },
+]
+
+/** Template do bloco a partir de um endereço base (holding register, base 0). */
+export function engemaseBlock(base: number = DEFAULT_BLOCK_BASE): MachineTemplate {
+  return {
+    id: `tpl_engemase_block_${base}`,
+    label: "Bloco OEE padrão Engemase",
+    description: `${BLOCK_REGISTERS} holding registers contíguos a partir do HR ${base} (1 leitura por máquina). Modo código de estado.`,
+    stateMode: "state_code",
+    tags: ENGEMASE_BLOCK_LAYOUT.map((f) => ({
+      name: f.name,
+      role: f.role,
+      area: "holding_register",
+      address: base + f.offset,
+      dataType: f.dataType,
+      byteOrder: is32(f.dataType) ? "CDAB" : "ABCD",
+      pollMs: 500,
+    })),
+  }
 }
+
+export const ENGEMASE_BLOCK: MachineTemplate = engemaseBlock(DEFAULT_BLOCK_BASE)
 
 export const DISCRETE_SIGNALS: MachineTemplate = {
   id: "tpl_discrete",
@@ -217,7 +243,8 @@ export const IO_RETROFIT: MachineTemplate = {
   ],
 }
 
-export const BUILTIN_TEMPLATES = [ENGEMASE_BLOCK, DISCRETE_SIGNALS, IO_RETROFIT]
+/** Outros templates prontos (o bloco padrão tem cartão próprio, com endereço base). */
+export const BUILTIN_TEMPLATES = [DISCRETE_SIGNALS, IO_RETROFIT]
 
 // ---------------------------------------------------------------------------
 // Validações por etapa

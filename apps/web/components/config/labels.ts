@@ -92,6 +92,32 @@ export const BAUD_RATES = [9600, 19200, 38400, 57600, 115200] as const
 
 export const PARITY_LABEL: Record<"N" | "E" | "O", string> = { N: "Nenhuma", E: "Par", O: "Ímpar" }
 
+/**
+ * Portas RS-485 isoladas do gateway padrão (reComputer R1000, docs/03): o borne RS485-n
+ * corresponde a um dispositivo do Linux. A correspondência final é confirmada em bancada.
+ */
+export const RS485_TTY = ["/dev/ttyAMA2", "/dev/ttyAMA3", "/dev/ttyAMA5"] as const
+
+/** Dispositivos `/dev/ttyAMA*` disponíveis no gateway conforme a descrição do hardware ("2× RS-485"). */
+export function ttyPortsFor(hardware: string): string[] {
+  const m = hardware.match(/(\d+)\s*×\s*RS-485/)
+  const n = Math.min(RS485_TTY.length, m ? Number(m[1]) : 0)
+  return RS485_TTY.slice(0, n)
+}
+
+/** Converte o nome lógico "/dev/ttyRS485-1" (cadastro antigo) no dispositivo do Linux ("/dev/ttyAMA2"). */
+export function ttyFromSerial(serialPort: string | undefined): string | undefined {
+  const m = serialPort?.match(/ttyRS485-(\d+)$/)
+  if (!m) return serialPort
+  return RS485_TTY[Number(m[1]) - 1] ?? serialPort
+}
+
+/** "RS485-1" a partir de "/dev/ttyAMA2". */
+export function rs485Label(tty: string): string {
+  const i = (RS485_TTY as readonly string[]).indexOf(tty)
+  return i >= 0 ? `RS485-${i + 1}` : tty
+}
+
 /** Portas seriais RS-485 do gateway a partir da descrição do hardware ("2× RS-485"). */
 export function serialPortsFor(hardware: string): string[] {
   const m = hardware.match(/(\d+)\s*×\s*RS-485/)
@@ -160,7 +186,9 @@ export const WIZARD_TAG_ROLES: TagRole[] = [
   "fault.code",
   "count.total",
   "count.reject",
+  "count.good",
   "product.code",
+  "speed.actual",
   "custom",
 ]
 

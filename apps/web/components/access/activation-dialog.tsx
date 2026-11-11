@@ -1,37 +1,31 @@
 "use client"
 
-import { useState } from "react"
-import { KeyRoundIcon, RefreshCwIcon } from "lucide-react"
-import { toast } from "sonner"
+import { KeyRoundIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { ActivationSteps } from "./activation-steps"
-import { activationCode } from "./labels"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { ActivationSteps, useActivationCode } from "./activation-steps"
 
 /** Instruções de ativação de um gateway já criado (status "aguardando ativação"). */
 export function ActivationDialog({
   gatewayName,
   code: initialCode,
+  expired = false,
   expiresLabel,
+  freshExpiresLabel,
   triggerLabel = "Instruções de ativação",
   triggerVariant = "outline",
 }: {
   gatewayName: string
   code: string
+  expired?: boolean
   expiresLabel: string
+  /** Validade de um código gerado agora. */
+  freshExpiresLabel: string
   triggerLabel?: string
   triggerVariant?: "outline" | "default" | "secondary"
 }) {
-  const [code, setCode] = useState(initialCode)
-  const [round, setRound] = useState(0)
-
-  const regenerate = () => {
-    const next = activationCode(`${gatewayName}:${code}:${round + 1}`)
-    setRound((r) => r + 1)
-    setCode(next)
-    toast.success("Novo código de ativação gerado", { description: `${next} · o código anterior (${code}) deixou de valer.` })
-  }
+  const act = useActivationCode(gatewayName, { code: initialCode, expired, expiresLabel }, freshExpiresLabel)
 
   return (
     <Dialog>
@@ -46,13 +40,7 @@ export function ActivationDialog({
           <DialogTitle>Ativar {gatewayName}</DialogTitle>
           <DialogDescription>Execute os comandos no terminal do gateway, na fábrica. O código vale para uma única ativação.</DialogDescription>
         </DialogHeader>
-        <ActivationSteps code={code} expiresLabel={expiresLabel} />
-        <DialogFooter className="sm:justify-between">
-          <Button type="button" variant="ghost" size="sm" onClick={regenerate}>
-            <RefreshCwIcon />
-            Gerar novo código
-          </Button>
-        </DialogFooter>
+        <ActivationSteps code={act.code} expired={act.expired} expiresLabel={act.expiresLabel} onRegenerate={act.regenerate} />
       </DialogContent>
     </Dialog>
   )

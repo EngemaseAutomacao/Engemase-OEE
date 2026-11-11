@@ -2,7 +2,7 @@
  * Monta os "view models" serializáveis dos gateways (servidor → componentes de cliente).
  * Tudo pré-formatado no servidor para evitar diferenças de formatação na hidratação.
  */
-import type { Device, Gateway, GatewayStatus, Machine } from "@/lib/mock"
+import { type AuditEntry, type Device, type Gateway, type GatewayStatus, type Machine, nowMs } from "@/lib/mock"
 import { ago, dateTime, num } from "@/lib/format"
 import { CLOCK_ALERT_MS, clockLabel, configLabel } from "./labels"
 
@@ -18,6 +18,7 @@ export interface GatewayRow {
   id: string
   name: string
   hostname: string
+  unitId: string
   unitName: string
   hardware: string
   status: GatewayStatus
@@ -38,6 +39,10 @@ export interface GatewayRow {
   devicesError: number
   machines: number
   enrollmentCode: string | null
+  /** Código de ativação vencido (vale 24 h). */
+  codeExpired: boolean
+  /** "12/11 10:42": validade (ou vencimento) do código atual. */
+  codeExpiresLabel: string
   issues: GatewayIssue[]
   /** Criado nesta sessão (protótipo): ainda sem página de detalhe. */
   local?: boolean
@@ -84,12 +89,30 @@ export function gatewayIssues(g: Gateway, devices: Device[]): GatewayIssue[] {
   return out
 }
 
-export function gatewayRow(g: Gateway, unitName: string, devices: Device[], machines: Machine[]): GatewayRow {
+const CODE_TTL_MS = 24 * 60 * 60_000
+
+/** Validade de um código gerado agora (protótipo: a partir de MOCK_NOW). */
+export const freshCodeExpiresLabel = () => dateTime(new Date(nowMs() + CODE_TTL_MS).toISOString())
+
+/**
+ * Validade do código de ativação de um gateway pendente. Usa o registro "gateway.create" da auditoria
+ * (quando o código foi gerado); sem registro, considera gerado há 2 h.
+ */
+export function activationInfo(g: Gateway, audit: AuditEntry[]): { expired: boolean; expiresLabel: string } {
+  const created = audit.find((a) => a.action === "gateway.create" && a.entityName === g.name)
+  const issued = created ? Date.parse(created.at) : nowMs() - 2 * 60 * 60_000
+  const expires = issued + CODE_TTL_MS
+  return { expired: expires < nowMs(), expiresLabel: dateTime(new Date(expires).toISOString()) }
+}
+
+export function gatewayRow(g: Gateway, unitName: string, devices: Device[], machines: Machine[], audit: AuditEntry[] = []): GatewayRow {
   const cfg = configLabel(g.configVersion, g.configApplied)
+  const code = activationInfo(g, audit)
   return {
     id: g.id,
     name: g.name,
     hostname: g.hostname,
+    unitId: g.unitId,
     unitName,
     hardware: g.hardware,
     status: g.status,
@@ -110,6 +133,8 @@ export function gatewayRow(g: Gateway, unitName: string, devices: Device[], mach
     devicesError: devices.filter((d) => d.status === "error").length,
     machines: machines.filter((m) => m.gatewayId === g.id).length,
     enrollmentCode: g.enrollmentCode ?? null,
+    codeExpired: g.status === "pending" && code.expired,
+    codeExpiresLabel: code.expiresLabel,
     issues: gatewayIssues(g, devices),
   }
 }

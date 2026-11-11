@@ -14,6 +14,7 @@ import type {
   TagRole,
   UserStatus,
 } from "@/lib/mock/types"
+import type { RemoteAccessPolicy, RemoteAccessStatus } from "@/lib/mock"
 
 // ---------------------------------------------------------------------------
 // Texto
@@ -258,4 +259,68 @@ export function isOlderVersion(v: string, ref: string = LATEST_AGENT): boolean {
     if (d !== 0) return d < 0
   }
   return false
+}
+
+// ---------------------------------------------------------------------------
+// Acesso remoto (VPN de manutenção, docs/12)
+// ---------------------------------------------------------------------------
+
+export const REMOTE_STATUS_LABEL: Record<RemoteAccessStatus, string> = {
+  requested: "Aguardando aprovação",
+  approved: "Aprovada",
+  active: "Ativa",
+  ended: "Encerrada",
+  rejected: "Recusada",
+  expired_unapproved: "Expirou sem aprovação",
+  revoked: "Revogada",
+}
+
+export const REMOTE_STATUS_STYLE: Record<RemoteAccessStatus, string> = {
+  requested: "bg-state-stopped/15 text-amber-700 dark:text-state-stopped",
+  approved: "bg-primary/10 text-primary",
+  active: "bg-state-running/12 text-state-running",
+  ended: "bg-muted text-muted-foreground",
+  rejected: "bg-state-fault/12 text-state-fault",
+  expired_unapproved: "bg-muted text-muted-foreground",
+  revoked: "bg-state-fault/12 text-state-fault",
+}
+
+export const REMOTE_POLICY_LABEL: Record<RemoteAccessPolicy["mode"], string> = {
+  disabled: "Desativado",
+  approval_required: "Com aprovação do cliente",
+  preapproved_window: "Janela pré-aprovada",
+}
+
+/** Portas permitidas para encaminhamento a um CLP (lista fechada por protocolo). */
+export const FORWARD_PORTS: { port: number; label: string }[] = [
+  { port: 502, label: "502 · Modbus TCP" },
+  { port: 102, label: "102 · Siemens S7" },
+  { port: 44818, label: "44818 · EtherNet/IP" },
+]
+
+export const WEEKDAY_LABEL = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"]
+
+/** 30 → "30 min", 60 → "1 h", 90 → "1 h 30 min" */
+export function minutesLabel(min: number): string {
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return m ? `${h} h ${m} min` : `${h} h`
+}
+
+/** 4812000 → "4,8 MB" */
+export function bytesLabel(n: number | null | undefined): string {
+  if (n === null || n === undefined) return "—"
+  if (n < 1_000) return `${n} B`
+  if (n < 1_000_000) return `${(n / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} kB`
+  return `${(n / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`
+}
+
+/** 3725 → "01:02:05" (contagem regressiva) */
+export function clockCountdown(totalS: number): string {
+  const s = Math.max(0, Math.floor(totalS))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const ss = s % 60
+  return [h, m, ss].map((x) => String(x).padStart(2, "0")).join(":")
 }

@@ -24,7 +24,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { BAUD_RATES, GATEWAY_STATUS_DOT, PARITY_LABEL, serialSummary } from "@/components/config/labels"
+import { BAUD_RATES, GATEWAY_STATUS_DOT, PARITY_LABEL, rs485Label, serialSummary } from "@/components/config/labels"
 import type { ConnDraft, Errors, WizardDevice, WizardGateway } from "@/components/config/wizard-model"
 
 export interface ConnTest {
@@ -193,13 +193,14 @@ export function ConnectionStep({
                 <Field data-invalid={!!err("serialPort")}>
                   <FieldLabel htmlFor="wz-serial">Porta serial do gateway</FieldLabel>
                   <Select value={draft.serialPort} onValueChange={(v) => onChange({ serialPort: v })}>
-                    <SelectTrigger id="wz-serial" className="w-full font-mono" aria-invalid={!!err("serialPort")}>
+                    <SelectTrigger id="wz-serial" className="w-full" aria-invalid={!!err("serialPort")}>
                       <SelectValue placeholder="Escolha a porta" />
                     </SelectTrigger>
                     <SelectContent>
                       {gateway.serialPorts.map((p) => (
-                        <SelectItem key={p} value={p} className="font-mono">
-                          {p}
+                        <SelectItem key={p} value={p}>
+                          <span className="font-mono">{p}</span>
+                          <span className="text-xs text-muted-foreground">borne {rs485Label(p)}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>

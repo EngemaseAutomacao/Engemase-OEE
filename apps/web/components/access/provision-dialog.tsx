@@ -61,6 +61,7 @@ export function ProvisionGatewayDialog({
       id: `gw_novo_${c}`,
       name: name.trim(),
       hostname: "—",
+      unitId,
       unitName,
       hardware: location.trim() ? `Local: ${location.trim()}` : "Hardware identificado na ativação",
       status: "pending",
@@ -81,10 +82,12 @@ export function ProvisionGatewayDialog({
       devicesError: 0,
       machines: 0,
       enrollmentCode: c,
+      codeExpired: false,
+      codeExpiresLabel: expiresLabel,
       issues: [{ kind: "pending", tone: "info", text: "Aguardando a instalação e ativação do agente no local" }],
       local: true,
     })
-    toast.success("Gateway criado", { description: `${name.trim()} · código de ativação ${c} (expira em 24 h)` })
+    toast.success("Gateway criado", { description: `${name.trim()} · código de ativação ${c} (válido até ${expiresLabel})` })
   }
 
   return (
@@ -115,9 +118,7 @@ export function ProvisionGatewayDialog({
               <Alert variant="destructive">
                 <TriangleAlertIcon />
                 <AlertTitle>Limite do plano atingido</AlertTitle>
-                <AlertDescription>
-                  Este cliente já usa {used} de {limit} gateways. Fale com a Engemase para ampliar o plano.
-                </AlertDescription>
+                <AlertDescription>Este cliente já usa {used} de {limit} gateways. Fale com a Engemase para ampliar o plano.</AlertDescription>
               </Alert>
             )}
 
@@ -160,7 +161,7 @@ export function ProvisionGatewayDialog({
               </Field>
             </FieldGroup>
 
-            <div className="flex items-start gap-3 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+            <div className="flex items-start gap-3 rounded-xl bg-muted/50 p-3 text-xs text-muted-foreground">
               <RouterIcon className="mt-px size-4 shrink-0" />
               <span>
                 Recomendado: computador industrial ARM64 ou x86 com 2 interfaces Ethernet (rede de TI e rede OT) e portas RS-485 para Modbus RTU.
