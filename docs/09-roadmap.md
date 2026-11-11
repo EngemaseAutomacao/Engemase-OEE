@@ -27,20 +27,22 @@ gantt
 - [ ] Next.js com Better Auth (organizações), layout base, tela de login.
 - [ ] `packages/db`: schema inicial (organização, ativos, gateway, device, tag, eventos, minutos) e primeira migração.
 - [ ] `packages/contracts`: schemas Zod do `/enroll` e do `/sync`, exportação para JSON Schema e fixtures.
-- [ ] **PoC de drivers** contra CLPs reais ou simuladores confiáveis:
-  - [ ] Modbus TCP (`simonvetter/modbus`)
-  - [ ] OPC UA (`gopcua/opcua`), incluindo subscription
-  - [ ] Siemens S7 (`robinson/gos7`), num S7-1200 com PUT/GET
-- [ ] `tools/plc-sim`: uma máquina simulada via Modbus, com ciclos e paradas.
+- [ ] **Comprar 2 gateways reComputer R1000 sem rádio (R10xx-00, 2 GB/16 GB)** para bancada, com cotação formal (ver [ADR-012](10-decisoes-arquiteturais.md#adr-012--hardware-padrão-do-gateway-seeed-recomputer-r1000-sem-rádio)).
+- [ ] **PoC Modbus** com `grid-x/modbus` contra CLPs reais e simulador:
+  - [ ] Modbus TCP: um CLP com servidor nativo (ex.: Schneider M221 ou Delta) e um módulo de I/O remoto
+  - [ ] Modbus RTU: barramento RS-485 com 2–3 escravos a 19200 8E1, usando o modo RS-485 do kernel no R1000
+  - [ ] Ordem de words em 32 bits, timeouts curtos e recuperação de escravo offline
+- [ ] Especificar o **bloco OEE padrão Engemase** (v1) e implementá-lo em pelo menos uma marca de CLP ([11](11-integracao-modbus.md#3-bloco-oee-padrão-engemase)).
+- [ ] `tools/plc-sim`: máquinas simuladas via Modbus TCP (`simonvetter/modbus`, que tem servidor), com o bloco OEE padrão, ciclos, paradas e falhas.
 - [ ] Teste do driver de banco (serverless HTTP vs `pg` + pool) com carga simulada de 100 gateways.
-- [ ] Escolher o hardware de gateway padrão (responder Q2 em [01](01-visao-e-requisitos.md#perguntas-em-aberto)).
+- [ ] Confirmar com despachante/OCD a NCM e a necessidade de anuência ANATEL do gateway sem rádio.
 
-**Critério de saída:** um gateway de bancada lê o simulador e um CLP real, envia `/sync` e os dados aparecem gravados na Neon. Bibliotecas de driver aprovadas ou substituídas.
+**Critério de saída:** um reComputer R1000 de bancada lê o simulador e CLPs reais por Modbus TCP e RTU, envia `/sync` e os dados aparecem gravados na Neon. Hardware e biblioteca aprovados (ou substituídos).
 
 ## Fase 1: MVP (~7 semanas + 2 de piloto)
 
 **Gateway**
-- [ ] Drivers Modbus TCP/RTU, OPC UA e S7.
+- [ ] Drivers **Modbus TCP, Modbus RTU (RS-485) e RTU sobre TCP**, com leitura em blocos e uma goroutine por barramento serial.
 - [ ] Scheduler com leitura em bloco, máquina de estados (modos `signals`, `state_code` e `count_derived`), contadores com overflow/reset, agregados por minuto.
 - [ ] Outbox SQLite com reenvio ordenado e limite de taxa.
 - [ ] Uplink HTTPS (`/enroll`, `/sync`, `/config`) com retentativas.
@@ -66,9 +68,9 @@ gantt
 
 ## Fase 2: produto (~8 semanas)
 
-- Drivers **EtherNet/IP** (Rockwell, Omron NJ/NX), **MC/SLMP** (Mitsubishi), **FINS** (Omron).
+- Primeiros **protocolos nativos**, conforme as marcas mais frequentes nos clientes: **S7comm** (Siemens), **EtherNet/IP** (Rockwell, Omron NJ/NX), **OPC UA**.
 - **OTA** com assinatura, canais e rollback. Página local de diagnóstico. `logs.upload`.
-- **Templates de máquina**, importação de tags por CSV, **browse OPC UA**.
+- **Templates de máquina** (incluindo o do bloco OEE padrão), importação de tags por CSV, **varredura Modbus** (unit ids e registradores).
 - Classificação automática por código de falha.
 - Relatórios: Pareto, MTBF/MTTR, tendências, exportação CSV/Excel. **Modo TV/Andon**.
 - **Alertas** (e-mail; avaliar WhatsApp/Telegram): máquina parada > X min, gateway offline, OEE abaixo da meta.
@@ -89,5 +91,5 @@ gantt
 
 1. Responder as **perguntas em aberto** ([01](01-visao-e-requisitos.md#perguntas-em-aberto)), principalmente Q1 (marcas de CLP), Q2 (hardware) e Q3 (escala).
 2. Criar o projeto na Vercel e instalar a integração **Neon** pelo Marketplace.
-3. Separar um CLP de cada marca prioritária para a bancada (S7-1200, um Modbus TCP qualquer, um servidor OPC UA).
+3. Montar a bancada: 2 reComputer R1000, um CLP com Modbus TCP nativo, um barramento RS-485 com 2–3 escravos (CLP + módulo de I/O) e cabos/terminações conforme o [guia Modbus](11-integracao-modbus.md#4-rs-485-boas-práticas-de-instalação).
 4. Abrir as issues da Fase 0 a partir do checklist acima.

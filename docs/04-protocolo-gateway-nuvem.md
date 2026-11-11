@@ -97,7 +97,8 @@ Resposta `200`:
   "commands": [
     { "id": "cmd_01JD4B", "type": "tag.read",
       "payload": { "device_id": "dev_01JD3K",
-                   "address": { "area": "DB", "db": 100, "offset": 14 }, "type": "real" } }
+                   "address": { "area": "holding_register", "offset": 1004 },
+                   "type": "uint32", "word_order": "CDAB" } }
   ],
   "next_sync_s": 10,
   "min_agent_version": "1.0.0"
@@ -112,7 +113,7 @@ Resposta `200`:
 | `device.test` | Testa a conexão com um CLP (IP e parâmetros) | MVP |
 | `config.reload` | Força baixar e aplicar a config | MVP |
 | `agent.restart` | Reinicia o serviço | MVP |
-| `opcua.browse` | Lista nós de um servidor OPC UA, para escolher tags pela web | F2 |
+| `modbus.scan` | Varre unit ids de um barramento RS-485 ou faixa de registradores, para ajudar no comissionamento | F2 |
 | `agent.update` | Atualiza para a versão indicada (OTA) | F2 |
 | `token.rotate` | Rotação de credencial | F2 |
 | `logs.upload` | Envia as últimas N linhas de log para diagnóstico | F2 |

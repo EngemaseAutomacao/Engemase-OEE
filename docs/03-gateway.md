@@ -17,31 +17,75 @@ O gateway é o coração da "independência de marca". Ele traduz qualquer CLP p
 
 ## Hardware recomendado
 
-Requisitos mínimos:
+Requisitos (todos obrigatórios, exceto onde indicado):
 
-| Item | Mínimo | Recomendado |
+| Item | Requisito |
+|---|---|
+| CPU / RAM | ARM64 ou x86-64; **2 GB de RAM** sobram (o agente usa 20–50 MB) |
+| Armazenamento | **eMMC ou SSD** (nada de cartão SD: o buffer SQLite grava continuamente) |
+| Rede | **2 Ethernet** (OT e IT separadas; 10/100 basta na OT) |
+| Serial | **≥ 1 RS-485 isolada**, com controle de direção por hardware ou pelo driver do kernel |
+| Alimentação | Faixa que cubra o **24 VDC industrial** (IEC 61131-2: ~20,4–28,8 V, com folga para transientes) |
+| Montagem e ambiente | Trilho DIN, sem ventoinha, faixa industrial de temperatura |
+| Software | Linux Debian (ou derivado) com acesso root para instalar nosso binário e serviço systemd |
+| Desejável | Watchdog de hardware, RTC com bateria, UPS/supercapacitor contra queda de energia, **sem rádio** (evita homologação ANATEL, ver abaixo) |
+
+### Recomendação: Seeed reComputer R1000, versão sem rádio (R10xx-00)
+
+Gateway industrial em trilho DIN baseado no Raspberry Pi **Compute Module 4**. Pela ficha oficial da Seeed:
+
+| Item | reComputer R1000 |
+|---|---|
+| RS-485 | **3 portas isoladas** (sinal e alimentação), já em modo RS-485 no boot (`/dev/ttyAMA2`, `ttyAMA3`, `ttyAMA5`) |
+| Ethernet | 1× 10/100/1000 (PoE opcional) + 1× 10/100 |
+| RAM / eMMC | 1, 2, 4 ou 8 GB / 8, 16 ou 32 GB (+ slot M.2 NVMe) |
+| Alimentação | **9–36 VDC** ou 12–24 VAC; consumo de ~3 a 5,5 W em 24 V |
+| Outros | RTC, TPM, trilho DIN ou parede; UPS/supercapacitor opcional |
+| Ciclo de vida | Produção declarada até pelo menos **dez/2030** |
+| SO | Raspberry Pi OS (Debian) 64 bits, root |
+
+**Configuração a padronizar:** **R10xx-00 (sem Wi-Fi/BLE), 2 GB de RAM, 16 GB de eMMC**, com o **módulo de UPS/supercapacitor** quando a planta tiver quedas de energia frequentes.
+
+Por que este modelo:
+- **3 RS-485 isoladas e 2 Ethernet** no mesmo equipamento, que é exatamente o que a decisão por Modbus TCP/RTU pede.
+- Preço de equipamento "maker industrial" (lista na faixa de **US$ 230–310** em 2026), com fabricante e ciclo de vida declarados.
+- Base Raspberry Pi: ecossistema enorme, kernel mantido, mesmo binário `linux/arm64`.
+
+Cuidados confirmados na pesquisa:
+- **Comprar a série `-00` (sem rádio).** A série `-10` traz Wi-Fi/BLE no CM4 e, para revenda ou instalação em cliente, cai na exigência de homologação ANATEL do produto final (o certificado do módulo não cobre o equipamento).
+- O **resistor de terminação de 120 Ω não vem montado**: usar resistor externo no borne quando o gateway for ponta do barramento. O comum do RS-485 vai no `GND_ISO`.
+- Watchdog: o SoC tem watchdog interno, usado pelo systemd (`RuntimeWatchdogSec` + `WatchdogSec` no serviço). O R1100 (abaixo) acrescenta um watchdog externo.
+- A versão **v1.1** da placa ligou o pino DE das RS-485 a pinos com RTS; pedir confirmação por escrito à Seeed de que o lote é v1.1.
+
+### Alternativas avaliadas
+
+| Opção | Quando usar | Observações |
 |---|---|---|
-| CPU | ARM64 ou x86-64, 2 núcleos | 4 núcleos |
-| RAM | 1 GB | 2–4 GB |
-| Armazenamento | 8 GB eMMC/SSD **industrial** | 32 GB+. Evitar cartão SD: o buffer grava continuamente |
-| Rede | **2 interfaces Ethernet** (OT e IT separadas) | + 4G opcional para fábricas sem rede IT |
-| Serial | RS-485 se houver Modbus RTU | — |
-| Ambiente | Trilho DIN, 24 VDC, sem ventoinha, 0–55 °C | Watchdog de hardware, RTC com bateria |
+| **Seeed reComputer R1100** (R11xx-00) | Quando watchdog externo, TPM e E/S digital pesarem mais que a 3ª RS-485 | 2× RS-485 + 2× RS-232 isoladas, 2 DI/2 DO, mesma Ethernet do R1000; preço próximo |
+| **Revolution Pi Connect 4 / 5** (Kunbus) | Cliente que exige marca europeia ou **compra com nota fiscal no Brasil** | Distribuidor nacional (Omega7, São José dos Campos-SP). Preço de lista ~€420–580 (≈ 1,8–2,5× o Seeed). Quantidade/isolação da RS-485 a confirmar |
+| **Siemens SIMATIC IOT2050** | Clientes "Siemens", suporte local | Imagem Debian 13 com root; 2 Ethernet; serial RS-232/422/485. Preços no Brasil muito dispersos (R$ 3,5 mil a R$ 10 mil): cotar |
+| **Moxa UC-1222A** | Ambiente severo (-40 °C), marca forte | Debian (MIL3) com suporte até 2031; ~US$ 410–600 nos EUA; isolação das seriais a confirmar |
+| **Advantech ECU-150** | Seriais isoladas (2.500 VDC) | O SKU barato vem com Yocto; Ubuntu só nos SKUs mais caros |
+| **EDATEC ED-IPC2110** | Segundo fornecedor de CM4 | 2× RS-485 + 2× RS-232 isoladas; -25 a 60 °C; ~US$ 280 |
+| **Montagem própria** (Raspberry Pi 5 + SSD NVMe + placa RS-485 isolada 7–36 V + caixa DIN) | **Bancada e laboratório**, não frota | Com as altas de memória de 2026, o custo fica parecido com o do R1000, sem certificação, garantia nem trilho DIN de fábrica |
 
-Opções de mercado a avaliar (todas com Linux baseado em Debian):
+**Descartados:** Teltonika TRB245/246 (processador MIPS com pouca RAM e flash; o SQLite em Go puro não tem port para MIPS), InHand IG502 (só SDK Python), Industrial Shields Raspberry PLC (Pi 4 com cartão SD), EMQX Neuron como base (só Modbus/MQTT no open source).
 
-- **Siemens SIMATIC IOT2050**: forte em clientes Siemens.
-- **Revolution Pi (Kunbus)**: baseado em Raspberry Pi Compute Module, bom custo e trilho DIN.
-- **Moxa UC-8200 / UC-3100**: robusto, com Linux industrial da Moxa.
-- **Advantech / OnLogic**: PCs industriais x86 fanless, quando houver muitos CLPs por gateway.
+### Arquitetura alternativa: só Ethernet no gateway
 
-> **Decisão sugerida:** padronizar um modelo ARM64 (custo) e um x86 (alta carga). O agente compila para os dois.
+Quando o barramento RS-485 estiver longe do painel do gateway, ou para aceitar hardware sem RS-485: um **conversor Modbus RTU→TCP em trilho DIN** ao lado do CLP. O gateway passa a falar só Modbus TCP (ou **RTU sobre TCP**, que a biblioteca escolhida suporta). Isso não resolve o problema de **mestre único** (ver [11](11-integracao-modbus.md#5-um-mestre-por-barramento)).
 
-**Capacidade por gateway (estimativa a validar na PoC):** de 30 a 50 CLPs com ~20 tags cada, a 500 ms, num ARM64 de 4 núcleos. O limite costuma estar no CLP e na rede, não no gateway.
+### Compra, impostos e ANATEL
+
+- Não há distribuidor nacional confirmado da Seeed. A compra é direta, via DigiKey/Mouser ou por parceiro. Para **piloto**, courier; para **frota**, **importação formal por CNPJ** (DI) via trading, com NCM definida por despachante. A classificação (ex.: 8471.50 vs. 8517.62) muda o imposto de importação e pode exigir anuência da ANATEL.
+- Ordem de grandeza: **o custo nacionalizado por courier fica acima de 2× o preço em dólar**. Para o R1000 de ~US$ 230–250, isso dá **cerca de R$ 2.400–2.700 por unidade** (estimativa de nov/2026; **pedir cotação formal**).
+- **ANATEL:** preferir **versões sem rádio**. Se o cliente precisar de 4G, usar módulo/roteador já homologado e **confirmar com um OCD** se o produto final precisa de homologação própria. Confirmar também a situação de equipamentos só com Ethernet e RS-485.
+
+**Capacidade por gateway (a validar na PoC):** um R1000 atende com folga dezenas de CLPs Modbus TCP e até 3 barramentos RS-485 com ~10 escravos cada a 19200 bps. O limite costuma estar no CLP e no barramento, não no gateway (ver [11](11-integracao-modbus.md#quanto-cabe-num-barramento)).
 
 ## Sistema operacional e instalação
 
-- **Debian 12/13** (ou o derivado do fabricante), com `chrony` (NTP), `unattended-upgrades` e `nftables`.
+- **Debian 12/13** ou o derivado do fabricante (no reComputer R1000, Raspberry Pi OS 64 bits, baseado em Debian), com `chrony` (NTP), `unattended-upgrades` e `nftables`. Os overlays de device tree do fabricante já deixam as portas RS-485 em modo RS-485.
 - O agente roda como **serviço systemd**, com usuário dedicado sem privilégios (`oee`).
 - Distribuição: **pacote `.deb`** (gerado com nfpm/goreleaser) e script de instalação. Imagem **Docker** opcional, para quem já usa containers.
 - Diretórios:
@@ -84,12 +128,10 @@ flowchart LR
   CFG["Config Manager<br/>baixa, valida e aplica<br/>(hot reload)"] --> DM
   subgraph DM["Driver Manager"]
     direction TB
-    D1["modbus"]
-    D2["opcua"]
-    D3["s7"]
-    D4["eip"]
-    D5["mc / fins"]
-    D6["sim"]
+    D1["modbus-tcp"]
+    D2["modbus-rtu<br/>(1 goroutine por barramento)"]
+    D3["sim"]
+    D4["futuros: s7, opcua,<br/>eip, fins, mc"]
   end
   DM --> SCH["Scheduler<br/>grupos por taxa,<br/>leitura em bloco"]
   SCH --> SP["Signal Processor<br/>escala, debounce,<br/>deadband"]
@@ -125,47 +167,48 @@ type Driver interface {
 
 Regras comuns a todos os drivers: reconexão com *backoff* exponencial, *timeout* por leitura, limite de requisições simultâneas por CLP (para não sobrecarregá-lo) e métricas de latência e erros.
 
-## Cobertura de marcas e protocolos
+## Protocolos: Modbus TCP e RTU no MVP
 
-| Fabricante / família | Protocolo preferido | Alternativa | Fase |
-|---|---|---|---|
-| **Siemens** S7-1200 / S7-1500 | **S7comm** (exige PUT/GET habilitado e acesso não otimizado aos DBs lidos) | OPC UA nativo (exige licença de runtime OPC UA da Siemens) | MVP |
-| **Siemens** S7-300 / S7-400 | S7comm | — | MVP |
-| **Rockwell / Allen-Bradley** ControlLogix, CompactLogix, Micro800 | **EtherNet/IP (CIP)**, tags simbólicas | OPC UA via servidor de terceiros | F2 |
-| Rockwell MicroLogix / SLC 500 | EtherNet/IP (PCCC) | — | F2 |
-| **Schneider** M221, M241, M340, M580 | **Modbus TCP** | OPC UA (M580/M262) | MVP |
-| **WEG** (CLIC, TPW, PLC300...) | **Modbus TCP/RTU** | — | MVP |
-| **Mitsubishi** FX5, iQ-R, Q, L | **MC protocol / SLMP** (3E) | OPC UA (módulo dedicado) | F2 |
-| **Omron** CP1, CJ2 | **FINS** (UDP/TCP) | — | F2 |
-| **Omron** NJ/NX | EtherNet/IP (CIP) | OPC UA nativo | F2 |
-| **Beckhoff** | OPC UA | ADS (avaliar) | MVP (via OPC UA) |
-| Altus, Delta, Unitronics, Eaton, outros | **Modbus TCP** ou **OPC UA** | — | MVP |
-| **Qualquer servidor OPC UA** (Kepware, Ignition, SCADA existente) | OPC UA | — | MVP |
-| **Máquina legada / sem acesso ao CLP** | **Módulo de I/O remoto Modbus TCP** (ex.: Moxa ioLogik, Advantech ADAM, WAGO) lendo sinais discretos: rodando, pulso de ciclo, refugo | — | MVP |
+Decisão: na versão 1, o gateway fala **somente Modbus**, em dois transportes ([ADR-011](10-decisoes-arquiteturais.md#adr-011--modbus-tcp-e-rtu-como-únicos-protocolos-do-mvp)):
 
-> **Ponto-chave:** Modbus TCP + OPC UA + S7 cobrem a maioria dos casos já no MVP. O módulo de I/O remoto garante que **qualquer máquina**, mesmo sem CLP acessível ou com CLP fechado pelo fabricante, possa ser monitorada. Pulsos de contagem devem usar o **contador de hardware do módulo de I/O**. Não se deve contar pulsos por polling, porque pulsos curtos se perdem.
-
-### Bibliotecas Go candidatas (validar na Fase 0)
-
-| Protocolo | Biblioteca | Observação |
+| Transporte | Parâmetros | Uso |
 |---|---|---|
-| Modbus TCP/RTU | `github.com/simonvetter/modbus` | TCP, RTU, RTU-over-TCP |
-| OPC UA | `github.com/gopcua/opcua` | Cliente, subscriptions, browse, segurança |
-| Siemens S7 | `github.com/robinson/gos7` | S7comm, endereçamento absoluto |
-| EtherNet/IP (Rockwell, Omron NJ/NX) | `libplctag` (C, via cgo) | Muito madura. Alternativa em Go puro: `gologix` |
-| Mitsubishi MC/SLMP | `go-mcprotocol` ou implementação própria | Protocolo simples (frame 3E) |
-| Omron FINS | Implementação própria ou lib comunitária | Protocolo simples |
-| Vários (referência) | Apache PLC4X (`plc4go`) | Útil como referência ou plano B. A maturidade varia por driver |
+| **Modbus TCP** | IP, porta (502), unit id, timeout | CLPs com Ethernet; módulos de I/O remoto; conversores RTU→TCP |
+| **Modbus RTU (RS-485)** | Porta serial do gateway, velocidade, paridade, data bits, stop bits, unit id, timeout | CLPs com porta serial; vários escravos por barramento (um unit id cada) |
+| RTU sobre TCP | IP, porta, unit id | Conversores serial-Ethernet transparentes |
 
-Cada biblioteca passa por um teste de bancada contra um CLP real (ou um simulador confiável) antes de ser adotada. O que não passar vira implementação própria, já que esses protocolos são bem documentados.
+O guia [11 — Integração Modbus](11-integracao-modbus.md) traz o suporte por marca de CLP, o **bloco OEE padrão Engemase**, as regras de RS-485 e o checklist de comissionamento.
+
+**Ponto-chave:** em vários CLPs (Siemens S7-1200/1500, Rockwell Logix, Omron) o Modbus exige bloco no programa ou módulo extra. Quando não for possível alterar o CLP, há duas saídas: o **módulo de I/O remoto** lendo sinais da máquina (MVP) ou os **protocolos nativos** (S7comm, EtherNet/IP, FINS, OPC UA) numa fase futura. A interface de driver abaixo já prevê isso.
+
+### Bibliotecas Go
+
+| Uso | Biblioteca | Motivo |
+|---|---|---|
+| **Cliente Modbus de produção** | `github.com/grid-x/modbus` (v1.5.1, set/2026, BSD) | TCP, RTU, ASCII, RTU sobre TCP/UDP; configura o **modo RS-485 do kernel**; API com `context` e timeouts de recuperação de link. Reduzir o timeout padrão (10 s) para 200–500 ms |
+| **Simulador e testes** | `github.com/simonvetter/modbus` (v1.6.4, MIT) | Tem **servidor** Modbus TCP, ideal para o `plc-sim` |
+| **Buffer SQLite** | `modernc.org/sqlite` | Go puro (sem cgo): o binário continua estático para arm64/amd64 |
+| Descartadas | `goburrow/modbus` (parada desde 2018), `go.bug.st/serial` (sem RS-485) | — |
+
+A decodificação de 32 bits e float com as quatro ordens de bytes (ABCD/CDAB/BADC/DCBA) é nossa (umas 50 linhas, com testes).
+
+### Futuro: outros protocolos
+
+| Fabricante | Protocolo nativo (fase futura) |
+|---|---|
+| Siemens S7-1200/1500/300/400 | S7comm (PUT/GET, DBs não otimizados) ou OPC UA (licença de runtime) |
+| Rockwell CompactLogix/ControlLogix | EtherNet/IP (CIP) — `libplctag` |
+| Mitsubishi | MC protocol / SLMP |
+| Omron | FINS; EtherNet/IP nos NJ/NX |
+| Qualquer servidor OPC UA | OPC UA — `gopcua/opcua` |
 
 ### Alternativas avaliadas (e por que não como base)
 
 | Opção | Por que não como base |
 |---|---|
 | **Node-RED** | Ótimo para protótipo, mas a configuração por fluxos não escala para centenas de gateways gerenciados remotamente e é difícil de versionar e validar |
-| **EMQX Neuron** | A edição open source inclui só Modbus TCP e MQTT. S7, OPC UA e outros são comerciais (licença por gateway) |
-| **Kepware / Ignition Edge** | Cobertura de drivers excelente, mas com licença por gateway (custo recorrente). **Continuam compatíveis:** se um cliente já tiver um, nosso gateway lê dele via OPC UA |
+| **EMQX Neuron** | A edição open source inclui só Modbus TCP e MQTT; o resto é comercial (licença por gateway) |
+| **Kepware / Ignition Edge** | Cobertura de drivers excelente, mas com licença por gateway. **Continuam compatíveis** no futuro via OPC UA |
 | **Telegraf** | Coleta métricas bem, mas não tem máquina de estados, contadores com reset nem config remota por tenant |
 
 ## Configuração de tags
@@ -185,37 +228,56 @@ As tags têm **papéis** (*roles*) que dizem ao motor de OEE o que cada sinal si
 | `speed.actual` | número | Velocidade (opcional, para gráficos) |
 | `custom` | qualquer | Histórico livre (temperatura, pressão...), com deadband |
 
-Exemplo de trecho da config recebida pelo gateway (JSON gerado pela nuvem):
+Exemplo de trecho da config recebida pelo gateway (JSON gerado pela nuvem), com um CLP em Modbus TCP e dois escravos num barramento RS-485:
 
 ```json
 {
   "config_version": 42,
+  "serial_buses": [
+    { "id": "bus_1", "port": "/dev/ttyAMA2", "baud": 19200, "parity": "E", "data_bits": 8, "stop_bits": 1 }
+  ],
   "devices": [
     {
-      "id": "dev_01JD3K",
-      "name": "CLP Injetora 03",
-      "protocol": "s7",
-      "params": { "host": "192.168.10.21", "rack": 0, "slot": 1, "timeout_ms": 1000 },
+      "id": "dev_inj03", "name": "CLP Injetora 03", "protocol": "modbus-tcp",
+      "params": { "host": "192.168.10.23", "port": 502, "unit_id": 1, "timeout_ms": 500 },
+      "blocks": [
+        { "area": "holding_register", "start": 1000, "count": 14, "poll_ms": 500 }
+      ],
       "tags": [
-        { "id": "tag_a1", "address": { "area": "DB", "db": 100, "offset": 0, "bit": 0 }, "type": "bool",   "poll_ms": 250, "role": "state.running", "machine_id": "mch_inj03" },
-        { "id": "tag_a2", "address": { "area": "DB", "db": 100, "offset": 2 },           "type": "uint32", "poll_ms": 500, "role": "count.total",   "machine_id": "mch_inj03" },
-        { "id": "tag_a3", "address": { "area": "DB", "db": 100, "offset": 6 },           "type": "uint32", "poll_ms": 500, "role": "count.reject",  "machine_id": "mch_inj03" },
-        { "id": "tag_a4", "address": { "area": "DB", "db": 100, "offset": 10 },          "type": "int16",  "poll_ms": 500, "role": "fault.code",    "machine_id": "mch_inj03" }
+        { "id": "tag_a2", "address": { "area": "holding_register", "offset": 1002 }, "type": "uint16", "role": "state.code", "machine_id": "mch_inj03" },
+        { "id": "tag_a3", "address": { "area": "holding_register", "offset": 1003 }, "type": "uint16", "role": "fault.code", "machine_id": "mch_inj03" },
+        { "id": "tag_a4", "address": { "area": "holding_register", "offset": 1004 }, "type": "uint32", "word_order": "CDAB", "role": "count.total", "machine_id": "mch_inj03" },
+        { "id": "tag_a5", "address": { "area": "holding_register", "offset": 1006 }, "type": "uint32", "word_order": "CDAB", "role": "count.reject", "machine_id": "mch_inj03" }
+      ]
+    },
+    {
+      "id": "dev_sop01", "name": "CLP Sopradora 01", "protocol": "modbus-rtu",
+      "params": { "bus": "bus_1", "unit_id": 1, "timeout_ms": 300 },
+      "tags": [
+        { "id": "tag_s1", "address": { "area": "coil", "offset": 0 }, "type": "bool", "poll_ms": 250, "role": "state.running", "machine_id": "mch_sop01" },
+        { "id": "tag_s2", "address": { "area": "holding_register", "offset": 100 }, "type": "uint32", "word_order": "CDAB", "poll_ms": 500, "role": "count.total", "machine_id": "mch_sop01" }
+      ]
+    },
+    {
+      "id": "dev_sop02", "name": "Módulo I/O Sopradora 02", "protocol": "modbus-rtu",
+      "params": { "bus": "bus_1", "unit_id": 2, "timeout_ms": 300 },
+      "tags": [
+        { "id": "tag_p1", "address": { "area": "input_register", "offset": 16 }, "type": "uint32", "word_order": "CDAB", "poll_ms": 500, "role": "count.total", "machine_id": "mch_sop02" }
       ]
     }
   ],
   "machines": [
-    {
-      "id": "mch_inj03",
-      "state_rules": { "mode": "signals", "comm_loss_after_s": 10 },
-      "counters": { "total": { "max": 4294967295, "reset_detection": true } }
-    }
+    { "id": "mch_inj03", "state_rules": { "mode": "state_code", "map": { "0": "STOPPED", "1": "RUNNING", "2": "FAULT", "3": "SETUP" }, "comm_loss_after_s": 10 } },
+    { "id": "mch_sop01", "state_rules": { "mode": "signals", "comm_loss_after_s": 10 } },
+    { "id": "mch_sop02", "state_rules": { "mode": "count_derived", "ideal_cycle_s": 6, "idle_after_cycles": 3 } }
   ],
   "uplink": { "sync_interval_s": 10, "max_batch_items": 2000 }
 }
 ```
 
-O endereço (`address`) é **estruturado por protocolo**, não uma string livre. A web valida cada campo antes de gerar a config: unit id e registrador no Modbus, nodeId no OPC UA, área/DB/offset no S7, nome simbólico no CIP.
+Regras do agente para RS-485: **uma goroutine por barramento**, com requisições estritamente serializadas (escravos lidos um após o outro). Dispositivos TCP têm **uma conexão persistente cada**, lidos em paralelo. Os `blocks` agrupam registradores contíguos numa só leitura (no máximo 125 registradores por leitura).
+
+O endereço (`address`) é **estruturado** (área Modbus + offset base 0), não uma string livre. A web valida cada campo antes de gerar a config e mostra a convenção 0xxxx/1xxxx/3xxxx/4xxxx ao lado, para evitar o erro clássico de deslocamento de 1.
 
 ## Motor de máquina (Machine Engine)
 

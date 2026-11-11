@@ -2,18 +2,18 @@
 
 Plataforma de monitoramento de **OEE (Overall Equipment Effectiveness)** para máquinas industriais, **independente da marca do CLP**.
 
-> **Status:** fase de planejamento. Ainda não há código: este repositório contém só a arquitetura e o plano de execução, em [`docs/`](docs/).
+> **Status:** planejamento concluído e **protótipo da interface** em andamento em [`apps/web`](apps/web/) (dados simulados, roda localmente). Arquitetura e plano em [`docs/`](docs/).
 
 ## Em uma frase
 
-Um **gateway Linux** instalado na fábrica conversa com os CLPs (Modbus, OPC UA, Siemens S7, EtherNet/IP...), calcula estados e contagens localmente e envia os dados por **HTTPS de saída** para uma **plataforma web em Next.js na Vercel**, com banco **Postgres na Neon**.
+Um **gateway Linux** instalado na fábrica conversa com os CLPs por **Modbus TCP ou Modbus RTU (RS-485)**, calcula estados e contagens localmente e envia os dados por **HTTPS de saída** para uma **plataforma web em Next.js na Vercel**, com banco **Postgres na Neon**.
 
 ```mermaid
 flowchart LR
   subgraph FAB["Fábrica (rede OT)"]
-    CLP1["CLP Siemens"] --> GW
-    CLP2["CLP Rockwell"] --> GW
-    CLP3["CLP Modbus<br/>(WEG, Schneider, Delta...)"] --> GW
+    CLP1["CLP Modbus TCP<br/>(Ethernet)"] --> GW
+    CLP2["CLPs Modbus RTU<br/>(barramento RS-485)"] --> GW
+    CLP3["Conversor RTU→TCP<br/>(barramento distante)"] --> GW
     IO["I/O remoto<br/>(máquinas legadas)"] --> GW
     GW["Gateway Linux<br/>oee-gateway (Go)"]
   end
@@ -33,8 +33,8 @@ flowchart LR
 
 | Camada | Escolha |
 |---|---|
-| Gateway (borda) | Agente próprio em **Go** (binário único, roda em ARM64/x86), Debian, systemd |
-| Protocolos | Modbus TCP/RTU, OPC UA, Siemens S7, EtherNet/IP (Rockwell), MC/SLMP (Mitsubishi), FINS (Omron) |
+| Gateway (borda) | Agente próprio em **Go** (binário único, roda em ARM64/x86), Debian, systemd. Hardware padrão: **Seeed reComputer R1000 sem rádio** (3× RS-485 isoladas, 2× Ethernet, trilho DIN, 24 VDC) |
+| Protocolos | **Modbus TCP e Modbus RTU (RS-485)** no MVP. S7, EtherNet/IP, OPC UA e outros em fase futura |
 | Buffer local | SQLite (store-and-forward: nenhum dado se perde se a internet cair) |
 | Plataforma web | **Next.js** (App Router) + TypeScript na **Vercel** |
 | Banco de dados | **Neon Postgres** (via integração nativa da Vercel) + **Drizzle ORM** |
@@ -57,6 +57,7 @@ flowchart LR
 | 08 | [Segurança e operação](docs/08-seguranca-e-operacao.md) | Segurança OT/IT, ambientes, CI/CD, observabilidade, custos |
 | 09 | [Roadmap](docs/09-roadmap.md) | Fases, entregas e critérios de saída |
 | 10 | [Decisões arquiteturais (ADRs)](docs/10-decisoes-arquiteturais.md) | Registro das decisões e alternativas avaliadas |
+| 11 | [Integração Modbus](docs/11-integracao-modbus.md) | Suporte por CLP, **bloco OEE padrão Engemase**, RS-485, comissionamento |
 
 ## Estrutura planejada do repositório
 

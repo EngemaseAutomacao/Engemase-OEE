@@ -44,7 +44,7 @@ Legenda: **MVP** = Fase 1 · **F2** = Fase 2 · **F3** = Fase 3 (ver [roadmap](0
 | RF15 | Alertas (máquina parada > X min, gateway offline, OEE abaixo da meta) | F2 |
 | RF16 | Atualização remota do gateway (OTA) | F2 |
 | RF17 | Templates de máquina (reaproveitar o mapeamento de tags) e importação de tags por CSV | F2 |
-| RF18 | Navegação (browse) de tags OPC UA pela web | F2 |
+| RF18 | Varredura de escravos/registradores Modbus pela web (ajuda no comissionamento) | F2 |
 | RF19 | API pública e webhooks para ERP/MES; ordens de produção | F3 |
 | RF20 | Escrita controlada no CLP (ex.: enviar ordem/receita) | F3+ |
 
@@ -78,8 +78,8 @@ Estas premissas moldam a arquitetura. Se alguma estiver errada, os documentos af
 
 | # | Pergunta | Por que importa |
 |---|---|---|
-| Q1 | Quais marcas e modelos de CLP aparecem primeiro nos clientes? | Define a ordem dos drivers (MVP: Modbus, OPC UA e S7) |
-| Q2 | Há hardware de gateway preferido (IOT2050, Revolution Pi, Moxa, PC industrial x86)? | Define a arquitetura de build (ARM64 vs x86) e o tamanho do buffer |
+| Q1 | Quais marcas e modelos de CLP aparecem primeiro nos clientes? A Engemase pode incluir o **bloco OEE padrão** nos programas? | O MVP é só Modbus TCP/RTU; isso define quantas máquinas dá para ligar sem mexer no CLP (ver [11](11-integracao-modbus.md)) |
+| Q2 | ~~Hardware do gateway~~ → **proposto:** Seeed reComputer R1000 sem rádio ([03](03-gateway.md#hardware-recomendado)). Falta: cotação formal e compra de 2 unidades para bancada | Custo por planta e prazo de importação |
 | Q3 | Quantas máquinas e plantas no primeiro ano? | Dimensiona o plano Neon/Vercel e a necessidade de MQTT |
 | Q4 | O operador terá tablet na máquina para apontar paradas? | Peso da tela do operador no MVP |
 | Q5 | Há requisito de retenção (ex.: 5 anos de histórico)? | Política de partições e custo de armazenamento |

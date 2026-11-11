@@ -6,10 +6,10 @@
 flowchart TB
   subgraph BORDA["1. Borda: fábrica (rede OT)"]
     direction LR
-    CLPs["CLPs<br/>Siemens, Rockwell, Mitsubishi,<br/>Omron, Schneider, WEG..."]
+    CLPs["CLPs<br/>Schneider, Delta, WEG, Siemens,<br/>Rockwell, Mitsubishi..."]
     IO["Módulo de I/O remoto<br/>(máquinas sem CLP acessível)"]
     GW["Gateway Linux<br/>oee-gateway (Go)<br/>drivers · estados · contadores · buffer SQLite"]
-    CLPs -->|"S7 · EtherNet/IP · Modbus · OPC UA · MC · FINS"| GW
+    CLPs -->|"Modbus TCP (Ethernet) · Modbus RTU (RS-485)"| GW
     IO -->|"Modbus TCP"| GW
   end
 

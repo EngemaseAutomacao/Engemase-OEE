@@ -14,6 +14,8 @@ Registro curto das decisões. Para mudar uma decisão, adicione uma nova ADR que
 | 008 | Somente leitura nos CLPs no v1 | Proposta |
 | 009 | Tempo real por polling no MVP | Proposta |
 | 010 | Better Auth para autenticação e organizações | Proposta |
+| 011 | Modbus TCP e RTU como únicos protocolos do MVP | **Aceita** (decisão do dono do produto) |
+| 012 | Hardware padrão do gateway: Seeed reComputer R1000 sem rádio | Proposta (validar em bancada) |
 
 ---
 
@@ -42,7 +44,7 @@ Registro curto das decisões. Para mudar uma decisão, adicione uma nova ADR que
 - *EMQX Neuron:* a edição open source só tem Modbus TCP e MQTT; S7 e OPC UA são comerciais.
 - *Kepware / Ignition Edge:* excelentes, mas com licença por gateway. Continuam utilizáveis como fonte, via OPC UA.
 
-**Consequências.** Binário único, ~20–50 MB de RAM, cross-compile trivial e OTA simples. Duas linguagens no monorepo. O EtherNet/IP pode exigir cgo (libplctag), o que complica o cross-compile; a mitigação é zig/goreleaser ou o pure-Go `gologix`.
+**Consequências.** Binário único, ~20–50 MB de RAM, cross-compile trivial e OTA simples. Duas linguagens no monorepo. Com o MVP só em Modbus ([ADR-011](#adr-011--modbus-tcp-e-rtu-como-únicos-protocolos-do-mvp)), a pilha é **Go puro** (`grid-x/modbus` + `modernc.org/sqlite`, sem cgo). Um driver EtherNet/IP futuro pode exigir cgo (libplctag); a mitigação é zig/goreleaser ou o pure-Go `gologix`.
 
 ---
 
@@ -141,3 +143,34 @@ Registro curto das decisões. Para mudar uma decisão, adicione uma nova ADR que
 **Alternativas.** *Clerk:* excelente experiência, organizações prontas, mas custo por usuário ativo e dados fora do nosso banco. *Auth.js:* não tem organizações nem papéis nativos.
 
 **Consequências.** Sem custo por usuário, dados sob nosso controle e flexibilidade para o login por PIN do operador. A manutenção da segurança da autenticação fica mais por nossa conta (atualizar dependências e seguir as boas práticas da biblioteca).
+
+---
+
+## ADR-011 — Modbus TCP e RTU como únicos protocolos do MVP
+
+**Contexto.** O dono do produto decidiu que a comunicação CLP ↔ gateway será por **Modbus TCP/IP** ou **Modbus RTU via RS-485**. É o protocolo mais universal entre os CLPs e módulos de I/O vendidos no Brasil e o mais simples de implementar e testar.
+
+**Decisão.** O agente implementa só os transportes Modbus TCP, Modbus RTU (RS-485) e RTU sobre TCP, com a biblioteca `grid-x/modbus`. A Engemase padroniza um **bloco OEE** de registradores para os CLPs que programa ([11](11-integracao-modbus.md#3-bloco-oee-padrão-engemase)). A interface de driver continua genérica para receber outros protocolos depois.
+
+**Alternativas.** Começar também com OPC UA e S7comm: cobre mais CLPs sem mexer no programa, mas multiplica o esforço de desenvolvimento e de teste no MVP.
+
+**Consequências.**
+- Em **Siemens S7-1200/1500, Rockwell Logix e Omron**, o Modbus exige bloco no programa ou módulo. Para esses casos no MVP: incluir o bloco OEE no programa (com autorização do cliente) ou usar **módulo de I/O remoto** lendo sinais da máquina.
+- Modbus RTU tem **mestre único por barramento**: o comissionamento precisa verificar se a IHM já é mestre ([11](11-integracao-modbus.md#5-um-mestre-por-barramento)).
+- Os protocolos nativos (S7comm, EtherNet/IP, FINS, OPC UA) entram numa fase futura, priorizados pelas marcas que mais aparecerem nos clientes.
+
+---
+
+## ADR-012 — Hardware padrão do gateway: Seeed reComputer R1000 sem rádio
+
+**Contexto.** O gateway precisa ser **bom e barato** (muitas unidades), com RS-485 isolada, 2 Ethernet, eMMC, 24 VDC e trilho DIN, rodando nosso binário Go em Debian.
+
+**Decisão.** Padronizar o **Seeed reComputer R1000, série R10xx-00 (sem Wi-Fi/BLE), 2 GB de RAM e 16 GB de eMMC**, com UPS/supercapacitor opcional. Segunda opção: **reComputer R1100 (R11xx-00)**. Para cliente que exija marca europeia ou compra nacional: **Revolution Pi Connect 4/5** (distribuidor no Brasil).
+
+**Alternativas.** Siemens IOT2050, Moxa UC-1222A, Advantech ECU-150 e EDATEC ED-IPC2110 (mais caros ou com ressalvas de SO e preço); Teltonika TRB246 (MIPS, descartado); montagem própria com Raspberry Pi 5 (só para bancada). Detalhes em [03](03-gateway.md#hardware-recomendado).
+
+**Consequências.**
+- **3 RS-485 isoladas + 2 Ethernet** por ~US$ 230–310 (lista 2026); custo nacionalizado estimado de ~R$ 2,4–2,7 mil por courier. **Pendente:** cotação formal e preço da série `-00`.
+- **Sem rádio**, para não depender de homologação ANATEL do produto final. A necessidade de anuência para equipamento só com Ethernet/RS-485 deve ser confirmada com um OCD e com o despachante (NCM).
+- O resistor de terminação RS-485 não vem montado (resistor externo no borne). Pedir à Seeed confirmação de que o lote é a revisão **v1.1** da placa.
+- **Validação obrigatória na Fase 0:** 2 unidades em bancada, testando as 3 RS-485 com o agente Go (modo RS-485 do kernel, 9600–115200 bps), consumo, temperatura e queda de energia com o buffer SQLite.
