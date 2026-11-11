@@ -37,7 +37,8 @@ export function StopsTable({
   const withReason = rows.map((r) => ({ ...r, reasonId: assigned[r.key] ?? r.reasonId }))
   const relevant = withReason.filter((r) => !r.micro)
   const micro = withReason.filter((r) => r.micro)
-  const pending = relevant.filter((r) => r.state === "STOPPED" && r.reasonId === null)
+  const needsReason = (r: StopRow) => (r.state === "STOPPED" || r.state === "FAULT") && !r.micro && r.reasonId === null
+  const pending = relevant.filter(needsReason)
   const visible = showMicro ? withReason : relevant
   const stoppedS = relevant.filter((r) => r.state !== "PLANNED_STOP").reduce((s, r) => s + r.durationS, 0)
 
@@ -101,10 +102,10 @@ export function StopsTable({
             </TableHeader>
             <TableBody>
               {visible.map((r) => {
-                const needsReason = r.state === "STOPPED" && !r.micro && r.reasonId === null
+                const pendingRow = needsReason(r)
                 const editable = !r.micro && r.state !== "NO_COMM"
                 return (
-                  <TableRow key={r.key} className={cn(needsReason && "bg-state-stopped/5", r.micro && "text-muted-foreground")}>
+                  <TableRow key={r.key} className={cn(pendingRow && "bg-state-stopped/5", r.micro && "text-muted-foreground")}>
                     <TableCell className="pl-6 tabular-nums">{time(r.start)}</TableCell>
                     <TableCell className="tabular-nums">
                       {r.open ? (
@@ -141,7 +142,7 @@ export function StopsTable({
                       )}
                     </TableCell>
                     <TableCell className="pr-6 text-right">
-                      {needsReason ? (
+                      {pendingRow ? (
                         <Button size="sm" onClick={() => setTarget(r)}>
                           Classificar
                         </Button>

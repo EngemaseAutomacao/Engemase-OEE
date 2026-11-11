@@ -32,14 +32,14 @@ const KIND_ICON: Record<AlertKind, LucideIcon> = {
   gateway_pending: HourglassIcon,
 }
 
-const SEVERITY_STYLE: Record<AlertSeverity, { icon: string; label: string; chip: string }> = {
-  critical: { icon: "bg-state-fault/12 text-state-fault", label: "Crítico", chip: "bg-state-fault/12 text-state-fault" },
+const SEVERITY_STYLE: Record<AlertSeverity, { icon: string; label: [string, string]; chip: string }> = {
+  critical: { icon: "bg-state-fault/12 text-state-fault", label: ["crítico", "críticos"], chip: "bg-state-fault/12 text-state-fault" },
   warning: {
     icon: "bg-state-stopped/15 text-amber-700 dark:text-state-stopped",
-    label: "Atenção",
+    label: ["de atenção", "de atenção"],
     chip: "bg-state-stopped/15 text-amber-700 dark:text-state-stopped",
   },
-  info: { icon: "bg-muted text-muted-foreground", label: "Pendência", chip: "bg-muted text-muted-foreground" },
+  info: { icon: "bg-muted text-muted-foreground", label: ["pendência", "pendências"], chip: "bg-muted text-muted-foreground" },
 }
 
 const INITIAL = 5
@@ -61,7 +61,7 @@ export function AlertsPanel({ alerts, className }: { alerts: MonitoringAlert[]; 
               .filter((c) => c.n > 0)
               .map((c) => (
                 <span key={c.s} className={cn("rounded-full px-2 py-0.5 text-xs font-medium tabular-nums", SEVERITY_STYLE[c.s].chip)}>
-                  {c.n} {SEVERITY_STYLE[c.s].label.toLowerCase()}
+                  {c.n} {SEVERITY_STYLE[c.s].label[c.n === 1 ? 0 : 1]}
                 </span>
               ))}
           </CardAction>

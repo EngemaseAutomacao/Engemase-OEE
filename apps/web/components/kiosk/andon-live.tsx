@@ -16,9 +16,9 @@ export function AndonClock({ timeZone, className }: { timeZone: string; classNam
   const day = d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", timeZone })
   return (
     <div className={cn("leading-none", className)}>
-      <div className="font-mono font-bold tracking-tight tabular-nums" suppressHydrationWarning>
+      <div className="font-bold tracking-tight tabular-nums" suppressHydrationWarning>
         <time className="text-[clamp(2.75rem,4.6vw,6rem)]">{hm}</time>
-        <span className="ml-1 text-[clamp(1.25rem,2vw,2.5rem)] text-muted-foreground">:{ss}</span>
+        <span className="ml-0.5 text-[clamp(1.25rem,2vw,2.5rem)] text-muted-foreground">:{ss}</span>
       </div>
       <div className="mt-2 text-[clamp(1rem,1.15vw,1.5rem)] text-muted-foreground first-letter:uppercase" suppressHydrationWarning>
         {day}

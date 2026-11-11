@@ -51,7 +51,6 @@ export function HourlyProductionChart({ data, height = 260 }: { data: HourlyPoin
 
   const option: EChartsOption = {
     grid: { left: 8, right: 8, top: 36, bottom: 8, containLabel: true },
-    legend: { top: 0, data: ["Boas", "Refugo", "Meta"] },
     tooltip: {
       trigger: "axis",
       confine: true,
@@ -131,7 +130,6 @@ export function OeeTrendChart({ data, height = 260 }: { data: DailyPoint[]; heig
 
   const option: EChartsOption = {
     grid: { left: 8, right: 16, top: 36, bottom: 8, containLabel: true },
-    legend: { top: 0, data: ["OEE", "Disponibilidade", "Performance", "Qualidade"] },
     tooltip: {
       trigger: "axis",
       confine: true,

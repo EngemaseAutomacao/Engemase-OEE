@@ -43,7 +43,7 @@ export default function Page() {
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_60%_at_0%_0%,color-mix(in_oklch,var(--primary)_22%,transparent),transparent),radial-gradient(50%_50%_at_100%_100%,color-mix(in_oklch,var(--state-running)_12%,transparent),transparent)]"
         />
-        <div className="relative flex flex-1 flex-col gap-10 p-10 xl:p-14">
+        <div className="relative flex flex-1 flex-col gap-8 p-10 xl:px-14">
           <Brand subtitle="por Engemase Automação" />
 
           <div className="max-w-xl">
@@ -56,7 +56,7 @@ export default function Page() {
             </p>
           </div>
 
-          <ul className="grid max-w-xl gap-5">
+          <ul className="grid max-w-xl gap-4">
             {FEATURES.map(({ icon: Icon, title, text }) => (
               <li key={title} className="flex gap-4">
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
@@ -70,7 +70,7 @@ export default function Page() {
             ))}
           </ul>
 
-          <LoginShowcase className="mt-auto max-w-xl" />
+          <LoginShowcase className="mt-auto hidden max-w-xl [@media(min-height:960px)]:block" />
         </div>
         <div className="relative flex items-center justify-between border-t px-10 py-4 text-xs text-muted-foreground xl:px-14">
           <span>© 2026 Engemase Automação</span>

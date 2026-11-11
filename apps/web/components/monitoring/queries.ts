@@ -69,9 +69,9 @@ export function stateDurations(events: StateEvent[]): Record<MachineState, numbe
 
 const durS = (e: StateEvent) => (Date.parse(e.end) - Date.parse(e.start)) / 1000
 
-/** Paradas não planejadas sem motivo (acima do limite de micro-parada), em aberto ou não. */
+/** Paradas não planejadas (parada ou falha) sem motivo, acima do limite de micro-parada, em aberto ou não. */
 export function unclassifiedStops(events: StateEvent[], microStopThresholdS: number) {
-  return events.filter((e) => e.state === "STOPPED" && e.reasonId === null && durS(e) >= microStopThresholdS)
+  return events.filter((e) => (e.state === "STOPPED" || e.state === "FAULT") && e.reasonId === null && durS(e) >= microStopThresholdS)
 }
 
 // ---------------------------------------------------------------------------

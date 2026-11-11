@@ -91,8 +91,9 @@ export function serialSummary(p: { baudRate?: number; dataBits?: number; parity?
 }
 
 /** Valor bruto da tag formatado para leitura humana. */
-export function formatTagValue(value: string, dataType: string): string {
+export function formatTagValue(value: string, dataType: string, role?: TagRole): string {
   if (value === "—" || value === "") return "—"
+  if (role === "product.code" || role === "state.code" || role === "fault.code") return value
   if (dataType === "bool") return value === "1" ? "1 · ligado" : "0 · desligado"
   const n = Number(value)
   if (Number.isNaN(n)) return value

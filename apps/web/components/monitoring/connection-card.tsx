@@ -46,7 +46,7 @@ function Fields({ items }: { items: [string, React.ReactNode][] }) {
       {items.map(([k, v]) => (
         <div key={k} className="contents">
           <dt className="text-muted-foreground">{k}</dt>
-          <dd className="min-w-0 truncate text-right font-medium tabular-nums sm:text-left">{v}</dd>
+          <dd className="min-w-0 truncate font-medium tabular-nums">{v}</dd>
         </div>
       ))}
     </dl>
@@ -249,13 +249,13 @@ export function ConnectionCard({
                           {t.dataType.endsWith("32") && ` · ${t.byteOrder}`}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-mono text-xs">{formatTagValue(t.lastValue, t.dataType)}</TableCell>
+                      <TableCell className="text-right font-mono text-xs">{formatTagValue(t.lastValue, t.dataType, t.role)}</TableCell>
                       <TableCell>
                         <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", QUALITY_STYLE[t.quality])}>{TAG_QUALITY_LABEL[t.quality]}</span>
                       </TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground tabular-nums">{num(t.pollMs)} ms</TableCell>
                       <TableCell className="pr-3 text-right">
-                        <TagReadButton tagName={t.name} value={formatTagValue(t.lastValue, t.dataType)} quality={t.quality} {...readCtx} />
+                        <TagReadButton tagName={t.name} value={formatTagValue(t.lastValue, t.dataType, t.role)} quality={t.quality} {...readCtx} />
                       </TableCell>
                     </TableRow>
                   ))}

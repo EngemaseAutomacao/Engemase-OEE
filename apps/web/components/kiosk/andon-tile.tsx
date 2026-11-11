@@ -59,7 +59,7 @@ export function AndonTile({ data }: { data: AndonTileData }) {
     <article
       aria-label={`${machine.name}: ${STATE_META[state].label}`}
       className={cn(
-        "@container relative flex min-h-[19rem] flex-col gap-[clamp(0.5rem,2.6cqw,1.25rem)] overflow-hidden rounded-2xl p-[clamp(1rem,4.2cqw,2rem)] shadow-lg xl:min-h-0",
+        "@container relative flex min-h-[19rem] flex-col justify-between gap-[clamp(0.5rem,2.6cqmin,1.5rem)] overflow-hidden rounded-2xl p-[clamp(1rem,1.4vw,2rem)] shadow-lg xl:min-h-0 xl:[container-type:size]",
         STATE_META[state].bg,
         STATE_ON[state],
         state === "NO_COMM" && "bg-stripes",
@@ -69,55 +69,57 @@ export function AndonTile({ data }: { data: AndonTileData }) {
         <span aria-hidden className="pointer-events-none absolute inset-0 animate-pulse rounded-2xl border-[6px] border-white/90" />
       )}
 
-      <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-[clamp(1.5rem,8.5cqw,4rem)] leading-none font-extrabold tracking-tight">{machine.name}</h2>
-          <p className="mt-1.5 truncate text-[clamp(0.875rem,3.4cqw,1.5rem)] font-semibold opacity-75">
-            {machine.code} · {machine.type}
-          </p>
-        </div>
-        <div className="shrink-0 text-right leading-none">
-          <div className="text-[clamp(1.75rem,11cqw,5.5rem)] font-black tracking-tight tabular-nums">
-            {showOee ? pct(live!.shift.oee, 0) : "—"}
-          </div>
-          <div className="mt-1 text-[clamp(0.75rem,3cqw,1.25rem)] font-bold tracking-[0.2em] opacity-75">OEE</div>
-        </div>
-      </header>
-
-      <div className="rounded-xl bg-black/15 px-[clamp(0.75rem,3cqw,1.5rem)] py-[clamp(0.5rem,2.6cqw,1.25rem)]">
-        <div className="flex items-center gap-[clamp(0.5rem,2.4cqw,1.25rem)]">
-          <Icon className="size-[clamp(1.75rem,8cqw,4rem)] shrink-0" strokeWidth={2.4} aria-hidden />
+      <div className="grid gap-[clamp(0.5rem,3cqmin,1.75rem)]">
+        <header className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="truncate text-[clamp(1.25rem,6.6cqw,3.25rem)] leading-none font-black uppercase">{TV_LABEL[state]}</div>
-            <div className="mt-1.5 text-[clamp(0.875rem,4.2cqw,2rem)] leading-none font-bold">
-              {live && !noData ? <LiveSince since={live.stateSince} /> : "Aguardando dados"}
+            <h2 className="truncate text-[clamp(1.5rem,10cqmin,4.75rem)] leading-none font-extrabold tracking-tight">{machine.name}</h2>
+            <p className="mt-[0.4em] truncate text-[clamp(0.875rem,4cqmin,1.75rem)] font-semibold opacity-75">
+              {machine.code} · {machine.type}
+            </p>
+          </div>
+          <div className="shrink-0 text-right leading-none">
+            <div className="text-[clamp(1.75rem,14cqmin,6.5rem)] font-black tracking-tight tabular-nums">
+              {showOee ? pct(live!.shift.oee, 0) : "—"}
+            </div>
+            <div className="mt-1 text-[clamp(0.75rem,3.4cqmin,1.5rem)] font-bold tracking-[0.2em] opacity-75">OEE</div>
+          </div>
+        </header>
+
+        <div className="rounded-xl bg-black/15 px-[clamp(0.75rem,3.4cqmin,1.75rem)] py-[clamp(0.5rem,3cqmin,1.5rem)]">
+          <div className="flex items-center gap-[clamp(0.5rem,2.6cqmin,1.5rem)]">
+            <Icon className="size-[clamp(1.75rem,11cqmin,5rem)] shrink-0" strokeWidth={2.4} aria-hidden />
+            <div className="min-w-0">
+              <div className="text-[clamp(1.25rem,8cqmin,3.75rem)] leading-[0.95] font-black text-balance uppercase">{TV_LABEL[state]}</div>
+              <div className="mt-[0.3em] text-[clamp(0.875rem,6cqmin,2.75rem)] leading-none font-bold">
+                {live && !noData ? <LiveSince since={live.stateSince} /> : "Aguardando dados"}
+              </div>
             </div>
           </div>
+          {detail && (
+            <div className="mt-[clamp(0.375rem,2.2cqmin,1rem)] line-clamp-2 text-[clamp(0.875rem,4.6cqmin,2rem)] leading-tight font-semibold">
+              {detail}
+            </div>
+          )}
         </div>
-        {detail && (
-          <div className="mt-[clamp(0.375rem,2cqw,0.875rem)] line-clamp-2 text-[clamp(0.875rem,3.8cqw,1.75rem)] leading-tight font-semibold">
-            {detail}
-          </div>
-        )}
       </div>
 
       {noData ? (
-        <div className="mt-auto flex items-center gap-3 text-[clamp(0.875rem,4cqw,1.75rem)] font-semibold opacity-85">
+        <div className="flex items-center gap-3 text-[clamp(0.875rem,5cqmin,2rem)] font-semibold opacity-85">
           <HourglassIcon className="size-[1.25em] shrink-0" aria-hidden />
           Aguardando os primeiros dados do gateway
         </div>
       ) : (
-        <div className="mt-auto grid gap-[clamp(0.375rem,1.8cqw,0.875rem)]">
-          <div className="truncate text-[clamp(0.875rem,4cqw,1.75rem)] font-semibold opacity-90">
+        <div className="grid gap-[clamp(0.375rem,2cqmin,1rem)]">
+          <div className="truncate text-[clamp(0.875rem,4.8cqmin,2rem)] font-semibold opacity-90">
             {live!.productName}
             <span className="font-medium opacity-70"> · {live!.productCode}</span>
           </div>
           <div className="flex items-baseline justify-between gap-3 leading-none tabular-nums">
-            <span className="text-[clamp(1.5rem,8.6cqw,4.25rem)] font-extrabold">{num(live!.countShift)}</span>
-            <span className="text-[clamp(0.875rem,4.4cqw,2rem)] font-bold opacity-75">meta {num(live!.targetShift)}</span>
+            <span className="text-[clamp(1.5rem,12cqmin,5.5rem)] font-extrabold">{num(live!.countShift)}</span>
+            <span className="text-[clamp(0.875rem,5.4cqmin,2.25rem)] font-bold opacity-75">meta {num(live!.targetShift)}</span>
           </div>
           <div className="relative py-1.5">
-            <div className="h-[clamp(0.5rem,2.4cqw,1.125rem)] overflow-hidden rounded-full bg-black/20">
+            <div className="h-[clamp(0.5rem,3cqmin,1.5rem)] overflow-hidden rounded-full bg-black/20">
               <div className="h-full rounded-full bg-current" style={{ width: `${progress}%` }} />
             </div>
             {expectedPct !== null && (
@@ -128,7 +130,7 @@ export function AndonTile({ data }: { data: AndonTileData }) {
               />
             )}
           </div>
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-[clamp(0.75rem,3.4cqw,1.5rem)] font-semibold tabular-nums">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-[clamp(0.75rem,4cqmin,1.75rem)] font-semibold tabular-nums">
             <span>
               {live!.stale
                 ? `Dados até ${time(live!.lastUpdate)}`

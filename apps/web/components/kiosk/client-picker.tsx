@@ -125,7 +125,7 @@ export function ClientPicker({ items }: { items: ClientPickerItem[] }) {
             <InputGroupInput
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar cliente, cidade ou unidade"
+              placeholder="Buscar cliente ou cidade"
               aria-label="Buscar cliente"
             />
           </InputGroup>

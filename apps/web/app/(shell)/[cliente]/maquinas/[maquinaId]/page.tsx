@@ -154,7 +154,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
               há {since(live.stateSince)} · desde {time(live.stateSince)}
             </span>
           ) : (
-            <span className="text-sm text-muted-foreground">Aguardando os primeiros dados</span>
+            <span className="text-sm text-muted-foreground">Nenhum dado recebido neste turno</span>
           )}
           {live?.faultCode !== undefined && (
             <span className="inline-flex items-center gap-1.5 rounded-md bg-state-fault/10 px-2 py-1 text-xs font-medium text-state-fault">
@@ -263,7 +263,6 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
   }))
   const dailyAvg = daily.length ? daily.reduce((s, d) => s + d.oee, 0) / daily.length : 0
   const bestDay = daily.reduce<DailyPoint | undefined>((b, d) => (!b || d.oee > b.oee ? d : b), undefined)
-  const producedSoFar = hourly.reduce((s, h) => s + (h.good ?? 0) + (h.reject ?? 0), 0)
 
   return (
     <PageBody>
@@ -323,7 +322,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
           <CardHeader>
             <CardTitle>Produção por hora</CardTitle>
             <CardDescription>
-              {num(producedSoFar)} peças no turno · barras = boas + refugo; contorno tracejado = meta da hora (sem paradas planejadas)
+              {num(live.countShift)} peças no turno · barras = boas + refugo; contorno tracejado = meta da hora (sem paradas planejadas)
             </CardDescription>
           </CardHeader>
           <CardContent className="px-3 sm:px-4">

@@ -44,3 +44,10 @@ export const CATEGORY_LABEL: Record<ReasonCategory, string> = {
   setup: "Setup",
   planned: "Planejada",
 }
+
+/** Botões de motivo: fundo suave + borda na cor da categoria (mesmas cores dos estados). */
+export const CATEGORY_BUTTON: Record<ReasonCategory, string> = {
+  unplanned: "border-state-stopped/60 bg-state-stopped/12 hover:bg-state-stopped/22",
+  setup: "border-state-setup/60 bg-state-setup/12 hover:bg-state-setup/22",
+  planned: "border-state-planned/60 bg-state-planned/12 hover:bg-state-planned/22",
+}
