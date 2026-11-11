@@ -63,6 +63,7 @@ flowchart LR
 | 13 | [Notificações e alertas](docs/13-notificacoes-e-alertas.md) | Central no app, Web Push, e-mail/WhatsApp, regras e anti-spam |
 | 14 | [Identidade visual e temas](docs/14-identidade-visual-e-temas.md) | Marca Engemase, cores por cliente, tema claro/escuro/automático |
 | 15 | [Plataforma multi-cliente](docs/15-multi-cliente-e-acesso.md) | Papéis e escopo por unidade, acesso da Engemase, isolamento, console, segurança |
+| 16 | [Projeto do gateway](docs/16-projeto-do-gateway.md) | Funções, software, rede e instalação, comissionamento local, preparação e ciclo de vida (definições canônicas) |
 | 17 | [Backlog e pendências](docs/17-backlog-e-pendencias.md) | O que falta, épicos até o piloto, decisões pendentes, próximos passos |
 
 ## Estrutura planejada do repositório

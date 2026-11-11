@@ -90,8 +90,9 @@ Quando o barramento RS-485 estiver longe do painel do gateway, ou para aceitar h
 - Distribuição: **pacote `.deb`** (gerado com nfpm/goreleaser) e script de instalação. Imagem **Docker** opcional, para quem já usa containers.
 - Diretórios:
   - `/usr/bin/oee-gateway`: binário
-  - `/etc/oee-gateway/credentials.json`: credencial (permissão 0600)
-  - `/var/lib/oee-gateway/`: `buffer.db`, `config.json` (última config boa) e estado dos contadores
+  - `/var/lib/oee-gateway/` (na partição `/data`): `credentials.json` (0600), `buffer.db`, config atual e anterior, estado dos contadores
+  - `/etc/oee-gateway/gateway.yaml` (config local mínima) e `/etc/oee-gateway/network.json` (rede, proxy e CA)
+  - definições canônicas de caminhos, usuários e processos: [16 §4](16-projeto-do-gateway.md#4-caminhos-usuários-e-identidade-canônico)
   - logs: journald
 
 Fluxo de instalação no cliente:

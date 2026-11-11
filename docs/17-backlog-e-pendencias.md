@@ -44,6 +44,7 @@ Premissas: 2 desenvolvedores (**Web** e **Gateway**), semana 1 = 16/11/2026, sem
 **Caminho crítico:** `N1 → W1 → W2a → W3 → W2b → W6 → W4 → W5 → W7 → W8 → W9 (+W11) → Piloto`.
 - A trilha web leva cerca de 15 semanas; a do gateway, cerca de 12,5. A folga do gateway vai para W11 e para o teste de longa duração.
 - **Piloto estimado: semana 14 a 16** (meados de fevereiro a início de março de 2027, sem o recesso). É de 3 a 5 semanas depois do Gantt do `docs/09`.
+- **Atenção (projeto do gateway, [16 §9](16-projeto-do-gateway.md#9-prazo-e-riscos)):** com a página local, a rede local com checkpoint, a imagem própria e a bancada, a trilha do gateway soma 17–20 semanas e **passa a ser o caminho crítico** (piloto nas semanas 19–21). Para manter 14–16: um segundo desenvolvedor ou técnico em tempo parcial **e** o corte de MVP do doc 16.
 - **Cortes possíveis para adiantar:**
   - terminais só se houver tablet (−0,5 semana);
   - console mínimo (−0,5 semana);
@@ -111,7 +112,7 @@ A ordem de urgência vem da Fase 0. Os padrões adotados até a decisão estão 
 | L19 | Terminais e operador | Código de pareamento, várias TVs por linha, lista de operadores, fila offline × reclassificação | F1 |
 | L20 | Autenticação | Política de senha, duração de sessão, bloqueio, recuperação do 2FA, SSO | F1 |
 | L21 | Limites da API | Números do rate limit por gateway | F1 |
-| L22 | Ciclo de vida do gateway | Em consolidação no `docs/16` | F0 |
+| L22 | Ciclo de vida do gateway | Consolidado no [`docs/16`](16-projeto-do-gateway.md) (MVP simplificado; completo na F2) | — |
 
 ## 5. Pendências do protótipo
 

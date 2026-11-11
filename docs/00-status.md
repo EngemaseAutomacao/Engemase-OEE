@@ -12,12 +12,16 @@
   - seletor de cliente, login, unidades e linhas, cadastro de máquinas;
   - marca Engemase, tema Claro/Escuro/Automático, sino de notificações e cor por cliente (exemplo: Serra Azul).
 
-## Interrompido a pedido (retomar)
+## Concluído nesta retomada
 
-- **Projeto do gateway** (vai virar `docs/16-projeto-do-gateway.md`):
-  - prontas, como rascunho em `docs/rascunhos/`: software (`gateway-software.md`) e rede e instalação (`gateway-rede-e-instalacao.md`);
-  - faltam o comissionamento local, a preparação e ciclo de vida e a revisão crítica.
-- **Levantamento do que falta:** interrompido antes de terminar. Refazer a auditoria da documentação, do protótipo e da implementação, com backlog priorizado.
+- **Projeto do gateway:** [`docs/16`](16-projeto-do-gateway.md), com as definições canônicas. Os 4 rascunhos detalhados estão em `docs/rascunhos/`.
+- **Levantamento do que falta:** [`docs/17`](17-backlog-e-pendencias.md), com backlog, decisões, lacunas e próximos passos. Os relatórios completos estão em `docs/rascunhos/`.
+- **18 contradições da documentação corrigidas.**
+
+## Em andamento
+
+- **Telas pendentes do protótipo**, no layout novo.
+- **Fase 0 (sistema real):** `packages/contracts`, `packages/oee-core`, `packages/db` (RLS), `tools/plc-sim`, `gateway/` e CI.
 
 ## Pendente no protótipo
 

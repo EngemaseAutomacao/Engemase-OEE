@@ -133,7 +133,7 @@ flowchart LR
 | 10 | Rotas do Better Auth esquecidas abertas | Lista de permissão + teste de CI que falha se surgir rota não classificada |
 | 11 | Terminais continuam ativos após quem pareou sair | Registro de quem pareou, revogação em um clique, prazo absoluto do token |
 | 12 | Cookie de terminal e sessão de pessoa no mesmo tablet | Terminal em caminho próprio (`/terminal`), nunca combinado com sessão de pessoa |
-| 13 | Comandos de diagnóstico usados para varrer a rede OT | Alvo só entre dispositivos cadastrados; limite de taxa; auditoria com payload |
+| 13 | Comandos de diagnóstico usados para varrer a rede OT | Alvo entre dispositivos cadastrados. Exceção: `device.test` pode testar um IP **ainda não cadastrado dentro da sub-rede OT do gateway**, liberado no firewall por 5 min, com limite de taxa (1 a cada 5 s) e auditoria com payload ([16 §5](16-projeto-do-gateway.md#5-rede-e-instalação)) |
 | 14 | Auditoria e exportações vazando outras unidades | Filtro por escopo; job de exportação guarda o escopo de quem pediu; download por rota autenticada |
 | 15 | Força bruta em senha, 2FA e códigos | Rate limit por conta e IP; 2FA da equipe Engemase cadastrado via link de e-mail |
 | 16 | Admin do cliente alterando o próprio plano/estado | Plano, limites e estado em `client_account`, gravável só pela plataforma |

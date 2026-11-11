@@ -74,7 +74,7 @@ Regras:
 |---|---|
 | Topologia | **Barramento em cascata** (daisy chain). Nada de estrela. Derivações curtas (< 20 m segundo a especificação Modbus) |
 | Terminação | **120 Ω só nas duas pontas** (a especificação Modbus também admite 150 Ω, ou 120 Ω + 1 nF). No reComputer R1000 o resistor **não vem montado**: usar resistor externo no borne da última estação |
-| Polarização (fail-safe) | **Um único par** de resistores (450–650 Ω) no barramento, normalmente no mestre (gateway). Não duplicar |
+| Polarização (fail-safe) | **Um único par** de resistores (450–650 Ω) no barramento, normalmente no mestre. **No reComputer R1000, ainda não se sabe se a porta polariza** (confirmar na bancada). Até lá, usar a polarização de um escravo ou de um terminador com bias. Não duplicar |
 | Cabo | Par trançado blindado de 120 Ω (22–24 AWG) **+ condutor de comum (0 V)**. Malha aterrada em **um só ponto** (no gateway). Longe de cabos de motor e inversor |
 | Isolação | Porta RS-485 **isolada** no gateway. Muitos CLPs baratos têm porta não isolada. A isolação **não dispensa** o fio de comum (no R1000, o comum vai no `GND_ISO`) |
 | Limites | 32 cargas unitárias por segmento (mais com transceptores de 1/4 ou 1/8 UL ou com repetidor) · ~1.000–1.200 m em baixa velocidade · endereços 1–247 (0 é broadcast, nunca ler) |
