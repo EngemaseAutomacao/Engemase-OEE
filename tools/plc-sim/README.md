@@ -17,20 +17,23 @@ Ou gere o binário (`go build` cria `./plc-sim`, ignorado pelo git):
 go build && ./plc-sim --help
 ```
 
-Saída típica:
+Saída típica (mesmo comando com `--speed 30`, para o exemplo ficar curto):
 
 ```text
 plc-sim · simulador de CLP Modbus TCP · bloco OEE padrão Engemase v1
-  máquinas: 3 · modo: unit · ciclo: 6s · semente: 42 · cenário: normal · velocidade: 1×
+  máquinas: 3 · modo: unit · ciclo: 6s · semente: 42 · cenário: normal · velocidade: 30×
   bloco: HR 1000–1031 (41001–41032) · 32 bits em CDAB · coils 0 (rodando) e 1 (falha) · somente leitura
   M1 → 127.0.0.1:1502 · unit id 1
   M2 → 127.0.0.1:1502 · unit id 2
   M3 → 127.0.0.1:1502 · unit id 3
 Ctrl+C para encerrar.
-23:11:11.874 [t=00:00:06] M1 produzindo → PARADA por ~30s (falta de material)
-23:11:12.874 [t=00:00:36] M1 parada → PRODUZINDO (produto 1001)
-23:11:12.974 [t=00:00:41] M1 produzindo → FALHA 520 (porta de segurança aberta) por ~54s
-23:11:13.573 [t=00:01:00] status M2 produzindo total=10 refugo=0 bons=10 hb=60 produto=1002 vel=581/h ciclo=6197ms
+23:13:00.678 [t=00:00:06] M1 produzindo → PARADA por ~30s (falta de material)
+23:13:01.679 [t=00:00:36] M1 parada → PRODUZINDO (produto 1001)
+23:13:01.779 [t=00:00:41] M1 produzindo → FALHA 520 (porta de segurança aberta) por ~54s
+23:13:03.379 [t=00:01:30] status M1 falha 520  total=2 refugo=0 bons=2 hb=90 produto=1001 vel=0/h ciclo=5865ms
+23:13:03.379 [t=00:01:30] status M2 produzindo total=15 refugo=1 bons=14 hb=90 produto=1002 vel=606/h ciclo=5941ms
+23:13:03.379 [t=00:01:30] status M3 produzindo total=15 refugo=0 bons=15 hb=90 produto=1003 vel=632/h ciclo=5700ms
+23:13:03.679 [t=00:01:36] M1 falha → PRODUZINDO (produto 1001)
 ```
 
 `[t=…]` é o relógio simulado (com `--speed 10` ele anda dez vezes mais rápido que o relógio de parede).
