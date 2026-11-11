@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oee.engemase.com.br/schemas/gateway/v1/enroll-response.json",
+  "title": "POST /enroll — resposta 201",
+  "description": "Credenciais do gateway (o token só aparece aqui). Contrato gateway ↔ nuvem v1. Gerado de @engemase/contracts; não edite à mão.",
+  "type": "object",
+  "properties": {
+    "gateway_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+      "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+    },
+    "token": {
+      "type": "string",
+      "maxLength": 160,
+      "pattern": "^gw_(?:live|test)_[A-Za-z0-9_-]{43,128}$"
+    },
+    "org": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$",
+      "description": "Slug do cliente"
+    },
+    "server_time": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+      "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+    }
+  },
+  "required": [
+    "gateway_id",
+    "token",
+    "org"
+  ]
+}

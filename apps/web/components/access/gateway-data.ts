@@ -5,7 +5,7 @@
  * Quando a camada real existir, isto vira consulta a `config_version`, `gateway_command` e `gateway_health`.
  */
 import { MOCK_NOW, nowMs, seededRandom, type Device, type Gateway, type Machine, type Tag } from "@/lib/mock"
-import { COMMAND_TYPE_LABEL, type CommandStatus, type CommandType, modbusRef, pollLabel } from "./labels"
+import { COMMAND_TYPE_LABEL, type CommandStatus, type CommandType, formatTagValue, modbusRef, pollLabel } from "./labels"
 
 const MIN = 60_000
 const HOUR = 60 * MIN
@@ -53,7 +53,7 @@ export function configHistory(
 ): ConfigVersion[] {
   const rnd = seededRandom(`${gateway.id}:config`)
   const machineName = (id: string) => machines.find((m) => m.id === id)?.name ?? "Máquina"
-  const pick = <T,>(list: T[]): T => list[Math.floor(rnd() * list.length)]!
+  const pick = <T>(list: T[]): T => list[Math.floor(rnd() * list.length)]!
   const who = authors.length > 0 ? authors : ["Equipe Engemase"]
 
   if (gateway.configVersion <= 1 || devices.length === 0) {
@@ -71,8 +71,8 @@ export function configHistory(
     ]
   }
 
-  // Mudanças plausíveis a partir das conexões e tags reais do gateway.
-  const templates: (() => ConfigChange)[] = [
+  // Mudanças plausíveis a partir das conexões e tags reais do gateway (só as aplicáveis ao que existe).
+  const tagTemplates: (() => ConfigChange)[] = [
     () => {
       const t = pick(tags)
       return { kind: "change", text: `${machineName(t.machineId)} · ${t.name}: intervalo de leitura ${pollLabel(t.pollMs * 2)} → ${pollLabel(t.pollMs)}` }
@@ -86,6 +86,12 @@ export function configHistory(
       return { kind: "add", text: `${machineName(t.machineId)} · tag "${t.name}" (${modbusRef(t.area, t.address)})` }
     },
     () => {
+      const t = pick(tags)
+      return { kind: "remove", text: `${machineName(t.machineId)} · tag "Temperatura do óleo (°C)" (não usada no OEE)` }
+    },
+  ]
+  const deviceTemplates: (() => ConfigChange)[] = [
+    () => {
       const d = pick(devices)
       return { kind: "change", text: `${d.name}: timeout ${d.params.timeoutMs * 2} ms → ${d.params.timeoutMs} ms` }
     },
@@ -95,11 +101,8 @@ export function configHistory(
         ? { kind: "add", text: `Conexão "${d.name}" (${d.params.host}:${d.params.port}, unit id ${d.params.unitId})` }
         : { kind: "add", text: `Escravo "${d.name}" no barramento ${d.params.serialPort} (unit id ${d.params.unitId})` }
     },
-    () => {
-      const t = pick(tags)
-      return { kind: "remove", text: `${machineName(t.machineId)} · tag "Temperatura do óleo (°C)" (não usada no OEE)` }
-    },
   ]
+  const templates = tags.length > 0 ? [...tagTemplates, ...deviceTemplates] : deviceTemplates
 
   const count = Math.min(gateway.configVersion, 6)
   const versions: ConfigVersion[] = []
@@ -145,10 +148,18 @@ export interface GatewayCommand {
   durationMs: number | null
 }
 
-export function commandHistory(gateway: Gateway, devices: Device[], tags: Tag[], machines: Machine[], requesters: string[]): GatewayCommand[] {
+export function commandHistory(
+  gateway: Gateway,
+  devices: Device[],
+  tags: Tag[],
+  machines: Machine[],
+  requesters: string[],
+  /** Quando a versão publicada atual foi publicada (para não "aplicar" versão antiga depois dela). */
+  latestPublishMs?: number,
+): GatewayCommand[] {
   if (gateway.status === "pending") return []
   const rnd = seededRandom(`${gateway.id}:commands`)
-  const pick = <T,>(list: T[]): T => list[Math.floor(rnd() * list.length)]!
+  const pick = <T>(list: T[]): T => list[Math.floor(rnd() * list.length)]!
   const who = requesters.length > 0 ? requesters : ["Equipe Engemase"]
   const machineName = (id: string) => machines.find((m) => m.id === id)?.name ?? "Máquina"
   const lastSeenMs = gateway.lastSeen ? Date.parse(gateway.lastSeen) : nowMs()
@@ -157,8 +168,17 @@ export function commandHistory(gateway: Gateway, devices: Device[], tags: Tag[],
   const out: GatewayCommand[] = []
   let at = nowMs() - (4 + Math.floor(rnd() * 8)) * MIN
   for (let i = 0; i < 14; i++) {
+    // Offline: só os 2 comandos mais recentes foram pedidos depois da perda de contato; o resto é anterior.
+    if (offline && i >= 2 && at > lastSeenMs) at = lastSeenMs - (5 + Math.floor(rnd() * 25)) * MIN
     const roll = rnd()
-    const type: CommandType = roll < 0.5 ? "tag.read" : roll < 0.8 ? "device.test" : roll < 0.93 ? "config.reload" : "agent.restart"
+    let type: CommandType = roll < 0.5 ? "tag.read" : roll < 0.8 ? "device.test" : roll < 0.93 ? "config.reload" : "agent.restart"
+    // Só gera tipos que fazem sentido para o que o gateway tem.
+    if (type === "tag.read" && tags.length === 0) type = "device.test"
+    if (type === "device.test" && devices.length === 0) type = "config.reload"
+    // Recarga depois de uma publicação ainda não aplicada não pode "aplicar" a versão antiga.
+    const pendingConfig = gateway.configApplied !== null && gateway.configApplied < gateway.configVersion
+    if (type === "config.reload" && pendingConfig && latestPublishMs !== undefined && at > latestPublishMs)
+      type = devices.length ? "device.test" : "agent.restart"
     const afterContact = at > lastSeenMs
     let status: CommandStatus = "done"
     let target = gateway.name
@@ -175,7 +195,7 @@ export function commandHistory(gateway: Gateway, devices: Device[], tags: Tag[],
         durationMs = d?.params.timeoutMs ?? 1000
       } else {
         durationMs = (d?.latencyMs ?? 20) + Math.round(rnd() * 12)
-        result = `Valor ${t.lastValue === "—" ? "0" : t.lastValue} (${modbusRef(t.area, t.address)})`
+        result = `Valor ${formatTagValue(t.lastValue === "—" ? "0" : t.lastValue, t.dataType)} (${modbusRef(t.area, t.address)})`
       }
     } else if (type === "device.test" && devices.length > 0) {
       const d = pick(devices)

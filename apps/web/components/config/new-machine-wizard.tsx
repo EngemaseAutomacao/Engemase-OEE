@@ -62,14 +62,14 @@ import {
 const STEPS: { title: string; hint: string; icon: LucideIcon; tone: IconTone; description: string }[] = [
   {
     title: "Identificação",
-    hint: "Nome, código e linha",
+    hint: "Nome e linha",
     icon: FactoryIcon,
     tone: "navy",
     description: "Como a máquina aparece no dashboard, na TV e na tela do operador, e em que linha ela fica.",
   },
   {
     title: "Conexão",
-    hint: "Gateway e Modbus",
+    hint: "Gateway Modbus",
     icon: PlugZapIcon,
     tone: "blue",
     description: "Gateway da unidade que lê o CLP e os parâmetros Modbus TCP ou RTU (RS-485).",
@@ -83,7 +83,7 @@ const STEPS: { title: string; hint: string; icon: LucideIcon; tone: IconTone; de
   },
   {
     title: "Regras de OEE",
-    hint: "Estado e ciclo ideal",
+    hint: "Estado e ciclo",
     icon: GaugeIcon,
     tone: "orange",
     description: "Como transformar os sinais em estados de OEE e qual é a velocidade nominal da máquina.",
@@ -92,7 +92,7 @@ const STEPS: { title: string; hint: string; icon: LucideIcon; tone: IconTone; de
     title: "Revisão",
     hint: "Conferir e ativar",
     icon: RocketIcon,
-    tone: "blue",
+    tone: "green",
     description: "Confira tudo antes de publicar a nova versão de configuração no gateway.",
   },
 ]
@@ -561,7 +561,7 @@ export function NewMachineWizard({
             )}
           </div>
 
-          <footer className="flex flex-wrap items-center justify-between gap-2 border-t px-5 py-3">
+          <footer className="flex items-center justify-between gap-2 border-t px-4 py-3 sm:px-5">
             <Button
               type="button"
               variant="ghost"
@@ -570,10 +570,9 @@ export function NewMachineWizard({
               }
             >
               <SaveIcon />
-              <span className="hidden sm:inline">Salvar rascunho</span>
-              <span className="sm:hidden">Rascunho</span>
+              <span className="sr-only sm:not-sr-only">Salvar rascunho</span>
             </Button>
-            <div className="flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-2">
               <Button type="button" variant="outline" onClick={() => goTo(step - 1)} disabled={step === 0}>
                 <ArrowLeftIcon />
                 Voltar

@@ -1,0 +1,1086 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oee.engemase.com.br/schemas/gateway/v1/strict/sync-response.json",
+  "title": "POST /sync — resposta 200",
+  "description": "Confirmação (ack), hora do servidor, versão de config, comandos e ritmo do próximo sync. Contrato gateway ↔ nuvem v1. Gerado de @engemase/contracts; não edite à mão.",
+  "type": "object",
+  "properties": {
+    "ack_seq": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991,
+      "description": "Remova da fila principal tudo com seq ≤ ack_seq"
+    },
+    "ack_samples_seq": {
+      "description": "Só quando as amostras têm fila própria",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "server_time": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+      "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+    },
+    "config": {
+      "type": "object",
+      "properties": {
+        "latest_version": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Se maior que a aplicada, o agente baixa GET /config"
+        }
+      },
+      "required": [
+        "latest_version"
+      ],
+      "additionalProperties": false
+    },
+    "commands": {
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Depois disso o comando não é executado (status expired)"
+              },
+              "type": {
+                "type": "string",
+                "const": "tag.read"
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                  },
+                  "address": {
+                    "type": "object",
+                    "properties": {
+                      "area": {
+                        "type": "string",
+                        "enum": [
+                          "coil",
+                          "discrete_input",
+                          "input_register",
+                          "holding_register"
+                        ]
+                      },
+                      "offset": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 65535,
+                        "description": "Offset Modbus em base 0 (0–65535)"
+                      },
+                      "bit": {
+                        "description": "Bit (0 = menos significativo) para type bool em registrador",
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 15
+                      }
+                    },
+                    "required": [
+                      "area",
+                      "offset"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "bool",
+                      "int16",
+                      "uint16",
+                      "int32",
+                      "uint32",
+                      "float32"
+                    ]
+                  },
+                  "word_order": {
+                    "type": "string",
+                    "enum": [
+                      "ABCD",
+                      "CDAB",
+                      "BADC",
+                      "DCBA"
+                    ]
+                  },
+                  "scale": {
+                    "type": "object",
+                    "properties": {
+                      "mul": {
+                        "type": "number"
+                      },
+                      "add": {
+                        "type": "number"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "device_id",
+                  "address",
+                  "type"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "expires_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Depois disso o comando não é executado (status expired)"
+              },
+              "type": {
+                "type": "string",
+                "const": "device.test"
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                  },
+                  "connection": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "protocol": {
+                            "type": "string",
+                            "const": "modbus-tcp"
+                          },
+                          "params": {
+                            "type": "object",
+                            "properties": {
+                              "host": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "format": "ipv4",
+                                    "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 253,
+                                    "pattern": "^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)*[A-Za-z](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
+                                  }
+                                ]
+                              },
+                              "port": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 65535,
+                                "description": "Porta TCP (padrão Modbus: 502)"
+                              },
+                              "unit_id": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 255,
+                                "description": "Unit id Modbus TCP (0–255; normalmente 1)"
+                              },
+                              "timeout_ms": {
+                                "type": "integer",
+                                "minimum": 50,
+                                "maximum": 10000
+                              }
+                            },
+                            "required": [
+                              "host",
+                              "port",
+                              "unit_id"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "protocol",
+                          "params"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "protocol": {
+                            "type": "string",
+                            "const": "modbus-rtu"
+                          },
+                          "params": {
+                            "type": "object",
+                            "properties": {
+                              "bus": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                "description": "id do barramento em serial_buses"
+                              },
+                              "unit_id": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 247,
+                                "description": "Unit id (1–247)"
+                              },
+                              "timeout_ms": {
+                                "type": "integer",
+                                "minimum": 50,
+                                "maximum": 10000
+                              },
+                              "turnaround_ms": {
+                                "description": "Intervalo extra entre quadros para este escravo (ms)",
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 1000
+                              }
+                            },
+                            "required": [
+                              "bus",
+                              "unit_id"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "protocol",
+                          "params"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "protocol": {
+                            "type": "string",
+                            "const": "modbus-rtu-over-tcp"
+                          },
+                          "params": {
+                            "type": "object",
+                            "properties": {
+                              "host": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "format": "ipv4",
+                                    "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 253,
+                                    "pattern": "^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)*[A-Za-z](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
+                                  }
+                                ]
+                              },
+                              "port": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 65535
+                              },
+                              "unit_id": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 247,
+                                "description": "Unit id (1–247)"
+                              },
+                              "timeout_ms": {
+                                "type": "integer",
+                                "minimum": 50,
+                                "maximum": 10000
+                              }
+                            },
+                            "required": [
+                              "host",
+                              "port",
+                              "unit_id"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "protocol",
+                          "params"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "serial_bus": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                      },
+                      "name": {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      "port": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "pattern": "^(?:\\/dev\\/[A-Za-z0-9._/-]+|[a-z][a-z0-9-]{0,31})$",
+                        "description": "Porta serial lógica (rs485-1) ou caminho /dev/..."
+                      },
+                      "baud": {
+                        "type": "number",
+                        "enum": [
+                          1200,
+                          2400,
+                          4800,
+                          9600,
+                          19200,
+                          38400,
+                          57600,
+                          115200
+                        ]
+                      },
+                      "parity": {
+                        "type": "string",
+                        "enum": [
+                          "N",
+                          "E",
+                          "O"
+                        ]
+                      },
+                      "data_bits": {
+                        "type": "number",
+                        "const": 8,
+                        "description": "Modbus RTU usa sempre 8 bits de dados"
+                      },
+                      "stop_bits": {
+                        "type": "number",
+                        "enum": [
+                          1,
+                          2
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "port",
+                      "baud",
+                      "parity",
+                      "data_bits",
+                      "stop_bits"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "allow_bus_pause": {
+                    "type": "boolean"
+                  },
+                  "probe": {
+                    "description": "Leitura opcional para validar o acesso (padrão: só conectar)",
+                    "type": "object",
+                    "properties": {
+                      "area": {
+                        "type": "string",
+                        "enum": [
+                          "coil",
+                          "discrete_input",
+                          "input_register",
+                          "holding_register"
+                        ]
+                      },
+                      "offset": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 65535,
+                        "description": "Offset Modbus em base 0 (0–65535)"
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2000
+                      }
+                    },
+                    "required": [
+                      "area",
+                      "offset",
+                      "count"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "device_id",
+                  "connection"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "expires_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Depois disso o comando não é executado (status expired)"
+              },
+              "type": {
+                "type": "string",
+                "const": "config.reload"
+              },
+              "payload": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "expires_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Depois disso o comando não é executado (status expired)"
+              },
+              "type": {
+                "type": "string",
+                "const": "agent.restart"
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "delay_s": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 300
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "expires_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Depois disso o comando não é executado (status expired)"
+              },
+              "type": {
+                "type": "string",
+                "const": "modbus.scan"
+              },
+              "payload": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "const": "unit_ids"
+                      },
+                      "bus_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                      },
+                      "unit_from": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 247,
+                        "description": "Unit id (1–247)"
+                      },
+                      "unit_to": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 247,
+                        "description": "Unit id (1–247)"
+                      },
+                      "probe": {
+                        "description": "Endereço lido em cada unit id (padrão: holding_register 0)",
+                        "type": "object",
+                        "properties": {
+                          "area": {
+                            "type": "string",
+                            "enum": [
+                              "coil",
+                              "discrete_input",
+                              "input_register",
+                              "holding_register"
+                            ]
+                          },
+                          "offset": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 65535,
+                            "description": "Offset Modbus em base 0 (0–65535)"
+                          }
+                        },
+                        "required": [
+                          "area",
+                          "offset"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "timeout_ms": {
+                        "type": "integer",
+                        "minimum": 50,
+                        "maximum": 2000
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "bus_id",
+                      "unit_from",
+                      "unit_to"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "const": "registers"
+                      },
+                      "device_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                      },
+                      "area": {
+                        "type": "string",
+                        "enum": [
+                          "coil",
+                          "discrete_input",
+                          "input_register",
+                          "holding_register"
+                        ]
+                      },
+                      "start": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 65535,
+                        "description": "Offset Modbus em base 0 (0–65535)"
+                      },
+                      "end": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 65535,
+                        "description": "Offset Modbus em base 0 (0–65535)"
+                      },
+                      "timeout_ms": {
+                        "type": "integer",
+                        "minimum": 50,
+                        "maximum": 2000
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "device_id",
+                      "area",
+                      "start",
+                      "end"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "expires_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Depois disso o comando não é executado (status expired)"
+              },
+              "type": {
+                "type": "string",
+                "const": "vpn.enable"
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                  },
+                  "auth_key": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 512,
+                    "description": "Chave de entrada de uso único (segredo)"
+                  },
+                  "control_url": {
+                    "description": "Servidor de controle alternativo (ex.: Headscale)",
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^https:\\/\\/[^\\s/?#]+(?:\\/[^\\s]*)?$"
+                  },
+                  "node_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63,
+                    "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+                  },
+                  "session_expires_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                    "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+                  },
+                  "idle_timeout_s": {
+                    "description": "Inatividade máxima (padrão: 900 s)",
+                    "type": "integer",
+                    "minimum": 60,
+                    "maximum": 7200
+                  },
+                  "approval": {
+                    "type": "string",
+                    "maxLength": 8192,
+                    "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+                    "description": "JWS compacto assinado com Ed25519 (alg EdDSA)"
+                  }
+                },
+                "required": [
+                  "session_id",
+                  "auth_key",
+                  "node_name",
+                  "session_expires_at",
+                  "approval"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "expires_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Depois disso o comando não é executado (status expired)"
+              },
+              "type": {
+                "type": "string",
+                "const": "vpn.disable"
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "requested",
+                      "expired",
+                      "revoked"
+                    ]
+                  }
+                },
+                "required": [
+                  "session_id"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "expires_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Depois disso o comando não é executado (status expired)"
+              },
+              "type": {
+                "type": "string",
+                "const": "vpn.status"
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "expires_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Depois disso o comando não é executado (status expired)"
+              },
+              "type": {
+                "type": "string",
+                "const": "ot.forward.open"
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                  },
+                  "forward_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                  },
+                  "device_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                  },
+                  "host": {
+                    "type": "string",
+                    "format": "ipv4",
+                    "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535
+                  },
+                  "forward_expires_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                    "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+                  },
+                  "max_connections": {
+                    "description": "Padrão: 1",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 8
+                  },
+                  "approval": {
+                    "type": "string",
+                    "maxLength": 8192,
+                    "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+                    "description": "JWS compacto assinado com Ed25519 (alg EdDSA)"
+                  }
+                },
+                "required": [
+                  "session_id",
+                  "forward_id",
+                  "device_id",
+                  "host",
+                  "port",
+                  "forward_expires_at",
+                  "approval"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "expires_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "Depois disso o comando não é executado (status expired)"
+              },
+              "type": {
+                "type": "string",
+                "const": "ot.forward.close"
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                  },
+                  "forward_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "requested",
+                      "expired",
+                      "revoked"
+                    ]
+                  }
+                },
+                "required": [
+                  "session_id",
+                  "forward_id"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "expires_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "next_sync_s": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 300
+    },
+    "min_agent_version": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    }
+  },
+  "required": [
+    "ack_seq",
+    "server_time",
+    "config",
+    "commands",
+    "next_sync_s",
+    "min_agent_version"
+  ],
+  "additionalProperties": false
+}

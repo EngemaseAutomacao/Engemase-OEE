@@ -159,4 +159,4 @@ export function dateParts(ymd: string) {
 export const weekMinutes = (weekStart: string, ymd: string, hm: string) => diffDays(ymd, weekStart) * 1440 + hmToMin(hm)
 
 /** Duração de uma parada planejada em minutos. */
-export const stopMinutes = (p: PlannedStop) => diffDays(p.endDate, p.startDate) * 1440 + hmToMin(p.endTime) - hmToMin(p.startTime)
+export const stopMinutes = (p: Pick<PlannedStop, "startDate" | "startTime" | "endDate" | "endTime">) => diffDays(p.endDate, p.startDate) * 1440 + hmToMin(p.endTime) - hmToMin(p.startTime)

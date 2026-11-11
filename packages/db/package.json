@@ -1,0 +1,37 @@
+{
+  "name": "@engemase/db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Schema do banco (Drizzle ORM + Postgres), migrações SQL e Row-Level Security por cliente.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./schema": {
+      "types": "./src/schema/index.ts",
+      "default": "./src/schema/index.ts"
+    }
+  },
+  "files": [
+    "src",
+    "migrations"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.4"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
+    "@types/node": "^22.20.5",
+    "drizzle-kit": "^0.31.11",
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.12"
+  }
+}

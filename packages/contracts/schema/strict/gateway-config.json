@@ -1,0 +1,1057 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oee.engemase.com.br/schemas/gateway/v1/strict/gateway-config.json",
+  "title": "GET /config — resposta 200",
+  "description": "Configuração completa do gateway: barramentos, dispositivos Modbus, blocos, tags, máquinas e uplink. Contrato gateway ↔ nuvem v1. Gerado de @engemase/contracts; não edite à mão.",
+  "type": "object",
+  "properties": {
+    "config_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "description": "Versão monotônica da config (aumenta a cada publicação)"
+    },
+    "gateway_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+      "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+      "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+    },
+    "serial_buses": {
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "port": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^(?:\\/dev\\/[A-Za-z0-9._/-]+|[a-z][a-z0-9-]{0,31})$",
+            "description": "Porta serial lógica (rs485-1) ou caminho /dev/..."
+          },
+          "baud": {
+            "type": "number",
+            "enum": [
+              1200,
+              2400,
+              4800,
+              9600,
+              19200,
+              38400,
+              57600,
+              115200
+            ]
+          },
+          "parity": {
+            "type": "string",
+            "enum": [
+              "N",
+              "E",
+              "O"
+            ]
+          },
+          "data_bits": {
+            "type": "number",
+            "const": 8,
+            "description": "Modbus RTU usa sempre 8 bits de dados"
+          },
+          "stop_bits": {
+            "type": "number",
+            "enum": [
+              1,
+              2
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "port",
+          "baud",
+          "parity",
+          "data_bits",
+          "stop_bits"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "devices": {
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 120
+              },
+              "enabled": {
+                "description": "false = dispositivo cadastrado, mas não lido (padrão: true)",
+                "type": "boolean"
+              },
+              "blocks": {
+                "maxItems": 256,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "area": {
+                      "type": "string",
+                      "enum": [
+                        "coil",
+                        "discrete_input",
+                        "input_register",
+                        "holding_register"
+                      ]
+                    },
+                    "start": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 65535,
+                      "description": "Offset Modbus em base 0 (0–65535)"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2000,
+                      "description": "Até 125 registradores ou 2000 bits"
+                    },
+                    "poll_ms": {
+                      "type": "integer",
+                      "minimum": 100,
+                      "maximum": 3600000
+                    }
+                  },
+                  "required": [
+                    "area",
+                    "start",
+                    "count",
+                    "poll_ms"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "tags": {
+                "maxItems": 2000,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                    },
+                    "name": {
+                      "type": "string",
+                      "maxLength": 120
+                    },
+                    "address": {
+                      "type": "object",
+                      "properties": {
+                        "area": {
+                          "type": "string",
+                          "enum": [
+                            "coil",
+                            "discrete_input",
+                            "input_register",
+                            "holding_register"
+                          ]
+                        },
+                        "offset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 65535,
+                          "description": "Offset Modbus em base 0 (0–65535)"
+                        },
+                        "bit": {
+                          "description": "Bit (0 = menos significativo) para type bool em registrador",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 15
+                        }
+                      },
+                      "required": [
+                        "area",
+                        "offset"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "bool",
+                        "int16",
+                        "uint16",
+                        "int32",
+                        "uint32",
+                        "float32"
+                      ]
+                    },
+                    "word_order": {
+                      "description": "Obrigatório para int32/uint32/float32",
+                      "type": "string",
+                      "enum": [
+                        "ABCD",
+                        "CDAB",
+                        "BADC",
+                        "DCBA"
+                      ]
+                    },
+                    "scale": {
+                      "type": "object",
+                      "properties": {
+                        "mul": {
+                          "type": "number"
+                        },
+                        "add": {
+                          "type": "number"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "poll_ms": {
+                      "description": "Obrigatório para tag fora de bloco; proibido dentro de bloco",
+                      "type": "integer",
+                      "minimum": 100,
+                      "maximum": 3600000
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "state.running",
+                        "state.fault",
+                        "state.code",
+                        "fault.code",
+                        "count.total",
+                        "count.good",
+                        "count.reject",
+                        "product.code",
+                        "speed.actual",
+                        "plc.heartbeat",
+                        "custom"
+                      ]
+                    },
+                    "machine_id": {
+                      "description": "Obrigatório exceto para o papel custom",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "sampling": {
+                      "type": "object",
+                      "properties": {
+                        "deadband": {
+                          "description": "Variação mínima para gerar nova amostra",
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "min_interval_s": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 86400
+                        },
+                        "max_interval_s": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 86400
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "address",
+                    "type",
+                    "role"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "protocol": {
+                "type": "string",
+                "const": "modbus-tcp"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "ipv4",
+                        "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 253,
+                        "pattern": "^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)*[A-Za-z](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
+                      }
+                    ]
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "description": "Porta TCP (padrão Modbus: 502)"
+                  },
+                  "unit_id": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255,
+                    "description": "Unit id Modbus TCP (0–255; normalmente 1)"
+                  },
+                  "timeout_ms": {
+                    "type": "integer",
+                    "minimum": 50,
+                    "maximum": 10000
+                  }
+                },
+                "required": [
+                  "host",
+                  "port",
+                  "unit_id"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "tags",
+              "protocol",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 120
+              },
+              "enabled": {
+                "description": "false = dispositivo cadastrado, mas não lido (padrão: true)",
+                "type": "boolean"
+              },
+              "blocks": {
+                "maxItems": 256,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "area": {
+                      "type": "string",
+                      "enum": [
+                        "coil",
+                        "discrete_input",
+                        "input_register",
+                        "holding_register"
+                      ]
+                    },
+                    "start": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 65535,
+                      "description": "Offset Modbus em base 0 (0–65535)"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2000,
+                      "description": "Até 125 registradores ou 2000 bits"
+                    },
+                    "poll_ms": {
+                      "type": "integer",
+                      "minimum": 100,
+                      "maximum": 3600000
+                    }
+                  },
+                  "required": [
+                    "area",
+                    "start",
+                    "count",
+                    "poll_ms"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "tags": {
+                "maxItems": 2000,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                    },
+                    "name": {
+                      "type": "string",
+                      "maxLength": 120
+                    },
+                    "address": {
+                      "type": "object",
+                      "properties": {
+                        "area": {
+                          "type": "string",
+                          "enum": [
+                            "coil",
+                            "discrete_input",
+                            "input_register",
+                            "holding_register"
+                          ]
+                        },
+                        "offset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 65535,
+                          "description": "Offset Modbus em base 0 (0–65535)"
+                        },
+                        "bit": {
+                          "description": "Bit (0 = menos significativo) para type bool em registrador",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 15
+                        }
+                      },
+                      "required": [
+                        "area",
+                        "offset"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "bool",
+                        "int16",
+                        "uint16",
+                        "int32",
+                        "uint32",
+                        "float32"
+                      ]
+                    },
+                    "word_order": {
+                      "description": "Obrigatório para int32/uint32/float32",
+                      "type": "string",
+                      "enum": [
+                        "ABCD",
+                        "CDAB",
+                        "BADC",
+                        "DCBA"
+                      ]
+                    },
+                    "scale": {
+                      "type": "object",
+                      "properties": {
+                        "mul": {
+                          "type": "number"
+                        },
+                        "add": {
+                          "type": "number"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "poll_ms": {
+                      "description": "Obrigatório para tag fora de bloco; proibido dentro de bloco",
+                      "type": "integer",
+                      "minimum": 100,
+                      "maximum": 3600000
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "state.running",
+                        "state.fault",
+                        "state.code",
+                        "fault.code",
+                        "count.total",
+                        "count.good",
+                        "count.reject",
+                        "product.code",
+                        "speed.actual",
+                        "plc.heartbeat",
+                        "custom"
+                      ]
+                    },
+                    "machine_id": {
+                      "description": "Obrigatório exceto para o papel custom",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "sampling": {
+                      "type": "object",
+                      "properties": {
+                        "deadband": {
+                          "description": "Variação mínima para gerar nova amostra",
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "min_interval_s": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 86400
+                        },
+                        "max_interval_s": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 86400
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "address",
+                    "type",
+                    "role"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "protocol": {
+                "type": "string",
+                "const": "modbus-rtu"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "bus": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "description": "id do barramento em serial_buses"
+                  },
+                  "unit_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 247,
+                    "description": "Unit id (1–247)"
+                  },
+                  "timeout_ms": {
+                    "type": "integer",
+                    "minimum": 50,
+                    "maximum": 10000
+                  },
+                  "turnaround_ms": {
+                    "description": "Intervalo extra entre quadros para este escravo (ms)",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000
+                  }
+                },
+                "required": [
+                  "bus",
+                  "unit_id"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "tags",
+              "protocol",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 120
+              },
+              "enabled": {
+                "description": "false = dispositivo cadastrado, mas não lido (padrão: true)",
+                "type": "boolean"
+              },
+              "blocks": {
+                "maxItems": 256,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "area": {
+                      "type": "string",
+                      "enum": [
+                        "coil",
+                        "discrete_input",
+                        "input_register",
+                        "holding_register"
+                      ]
+                    },
+                    "start": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 65535,
+                      "description": "Offset Modbus em base 0 (0–65535)"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2000,
+                      "description": "Até 125 registradores ou 2000 bits"
+                    },
+                    "poll_ms": {
+                      "type": "integer",
+                      "minimum": 100,
+                      "maximum": 3600000
+                    }
+                  },
+                  "required": [
+                    "area",
+                    "start",
+                    "count",
+                    "poll_ms"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "tags": {
+                "maxItems": 2000,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+                    },
+                    "name": {
+                      "type": "string",
+                      "maxLength": 120
+                    },
+                    "address": {
+                      "type": "object",
+                      "properties": {
+                        "area": {
+                          "type": "string",
+                          "enum": [
+                            "coil",
+                            "discrete_input",
+                            "input_register",
+                            "holding_register"
+                          ]
+                        },
+                        "offset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 65535,
+                          "description": "Offset Modbus em base 0 (0–65535)"
+                        },
+                        "bit": {
+                          "description": "Bit (0 = menos significativo) para type bool em registrador",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 15
+                        }
+                      },
+                      "required": [
+                        "area",
+                        "offset"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "bool",
+                        "int16",
+                        "uint16",
+                        "int32",
+                        "uint32",
+                        "float32"
+                      ]
+                    },
+                    "word_order": {
+                      "description": "Obrigatório para int32/uint32/float32",
+                      "type": "string",
+                      "enum": [
+                        "ABCD",
+                        "CDAB",
+                        "BADC",
+                        "DCBA"
+                      ]
+                    },
+                    "scale": {
+                      "type": "object",
+                      "properties": {
+                        "mul": {
+                          "type": "number"
+                        },
+                        "add": {
+                          "type": "number"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "poll_ms": {
+                      "description": "Obrigatório para tag fora de bloco; proibido dentro de bloco",
+                      "type": "integer",
+                      "minimum": 100,
+                      "maximum": 3600000
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "state.running",
+                        "state.fault",
+                        "state.code",
+                        "fault.code",
+                        "count.total",
+                        "count.good",
+                        "count.reject",
+                        "product.code",
+                        "speed.actual",
+                        "plc.heartbeat",
+                        "custom"
+                      ]
+                    },
+                    "machine_id": {
+                      "description": "Obrigatório exceto para o papel custom",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "sampling": {
+                      "type": "object",
+                      "properties": {
+                        "deadband": {
+                          "description": "Variação mínima para gerar nova amostra",
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "min_interval_s": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 86400
+                        },
+                        "max_interval_s": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 86400
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "address",
+                    "type",
+                    "role"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "protocol": {
+                "type": "string",
+                "const": "modbus-rtu-over-tcp"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "ipv4",
+                        "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 253,
+                        "pattern": "^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)*[A-Za-z](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
+                      }
+                    ]
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535
+                  },
+                  "unit_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 247,
+                    "description": "Unit id (1–247)"
+                  },
+                  "timeout_ms": {
+                    "type": "integer",
+                    "minimum": 50,
+                    "maximum": 10000
+                  }
+                },
+                "required": [
+                  "host",
+                  "port",
+                  "unit_id"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "tags",
+              "protocol",
+              "params"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "machines": {
+      "maxItems": 256,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "state_rules": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "const": "signals"
+                  },
+                  "comm_loss_after_s": {
+                    "description": "Segundos sem leitura boa até NO_COMM (padrão: 10)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3600
+                  },
+                  "debounce_s": {
+                    "description": "Debounce de mudança de estado (padrão: 1 s)",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 60
+                  },
+                  "heartbeat_timeout_s": {
+                    "description": "Heartbeat parado por mais que isso vira NO_COMM (exige tag plc.heartbeat)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3600
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "const": "state_code"
+                  },
+                  "map": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^(?:0|-?[1-9]\\d{0,9})$"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "enum": [
+                        "RUNNING",
+                        "STOPPED",
+                        "FAULT",
+                        "SETUP"
+                      ]
+                    },
+                    "description": "Código do CLP → estado OEE"
+                  },
+                  "default_state": {
+                    "description": "Estado para códigos fora do mapa (padrão: STOPPED)",
+                    "type": "string",
+                    "enum": [
+                      "RUNNING",
+                      "STOPPED",
+                      "FAULT",
+                      "SETUP"
+                    ]
+                  },
+                  "comm_loss_after_s": {
+                    "description": "Segundos sem leitura boa até NO_COMM (padrão: 10)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3600
+                  },
+                  "debounce_s": {
+                    "description": "Debounce de mudança de estado (padrão: 1 s)",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 60
+                  },
+                  "heartbeat_timeout_s": {
+                    "description": "Heartbeat parado por mais que isso vira NO_COMM (exige tag plc.heartbeat)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3600
+                  }
+                },
+                "required": [
+                  "mode",
+                  "map"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "const": "count_derived"
+                  },
+                  "ideal_cycle_s": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 86400,
+                    "description": "Tempo de ciclo ideal (s)"
+                  },
+                  "idle_after_cycles": {
+                    "description": "Ciclos sem peça até parada (padrão: 3)",
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 1000
+                  },
+                  "comm_loss_after_s": {
+                    "description": "Segundos sem leitura boa até NO_COMM (padrão: 10)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3600
+                  },
+                  "debounce_s": {
+                    "description": "Debounce de mudança de estado (padrão: 1 s)",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 60
+                  },
+                  "heartbeat_timeout_s": {
+                    "description": "Heartbeat parado por mais que isso vira NO_COMM (exige tag plc.heartbeat)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3600
+                  }
+                },
+                "required": [
+                  "mode",
+                  "ideal_cycle_s"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "max_rate_per_s": {
+            "description": "Taxa máxima plausível de peças/s (sanidade dos contadores)",
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 100000
+          }
+        },
+        "required": [
+          "id",
+          "state_rules"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "uplink": {
+      "type": "object",
+      "properties": {
+        "sync_interval_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300,
+          "description": "Intervalo do /sync em segundos (padrão: 10)"
+        },
+        "max_batch_items": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000,
+          "description": "Máximo de itens (events + minutes + samples) por lote"
+        },
+        "max_batch_bytes": {
+          "description": "Máximo de bytes do JSON descompactado",
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 1048576
+        }
+      },
+      "required": [
+        "sync_interval_s",
+        "max_batch_items"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "config_version",
+    "serial_buses",
+    "devices",
+    "machines",
+    "uplink"
+  ],
+  "additionalProperties": false
+}

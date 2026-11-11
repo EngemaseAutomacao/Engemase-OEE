@@ -70,7 +70,19 @@ export function UsageBar({ value, tone }: { value: number; tone: "ok" | "warn" |
   )
 }
 
-function Metric({ label, value, hint, alert, children }: { label: string; value: React.ReactNode; hint?: React.ReactNode; alert?: boolean; children?: React.ReactNode }) {
+function Metric({
+  label,
+  value,
+  hint,
+  alert,
+  children,
+}: {
+  label: string
+  value: React.ReactNode
+  hint?: React.ReactNode
+  alert?: boolean
+  children?: React.ReactNode
+}) {
   return (
     <div className="min-w-0 rounded-xl bg-muted/50 px-3 py-2.5">
       <dt className="truncate text-[11px] text-muted-foreground">{label}</dt>
@@ -168,7 +180,11 @@ export function GatewayCard({ row, href, freshExpiresLabel }: { row: GatewayRow;
             <Metric label="CPU" value={dim || row.cpuPct === null ? "—" : `${row.cpuPct.toLocaleString("pt-BR")}%`}>
               {!dim && row.cpuPct !== null && <UsageBar value={row.cpuPct} tone={row.cpuPct > 80 ? "bad" : row.cpuPct > 50 ? "warn" : "ok"} />}
             </Metric>
-            <Metric label="Memória" value={dim || row.memMb === null ? "—" : `${row.memMb.toLocaleString("pt-BR")} MB`} hint={!dim ? "Uso do agente" : undefined} />
+            <Metric
+              label="Memória"
+              value={dim || row.memMb === null ? "—" : `${row.memMb.toLocaleString("pt-BR")} MB`}
+              hint={!dim ? "Uso do agente" : undefined}
+            />
             <Metric label="Disco livre" value={row.diskFreePct === null ? "—" : `${row.diskFreePct}%`} alert={row.diskFreePct !== null && row.diskFreePct < 20}>
               {row.diskFreePct !== null && <UsageBar value={row.diskFreePct} tone={row.diskFreePct < 10 ? "bad" : row.diskFreePct < 20 ? "warn" : "ok"} />}
             </Metric>
@@ -197,7 +213,10 @@ export function GatewayCard({ row, href, freshExpiresLabel }: { row: GatewayRow;
         {row.local ? (
           <span className="shrink-0 text-xs text-muted-foreground">Criado agora</span>
         ) : (
-          <Link href={href} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline focus-visible:underline focus-visible:outline-none">
+          <Link
+            href={href}
+            className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline focus-visible:underline focus-visible:outline-none"
+          >
             Ver detalhes
             <ArrowRightIcon className="size-3.5" />
           </Link>

@@ -196,7 +196,14 @@ export interface GatewayDetail {
   remote: RemoteAccessVM
   /** Máquinas que este gateway alimenta (ou vai alimentar, se pendente). */
   machines: { id: string; name: string; code: string; hasDevice: boolean }[]
-  activation: { code: string; expired: boolean; expiresLabel: string; freshExpiresLabel: string } | null
+  activation: {
+    code: string
+    expired: boolean
+    expiresLabel: string
+    freshExpiresLabel: string
+    createdBy: string | null
+    createdLabel: string | null
+  } | null
 }
 
 // ---------------------------------------------------------------------------
@@ -247,7 +254,12 @@ export function buildGatewayDetail(client: Client, g: Gateway): GatewayDetail {
     latencyMs: d.latencyMs,
     errors1m: d.errors1m,
     lastError: d.lastError ?? null,
-    machines: [...new Set(tags.filter((t) => t.deviceId === d.id).map((t) => machineName(t.machineId)))],
+    machines: [
+      ...new Set([
+        ...machines.filter((m) => m.deviceId === d.id).map((m) => m.name),
+        ...tags.filter((t) => t.deviceId === d.id).map((t) => machineName(t.machineId)),
+      ]),
+    ],
     tagCount: tags.filter((t) => t.deviceId === d.id).length,
   })
   const deviceList = devices.map(deviceVM)
@@ -304,7 +316,10 @@ export function buildGatewayDetail(client: Client, g: Gateway): GatewayDetail {
   ).map((v) => ({ ...v, publishedLabel: dateTime(v.publishedAt), publishedAgo: ago(v.publishedAt) }))
 
   // Comandos
-  const commands = commandHistory(g, devices, tags, machines, authors).map(({ createdAt, ...c }) => ({ ...c, createdLabel: dateTime(createdAt), createdAgo: ago(createdAt) }))
+  const latestVersion = versions.find((v) => v.version === g.configVersion)
+  const commands = commandHistory(g, devices, tags, machines, authors, latestVersion ? Date.parse(latestVersion.publishedAt) : undefined).map(
+    ({ createdAt, ...c }) => ({ ...c, createdLabel: dateTime(createdAt), createdAgo: ago(createdAt) }),
+  )
 
   // Acesso remoto
   const policy = getRemoteAccessPolicy(client.id)
@@ -334,6 +349,7 @@ export function buildGatewayDetail(client: Client, g: Gateway): GatewayDetail {
   })
 
   const act = g.status === "pending" && g.enrollmentCode ? activationInfo(g, audit) : null
+  const created = audit.find((a) => a.action === "gateway.create" && a.entityName === g.name)
 
   return {
     id: g.id,
@@ -383,10 +399,24 @@ export function buildGatewayDetail(client: Client, g: Gateway): GatewayDetail {
       sessions,
       plcTargets: tcpDevices.filter((d) => d.status !== "disabled").map((d) => ({ id: d.id, label: `${d.name} · ${d.host}`, host: d.host ?? "" })),
       ports: FORWARD_PORTS,
-      me: { name: me.name, roleLabel: me.platformRole ? `${PLATFORM_ROLE_LABEL[me.platformRole]} Engemase` : "Usuário do cliente", canRequest: !!me.platformRole },
+      me: {
+        name: me.name,
+        roleLabel: me.platformRole ? `${PLATFORM_ROLE_LABEL[me.platformRole]} Engemase` : "Usuário do cliente",
+        canRequest: !!me.platformRole,
+      },
       historyHref: `/${client.slug}/acesso-remoto`,
     },
     machines: machines.filter((m) => m.gatewayId === g.id).map((m) => ({ id: m.id, name: m.name, code: m.code, hasDevice: !!m.deviceId })),
-    activation: act && g.enrollmentCode ? { code: g.enrollmentCode, expired: act.expired, expiresLabel: act.expiresLabel, freshExpiresLabel: freshCodeExpiresLabel() } : null,
+    activation:
+      act && g.enrollmentCode
+        ? {
+            code: g.enrollmentCode,
+            expired: act.expired,
+            expiresLabel: act.expiresLabel,
+            freshExpiresLabel: freshCodeExpiresLabel(),
+            createdBy: created?.actorName ?? null,
+            createdLabel: created ? dateTime(created.at) : null,
+          }
+        : null,
   }
 }

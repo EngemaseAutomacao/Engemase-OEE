@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oee.engemase.com.br/schemas/gateway/v1/enroll-request.json",
+  "title": "POST /enroll — requisição",
+  "description": "Troca do código de ativação pelas credenciais do gateway. Contrato gateway ↔ nuvem v1. Gerado de @engemase/contracts; não edite à mão.",
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Z0-9]{4}-?[A-Z0-9]{4}$"
+    },
+    "hostname": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "pattern": "^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)*[A-Za-z](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
+    },
+    "agent_version": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "hw": {
+      "type": "object",
+      "properties": {
+        "arch": {
+          "type": "string",
+          "enum": [
+            "arm64",
+            "amd64",
+            "arm"
+          ]
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "mem_mb": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "serial_number": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "board_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "profile": {
+          "description": "Perfil de hardware do agente (ex.: recomputer-r1000)",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+        },
+        "serial_ports": {
+          "description": "Portas RS-485 lógicas disponíveis",
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^(?:\\/dev\\/[A-Za-z0-9._/-]+|[a-z][a-z0-9-]{0,31})$",
+            "description": "Porta serial lógica (rs485-1) ou caminho /dev/..."
+          }
+        }
+      },
+      "required": [
+        "arch",
+        "model",
+        "mem_mb"
+      ]
+    }
+  },
+  "required": [
+    "code",
+    "hostname",
+    "agent_version",
+    "hw"
+  ]
+}

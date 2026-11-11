@@ -118,7 +118,9 @@ export function ProvisionGatewayDialog({
               <Alert variant="destructive">
                 <TriangleAlertIcon />
                 <AlertTitle>Limite do plano atingido</AlertTitle>
-                <AlertDescription>Este cliente já usa {used} de {limit} gateways. Fale com a Engemase para ampliar o plano.</AlertDescription>
+                <AlertDescription>
+                  Este cliente já usa {used} de {limit} gateways. Fale com a Engemase para ampliar o plano.
+                </AlertDescription>
               </Alert>
             )}
 
@@ -164,8 +166,8 @@ export function ProvisionGatewayDialog({
             <div className="flex items-start gap-3 rounded-xl bg-muted/50 p-3 text-xs text-muted-foreground">
               <RouterIcon className="mt-px size-4 shrink-0" />
               <span>
-                Recomendado: computador industrial ARM64 ou x86 com 2 interfaces Ethernet (rede de TI e rede OT) e portas RS-485 para Modbus RTU.
-                Uso do plano: {used} de {limit} gateways.
+                Recomendado: computador industrial ARM64 ou x86 com 2 interfaces Ethernet (rede de TI e rede OT) e portas RS-485 para Modbus RTU. Uso do plano:{" "}
+                {used} de {limit} gateways.
               </span>
             </div>
 

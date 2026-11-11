@@ -24,7 +24,6 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Ring } from "@/components/dashboard/ring"
 import { SectionCard } from "@/components/dashboard/section-card"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { norm, piecesPerHour, plural, seconds } from "@/components/config/labels"
@@ -146,8 +145,8 @@ export function ProductsManager({
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={PackageIcon} tone="blue" label="Produtos cadastrados" value={num(products.length)} hint={`${running} carregados nas máquinas agora`} />
-        <StatCard icon={TimerIcon} tone="navy" label="Ciclos ideais definidos" value={num(combos)} hint="combinações produto × máquina" />
+        <StatCard icon={PackageIcon} tone="blue" label="Produtos" value={num(products.length)} hint={`${running} em uso nas máquinas agora`} />
+        <StatCard icon={TimerIcon} tone="navy" label="Ciclos ideais definidos" value={num(combos)} hint="produto × máquina" />
         <StatCard
           icon={FactoryIcon}
           tone="teal"
@@ -158,15 +157,14 @@ export function ProductsManager({
               <span className="text-base font-semibold text-muted-foreground"> / {machines.length}</span>
             </>
           }
-          hint="com ciclo por produto"
-          aside={<Ring value={machines.length ? covered.size / machines.length : 0} size={54} stroke={6} color="#0e9384" label={pct(machines.length ? covered.size / machines.length : 0, 0)} />}
+          hint={`${pct(machines.length ? covered.size / machines.length : 0, 0)} com ciclo por produto`}
         />
         <StatCard
           icon={TriangleAlertIcon}
           tone="orange"
           label="Ciclos para conferir"
           value={num(deviations.length)}
-          hint={`diferem mais de ${pct(DEVIATION, 0)} do padrão da máquina`}
+          hint={`fora de ±${pct(DEVIATION, 0)} do padrão`}
         />
       </div>
 
@@ -176,31 +174,36 @@ export function ProductsManager({
           description={`${plural(visible.length, "produto", "produtos")}${q ? ` para “${query.trim()}”` : ""}`}
           className="xl:col-span-8"
           action={
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <InputGroup className="h-8 w-full sm:w-56">
-                <InputGroupAddon>
-                  <SearchIcon />
-                </InputGroupAddon>
-                <InputGroupInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar código ou nome" aria-label="Buscar produto" />
-              </InputGroup>
-              {units.length > 1 && (
-                <Select value={unitId} onValueChange={setUnitId}>
-                  <SelectTrigger size="sm" className="w-full sm:w-44" aria-label="Unidade">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as unidades</SelectItem>
-                    {units.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
+            products.length > 0 && machines.length > 0 ? (
+              <button type="button" onClick={() => setMatrixOpen(true)} className="shrink-0 text-xs font-semibold text-primary hover:underline">
+                Editar matriz
+              </button>
+            ) : undefined
           }
         >
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <InputGroup className="sm:max-w-72">
+              <InputGroupAddon>
+                <SearchIcon />
+              </InputGroupAddon>
+              <InputGroupInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por código ou nome" aria-label="Buscar produto" />
+            </InputGroup>
+            {units.length > 1 && (
+              <Select value={unitId} onValueChange={setUnitId}>
+                <SelectTrigger className="w-full sm:w-48" aria-label="Unidade">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as unidades</SelectItem>
+                  {units.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
           {visible.length === 0 ? (
             <Empty className="border border-dashed">
               <EmptyHeader>
@@ -234,14 +237,14 @@ export function ProductsManager({
               </EmptyContent>
             </Empty>
           ) : (
-            <Table className="min-w-[760px]">
+            <Table className="min-w-[640px]">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-20 text-xs">Código</TableHead>
+                  <TableHead className="w-16 text-xs">Código</TableHead>
                   <TableHead className="text-xs">Produto</TableHead>
                   <TableHead className="text-xs">Máquinas · ciclo ideal</TableHead>
-                  <TableHead className="w-28 text-right text-xs">Capacidade</TableHead>
-                  <TableHead className="w-28 text-right text-xs">
+                  <TableHead className="w-24 text-right text-xs">Capacidade</TableHead>
+                  <TableHead className="w-20 text-right text-xs">
                     <span className="sr-only">Ações</span>
                   </TableHead>
                 </TableRow>

@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oee.engemase.com.br/schemas/gateway/v1/strict/vpn-approval-claims.json",
+  "title": "Claims da aprovação de VPN",
+  "description": "Payload do JWS (EdDSA) que acompanha vpn.enable. Contrato gateway ↔ nuvem v1. Gerado de @engemase/contracts; não edite à mão.",
+  "type": "object",
+  "properties": {
+    "typ": {
+      "type": "string",
+      "const": "engemase.vpn_approval.v1"
+    },
+    "gateway_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+      "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+    },
+    "session_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+      "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+    },
+    "requested_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "approved_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "approved_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+      "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+    },
+    "not_after": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+      "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+    },
+    "allow_ot_forward": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "typ",
+    "gateway_id",
+    "session_id",
+    "requested_by",
+    "approved_by",
+    "approved_at",
+    "not_after",
+    "allow_ot_forward"
+  ],
+  "additionalProperties": false
+}

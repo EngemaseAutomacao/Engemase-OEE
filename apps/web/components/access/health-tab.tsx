@@ -2,6 +2,7 @@
 
 import type { EChartsOption } from "echarts"
 import { ActivityIcon } from "lucide-react"
+import { useTheme } from "next-themes"
 
 import { cn } from "@/lib/utils"
 import { EChart } from "@/components/charts/echart"
@@ -9,6 +10,12 @@ import { SectionCard } from "@/components/dashboard/section-card"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import type { HealthSeries } from "./gateway-data"
 import { UsageBar } from "./gateway-card"
+
+/** Cores das séries: passos claros para o modo escuro (mesmas famílias da marca), não inversão automática. */
+const SERIES = {
+  light: { cpu: "#257bb4", mem: "#0e9384", buffer: "#2c4e73" },
+  dark: { cpu: "#4a9fd6", mem: "#2bb3a3", buffer: "#9cc3e6" },
+}
 
 const fmt = (v: number, digits = 1) => v.toLocaleString("pt-BR", { maximumFractionDigits: digits })
 
@@ -45,8 +52,22 @@ function MetricChart({
       axisPointer: { type: kind === "bar" ? "shadow" : "line" },
       valueFormatter: (v) => (v === null || v === undefined || v === "-" ? "sem contato" : `${fmt(Number(v))} ${unit}`),
     },
-    xAxis: { type: "category", data: labels, boundaryGap: kind === "bar", axisTick: { show: false }, axisLabel: { fontSize: 10, interval: 11 } },
-    yAxis: { type: "value", splitNumber: 3, max, axisLabel: { fontSize: 10, formatter: (v: number) => `${fmt(v, 0)}${unit === "%" ? "%" : ""}` } },
+    xAxis: {
+      type: "category",
+      data: labels,
+      boundaryGap: kind === "bar",
+      axisTick: { show: false },
+      axisLabel: { fontSize: 10, interval: 11 },
+    },
+    yAxis: {
+      type: "value",
+      splitNumber: 3,
+      max,
+      axisLabel: {
+        fontSize: 10,
+        formatter: (v: number) => `${fmt(v, 0)}${unit === "%" ? "%" : ""}`,
+      },
+    },
     series: [
       {
         name: unit === "%" ? "CPU" : unit === "MB" ? "Memória" : "Fila",
@@ -56,7 +77,10 @@ function MetricChart({
         showSymbol: false,
         symbolSize: 8,
         lineStyle: { width: 2, color },
-        itemStyle: { color, borderRadius: kind === "bar" ? [3, 3, 0, 0] : undefined },
+        itemStyle: {
+          color,
+          borderRadius: kind === "bar" ? [3, 3, 0, 0] : undefined,
+        },
         barCategoryGap: "35%",
         areaStyle: kind === "line" ? { color: `${color}1f` } : undefined,
         markArea:
@@ -64,7 +88,13 @@ function MetricChart({
             ? {
                 silent: true,
                 itemStyle: { color: "rgba(148,163,184,0.16)" },
-                label: { show: true, position: "insideTop", fontSize: 10, color: "#94a3b8", formatter: "Sem contato" },
+                label: {
+                  show: true,
+                  position: "insideTop",
+                  fontSize: 10,
+                  color: "#94a3b8",
+                  formatter: "Sem contato",
+                },
                 data: [[{ xAxis: labels[lostAt] }, { xAxis: labels[labels.length - 1] }]],
               }
             : undefined,
@@ -73,7 +103,12 @@ function MetricChart({
               silent: true,
               symbol: "none",
               lineStyle: { type: "dashed", width: 1, color: "#94a3b8" },
-              label: { formatter: threshold.label, fontSize: 10, color: "#94a3b8", position: "insideEndTop" },
+              label: {
+                formatter: threshold.label,
+                fontSize: 10,
+                color: "#94a3b8",
+                position: "insideEndTop",
+              },
               data: [{ yAxis: threshold.value }],
             }
           : undefined,
@@ -122,6 +157,8 @@ export function HealthTab({
     lastSeenAgo: string
   }
 }) {
+  const { resolvedTheme } = useTheme()
+  const colors = SERIES[resolvedTheme === "dark" ? "dark" : "light"]
   if (!health) {
     return (
       <Empty className="rounded-2xl border border-dashed bg-card">
@@ -135,6 +172,7 @@ export function HealthTab({
       </Empty>
     )
   }
+  const noData = health.lostAt === 0
   const cpu = lastValue(health.cpu)
   const mem = lastValue(health.memMb)
   const buf = lastValue(health.buffer)
@@ -142,30 +180,42 @@ export function HealthTab({
 
   return (
     <div className="grid gap-4 xl:grid-cols-12">
-      <div className="grid gap-4 sm:grid-cols-2 xl:col-span-8">
-        <SectionCard title="CPU" description={`Últimas 6 h, a cada 5 min · ${note}: ${cpu !== null ? `${fmt(cpu)}%` : "—"}`}>
-          <MetricChart labels={health.labels} data={health.cpu} color="#257bb4" unit="%" lostAt={health.lostAt} />
-        </SectionCard>
-        <SectionCard title="Memória do agente" description={`Últimas 6 h · ${note}: ${mem !== null ? `${fmt(mem, 0)} MB` : "—"}`}>
-          <MetricChart labels={health.labels} data={health.memMb} color="#0e9384" unit="MB" lostAt={health.lostAt} />
-        </SectionCard>
-        <SectionCard
-          title="Fila do buffer"
-          description={`Leituras aguardando envio · ${note}: ${buf !== null ? fmt(buf, 0) : "—"}. Acima de 20 por vários minutos indica rede lenta ou instável.`}
-          className="sm:col-span-2"
-        >
-          <MetricChart
-            labels={health.labels}
-            data={health.buffer}
-            color="#2c4e73"
-            unit="leituras"
-            kind="bar"
-            lostAt={health.lostAt}
-            threshold={{ value: 20, label: "alerta: 20" }}
-            height={190}
-          />
-        </SectionCard>
-      </div>
+      {noData ? (
+        <Empty className="rounded-2xl border border-dashed bg-card xl:col-span-8">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <ActivityIcon />
+            </EmptyMedia>
+            <EmptyTitle>Sem dados nas últimas 6 horas</EmptyTitle>
+            <EmptyDescription>O gateway está sem contato {info.lastSeenAgo}. Os gráficos voltam a ser preenchidos no próximo sincronismo.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:col-span-8">
+          <SectionCard title="CPU" description={`Últimas 6 h, a cada 5 min · ${note}: ${cpu !== null ? `${fmt(cpu)}%` : "—"}`}>
+            <MetricChart labels={health.labels} data={health.cpu} color={colors.cpu} unit="%" lostAt={health.lostAt} />
+          </SectionCard>
+          <SectionCard title="Memória do agente" description={`Últimas 6 h · ${note}: ${mem !== null ? `${fmt(mem, 0)} MB` : "—"}`}>
+            <MetricChart labels={health.labels} data={health.memMb} color={colors.mem} unit="MB" lostAt={health.lostAt} />
+          </SectionCard>
+          <SectionCard
+            title="Fila do buffer"
+            description={`Leituras aguardando envio · ${note}: ${buf !== null ? fmt(buf, 0) : "—"}. Acima de 20 por vários minutos indica rede lenta ou instável.`}
+            className="sm:col-span-2"
+          >
+            <MetricChart
+              labels={health.labels}
+              data={health.buffer}
+              color={colors.buffer}
+              unit="leituras"
+              kind="bar"
+              lostAt={health.lostAt}
+              threshold={{ value: 20, label: "alerta: 20" }}
+              height={190}
+            />
+          </SectionCard>
+        </div>
+      )}
 
       <SectionCard title="Equipamento" description="Ficha reportada pelo agente" className="xl:col-span-4">
         <dl className="divide-y">
@@ -173,11 +223,7 @@ export function HealthTab({
           <Info label="Hostname" value={info.hostname} mono />
           <Info label="Rede de TI (eth0)" value={info.ipIt ?? "—"} mono />
           <Info label="Rede OT (eth1)" value={info.ipOt ?? "—"} mono />
-          <Info
-            label="Agente"
-            value={info.agentVersion ? `v${info.agentVersion}` : "—"}
-            alert={info.agentOutdated}
-          >
+          <Info label="Agente" value={info.agentVersion ? `v${info.agentVersion}` : "—"} alert={info.agentOutdated}>
             {info.agentVersion && (
               <div className="text-[11px] font-normal text-muted-foreground">{info.agentOutdated ? `Disponível: v${info.latestAgent}` : "Versão atual"}</div>
             )}

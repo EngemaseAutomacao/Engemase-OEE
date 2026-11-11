@@ -421,7 +421,8 @@ export function simulatedLatency(protocol: Protocol, seed: string): number {
  */
 export function simulatedValue(t: TagDraft, stateMap: StateMapRow[], tick: number): string {
   const h = hash(`${t.area}:${t.address}:${t.name}`)
-  const counter = 120_000 + (h % 880_000) + tick * 3
+  // Mesma base para total, refugo e boas (coerentes entre si); avança a cada leitura.
+  const counter = 523_418 + tick * 3
   switch (t.role) {
     case "state.running":
       return "1"

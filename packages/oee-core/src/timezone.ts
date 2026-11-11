@@ -10,7 +10,6 @@ import type { Instant } from "./types.js";
  * - no **buraco** (o relógio adianta), o horário é empurrado para depois do buraco.
  */
 
-const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
 
 /** Data local `YYYY-MM-DD` já validada, em partes. */
@@ -162,9 +161,4 @@ export function isoWeekday(date: string): IsoWeekday {
   const { year, month, day } = parsePlainDate(date);
   const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
   return (weekday === 0 ? 7 : weekday) as IsoWeekday;
-}
-
-/** Converte minutos em ms (atalho legível). */
-export function minutesToMs(minutes: number): number {
-  return minutes * MINUTE_MS;
 }

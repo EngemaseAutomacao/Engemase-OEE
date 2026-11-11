@@ -125,7 +125,8 @@ export function RequestAccessDialog({
           <DialogHeader>
             <DialogTitle>Solicitar acesso remoto</DialogTitle>
             <DialogDescription>
-              {gatewayName} · <span className="font-mono">{hostname}</span>. A VPN só liga depois da aprovação do admin do cliente e se desliga sozinha no fim do prazo.
+              {gatewayName} · <span className="font-mono">{hostname}</span>. A VPN só liga depois da aprovação do admin do cliente e se desliga sozinha no fim
+              do prazo.
             </DialogDescription>
           </DialogHeader>
 
@@ -155,13 +156,24 @@ export function RequestAccessDialog({
                 rows={3}
                 aria-invalid={touched && !!errors.reason}
               />
-              {touched && errors.reason ? <FieldError>{errors.reason}</FieldError> : <FieldDescription>Aparece para o cliente na aprovação e na auditoria.</FieldDescription>}
+              {touched && errors.reason ? (
+                <FieldError>{errors.reason}</FieldError>
+              ) : (
+                <FieldDescription>Aparece para o cliente na aprovação e na auditoria.</FieldDescription>
+              )}
             </Field>
 
             <div className="grid gap-5 sm:grid-cols-2">
               <Field data-invalid={touched && !!errors.ticket}>
                 <FieldLabel htmlFor="ra-ticket">Chamado</FieldLabel>
-                <Input id="ra-ticket" value={ticket} onChange={(e) => setTicket(e.target.value)} placeholder="#1060" aria-invalid={touched && !!errors.ticket} autoComplete="off" />
+                <Input
+                  id="ra-ticket"
+                  value={ticket}
+                  onChange={(e) => setTicket(e.target.value)}
+                  placeholder="#1060"
+                  aria-invalid={touched && !!errors.ticket}
+                  autoComplete="off"
+                />
                 {touched && errors.ticket && <FieldError>{errors.ticket}</FieldError>}
               </Field>
               <Field>
@@ -248,8 +260,8 @@ export function RequestAccessDialog({
                   <TriangleAlertIcon className="text-amber-700 dark:text-state-stopped" />
                   <AlertTitle>Acesso à rede industrial</AlertTitle>
                   <AlertDescription>
-                    Só este IP:porta fica acessível, por no máximo 30 min e com aprovação própria do cliente. O gateway continua sem rotear a rede OT. Combine com a
-                    equipe da planta antes de conectar o software do CLP ou alterar o programa.
+                    Só este IP:porta fica acessível, por no máximo 30 min e com aprovação própria do cliente. O gateway continua sem rotear a rede OT. Combine
+                    com a equipe da planta antes de conectar o software do CLP ou alterar o programa.
                   </AlertDescription>
                 </Alert>
               </div>
@@ -272,8 +284,8 @@ export function RequestAccessDialog({
 
           <p className="flex items-start gap-2 rounded-xl bg-muted/50 p-3 text-xs text-muted-foreground">
             <ShieldAlertIcon className="mt-px size-4 shrink-0" />
-            Quem pede nunca aprova. Pedido, aprovação, conexões e encerramento ficam na auditoria visível ao cliente. O kill switch local do gateway prevalece sobre a
-            plataforma.
+            Quem pede nunca aprova. Pedido, aprovação, conexões e encerramento ficam na auditoria visível ao cliente. O kill switch local do gateway prevalece
+            sobre a plataforma.
           </p>
 
           <DialogFooter>

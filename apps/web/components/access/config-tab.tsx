@@ -41,8 +41,8 @@ function RevertButton({ v, next, onRevert }: { v: number; next: number; onRevert
         <AlertDialogHeader>
           <AlertDialogTitle>Reverter para a v{v}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Será publicada a v{next} com o mesmo conteúdo da v{v}. Nenhuma versão é apagada: o histórico continua completo. O gateway aplica a nova versão no próximo
-            sincronismo e a alteração fica registrada na auditoria.
+            Será publicada a v{next} com o mesmo conteúdo da v{v}. Nenhuma versão é apagada: o histórico continua completo. O gateway aplica a nova versão no
+            próximo sincronismo e a alteração fica registrada na auditoria.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -93,8 +93,12 @@ export function ConfigTab({
                 <HardDriveDownloadIcon className="size-3.5" />
                 Aplicada no gateway
               </div>
-              <div className={cn("text-2xl font-bold tabular-nums", !synced && "text-amber-700 dark:text-state-stopped")}>{applied !== null ? `v${applied}` : "—"}</div>
-              <div className="truncate text-[11px] text-muted-foreground">{synced ? "Em uso agora" : offline ? "Último valor reportado" : "Aguardando aplicação"}</div>
+              <div className={cn("text-2xl font-bold tabular-nums", !synced && "text-amber-700 dark:text-state-stopped")}>
+                {applied !== null ? `v${applied}` : "—"}
+              </div>
+              <div className="truncate text-[11px] text-muted-foreground">
+                {synced ? "Em uso agora" : offline ? "Último valor reportado" : "Aguardando aplicação"}
+              </div>
             </div>
           </div>
 
@@ -118,8 +122,8 @@ export function ConfigTab({
             {reloading ? "Recarregando…" : "Forçar recarga da configuração"}
           </Button>
           <p className="text-xs text-muted-foreground">
-            Cada publicação gera uma versão imutável. O gateway baixa a versão nova no sincronismo, valida e confirma a aplicação; se a validação falhar, ele continua
-            na versão anterior.
+            Cada publicação gera uma versão imutável. O gateway baixa a versão nova no sincronismo, valida e confirma a aplicação; se a validação falhar, ele
+            continua na versão anterior.
           </p>
         </div>
       </SectionCard>

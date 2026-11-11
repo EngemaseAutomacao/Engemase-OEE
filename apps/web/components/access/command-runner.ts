@@ -45,7 +45,10 @@ export function useCommandRunner({ initial, offline, me, nowLabel }: { initial: 
 
     if (offline) {
       toast.info(`${COMMAND_TYPE_LABEL[type]} na fila`, {
-        description: type === "tag.read" ? "O gateway está offline. Leituras de tag expiram em 2 min se ele não voltar." : "O gateway está offline. O comando será entregue quando ele voltar a sincronizar.",
+        description:
+          type === "tag.read"
+            ? "O gateway está offline. Leituras de tag expiram em 2 min se ele não voltar."
+            : "O gateway está offline. O comando será entregue quando ele voltar a sincronizar.",
       })
       return Promise.resolve(null)
     }

@@ -238,7 +238,7 @@ export function TagsStep({
         </Empty>
       ) : (
         <div className="overflow-hidden rounded-lg border">
-          <Table className="min-w-[1120px]">
+          <Table className="min-w-[1240px]">
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
                 <TableHead className="w-40 pl-3">Papel</TableHead>
@@ -407,7 +407,7 @@ function TagRows({
             value={t.name}
             onChange={(e) => onChange({ name: e.target.value })}
             placeholder="Descrição do sinal"
-            className="h-8 min-w-40"
+            className="h-8 min-w-52"
             aria-label="Nome do sinal"
             aria-invalid={!!error && !t.name.trim()}
           />

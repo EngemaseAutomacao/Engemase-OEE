@@ -2,18 +2,7 @@
  * Rótulos e utilitários PUROS das telas de conectividade e acesso
  * (gateways, CLPs, tags, usuários e auditoria). Seguros em servidor e cliente.
  */
-import type {
-  ClientRole,
-  DataType,
-  DeviceStatus,
-  GatewayStatus,
-  ModbusArea,
-  PlatformRole,
-  Protocol,
-  Tag,
-  TagRole,
-  UserStatus,
-} from "@/lib/mock/types"
+import type { ClientRole, DataType, DeviceStatus, GatewayStatus, ModbusArea, PlatformRole, Protocol, Tag, TagRole, UserStatus } from "@/lib/mock/types"
 import type { RemoteAccessPolicy, RemoteAccessStatus } from "@/lib/mock"
 
 // ---------------------------------------------------------------------------

@@ -59,7 +59,7 @@ function DeviceRow({ d, offline, onTest }: { d: DeviceVM; offline: boolean; onTe
           )}
         </div>
       </div>
-      <div className="flex items-center justify-between gap-4 pl-11 md:justify-end md:pl-0">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:pl-11 md:justify-end md:pl-0">
         <div className="flex items-center gap-4">
           <Figure label="Latência" value={offline || d.latencyMs === null ? "—" : `${d.latencyMs} ms`} />
           <Figure label="Erros/min" value={offline ? "—" : String(d.errors1m)} alert={!offline && d.errors1m > 0} />
@@ -168,7 +168,9 @@ export function ConnectionsTab({
         <Alert className="rounded-2xl">
           <WifiOffIcon />
           <AlertTitle>Gateway offline</AlertTitle>
-          <AlertDescription>Estado das conexões conforme o último contato ({lastSeenAgo}). Testes ficam na fila até o gateway voltar a sincronizar.</AlertDescription>
+          <AlertDescription>
+            Estado das conexões conforme o último contato ({lastSeenAgo}). Testes ficam na fila até o gateway voltar a sincronizar.
+          </AlertDescription>
         </Alert>
       )}
 
@@ -190,7 +192,11 @@ export function ConnectionsTab({
 
       <SectionCard
         title="Modbus RTU · RS-485"
-        description={rtuCount > 0 ? `${plural(rtuCount, "escravo", "escravos")} em ${plural(buses.filter((b) => b.devices.length > 0).length, "barramento", "barramentos")}` : "Nenhum escravo cadastrado"}
+        description={
+          rtuCount > 0
+            ? `${plural(rtuCount, "escravo", "escravos")} em ${plural(buses.filter((b) => b.devices.length > 0).length, "barramento", "barramentos")}`
+            : "Nenhum escravo cadastrado"
+        }
       >
         {buses.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground">Este gateway não tem portas RS-485.</p>
@@ -222,7 +228,8 @@ export function ConnectionsTab({
                   {b.devices.some((d) => d.status === "error") && (
                     <p className="flex items-start gap-1.5 rounded-lg bg-state-stopped/12 px-2.5 py-1.5 text-xs text-amber-800 dark:text-state-stopped">
                       <TriangleAlertIcon className="mt-px size-3.5 shrink-0" />
-                      Escravo com erro consome o timeout inteiro a cada varredura. Verifique terminação de 120 Ω, fio de comum (0 V) e paridade iguais em todo o barramento.
+                      Escravo com erro consome o timeout inteiro a cada varredura. Verifique terminação de 120 Ω, fio de comum (0 V) e paridade iguais em todo o
+                      barramento.
                     </p>
                   )}
                   <ul className="divide-y border-t pt-3">

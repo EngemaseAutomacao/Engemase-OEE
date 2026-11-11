@@ -52,7 +52,9 @@ export function TagsTab({ tags, devices, run }: { tags: TagVM[]; devices: Device
 
   const visible = useMemo(() => {
     const q = norm(query.trim())
-    return tags.filter((t) => (device === "all" || t.deviceId === device) && (!q || norm(`${t.name} ${t.machineName} ${t.roleLabel} ${t.ref} ${t.address}`).includes(q)))
+    return tags.filter(
+      (t) => (device === "all" || t.deviceId === device) && (!q || norm(`${t.name} ${t.machineName} ${t.roleLabel} ${t.ref} ${t.address}`).includes(q)),
+    )
   }, [tags, device, query])
 
   const groups = useMemo(() => {
@@ -203,8 +205,9 @@ export function TagsTab({ tags, devices, run }: { tags: TagVM[]; devices: Device
       <div className="flex items-start gap-3 rounded-2xl border bg-card px-5 py-3.5 text-xs text-muted-foreground">
         <BookOpenIcon className="mt-px size-4 shrink-0 text-[#0e9384]" />
         <p>
-          <span className="font-medium text-foreground">Endereço base 0 × convenção:</span> “40001” é o holding register de endereço 0 no protocolo. A plataforma
-          guarda o endereço base 0 e mostra a convenção ao lado. Em 32 bits, confirme a ordem das words (padrão CDAB) lendo um valor conhecido, como o contador.
+          <span className="font-medium text-foreground">Endereço base 0 × convenção:</span> “40001” é o holding register de endereço 0 no protocolo. A
+          plataforma guarda o endereço base 0 e mostra a convenção ao lado. Em 32 bits, confirme a ordem das words (padrão CDAB) lendo um valor conhecido, como
+          o contador.
         </p>
       </div>
     </div>

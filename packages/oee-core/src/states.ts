@@ -1,5 +1,6 @@
 import { OeeInputError } from "./errors.js";
 import { clipInterval, subtractIntervals } from "./intervals.js";
+import { resolveOptions } from "./options.js";
 import type { Interval, MachineState, OeeOptions, ReasonCategory, StateEvent } from "./types.js";
 
 /** O que um trecho da linha do tempo representa. */
@@ -164,8 +165,9 @@ function markMicroStops(events: ResolvedEvent[], thresholdS: number): ResolvedEv
 export function resolveStateTimeline(
   events: readonly StateEvent[],
   window: Interval,
-  options: TimelineOptions,
+  partialOptions?: Partial<TimelineOptions>,
 ): StateSegment[] {
+  const options = resolveOptions(partialOptions);
   if (!Number.isFinite(window.start) || !Number.isFinite(window.end) || window.end < window.start) {
     throw new OeeInputError("Janela de cálculo inválida.");
   }
