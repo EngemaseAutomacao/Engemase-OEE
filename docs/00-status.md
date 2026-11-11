@@ -12,10 +12,12 @@
   - seletor de cliente, login, unidades e linhas, cadastro de máquinas;
   - marca Engemase, tema Claro/Escuro/Automático, sino de notificações e cor por cliente (exemplo: Serra Azul).
 
-## Em andamento (análises rodando na sessão)
+## Interrompido a pedido (retomar)
 
-- **Projeto do gateway** → vai virar `docs/16-projeto-do-gateway.md`. Cobre software, rede e instalação, comissionamento local, preparação e ciclo de vida.
-- **Levantamento do que falta** → auditoria da documentação, do protótipo e da implementação, com backlog priorizado.
+- **Projeto do gateway** (vai virar `docs/16-projeto-do-gateway.md`):
+  - prontas, como rascunho em `docs/rascunhos/`: software (`gateway-software.md`) e rede e instalação (`gateway-rede-e-instalacao.md`);
+  - faltam o comissionamento local, a preparação e ciclo de vida e a revisão crítica.
+- **Levantamento do que falta:** interrompido antes de terminar. Refazer a auditoria da documentação, do protótipo e da implementação, com backlog priorizado.
 
 ## Pendente no protótipo
 
