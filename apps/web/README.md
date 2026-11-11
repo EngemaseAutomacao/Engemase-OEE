@@ -32,7 +32,9 @@ app/
 components/
   ui/       shadcn/ui (não editar sem necessidade)
   shell/    layout: menu, cabeçalho, PageHeader/PageBody
+  dashboard/ PADRÃO VISUAL: StatCard, SectionCard, IconCircle, Ring, Gauge, Donut, StatePipeline, ActivityTimeline
   oee/      domínio: StateBadge, OeeRing, OeeBreakdown, KpiCard, MachineCard, StateTimeline
+  overview/ dados e gráficos da Visão geral (referência de como montar uma página no padrão novo)
   charts/   EChart (wrapper do ECharts com tema claro/escuro)
 lib/
   mock/     dados simulados + funções de consulta (trocar pela camada real depois)
@@ -50,6 +52,13 @@ lib/
 5. Textos da interface em **português do Brasil**; código e identificadores em inglês.
 6. Cores de estado: classes `bg-state-*`/`text-state-*` e `STATE_META` (`lib/states.ts`); em gráficos use `STATE_META[x].hex` e `TONE_HEX`.
 7. Ações (salvar, convidar, testar leitura) no protótipo só mostram um `toast` (sonner) — não há backend ainda.
+8. **Padrão visual** (inspirado na referência aprovada pelo dono do produto; ver `app/(shell)/[cliente]/page.tsx`):
+   - página: `<div className="flex flex-col gap-5 p-4 md:p-6">`, título `text-2xl font-bold` + subtítulo `text-sm text-muted-foreground`, ações/filtros à direita;
+   - indicadores em `StatCard` (ícone em círculo colorido, valor grande, variação ↑/↓);
+   - blocos em `SectionCard` (cartão `rounded-2xl`, título + link "Ver tudo"/ação à direita);
+   - tabelas dentro de `SectionCard`, com `overflow-x-auto`; badges suaves; ações como botões-ícone quadrados suaves;
+   - cores: azul Engemase (primária), azul-marinho, teal `#0e9384` e laranja `#e96549` só em ícones decorativos; estados de máquina sempre com `STATE_META`;
+   - barras de rolagem já estão ocultas globalmente (não reintroduzir).
 
 ## Checagens
 
