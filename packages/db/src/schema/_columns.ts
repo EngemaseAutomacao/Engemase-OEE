@@ -42,7 +42,7 @@ function quoteLiteral(value: string): string {
 }
 
 /** `coluna IN ('a', 'b', ...)` para CHECKs de "enum" em texto. */
-export function oneOf(column: AnyPgColumn, values: readonly string[]): SQL {
+export function oneOf(column: AnyPgColumn | SQL, values: readonly string[]): SQL {
   if (values.length === 0) throw new Error("oneOf: lista de valores vazia")
   return sql`${column} IN (${sql.raw(values.map(quoteLiteral).join(", "))})`
 }
