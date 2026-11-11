@@ -24,7 +24,8 @@
   --card-foreground: #13253a;
   --popover: #ffffff;
   --popover-foreground: #13253a;
-  --primary: var(--brand-blue);
+  /* Azul Engemase levemente escurecido: contraste AA (>= 4,5:1) também como texto sobre o fundo. */
+  --primary: #2272ab;
   --primary-foreground: #ffffff;
   --secondary: #edf2f7;
   --secondary-foreground: #1f3a57;

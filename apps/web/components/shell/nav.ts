@@ -1,17 +1,22 @@
 import {
   ActivityIcon,
   BarChart3Icon,
+  BellIcon,
   BoxIcon,
   Building2Icon,
   ClipboardListIcon,
   ClockIcon,
   CpuIcon,
+  KeyRoundIcon,
+  LifeBuoyIcon,
+  PaletteIcon,
   FactoryIcon,
   GaugeIcon,
   HistoryIcon,
   LayoutDashboardIcon,
   type LucideIcon,
   MonitorIcon,
+  MonitorSmartphoneIcon,
   RouterIcon,
   ShieldCheckIcon,
   TabletSmartphoneIcon,
@@ -33,7 +38,7 @@ export interface NavGroup {
 }
 
 /** Menu da área do cliente. `href` é relativo a /[cliente]. */
-export function clientNav(slug: string): NavGroup[] {
+export function clientNav(slug: string, kiosk: { machineId?: string; lineId?: string } = {}): NavGroup[] {
   const b = `/${slug}`
   return [
     {
@@ -53,8 +58,9 @@ export function clientNav(slug: string): NavGroup[] {
     {
       label: "Chão de fábrica",
       items: [
-        { title: "Tela do operador", href: `${b}/operador/mch_inj01`, icon: TabletSmartphoneIcon },
-        { title: "TV / Andon", href: `${b}/andon/lin_injA`, icon: MonitorIcon },
+        ...(kiosk.machineId ? [{ title: "Tela do operador", href: `${b}/operador/${kiosk.machineId}`, icon: TabletSmartphoneIcon }] : []),
+        ...(kiosk.lineId ? [{ title: "TV / Andon", href: `${b}/andon/${kiosk.lineId}`, icon: MonitorIcon }] : []),
+        { title: "Notificações", href: `${b}/notificacoes`, icon: BellIcon },
       ],
     },
     {
@@ -67,7 +73,16 @@ export function clientNav(slug: string): NavGroup[] {
         { title: "Turnos", href: `${b}/config/turnos`, icon: ClockIcon },
         { title: "Motivos de parada", href: `${b}/config/motivos`, icon: TagsIcon },
         { title: "Usuários", href: `${b}/config/usuarios`, icon: UsersIcon },
+        { title: "Terminais (TV/tablet)", href: `${b}/config/terminais`, icon: MonitorSmartphoneIcon },
+        { title: "Aparência", href: `${b}/config/aparencia`, icon: PaletteIcon },
         { title: "Auditoria", href: `${b}/config/auditoria`, icon: HistoryIcon },
+      ],
+    },
+    {
+      label: "Suporte",
+      items: [
+        { title: "Acesso remoto", href: `${b}/acesso-remoto`, icon: KeyRoundIcon },
+        { title: "Central de ajuda", href: `${b}/ajuda`, icon: LifeBuoyIcon },
       ],
     },
   ]
@@ -81,6 +96,7 @@ export const adminNav: NavGroup[] = [
       { title: "Visão geral", href: "/admin", icon: LayoutDashboardIcon, exact: true },
       { title: "Clientes", href: "/admin/clientes", icon: Building2Icon },
       { title: "Frota de gateways", href: "/admin/gateways", icon: CpuIcon },
+      { title: "Acesso remoto", href: "/admin/acesso-remoto", icon: KeyRoundIcon },
     ],
   },
   {

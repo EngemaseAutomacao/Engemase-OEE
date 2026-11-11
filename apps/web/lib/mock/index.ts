@@ -168,3 +168,44 @@ export const adminClientParams = () => clients.map((c) => ({ clienteId: c.id }))
 
 /** Instante "agora" do protótipo em ms (para cálculos de duração em componentes de servidor). */
 export const nowMs = () => Date.parse(MOCK_NOW)
+
+// ---------------------------------------------------------------------------
+// 2ª rodada: notificações, acesso remoto, terminais, ajuda e identidade visual
+// ---------------------------------------------------------------------------
+import {
+  brandPresets,
+  clientBrandings,
+  helpArticles,
+  helpCategories,
+  helpFaq,
+  notifications,
+  remoteAccessPolicies,
+  remoteAccessSessions,
+  terminals,
+} from "./extra"
+
+export type {
+  AlertSeverity,
+  AlertType,
+  AppNotification,
+  ClientBranding,
+  HelpArticle,
+  RemoteAccessPolicy,
+  RemoteAccessSession,
+  RemoteAccessStatus,
+  Terminal,
+} from "./extra"
+export { brandPresets, helpCategories, helpFaq }
+
+export const getNotifications = (clientId?: string) =>
+  [...notifications.filter((n) => !clientId || n.clientId === clientId)].sort((a, b) => b.at.localeCompare(a.at))
+export const getRemoteAccessSessions = (filter: { clientId?: string; gatewayId?: string } = {}) =>
+  [...remoteAccessSessions.filter((s) => (!filter.clientId || s.clientId === filter.clientId) && (!filter.gatewayId || s.gatewayId === filter.gatewayId))].sort((a, b) =>
+    b.requestedAt.localeCompare(a.requestedAt),
+  )
+export const getRemoteAccessPolicy = (clientId: string) => remoteAccessPolicies.find((p) => p.clientId === clientId)
+export const getTerminals = (clientId: string) => terminals.filter((t) => t.clientId === clientId)
+export const getHelpArticles = () => helpArticles
+export const getHelpArticle = (slug: string) => helpArticles.find((a) => a.slug === slug)
+/** Identidade do cliente; `undefined` = padrão Engemase. */
+export const getClientBranding = (clientId: string) => clientBrandings.find((b) => b.clientId === clientId)

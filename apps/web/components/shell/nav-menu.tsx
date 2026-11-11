@@ -45,8 +45,8 @@ function NavGroups({ groups }: { groups: NavGroup[] }) {
   )
 }
 
-export function ClientNavMenu({ slug }: { slug: string }) {
-  return <NavGroups groups={clientNav(slug)} />
+export function ClientNavMenu({ slug, machineId, lineId }: { slug: string; machineId?: string; lineId?: string }) {
+  return <NavGroups groups={clientNav(slug, { machineId, lineId })} />
 }
 
 export function AdminNavMenu() {

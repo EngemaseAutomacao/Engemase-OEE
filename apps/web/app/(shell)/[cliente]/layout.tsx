@@ -1,10 +1,19 @@
 import { notFound } from "next/navigation"
-import { BellIcon, PauseCircleIcon, ShieldCheckIcon } from "lucide-react"
+import { PauseCircleIcon, ShieldCheckIcon } from "lucide-react"
 
-import { clientParams, getAccessibleClients, getClientBySlug, getCurrentUser, getUnits } from "@/lib/mock"
-import { initials } from "@/lib/format"
+import {
+  clientParams,
+  getAccessibleClients,
+  getClientBranding,
+  getClientBySlug,
+  getCurrentUser,
+  getLines,
+  getMachines,
+  getNotifications,
+  getUnits,
+} from "@/lib/mock"
+import { ago, initials } from "@/lib/format"
 import { CLIENT_ROLE_LABEL, PLATFORM_ROLE_LABEL } from "@/lib/roles"
-import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import {
   Sidebar,
@@ -17,7 +26,9 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { ClientSwitcher } from "@/components/shell/client-switcher"
+import { HelpButton } from "@/components/shell/help-button"
 import { ClientNavMenu } from "@/components/shell/nav-menu"
+import { NotificationBell } from "@/components/shell/notification-bell"
 import { UnitSelector } from "@/components/shell/unit-selector"
 import { UserMenu } from "@/components/shell/user-menu"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -35,9 +46,25 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/[
   const membership = me.memberships.find((m) => m.clientId === client.id)
   const roleLabel = me.platformRole ? `Engemase · ${PLATFORM_ROLE_LABEL[me.platformRole]}` : membership ? CLIENT_ROLE_LABEL[membership.role] : ""
   const units = getUnits(client.id)
+  const branding = getClientBranding(client.id)
+  const firstMachine = getMachines(client.id)[0]
+  const firstLine = getLines(client.id)[0]
+  const bellItems = getNotifications(client.id).map((n) => ({
+    id: n.id,
+    severity: n.severity,
+    title: n.title,
+    body: n.body,
+    href: n.href,
+    ago: ago(n.at),
+    read: n.read,
+  }))
 
   return (
     <SidebarProvider>
+      {branding && (
+        // Identidade visual do cliente (docs/14): tokens já calculados no servidor; cores de estado não mudam.
+        <style>{`html:root{--primary:${branding.tokens.light.primary};--ring:${branding.tokens.light.ring};--sidebar:${branding.tokens.light.sidebar};--sidebar-primary:${branding.tokens.light.primary};--sidebar-accent:color-mix(in oklab,${branding.tokens.light.sidebar} 82%,white);--sidebar-border:color-mix(in oklab,${branding.tokens.light.sidebar} 80%,white)}html.dark{--primary:${branding.tokens.dark.primary};--ring:${branding.tokens.dark.ring};--sidebar:${branding.tokens.dark.sidebar};--sidebar-primary:${branding.tokens.dark.primary};--sidebar-accent:color-mix(in oklab,${branding.tokens.dark.sidebar} 85%,white)}`}</style>
+      )}
       <Sidebar collapsible="icon">
         <SidebarHeader>
           <ClientSwitcher
@@ -47,7 +74,7 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/[
           />
         </SidebarHeader>
         <SidebarContent>
-          <ClientNavMenu slug={client.slug} />
+          <ClientNavMenu slug={client.slug} machineId={firstMachine?.id} lineId={firstLine?.id} />
         </SidebarContent>
         <SidebarFooter>
           <UserMenu name={me.name} email={me.email ?? me.username ?? ""} roleLabel={roleLabel} initials={initials(me.name)} isPlatform={Boolean(me.platformRole)} />
@@ -75,9 +102,8 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/[
           <span className="truncate text-sm font-medium">{client.name}</span>
           <div className="ml-auto flex items-center gap-1.5">
             <UnitSelector units={units.map((u) => ({ id: u.id, name: u.name }))} />
-            <Button variant="ghost" size="icon" aria-label="Notificações">
-              <BellIcon className="size-4" />
-            </Button>
+            <HelpButton href={`/${client.slug}/ajuda`} />
+            <NotificationBell items={bellItems} allHref={`/${client.slug}/notificacoes`} />
             <ThemeToggle />
           </div>
         </header>
