@@ -71,7 +71,7 @@ Se a máquina **rodou** durante um intervalo de parada planejada (ex.: trabalhou
 
 ## Algoritmo (janela [t0, t1) de uma máquina)
 
-1. **Janelas de turno:** interseção de [t0, t1) com os turnos da planta (no fuso da planta, convertido para UTC). Turnos que atravessam a meia-noite pertencem à data de início.
+1. **Janelas de turno:** interseção de [t0, t1) com os turnos da unidade (no fuso da unidade, convertido para UTC). Turnos que atravessam a meia-noite pertencem à data de início.
 2. **Tempo planejado:** as janelas de turno menos os intervalos de parada planejada (calendário) e menos os eventos de parada com motivo de categoria "planejada". Aplica a regra de "produção durante parada planejada".
 3. **Tempo de operação:** soma dos intervalos `RUNNING` dentro do tempo planejado, mais as paradas menores que o limite de micro-parada.
 4. **Contagens:** soma de `total` e `reject` de `production_minute` na janela, menos ajustes manuais de `quality_entry`. Peças boas = total − refugo.
@@ -81,9 +81,9 @@ Se a máquina **rodou** durante um intervalo de parada planejada (ex.: trabalhou
 
 Os **tempos** vêm dos eventos (precisão de segundos e motivos aplicados). As **contagens** vêm dos minutos. Os segundos por estado dentro de `production_minute` servem para gráficos rápidos e para conferência cruzada.
 
-Agregações acima de máquina (linha, planta):
+Agregações acima de máquina (linha, unidade):
 
-- **OEE da linha/planta = Σ (boas × ciclo ideal) ÷ Σ tempo planejado.** A média simples dos OEEs das máquinas distorce o resultado e não deve ser usada.
+- **OEE da linha/unidade = Σ (boas × ciclo ideal) ÷ Σ tempo planejado.** A média simples dos OEEs das máquinas distorce o resultado e não deve ser usada.
 - Para linhas em série, também se mostra o OEE da **máquina gargalo**, configurável.
 
 ## Casos especiais
@@ -99,7 +99,7 @@ Agregações acima de máquina (linha, planta):
 | Refugo lançado depois | Entra em `quality_entry` e marca o turno como sujo para recálculo |
 | Operador reclassifica uma parada | Atualiza `reason_id` e marca o turno como sujo |
 | Máquina sem sinal de "rodando" | Modo `count_derived` (ver [03](03-gateway.md#determinação-do-estado)) |
-| Fuso e horário de verão | Cálculo sempre com timezone IANA da planta. O Brasil não tem horário de verão hoje, mas o código não presume isso |
+| Fuso e horário de verão | Cálculo sempre com timezone IANA da unidade. O Brasil não tem horário de verão hoje, mas o código não presume isso |
 
 ### Dados atrasados
 

@@ -96,7 +96,7 @@ sequenceDiagram
 
 **Estados:** `solicitada → aprovada → ativando → ativa → encerrando → encerrada`, com saídas `recusada`, `cancelada`, `expirada sem aprovação`, `falhou` e `revogada`.
 
-**Políticas por cliente (ou planta/gateway, vale a mais restritiva):** desativado · **com aprovação** (padrão) · janela pré-aprovada (ex.: sábado 8h–12h) · emergência com aviso posterior (só se o contrato prever).
+**Políticas por cliente (ou unidade/gateway, vale a mais restritiva):** desativado · **com aprovação** (padrão) · janela pré-aprovada (ex.: sábado 8h–12h) · emergência com aviso posterior (só se o contrato prever).
 
 ## No gateway
 

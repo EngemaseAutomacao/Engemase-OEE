@@ -2,7 +2,7 @@
 
 Plataforma de monitoramento de **OEE (Overall Equipment Effectiveness)** para máquinas industriais, **independente da marca do CLP**.
 
-> **Status:** planejamento concluído e **protótipo da interface** em andamento em [`apps/web`](apps/web/) (dados simulados, roda localmente). Arquitetura e plano em [`docs/`](docs/).
+> **Status:** planejamento em revisão final (ADRs aguardando aceite formal, ver [D37 em `docs/17`](docs/17-backlog-e-pendencias.md#3-decisões-pendentes-do-dono-do-produto)) e **protótipo da interface** em andamento em [`apps/web`](apps/web/) (dados simulados, roda localmente). Arquitetura e plano em [`docs/`](docs/).
 
 ## Em uma frase
 
@@ -80,7 +80,7 @@ engemase-oee/
 │   ├── cmd/oee-gateway/
 │   └── internal/{config,drivers,engine,buffer,uplink,commands,updater}
 ├── tools/
-│   └── plc-sim/              # Simulador de máquinas/CLPs (Modbus + OPC UA)
+│   └── plc-sim/              # Simulador de máquinas/CLPs (Modbus)
 ├── deploy/
 │   └── gateway/              # systemd, pacote .deb, script de instalação, Dockerfile
 └── docs/                     # Esta documentação

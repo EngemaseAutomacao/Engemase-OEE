@@ -132,7 +132,7 @@ Registro curto das decisões. Para mudar uma decisão, adicione uma nova ADR que
 
 **Contexto.** As telas precisam de atualização em segundos, não em milissegundos. Vercel Functions passou a suportar WebSockets recentemente, mas as conexões encerram no limite de duração da função e o fan-out exige pub/sub.
 
-**Decisão.** Polling leve (3–5 s) com TanStack Query sobre `machine_live` e OEE do turno calculado sob demanda.
+**Decisão.** Polling leve (a cada 2 s nas telas ao vivo e na TV, para cumprir o RNF02) com TanStack Query sobre `machine_live` e OEE do turno calculado sob demanda.
 
 **Alternativas.** WebSockets da Vercel + pub/sub (Redis), ou serviço gerenciado (Ably/Pusher): menor latência, mas mais peças móveis.
 
@@ -148,7 +148,9 @@ Registro curto das decisões. Para mudar uma decisão, adicione uma nova ADR que
 
 **Alternativas.** *Clerk:* excelente experiência, organizações prontas, mas custo por usuário ativo e dados fora do nosso banco. *Auth.js:* não tem organizações nem papéis nativos.
 
-**Consequências.** Sem custo por usuário, dados sob nosso controle e flexibilidade para o login por PIN do operador. A manutenção da segurança da autenticação fica mais por nossa conta (atualizar dependências e seguir as boas práticas da biblioteca).
+**Consequências.** Sem custo por usuário, dados sob nosso controle e flexibilidade para a identificação do operador do chão por PIN dentro do terminal pareado (o operador do chão não tem conta; ver [15](15-multi-cliente-e-acesso.md#1-hierarquia-e-identidades)). A manutenção da segurança da autenticação fica mais por nossa conta (atualizar dependências e seguir as boas práticas da biblioteca).
+
+**Nota (11/11/2026).** O fluxo de convites do Better Auth **não é usado**: a entrada de usuários usa um token próprio de uso único para definir senha, que também comprova o e-mail ([15](15-multi-cliente-e-acesso.md#5-better-auth-o-que-usamos-e-o-que-fica-fechado)).
 
 ---
 

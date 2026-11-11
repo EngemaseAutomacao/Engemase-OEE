@@ -1,5 +1,7 @@
 # 09 — Roadmap
 
+> **Estimativa revista:** o [17](17-backlog-e-pendencias.md#2-backlog-até-o-piloto) reestimou o prazo e prevalece sobre as durações abaixo onde houver conflito. Piloto estimado nas **semanas 14 a 16** (meados de fevereiro a início de março de 2027, sem o recesso de fim de ano).
+
 As estimativas consideram um time de **2 desenvolvedores** (um focado no gateway, outro na web, revezando). São para planejamento e devem ser revisadas ao fim da Fase 0.
 
 ```mermaid
@@ -34,7 +36,7 @@ gantt
   - [ ] Ordem de words em 32 bits, timeouts curtos e recuperação de escravo offline
 - [ ] Especificar o **bloco OEE padrão Engemase** (v1) e implementá-lo em pelo menos uma marca de CLP ([11](11-integracao-modbus.md#3-bloco-oee-padrão-engemase)).
 - [ ] `tools/plc-sim`: máquinas simuladas via Modbus TCP (`simonvetter/modbus`, que tem servidor), com o bloco OEE padrão, ciclos, paradas e falhas.
-- [ ] Teste do driver de banco (serverless HTTP vs `pg` + pool) com carga simulada de 100 gateways.
+- [ ] Teste do driver de banco (`pg` + pool vs. driver serverless via WebSocket; a RLS exige transação interativa) com carga simulada de 100 gateways.
 - [ ] Confirmar com despachante/OCD a NCM e a necessidade de anuência ANATEL do gateway sem rádio.
 
 **Critério de saída:** um reComputer R1000 de bancada lê o simulador e CLPs reais por Modbus TCP e RTU, envia `/sync` e os dados aparecem gravados na Neon. Hardware e biblioteca aprovados (ou substituídos).
@@ -50,7 +52,7 @@ gantt
 - [ ] Pacote `.deb`, unit systemd e script de instalação.
 
 **Web**
-- [ ] Cadastros: plantas, áreas, linhas, máquinas, produtos e ciclo ideal, turnos, paradas planejadas, motivos.
+- [ ] Cadastros: unidades, áreas (opcionais), linhas, máquinas, produtos e ciclo ideal, turnos, paradas planejadas, motivos.
 - [ ] Gateways: provisionamento por código, status, conexões de CLP, tags por papel, **teste de leitura**, publicação de config versionada.
 - [ ] API dos gateways com validação, idempotência e escopo por tenant.
 - [ ] Dashboard ao vivo (visão geral + linha + máquina) com polling.
@@ -63,7 +65,7 @@ gantt
 - [ ] Relatório de OEE por período, turno, máquina e produto.
 - [ ] Cron: `close-shifts`, `recompute-dirty`, `gateway-watchdog`, `expire-commands`.
 - [ ] **Multi-cliente** ([15](15-multi-cliente-e-acesso.md)): `requireTenant`, RLS no nível do cliente, FKs compostas, escopo por unidade, testes de isolamento no CI.
-- [ ] **Console Engemase**: clientes (assistente de 3 passos), detalhe, frota de gateways, equipe, concessões de suporte e atribuições, auditoria.
+- [ ] **Console Engemase**: clientes (assistente de 3 passos), detalhe, frota de gateways, equipe, concessões de suporte e atribuições, auditoria. 2FA obrigatório para a equipe Engemase.
 - [ ] Usuários do cliente com papel e escopo, fluxo "definir senha" com token próprio, e-mail transacional (Resend).
 - [ ] Terminais pareados (TV Andon e tablet do operador).
 
@@ -78,13 +80,12 @@ gantt
 - **OTA** com assinatura, canais e rollback. Página local de diagnóstico. `logs.upload`.
 - **Templates de máquina** (incluindo o do bloco OEE padrão), importação de tags por CSV, **varredura Modbus** (unit ids e registradores).
 - Classificação automática por código de falha.
-- Relatórios: Pareto, MTBF/MTTR, tendências, exportação CSV/Excel. **Modo TV/Andon**.
-- **Alertas** (e-mail; avaliar WhatsApp/Telegram): máquina parada > X min, gateway offline, OEE abaixo da meta.
-- 2FA obrigatório para perfis administrativos. Avaliar RLS.
+- Relatórios: Pareto, MTBF/MTTR, tendências, exportação CSV/Excel.
+- **Alertas em canais externos** (e-mail e WhatsApp; Telegram só para a equipe Engemase, ver [13](13-notificacoes-e-alertas.md#canais)): máquina parada > X min, gateway offline, OEE abaixo da meta. Na Fase 1, esses alertas já aparecem na central do app.
+- 2FA para os admins do cliente, conforme a decisão D14 ([17](17-backlog-e-pendencias.md#3-decisões-pendentes-do-dono-do-produto)). A RLS no nível do cliente e o 2FA da equipe Engemase já entram no MVP ([15](15-multi-cliente-e-acesso.md)).
 - **Acesso remoto (VPN) aos gateways** sob demanda, com aprovação do cliente e auditoria ([12](12-acesso-remoto-vpn.md)), depois da PoC com o Tailscale.
 - **Web Push** e escalonamento por e-mail ([13](13-notificacoes-e-alertas.md)); app instalável (PWA).
 - **Cores e logotipos por cliente** com editor e prévia ([14](14-identidade-visual-e-temas.md)).
-- Painel de super admin: frota de gateways de todos os clientes.
 
 ## Fase 3: escala e integrações (~10 semanas)
 
@@ -98,7 +99,7 @@ gantt
 
 ## Primeiros passos práticos (próxima semana)
 
-1. Responder as **perguntas em aberto** ([01](01-visao-e-requisitos.md#perguntas-em-aberto)), principalmente Q1 (marcas de CLP), Q2 (hardware) e Q3 (escala).
+1. Responder as **perguntas em aberto** ([01](01-visao-e-requisitos.md#perguntas-em-aberto)), principalmente Q1 (marcas de CLP) e Q3 (escala).
 2. Criar o projeto na Vercel e instalar a integração **Neon** pelo Marketplace.
 3. Montar a bancada: 2 reComputer R1000, um CLP com Modbus TCP nativo, um barramento RS-485 com 2–3 escravos (CLP + módulo de I/O) e cabos/terminações conforme o [guia Modbus](11-integracao-modbus.md#4-rs-485-boas-práticas-de-instalação).
 4. Abrir as issues da Fase 0 a partir do checklist acima.

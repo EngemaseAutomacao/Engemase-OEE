@@ -18,13 +18,15 @@ Plataforma (Engemase)
 | Identidade | Exemplo | Autenticação | Alcance |
 |---|---|---|---|
 | **Usuário de plataforma** | Equipe Engemase | E-mail + senha + **2FA obrigatório** | Ver seção 3 |
-| **Usuário do cliente** | Gerente, engenheiro, supervisor | E-mail + senha (2FA conforme papel/política) | Um cliente; cliente inteiro ou algumas unidades |
+| **Usuário do cliente** | Gerente, engenheiro, supervisor, líder de linha | E-mail + senha (2FA conforme papel/política) | Um cliente; cliente inteiro ou algumas unidades |
 | **Terminal** | TV Andon, tablet da máquina | Token de dispositivo obtido por **código de pareamento** | Uma unidade; linhas/máquinas fixas |
-| **Operador** | Operador de injetora | Identificado **dentro do terminal** (lista no MVP; PIN/crachá na F2) — não é conta de login | Máquinas do terminal |
+| **Operador do chão** | Operador de injetora | Identificado **dentro do terminal** (lista no MVP; PIN/crachá na F2) — **não é conta de login** | Máquinas do terminal |
 | **Gateway** | Gateway Linux | Token próprio ([04](04-protocolo-gateway-nuvem.md)) | Máquinas do próprio gateway |
 | **Integração** (F3) | ERP/MES | Chave de API por cliente | Escopos de leitura/escrita |
 
 **Sem contas compartilhadas.** Nada de `tv@cliente.com.br`: TV e tablet são **terminais pareados**.
+
+**Operador: pessoa com login × operador do chão.** O papel `operator` (seção 2) existe para **pessoas com login** que apontam paradas no próprio aparelho (ex.: líder de linha). Os operadores do chão usam o **terminal pareado** da máquina ou da linha e **não são contas**.
 
 Uma pessoa pode ter **vínculos com mais de um cliente** (ex.: consultor); o cliente é escolhido depois do login.
 
@@ -35,13 +37,13 @@ Uma pessoa pode ter **vínculos com mais de um cliente** (ex.: consultor); o cli
 | **Admin do cliente** (`client_admin`) | **Sempre o cliente inteiro** (MVP) | Unidades, linhas, máquinas, usuários, turnos, produtos, motivos, política de acesso remoto e de suporte |
 | **Engenheiro** (`engineer`) | Todas ou algumas unidades | Gateways, conexões Modbus, tags, máquinas (se o cliente não for "gerenciado pela Engemase") |
 | **Supervisor** (`supervisor`) | Todas ou algumas unidades | Dashboards, relatórios, turnos, produtos, motivos, classificação de paradas |
-| **Operador** (`operator`) | Algumas unidades | Classificar paradas, refugo e troca de produto (normalmente pelo terminal) |
+| **Operador** (`operator`) | Algumas unidades | Pessoa com login que aponta no próprio aparelho (ex.: líder de linha): classificar paradas, refugo e troca de produto. Operadores do chão usam o terminal e não têm conta (seção 1) |
 | **Visualizador** (`viewer`) | Todas ou algumas unidades | Somente leitura |
 
 Regras:
 - **Escopo explícito e "fail-closed":** todo vínculo tem escopo obrigatório (`all` ou lista de unidades). **Nenhuma unidade listada = nenhum acesso**. Vínculo sem registro de escopo = vínculo inativo.
 - Só o **admin do cliente** concede papéis de cliente. Ninguém concede papel acima do próprio. Não é possível remover ou rebaixar o **último admin** do cliente.
-- Agregados (OEE da planta, relatórios, auditoria, exportações) **respeitam o escopo**: quem vê só a Unidade A nunca vê números que incluam a Unidade B.
+- Agregados (OEE da unidade, relatórios, auditoria, exportações) **respeitam o escopo**: quem vê só a Unidade A nunca vê números que incluam a Unidade B.
 - Escopo por **linha ou máquina** para pessoas fica para a F2, se o dono do produto pedir (pergunta P1).
 
 **Modo de gestão do cliente** (`client_account.managed_by_engemase`): quando ligado, gateways, conexões, tags e publicação de configuração ficam **só leitura** para os papéis do cliente (a Engemase configura como serviço). Os pedidos vão pelo canal de suporte.

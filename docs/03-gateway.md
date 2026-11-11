@@ -5,7 +5,7 @@ O gateway é o coração da "independência de marca". Ele traduz qualquer CLP p
 ## Responsabilidades
 
 1. Conectar-se aos CLPs pelos protocolos nativos, **somente leitura**.
-2. Ler as tags no ritmo configurado (polling em bloco ou *subscription* OPC UA).
+2. Ler as tags no ritmo configurado (polling em bloco no Modbus; *subscription* só com protocolos futuros, como OPC UA).
 3. Normalizar: escala, tipo e *debounce*.
 4. Determinar o **estado da máquina** (produzindo, parada, falha, sem comunicação...).
 5. Calcular **deltas de contadores**, tratando overflow e reset.
@@ -291,7 +291,7 @@ Três modos, configuráveis por máquina:
 
 Em todos os modos, se o driver não conseguir ler por mais de `comm_loss_after_s`, o estado vira **`NO_COMM`**.
 
-Toda mudança de estado gera um **evento** (UUIDv7, timestamp, estado, código de falha). Um *debounce* configurável (ex.: 2 s) evita eventos espúrios.
+Toda mudança de estado gera um **evento** (UUIDv7, timestamp, estado, código de falha). Um *debounce* configurável (padrão de **1 s**) evita eventos espúrios. O padrão é curto por causa do RNF02 (estado visível na web em ≤ 5 s; ver a conta do pior caso em [02](02-arquitetura.md#d-visualização-ao-vivo)).
 
 ### Contadores
 
@@ -308,7 +308,7 @@ A cada minuto fechado, por máquina:
 
 ```json
 { "machine_id": "mch_inj03", "t": "2026-11-11T13:02:00Z",
-  "run_s": 38, "stop_s": 0, "fault_s": 22, "no_comm_s": 0,
+  "run_s": 38, "stop_s": 0, "fault_s": 22, "setup_s": 0, "no_comm_s": 0,
   "total": 12, "reject": 1, "product": "PRD-001" }
 ```
 
@@ -341,11 +341,11 @@ Uma página HTTP simples, **só na interface OT ou em localhost**, para o comiss
 
 ## Segurança no gateway
 
-Ver [08](08-seguranca-e-operacao.md#gateway). Resumo: usuário sem privilégios, hardening do systemd, credencial com permissão 0600, `ip_forward=0` (o gateway **não roteia** entre OT e IT), firewall somente de saída, SSH desabilitado ou só com chave, atualizações de segurança automáticas do SO.
+Ver [08](08-seguranca-e-operacao.md#gateway). Resumo: usuário sem privilégios, hardening do systemd, credencial com permissão 0600, `ip_forward=0` (o gateway **não roteia** entre OT e IT), firewall somente de saída, OpenSSH escutando **só em 127.0.0.1** (alcançável apenas por uma sessão de acesso remoto aprovada, com certificados SSH de curta duração; ver [12](12-acesso-remoto-vpn.md)), atualizações de segurança automáticas do SO.
 
 ## Simulador (`tools/plc-sim`)
 
-Ferramenta em Go que sobe servidores **Modbus TCP** e **OPC UA** simulando máquinas: ciclos, paradas aleatórias, falhas com códigos, refugo e reset de contador. Serve para:
+Ferramenta em Go que sobe servidores **Modbus TCP** simulando máquinas: ciclos, paradas aleatórias, falhas com códigos, refugo e reset de contador. Serve para:
 
 - desenvolver a plataforma sem CLP físico;
 - testes automatizados do agente no CI (cenários determinísticos com *seed*);

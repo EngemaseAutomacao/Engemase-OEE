@@ -61,7 +61,7 @@ flowchart TB
 | Banco | Neon Postgres | Cadastros, eventos de estado, agregados por minuto, OEE consolidado, auditoria | [06](06-banco-de-dados.md) |
 | Cálculo de OEE | Pacote TS `@engemase/oee-core` | Funções puras de cálculo, usadas pela API, pelo app e pelos jobs | [07](07-calculo-oee.md) |
 | Armazenamento de arquivos | Vercel Blob | Binários assinados do gateway (OTA), exportações | [08](08-seguranca-e-operacao.md) |
-| Simulador | `tools/plc-sim` (local e CI) | Máquinas virtuais via Modbus e OPC UA, para desenvolvimento, testes e demonstração | [03](03-gateway.md) |
+| Simulador | `tools/plc-sim` (local e CI) | Máquinas virtuais via Modbus, para desenvolvimento, testes e demonstração | [03](03-gateway.md) |
 
 ## Fluxos principais
 
@@ -100,7 +100,7 @@ sequenceDiagram
   participant DB as Neon
 
   loop a cada 100 ms a 1 s (por grupo de tags)
-    GW->>CLP: leitura em bloco (ou subscription OPC UA)
+    GW->>CLP: leitura em bloco (Modbus)
     CLP-->>GW: valores
     GW->>GW: estado da máquina, delta de contadores, bucket do minuto
   end
@@ -118,18 +118,20 @@ sequenceDiagram
 
 - O engenheiro altera tags na web → nova `config_version` (snapshot JSON imutável).
 - Na próxima resposta do `/sync`, o gateway vê a versão nova, faz `GET /config`, valida e aplica sem reiniciar. Depois informa a versão aplicada (ou o erro).
-- Comandos (ex.: **"testar leitura da tag"**) entram em uma fila no banco e vão na resposta do `/sync`. O gateway executa e devolve o resultado no `/sync` seguinte. A espera percebida é de 1 a 10 s. Para comandos interativos, o gateway entra temporariamente em modo de sync rápido (1 s).
+- Comandos (ex.: **"testar leitura da tag"**) entram em uma fila no banco e vão na resposta do `/sync`. O gateway executa e devolve o resultado no `/sync` seguinte.
+- **Modo interativo:** quando há comando pendente para o gateway ou uma tela de comissionamento aberta, a resposta do `/sync` traz `next_sync_s = 1` por até 5 min. No "Ler agora", a primeira leitura pode levar até um ciclo normal (≤ 10 s), porque o comando só chega ao gateway na resposta do próximo `/sync`; as seguintes levam ~1–2 s. Ver [04](04-protocolo-gateway-nuvem.md#post-sync).
 
 ### D. Visualização ao vivo
 
 - A ingestão atualiza `machine_live` (uma linha por máquina, via upsert).
-- As telas fazem *polling* leve a cada 3–5 s (TanStack Query), lendo só as máquinas visíveis.
+- As telas ao vivo e a TV fazem *polling* leve a cada 2 s (TanStack Query), lendo só as máquinas visíveis.
+- **Conta do pior caso do RNF02 (≤ 5 s):** debounce de estado na borda (1 s, padrão configurável; [03](03-gateway.md#determinação-do-estado)) + debounce do envio imediato do `/sync` (1 s; [04](04-protocolo-gateway-nuvem.md#post-sync)) + rede e gravação (~0,5 s) + intervalo do polling (até 2 s) + consulta e desenho da tela (~0,5 s) ≈ **5 s**.
 - OEE do turno atual: calculado sob demanda a partir dos agregados por minuto (barato: ≤ 720 linhas por máquina em um turno de 12 h).
 - Push em tempo real (WebSocket/serviço gerenciado) fica para a Fase 3, se for necessário. Ver [ADR-009](10-decisoes-arquiteturais.md#adr-009--tempo-real-por-polling-no-mvp).
 
 ### E. Fechamento de turno
 
-- Um cron a cada minuto identifica turnos encerrados (no fuso de cada planta) e consolida `oee_shift`.
+- Um cron a cada minuto identifica turnos encerrados (no fuso de cada unidade) e consolida `oee_shift`.
 - Dados que chegam atrasados (gateway que ficou offline) marcam o turno como "sujo". Um cron a cada 5 min recalcula os turnos sujos.
 
 ## Escalabilidade
@@ -143,7 +145,7 @@ Estimativas para **100 máquinas** em **20 gateways**:
 | Requisições `/sync` | 20 gateways × 6/min ≈ **2 req/s** (+ picos em mudanças de estado) |
 | Linhas de agregado por minuto | 100 × 1.440/dia ≈ **144 mil/dia** (~52 milhões/ano, ~5 GB/ano) |
 | Eventos de estado | ~10–50 mil/dia |
-| Polling das telas | 50 telas × 1 req/4 s ≈ **12 req/s** (consultas pequenas) |
+| Polling das telas | 50 telas × 1 req/2 s ≈ **25 req/s** (consultas pequenas) |
 
 Esse volume é **baixo** para Postgres e para Vercel Functions. O gargalo real, se houver, será o custo por invocação e a quantidade de conexões. Ambos têm mitigação conhecida: lotes maiores e o pooler da Neon.
 
@@ -162,7 +164,7 @@ Esse volume é **baixo** para Postgres e para Vercel Functions. O gargalo real, 
 engemase-oee/
 ├── apps/
 │   └── web/                      # Next.js na Vercel
-│       ├── app/(app)/[org]/...   # telas por organização
+│       ├── app/(shell)/[cliente]/ # telas por cliente
 │       ├── app/api/gateway/v1/   # API dos gateways
 │       ├── app/api/cron/         # jobs agendados
 │       └── server/               # camada de acesso a dados (sempre com escopo de tenant)
@@ -174,13 +176,13 @@ engemase-oee/
 ├── gateway/                      # Módulo Go independente (go.mod próprio)
 │   ├── cmd/oee-gateway/          # main: run, enroll, version, diag
 │   ├── internal/config/          # carga, validação e aplicação da config
-│   ├── internal/drivers/         # modbus, opcua, s7, eip, mc, fins, sim
+│   ├── internal/drivers/         # modbus, sim (MVP); s7, opcua, eip, mc, fins no futuro
 │   ├── internal/engine/          # scheduler, máquina de estados, contadores, buckets
 │   ├── internal/buffer/          # outbox SQLite
 │   ├── internal/uplink/          # https (MVP), mqtt (futuro)
 │   ├── internal/commands/        # executor de comandos remotos
 │   └── internal/updater/         # OTA com verificação de assinatura
-├── tools/plc-sim/                # simulador de máquinas (Go): Modbus + OPC UA
+├── tools/plc-sim/                # simulador de máquinas (Go): Modbus
 ├── deploy/gateway/               # unit systemd, .deb (nfpm), install.sh, Dockerfile
 ├── .github/workflows/            # CI: web, gateway, contratos, releases
 ├── turbo.json · pnpm-workspace.yaml

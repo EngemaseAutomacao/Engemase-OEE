@@ -28,7 +28,8 @@ flowchart LR
 | Controle | Como |
 |---|---|
 | Separação OT/IT | Duas interfaces de rede, `net.ipv4.ip_forward=0`. O gateway **não roteia** entre as redes |
-| Firewall local | nftables: entrada bloqueada (exceto SSH opcional pela OT), saída permitida só para 443 e para as portas industriais da sub-rede OT |
+| Firewall local | nftables: entrada bloqueada (sem exceção para SSH), saída permitida só para 443 e para as portas industriais da sub-rede OT |
+| SSH | OpenSSH escuta **só em 127.0.0.1**. Acesso só por uma **sessão de acesso remoto aprovada** pelo cliente, com **certificados SSH de curta duração** (válidos só na janela da sessão). Ver [12](12-acesso-remoto-vpn.md) |
 | Somente leitura | O v1 não implementa escrita em nenhum driver. A futura escrita (F3+) exigirá allowlist por tag, papel específico, confirmação e auditoria |
 | Processo | Usuário `oee` sem privilégios. Hardening do systemd (`NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, `ReadWritePaths=/var/lib/oee-gateway`) |
 | Credencial | Arquivo 0600, de propriedade do `oee`. Token revogável pela web |
@@ -87,7 +88,7 @@ flowchart LR
 | Saúde dos gateways | No próprio produto: online/offline, versão, fila pendente, latência por CLP, relógio, disco (enviados no `/sync`) |
 | Logs do gateway | journald local. Envio sob demanda com o comando `logs.upload` (F2) |
 | Banco | Métricas da Neon + `pg_stat_statements` para consultas lentas |
-| Alertas operacionais | Gateway offline, buffer acima de 80%, erro de ingestão, cron falhando (F2: e-mail/Slack) |
+| Alertas operacionais | Gateway offline, buffer acima de 80%, erro de ingestão, cron falhando (F2: e-mail e Telegram para a equipe Engemase, ver [13](13-notificacoes-e-alertas.md#canais)) |
 
 ## Custos de referência (ordem de grandeza, nov/2026)
 
@@ -106,7 +107,7 @@ flowchart LR
 ## Operação e suporte (runbooks a escrever)
 
 - Gateway offline: checklist de energia, rede, DNS, proxy, relógio e token.
-- CLP sem comunicação: IP, rack/slot, PUT/GET (Siemens), permissões OPC UA, firewall OT.
+- CLP sem comunicação (Modbus): IP e porta, unit id, mestre único no barramento RS-485, terminação e polarização, firewall OT ([11](11-integracao-modbus.md#7-checklist-de-comissionamento-em-campo)).
 - Contagem divergente do CLP: conferir tag, tipo, byte order e eventos de reset.
 - Restaurar banco (PITR) e reprocessar turnos.
 - Rotacionar token de um gateway comprometido.

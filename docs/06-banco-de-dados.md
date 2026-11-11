@@ -55,12 +55,13 @@ Por isso optamos por **tabelas de agregado próprias** (minuto → turno), calcu
 erDiagram
   organization ||--o{ member : tem
   user ||--o{ member : participa
-  organization ||--o{ plant : possui
-  plant ||--o{ area : contem
-  area ||--o{ line : contem
+  organization ||--o{ unit : possui
+  unit ||--o{ area : contem
+  unit ||--o{ line : contem
+  area |o--o{ line : agrupa
   line ||--o{ machine : contem
   organization ||--o{ gateway : possui
-  plant ||--o{ gateway : instalado_em
+  unit ||--o{ gateway : instalado_em
   gateway ||--o{ device : conecta
   device ||--o{ tag : expoe
   machine ||--o{ tag : usa
@@ -69,8 +70,8 @@ erDiagram
   organization ||--o{ product : cadastra
   product ||--o{ product_machine : ciclo_ideal
   machine ||--o{ product_machine : ciclo_ideal
-  plant ||--o{ shift : define
-  plant ||--o{ planned_downtime : agenda
+  unit ||--o{ shift : define
+  unit ||--o{ planned_downtime : agenda
   organization ||--o{ downtime_reason : define
   machine ||--o{ machine_state_event : gera
   downtime_reason ||--o{ machine_state_event : classifica
@@ -97,8 +98,9 @@ erDiagram
 
 | Tabela | Campos principais |
 |---|---|
-| `plant` | id, organization_id, nome, **timezone** (ex.: `America/Sao_Paulo`) |
-| `area` / `line` | id, organization_id, parent_id, nome |
+| `unit` | id, organization_id, nome, **timezone** (ex.: `America/Sao_Paulo`). "Unidade" é o termo único no produto e no código (`unit`) |
+| `area` | id, organization_id, unit_id, nome. **Opcional**, só agrupador |
+| `line` | id, organization_id, unit_id, area_id (nulo = linha ligada direto à unidade), nome |
 | `machine` | id, organization_id, line_id, nome, código, `ideal_cycle_s` padrão, `micro_stop_threshold_s`, `state_mode`, template_id, ativo |
 | `machine_template` (F2) | id, organization_id, nome, definição de tags e regras (jsonb) |
 
@@ -106,7 +108,7 @@ erDiagram
 
 | Tabela | Campos principais |
 |---|---|
-| `gateway` | id, organization_id, plant_id, nome, `token_hash`, status, `last_seen_at`, versão, `config_version_applied`, info de hardware (jsonb), métricas de saúde |
+| `gateway` | id, organization_id, unit_id, nome, `token_hash`, status, `last_seen_at`, versão, `config_version_applied`, info de hardware (jsonb), métricas de saúde |
 | `gateway_enrollment` | gateway_id, `code_hash`, expira_em, usado_em |
 | `device` | id, gateway_id, nome, protocolo, `params` (jsonb validado por protocolo) |
 | `tag` | id, device_id, machine_id, nome, `address` (jsonb), tipo, escala, `poll_ms`, **role**, deadband |
@@ -120,8 +122,8 @@ erDiagram
 |---|---|
 | `product` | id, organization_id, código, nome |
 | `product_machine` | product_id, machine_id, `ideal_cycle_s` |
-| `shift` | id, plant_id, nome, hora_inicio, hora_fim, dias_semana, vigência |
-| `planned_downtime` | id, plant_id/line_id/machine_id, início, fim, recorrência, motivo |
+| `shift` | id, unit_id, nome, hora_inicio, hora_fim, dias_semana, vigência |
+| `planned_downtime` | id, unit_id/line_id/machine_id, início, fim, recorrência, motivo |
 | `downtime_reason` | id, organization_id, parent_id, nome, **categoria** (não planejada / planejada / setup), cor |
 | `fault_code_map` (F2) | machine_id ou template_id, código de falha → reason_id |
 
@@ -130,7 +132,7 @@ erDiagram
 | Tabela | Chave | Campos principais |
 |---|---|---|
 | `machine_state_event` | id (UUIDv7 da borda) | machine_id, state, `started_at`, `ended_at` (null = em aberto), fault_code, reason_id, classificado_por, classificado_em, origem |
-| `production_minute` | (machine_id, bucket_start) | run_s, stop_s, fault_s, no_comm_s, total, reject, product_code — **particionada por mês** |
+| `production_minute` | (machine_id, bucket_start) | run_s, stop_s, fault_s, setup_s, no_comm_s (somam 60 s), total, reject, product_code — **particionada por mês** |
 | `production_run` | id | machine_id, product_id, order_code, início, fim (troca de produto vinda do CLP ou do operador) |
 | `quality_entry` | id | machine_id, timestamp, quantidade, motivo de refugo, usuário (lançamento manual) |
 | `machine_live` | machine_id | state, state_since, fault_code, counter_total, product, atualizado_em |
@@ -151,8 +153,8 @@ erDiagram
 
 ### Convenções
 
-- **IDs:** UUIDv7 (ordenáveis no tempo; `uuidv7()` é nativo no Postgres 18). Nos eventos da borda, o ID vem do gateway, o que garante idempotência.
-- **Tempo:** sempre `timestamptz`, em UTC. O fuso fica na planta.
+- **IDs:** UUIDv7 em todo o banco e em toda a API (ordenáveis no tempo; `uuidv7()` é nativo no Postgres 18). Nos eventos da borda, o ID vem do gateway, o que garante idempotência. Não há IDs com prefixo: os exemplos com prefixo (`mch_...`, `dev_...`, `tag_...`) em outros documentos são ilustrativos ([04](04-protocolo-gateway-nuvem.md#princípios)).
+- **Tempo:** sempre `timestamptz`, em UTC. O fuso fica na unidade.
 - **Exclusão lógica** (`deleted_at`) em cadastros. Dados de produção nunca são apagados por usuário.
 - **Índices:** séries temporais com índice `(machine_id, tempo)`. Eventos em aberto com índice parcial `WHERE ended_at IS NULL`.
 
