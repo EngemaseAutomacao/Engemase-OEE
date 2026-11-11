@@ -62,7 +62,10 @@ gantt
 - [ ] Central de ajuda: guias, perguntas frequentes, abertura de chamado e ajuda contextual.
 - [ ] Relatório de OEE por período, turno, máquina e produto.
 - [ ] Cron: `close-shifts`, `recompute-dirty`, `gateway-watchdog`, `expire-commands`.
-- [ ] Usuários, convites, papéis e auditoria básica.
+- [ ] **Multi-cliente** ([15](15-multi-cliente-e-acesso.md)): `requireTenant`, RLS no nível do cliente, FKs compostas, escopo por unidade, testes de isolamento no CI.
+- [ ] **Console Engemase**: clientes (assistente de 3 passos), detalhe, frota de gateways, equipe, concessões de suporte e atribuições, auditoria.
+- [ ] Usuários do cliente com papel e escopo, fluxo "definir senha" com token próprio, e-mail transacional (Resend).
+- [ ] Terminais pareados (TV Andon e tablet do operador).
 
 **Critério de saída (piloto):** uma linha real de um cliente rodando **2 semanas** com:
 - zero perda de contagem comparando com o contador do CLP, inclusive após derrubar a internet propositalmente por algumas horas;

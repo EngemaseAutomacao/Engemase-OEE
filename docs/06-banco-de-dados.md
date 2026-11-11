@@ -11,7 +11,7 @@ O ponto decisivo é o **perfil de carga do OEE**: escrita contínua 24/7 (os gat
 | Modelo de cobrança | **Compute por hora (CU-hora) + armazenamento.** Escala a zero quando ocioso | **Por operação** (cada query do Prisma ORM ou cada statement SQL numa conexão direta) + armazenamento |
 | Encaixe com ingestão 24/7 | Em produção o compute fica sempre ligado. O custo é **previsível e não cresce com o número de escritas**. Escalar a zero ajuda em dev e preview | **Toda escrita é uma operação cobrada.** O custo cresce linearmente com máquinas × frequência de sync, além das consultas das telas ao vivo |
 | Extensões | Catálogo amplo: **pg_partman** (com worker de manutenção próprio), pg_stat_statements, timescaledb (só os recursos de licença Apache), pg_cron (só roda com o compute ativo) e outras | Conjunto menor (ex.: pgvector). Confirmar a lista atual antes de depender de uma |
-| Branching | **Branch copy-on-write do banco.** A integração com a Vercel pode criar um branch por preview deployment, com dados reais anonimizáveis | Sem branching copy-on-write equivalente (até onde verificamos) |
+| Branching | **Branch copy-on-write do banco.** A integração com a Vercel pode criar um branch por preview deployment (a partir de um **branch-semente com dados sintéticos**, nunca de produção; ver [15](15-multi-cliente-e-acesso.md#8-requisitos-de-segurança-da-revisão-adversarial)) | Sem branching copy-on-write equivalente (até onde verificamos) |
 | Conexões | Postgres padrão (TCP) com **pooler** (PgBouncer) + driver serverless (HTTP/WebSocket) | Postgres padrão via conexões diretas (GA desde out/2025), com limite por plano (ex.: 10 diretas no Free/Starter) |
 | ORM | Qualquer (Drizzle, Prisma, Kysely, SQL puro) | Qualquer via conexão direta. Melhor experiência com Prisma ORM |
 | Recursos operacionais | Autoscaling de compute, réplicas de leitura, restauração point-in-time, Postgres 18 | Mais novo. O Prisma Accelerate (cache e conexões hospedadas) tem aposentadoria anunciada para 01/12/2026 |
@@ -86,10 +86,12 @@ erDiagram
 
 | Tabela | Campos principais |
 |---|---|
-| `organization` | id, slug, nome, plano, limites (máquinas, gateways), criado_em |
+| `organization` | id, slug, nome, criado_em (tabela do Better Auth) |
+| `client_account` | organização (1:1), status, plano, limites, `managed_by_engemase` — só a plataforma grava ([15](15-multi-cliente-e-acesso.md#9-modelo-de-dados-acréscimos)) |
 | `user` | id, nome, e-mail, 2FA... |
-| `member` | organization_id, user_id, papel |
-| `invitation` | organization_id, e-mail, papel, expira_em |
+| `member` | organization_id, user_id (tabela do Better Auth) |
+| `member_access` / `member_unit` | papel e escopo de unidades do vínculo (fail-closed) |
+| `account_token` | tokens próprios de uso único (definir senha, verificar e-mail, pareamento), só hash |
 
 **2. Ativos**
 
@@ -156,10 +158,12 @@ erDiagram
 
 ## Multi-tenancy
 
-- Modelo **"banco compartilhado, schema compartilhado"**, com `organization_id` em todas as tabelas de cadastro.
-- As tabelas de série temporal são acessadas **sempre via `machine_id`**, já filtrado pelas máquinas da organização na camada de acesso a dados (ver [05](05-plataforma-web.md#isolamento-multi-tenant-no-código)).
-- **RLS** do Postgres como segunda camada: avaliar na Fase 2. Exige `SET LOCAL app.org_id` por transação, o que é compatível com o pooler em modo transação.
-- Clientes grandes que exijam isolamento físico podem ganhar um **projeto Neon dedicado** no futuro, com o mesmo schema e uma string de conexão por organização.
+- Modelo **"banco compartilhado, schema compartilhado"**, com `organization_id` em **todas** as tabelas de cliente, **inclusive as séries temporais** (desnormalizado a partir da máquina).
+- **RLS já no MVP, no nível do cliente:** `FORCE ROW LEVEL SECURITY` e política restritiva por `current_setting('app.org_id')`, definido com `set_config(..., true)` no início de cada transação; papel de banco da aplicação sem `BYPASSRLS`. Exige driver com transação interativa (`pg` com pool ou driver serverless via WebSocket).
+- **Chaves estrangeiras compostas** `(id, organization_id)` entre tabelas filhas e vínculo explícito `gateway_machine`.
+- O escopo por unidade é aplicado na camada de acesso a dados (RLS por unidade avaliada depois).
+- Clientes grandes que exijam isolamento físico podem ganhar um **projeto Neon dedicado** no futuro, com o mesmo schema.
+- Detalhes e testes de isolamento: [15](15-multi-cliente-e-acesso.md#4-isolamento-de-dados-defesa-em-camadas).
 
 ## Volume, particionamento e retenção
 
@@ -180,7 +184,7 @@ A retenção é configurável por organização e pode virar diferencial de plan
 | Ambiente | Banco |
 |---|---|
 | Local | Postgres em Docker **ou** branch `dev` da Neon |
-| Preview (PR) | Branch Neon `preview/<branch>` criado automaticamente pela integração da Vercel |
+| Preview (PR) | Branch Neon `preview/<branch>` criado automaticamente pela integração da Vercel, **a partir de um branch-semente com dados sintéticos** (nunca cópia da produção) |
 | Produção | Branch `main` da Neon |
 
 - Migrações geradas pelo `drizzle-kit generate`, em **SQL versionado no repositório**.

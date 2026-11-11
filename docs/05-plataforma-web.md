@@ -26,8 +26,13 @@
 /[org]/                                  Visão geral (cards por planta/linha: estado + OEE do turno)
 /[org]/linhas/[lineId]                   Linha: máquinas, OEE da linha, gargalo
 /[org]/maquinas/[machineId]              Máquina: estado ao vivo, timeline, OEE (A/P/Q), paradas, produção
-/[org]/andon/[lineId]                    Modo TV: tela cheia, fonte grande, auto-refresh (F2)
-/[org]/operador/[machineId]              Tela do operador (tablet): paradas a classificar, refugo, produto
+/[org]/notificacoes                      Central de notificações (alertas) e preferências
+/[org]/ajuda                             Central de ajuda: guias, perguntas frequentes, chamado
+/[org]/acesso-remoto                     Pedidos e histórico de acesso remoto (VPN) aos gateways
+/conta                                   Perfil, senha, 2FA, sessões, tema, dispositivos com push
+
+/terminal/parear                         Pareamento de TV/tablet por código (terminal = dispositivo, não pessoa)
+/terminal                                Andon (TV) ou tela do operador (tablet), conforme o terminal
 /[org]/relatorios/oee                    OEE por período / turno / máquina / produto
 /[org]/relatorios/paradas                Pareto de motivos, MTBF/MTTR (F2)
 
@@ -38,7 +43,9 @@
 /[org]/config/gateways                   Lista, status, provisionamento (código de ativação)
 /[org]/config/gateways/[id]              Conexões de CLP, tags, teste de leitura, comandos, versão
 /[org]/config/templates                  Templates de máquina (F2)
-/[org]/config/usuarios                   Usuários, convites, papéis
+/[org]/config/usuarios                   Usuários, papéis e escopo de unidades
+/[org]/config/terminais                  TVs e tablets pareados
+/[org]/config/aparencia                  Cores e logotipos do cliente (F2)
 /[org]/config/auditoria                  Log de alterações
 
 /admin                                   Super admin Engemase: organizações, frota de gateways, planos
@@ -75,22 +82,25 @@ Recursos que sustentam isso:
 
 ## Papéis e permissões (RBAC)
 
-| Ação | Owner | Admin | Engenheiro | Supervisor | Operador | Visualizador |
-|---|:-:|:-:|:-:|:-:|:-:|:-:|
-| Ver dashboards e relatórios | ✓ | ✓ | ✓ | ✓ | ✓ (sua máquina) | ✓ |
-| Classificar paradas, lançar refugo e produto | ✓ | ✓ | ✓ | ✓ | ✓ | — |
-| Turnos, produtos, motivos | ✓ | ✓ | — | ✓ | — | — |
-| Gateways, conexões, tags, comandos | ✓ | ✓ | ✓ | — | — | — |
-| Usuários e convites | ✓ | ✓ | — | — | — | — |
-| Faturamento e exclusão da organização | ✓ | — | — | — | — | — |
+O modelo completo (papéis do cliente com escopo por unidade, papéis da equipe Engemase com concessão de acesso, terminais pareados, ciclo de vida do cliente e requisitos de segurança) está em **[15 — Plataforma multi-cliente](15-multi-cliente-e-acesso.md)**. Resumo:
 
-O papel vale **por organização** (plugin de organizações do Better Auth). No futuro, poderá ser restrito também por planta.
+| Ação | Admin do cliente | Engenheiro | Supervisor | Operador | Visualizador |
+|---|:-:|:-:|:-:|:-:|:-:|
+| Ver dashboards e relatórios (no seu escopo) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Classificar paradas, lançar refugo e produto | ✓ | ✓ | ✓ | ✓ | — |
+| Turnos, produtos, motivos | ✓ | — | ✓ | — | — |
+| Gateways, conexões, tags (se o cliente não for "gerenciado pela Engemase") | ✓ | ✓ | — | — | — |
+| Unidades, linhas, máquinas | ✓ | ✓* | — | — | — |
+| Usuários e escopos | ✓ | — | — | — | — |
+| Política de suporte e de acesso remoto; aprovar acesso remoto | ✓ | — | — | — | — |
+
+\* Engenheiro cria máquinas nas unidades do seu escopo; unidades e linhas são do admin.
+
+O admin do cliente tem sempre o cliente inteiro; os demais papéis têm escopo "todas as unidades" ou uma lista de unidades. A equipe Engemase acessa os dados de um cliente por papel de plataforma, concessão de suporte ou atribuição, sempre com faixa na tela e registro visível ao cliente.
 
 ## Isolamento multi-tenant no código
 
-- Toda consulta passa por uma **camada de acesso a dados** (`apps/web/server/`) que exige um `TenantContext` (organização + usuário + papel). Não existe consulta "solta" a tabelas de tenant.
-- Testes automatizados de isolamento: o usuário da organização A tenta acessar IDs da organização B e deve receber `404`.
-- Row-Level Security (RLS) do Postgres fica como **segunda camada** a avaliar na Fase 2. Ver [06](06-banco-de-dados.md#multi-tenancy).
+Defesa em camadas, detalhada em [15](15-multi-cliente-e-acesso.md#4-isolamento-de-dados-defesa-em-camadas): cliente resolvido pela URL, `requireTenant()` em toda página/Server Action/route handler, camada de acesso a dados obrigatória, **RLS no nível do cliente já no MVP**, chaves estrangeiras compostas, nenhum dado de cliente em shell estático do Next.js, e testes automáticos de isolamento no CI.
 
 ## Dados ao vivo
 

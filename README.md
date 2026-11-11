@@ -61,6 +61,7 @@ flowchart LR
 | 12 | [Acesso remoto (VPN)](docs/12-acesso-remoto-vpn.md) | VPN de manutenção sob demanda, aprovada pelo cliente e auditada |
 | 13 | [Notificações e alertas](docs/13-notificacoes-e-alertas.md) | Central no app, Web Push, e-mail/WhatsApp, regras e anti-spam |
 | 14 | [Identidade visual e temas](docs/14-identidade-visual-e-temas.md) | Marca Engemase, cores por cliente, tema claro/escuro/automático |
+| 15 | [Plataforma multi-cliente](docs/15-multi-cliente-e-acesso.md) | Papéis e escopo por unidade, acesso da Engemase, isolamento, console, segurança |
 
 ## Estrutura planejada do repositório
 

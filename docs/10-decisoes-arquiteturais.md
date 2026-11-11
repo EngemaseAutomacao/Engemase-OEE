@@ -10,7 +10,7 @@ Registro curto das decisões. Para mudar uma decisão, adicione uma nova ADR que
 | 004 | Neon como banco (Postgres padrão, sem TimescaleDB) | Proposta |
 | 005 | Drizzle como ORM | Proposta |
 | 006 | Borda calcula estados e agregados; nuvem calcula OEE | Proposta |
-| 007 | Multi-tenant com schema compartilhado | Proposta |
+| 007 | Multi-tenant com schema compartilhado | Substituída pela 016 |
 | 008 | Somente leitura nos CLPs no v1 | Proposta |
 | 009 | Tempo real por polling no MVP | Proposta |
 | 010 | Better Auth para autenticação e organizações | Proposta |
@@ -19,6 +19,7 @@ Registro curto das decisões. Para mudar uma decisão, adicione uma nova ADR que
 | 013 | VPN de manutenção sob demanda (Tailscale com helper separado) | Proposta (validar na PoC) |
 | 014 | Alertas: central no app + Web Push próprio | Proposta |
 | 015 | Cores por cliente calculadas no servidor, com cores de estado travadas | Proposta |
+| 016 | Multi-cliente com isolamento em camadas e acesso Engemase por concessão | Proposta |
 
 ---
 
@@ -104,6 +105,8 @@ Registro curto das decisões. Para mudar uma decisão, adicione uma nova ADR que
 ---
 
 ## ADR-007 — Multi-tenant com schema compartilhado
+
+> **Substituída pela [ADR-016](#adr-016--multi-cliente-com-isolamento-em-camadas-e-acesso-engemase-por-concessão)** (RLS antecipada para o MVP e acesso da Engemase por concessão).
 
 **Contexto.** A Engemase deve atender vários clientes com a mesma plataforma.
 
@@ -217,3 +220,21 @@ Registro curto das decisões. Para mudar uma decisão, adicione uma nova ADR que
 **Alternativas.** Calcular no CSS (`oklch(from …)`, `contrast-color()`): suporte recente demais para TVs e tablets de fábrica e não atende os gráficos. Temas pré-compilados por cliente: exigiria rebuild.
 
 **Consequências.** Sem rebuild por cliente, com resultado auditável. Algumas marcas (verde, vermelho, laranja) não podem ser a cor primária: a cor original fica como detalhe decorativo. O PWA por cliente leva naturalmente ao subdomínio por cliente.
+
+---
+
+## ADR-016 — Multi-cliente com isolamento em camadas e acesso Engemase por concessão
+
+**Contexto.** Todos os clientes usam a mesma plataforma; cada um só pode ver as próprias máquinas, e a plataforma precisa ser gerenciável por dentro (clientes, unidades, máquinas, usuários). Uma revisão adversarial encontrou riscos concretos (convites, redefinição de senha, escopo que falha aberto, cache estático, previews com dados de produção).
+
+**Decisão.** Detalhada em [15](15-multi-cliente-e-acesso.md):
+- schema compartilhado com `organization_id` em todas as tabelas de cliente e **RLS no nível do cliente já no MVP**, mais `requireTenant()`, camada de acesso a dados, FKs compostas e testes de isolamento no CI;
+- papéis do cliente com **escopo por unidade fail-closed**; admin do cliente sempre com o cliente inteiro;
+- equipe Engemase com papéis de plataforma e acesso a dados de cliente por **papel, concessão de suporte com prazo ou atribuição**, sempre visível ao cliente; impersonação só na F2 e somente leitura;
+- Better Auth como motor de identidade, com `/api/auth/*` fechado por lista de permissão e gestão por Server Actions nossas;
+- TV e tablet como **terminais pareados**, não contas de pessoa;
+- e-mail transacional no MVP.
+
+**Alternativas.** Banco ou projeto por cliente (operação multiplicada; reservado para quem exigir); RLS só na F2 (menos esforço agora, mas a defesa ficaria só no código); fluxo de convites do Better Auth (mais simples, mas sujeito ao ataque de posse de e-mail).
+
+**Consequências.** O MVP fica mais seguro e um pouco maior (estimativa de +3 a 4 semanas na parte web: console, RLS, terminais, e-mail e testes de isolamento). O protótipo de interface continua com dados fictícios e rotas estáticas, que **não podem** ir para a implementação real.

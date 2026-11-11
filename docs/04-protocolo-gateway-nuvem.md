@@ -135,7 +135,9 @@ Além disso:
 
 - Se `minutes` ou `events` caem em um **turno já consolidado**, o turno é marcado como "sujo" (`oee_shift.dirty = true`) e recalculado pelo cron. Ver [07](07-calculo-oee.md#dados-atrasados).
 - Tudo de um `/sync` é gravado **em uma transação**. O `ack_seq` só é devolvido após o commit.
-- A API valida que cada `machine_id` e `tag_id` pertence ao gateway autenticado. Um gateway nunca escreve em máquina de outro gateway ou de outra organização.
+- A API valida que cada `machine_id` e `tag_id` pertence ao gateway autenticado (vínculo `gateway_machine`, com `organization_id` e chaves compostas). Um gateway nunca escreve em máquina de outro gateway ou de outra organização.
+- Timestamps no futuro além de uma tolerância (ex.: `server_time` + 2 min) são rejeitados; reescrita de um minuto já gravado com valor diferente gera alerta e guarda a versão anterior.
+- **Suspensão do cliente não interrompe a ingestão:** o gateway continua enviando e nada se perde ([15](15-multi-cliente-e-acesso.md#6-ciclo-de-vida-do-cliente)).
 
 ## Erros e retentativas
 

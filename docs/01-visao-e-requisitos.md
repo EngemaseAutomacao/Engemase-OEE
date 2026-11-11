@@ -19,7 +19,8 @@ Três qualidades guiam o projeto:
 | **Engenheiro / integrador** | Provisiona gateways, cadastra conexões de CLP e tags, testa leituras |
 | **Supervisor / gestor** | Dashboards, relatórios, análise de paradas, metas |
 | **Operador** | No tablet da máquina: aponta motivo de parada, refugo e troca de produto |
-| **Visualizador / TV Andon** | Tela somente leitura, em tela cheia, no chão de fábrica |
+| **Visualizador** | Somente leitura (ex.: diretoria, consultor) |
+| **Terminal (TV Andon / tablet)** | Dispositivo pareado por código, não é conta de pessoa |
 
 ## Requisitos funcionais
 
@@ -27,7 +28,7 @@ Legenda: **MVP** = Fase 1 · **F2** = Fase 2 · **F3** = Fase 3 (ver [roadmap](0
 
 | ID | Requisito | Fase |
 |---|---|---|
-| RF01 | Hierarquia de ativos: organização → planta → área → linha → máquina | MVP |
+| RF01 | Hierarquia: cliente → unidade → [área, opcional] → linha → máquina; cada cliente vê só os seus dados ([15](15-multi-cliente-e-acesso.md)) | MVP |
 | RF02 | Cadastro de gateways com provisionamento por **código de ativação** (sem SSH) | MVP |
 | RF03 | Cadastro de conexões de CLP (protocolo, IP, parâmetros) e tags (endereço, tipo, **papel**) | MVP |
 | RF04 | **Teste de leitura** de uma tag pela web ("ler agora") | MVP |

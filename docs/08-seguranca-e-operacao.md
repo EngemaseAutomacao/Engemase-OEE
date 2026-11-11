@@ -41,8 +41,8 @@ flowchart LR
 
 | Controle | Como |
 |---|---|
-| Autenticação | Better Auth. 2FA obrigatório para admins e engenheiros (F2) |
-| Autorização | RBAC por organização (ver [05](05-plataforma-web.md#papéis-e-permissões-rbac)). Camada de acesso a dados com escopo obrigatório de tenant |
+| Autenticação | Better Auth com `/api/auth/*` fechado por lista de permissão; tokens próprios de uso único para definir/redefinir senha (no fragmento da URL, fora de logs). **2FA obrigatório para a equipe Engemase no MVP**; para o cliente, conforme política. Ver [15](15-multi-cliente-e-acesso.md) |
+| Autorização | Papel × escopo de unidades × estado do cliente, calculado a cada requisição (`requireTenant`). RLS no nível do cliente. Equipe Engemase só com papel de plataforma, concessão de suporte ou atribuição, sempre visível ao cliente ([15](15-multi-cliente-e-acesso.md)) |
 | API dos gateways | Token por gateway, guardado como hash. Validação de que cada máquina e tag pertence ao gateway. Schemas Zod. Limite de payload |
 | Rate limiting | Vercel Firewall (regras de taxa por IP/rota) + limite por gateway na aplicação |
 | Cron | `CRON_SECRET` validado em `/api/cron/*` |
@@ -56,7 +56,7 @@ flowchart LR
 | Ambiente | Web | Banco | Gateways |
 |---|---|---|---|
 | **Local** | `pnpm dev` | Postgres em Docker ou branch `dev` da Neon | Agente local + `plc-sim` |
-| **Preview** (por PR) | Deploy de preview da Vercel | Branch Neon automático por preview | Gateway de bancada (opcional), com o header de bypass da Deployment Protection |
+| **Preview** (por PR) | Deploy de preview da Vercel (com Deployment Protection) | Branch Neon automático por preview, a partir de **branch-semente sintético** (nunca dados de produção) | Gateway de bancada (opcional), com o header de bypass da Deployment Protection |
 | **Produção** | Domínio próprio (ex.: `oee.engemase.com.br`) | Branch `main` da Neon | Gateways dos clientes |
 
 Um **gateway de bancada** na Engemase (com CLPs reais de cada marca suportada) roda contra produção numa organização interna "Engemase Lab". Ele funciona como teste de fumaça contínuo e como demonstração.
