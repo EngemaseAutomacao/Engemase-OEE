@@ -139,7 +139,7 @@ export function OeeReport({ clientSlug, rows, machines, units, lines }: OeeRepor
           label="Linha"
           value={lineId}
           allLabel="Todas as linhas"
-            allShort="Todas"
+          allShort="Todas"
           options={lineOptions.map((l) => ({ value: l.id, label: l.name }))}
           onChange={(v) => {
             setLineId(v)
@@ -150,7 +150,7 @@ export function OeeReport({ clientSlug, rows, machines, units, lines }: OeeRepor
           label="Máquina"
           value={machineId}
           allLabel="Todas as máquinas"
-            allShort="Todas"
+          allShort="Todas"
           options={scopeMachines.map((m) => ({ value: m.id, label: m.name, hint: m.code }))}
           onChange={setMachineId}
         />
@@ -158,7 +158,7 @@ export function OeeReport({ clientSlug, rows, machines, units, lines }: OeeRepor
           label="Turno"
           value={shift}
           allLabel="Todos os turnos"
-            allShort="Todos"
+          allShort="Todos"
           options={shiftNames.map((s) => ({ value: s, label: s }))}
           onChange={setShift}
           triggerClassName="sm:w-[150px]"

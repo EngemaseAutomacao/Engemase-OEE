@@ -128,7 +128,7 @@ export function StopsReport({ clientSlug, records, machines, units, lines, endDa
           label="Linha"
           value={lineId}
           allLabel="Todas as linhas"
-            allShort="Todas"
+          allShort="Todas"
           options={lineOptions.map((l) => ({ value: l.id, label: l.name }))}
           onChange={(v) => {
             setLineId(v)
@@ -139,7 +139,7 @@ export function StopsReport({ clientSlug, records, machines, units, lines, endDa
           label="Máquina"
           value={machineId}
           allLabel="Todas as máquinas"
-            allShort="Todas"
+          allShort="Todas"
           options={scopeMachines.map((m) => ({ value: m.id, label: m.name, hint: m.code }))}
           onChange={setMachineId}
         />
@@ -147,7 +147,7 @@ export function StopsReport({ clientSlug, records, machines, units, lines, endDa
           label="Categoria"
           value={category}
           allLabel="Todas as categorias"
-            allShort="Todas"
+          allShort="Todas"
           options={CATEGORY_ORDER.map((k) => ({ value: k, label: CATEGORY_META[k].plural }))}
           onChange={(v) => setCategory(v as CategoryFilter)}
         />
