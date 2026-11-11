@@ -394,3 +394,64 @@ export function refRange(t: TagDraft): string {
   if (isBitArea(t.area) || !is32(t.dataType)) return first
   return `${first}–${modbusRef(t.area, a + 1)}`
 }
+
+// ---------------------------------------------------------------------------
+// Leitura de teste simulada (protótipo: sem gateway real)
+// ---------------------------------------------------------------------------
+
+/** Hash simples e determinístico (mesma entrada → mesmo valor). */
+function hash(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+/** Latência simulada de uma transação Modbus (RTU é mais lento que TCP). */
+export function simulatedLatency(protocol: Protocol, seed: string): number {
+  const h = hash(seed)
+  return protocol === "modbus-tcp" ? 8 + (h % 18) : 28 + (h % 26)
+}
+
+/**
+ * Valor lido de um sinal, coerente com o papel (máquina produzindo, sem alarme).
+ * `tick` muda a cada leitura para o heartbeat e os contadores avançarem.
+ */
+export function simulatedValue(t: TagDraft, stateMap: StateMapRow[], tick: number): string {
+  const h = hash(`${t.area}:${t.address}:${t.name}`)
+  const counter = 120_000 + (h % 880_000) + tick * 3
+  switch (t.role) {
+    case "state.running":
+      return "1"
+    case "state.fault":
+      return "0"
+    case "state.code": {
+      const running = stateMap.find((r) => r.state === "RUNNING")
+      return running ? `${running.code} · ${running.label || "Produzindo"}` : "1"
+    }
+    case "fault.code":
+      return "0 · sem alarme"
+    case "count.total":
+      return counter.toLocaleString("pt-BR")
+    case "count.reject":
+      return Math.round(counter * 0.018).toLocaleString("pt-BR")
+    case "count.good":
+      return (counter - Math.round(counter * 0.018)).toLocaleString("pt-BR")
+    case "product.code":
+      return String(1200 + (h % 12))
+    case "speed.actual":
+      return String(160 + (h % 60))
+    default: {
+      const n = t.name.toLowerCase()
+      if (n.includes("versão")) return "1"
+      if (n.includes("heartbeat")) return String((h % 30_000) + tick)
+      if (n.includes("ciclo")) return String(17_200 + (h % 1_400))
+      if (n.includes("bits")) return "0x0001 · automático"
+      if (t.dataType === "bool") return "0"
+      if (t.dataType === "float32") return (180 + (h % 600) / 10).toLocaleString("pt-BR", { maximumFractionDigits: 1 })
+      return String(h % 1000)
+    }
+  }
+}

@@ -265,8 +265,12 @@ export function isOlderVersion(v: string, ref: string = LATEST_AGENT): boolean {
 // Acesso remoto (VPN de manutenção, docs/12)
 // ---------------------------------------------------------------------------
 
-export const REMOTE_STATUS_LABEL: Record<RemoteAccessStatus, string> = {
+/** Status de sessão na interface: os do mock + "cancelada" (pedido retirado por quem pediu, docs/12). */
+export type SessionStatus = RemoteAccessStatus | "cancelled"
+
+export const REMOTE_STATUS_LABEL: Record<SessionStatus, string> = {
   requested: "Aguardando aprovação",
+  cancelled: "Cancelada",
   approved: "Aprovada",
   active: "Ativa",
   ended: "Encerrada",
@@ -275,8 +279,9 @@ export const REMOTE_STATUS_LABEL: Record<RemoteAccessStatus, string> = {
   revoked: "Revogada",
 }
 
-export const REMOTE_STATUS_STYLE: Record<RemoteAccessStatus, string> = {
+export const REMOTE_STATUS_STYLE: Record<SessionStatus, string> = {
   requested: "bg-state-stopped/15 text-amber-700 dark:text-state-stopped",
+  cancelled: "bg-muted text-muted-foreground",
   approved: "bg-primary/10 text-primary",
   active: "bg-state-running/12 text-state-running",
   ended: "bg-muted text-muted-foreground",
