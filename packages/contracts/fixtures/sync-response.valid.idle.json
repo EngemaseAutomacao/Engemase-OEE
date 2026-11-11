@@ -1,0 +1,10 @@
+{
+  "ack_seq": 0,
+  "server_time": "2026-11-11T13:02:15.402Z",
+  "config": {
+    "latest_version": 42
+  },
+  "commands": [],
+  "next_sync_s": 10,
+  "min_agent_version": "1.0.0"
+}

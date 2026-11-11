@@ -1,0 +1,175 @@
+{
+  "ack_seq": 502,
+  "ack_samples_seq": 9003,
+  "server_time": "2026-11-11T13:03:05.233Z",
+  "config": {
+    "latest_version": 42
+  },
+  "commands": [
+    {
+      "id": "01a1cab3-55e8-7cf0-a52e-692c5f1aac62",
+      "type": "tag.read",
+      "issued_at": "2026-11-11T13:02:05.300Z",
+      "expires_at": "2026-11-11T13:04:05.300Z",
+      "payload": {
+        "device_id": "01a1599e-7f90-7b47-976d-2b40a6cb24c1",
+        "address": {
+          "area": "holding_register",
+          "offset": 1004
+        },
+        "type": "uint32",
+        "word_order": "CDAB"
+      }
+    },
+    {
+      "id": "01a1cab3-59d0-74e2-aa70-5ede7ef9053c",
+      "type": "device.test",
+      "issued_at": "2026-11-11T13:02:05.300Z",
+      "expires_at": "2026-11-11T13:04:05.300Z",
+      "payload": {
+        "device_id": "01a1cab3-6074-7dc2-ad6e-d8225a5aee79",
+        "connection": {
+          "protocol": "modbus-rtu-over-tcp",
+          "params": {
+            "host": "192.168.10.40",
+            "port": 4001,
+            "unit_id": 3,
+            "timeout_ms": 500
+          }
+        },
+        "probe": {
+          "area": "holding_register",
+          "offset": 0,
+          "count": 10
+        }
+      }
+    },
+    {
+      "id": "01a1cab3-7528-7875-b9e9-449f0be70ebb",
+      "type": "device.test",
+      "issued_at": "2026-11-11T13:02:05.300Z",
+      "expires_at": "2026-11-11T13:04:05.300Z",
+      "payload": {
+        "device_id": "01a159a0-5c20-7fb9-ad36-a2297f2a5938",
+        "connection": {
+          "protocol": "modbus-rtu",
+          "params": {
+            "bus": "01a1599d-9148-75c2-9673-d03229272dbb",
+            "unit_id": 2,
+            "timeout_ms": 300
+          }
+        },
+        "serial_bus": {
+          "id": "01a1cab3-0000-7000-8000-000000000bad",
+          "port": "rs485-1",
+          "baud": 9600,
+          "parity": "N",
+          "data_bits": 8,
+          "stop_bits": 2
+        },
+        "allow_bus_pause": true,
+        "probe": {
+          "area": "input_register",
+          "offset": 16,
+          "count": 2
+        }
+      }
+    },
+    {
+      "id": "01a1cab3-5db8-7495-9ef3-d1edb6c3051b",
+      "type": "config.reload",
+      "issued_at": "2026-11-11T13:02:05.300Z",
+      "expires_at": "2026-11-11T13:12:05.300Z",
+      "payload": {}
+    },
+    {
+      "id": "01a1cab3-61a0-7cba-9290-43975497e9b6",
+      "type": "agent.restart",
+      "issued_at": "2026-11-11T13:02:05.300Z",
+      "expires_at": "2026-11-11T13:12:05.300Z",
+      "payload": {
+        "reason": "Teste de reinício pedido pelo suporte",
+        "delay_s": 5
+      }
+    },
+    {
+      "id": "01a1cab3-6588-7732-8c1b-c364878a0e1f",
+      "type": "modbus.scan",
+      "issued_at": "2026-11-11T13:02:05.300Z",
+      "expires_at": "2026-11-11T13:12:05.300Z",
+      "payload": {
+        "mode": "unit_ids",
+        "bus_id": "01a1599d-9148-75c2-9673-d03229272dbb",
+        "unit_from": 1,
+        "unit_to": 32,
+        "probe": {
+          "area": "holding_register",
+          "offset": 0
+        },
+        "timeout_ms": 200
+      }
+    },
+    {
+      "id": "01a1cab3-6970-7364-b760-3a437894d006",
+      "type": "vpn.enable",
+      "issued_at": "2026-11-11T13:02:05.300Z",
+      "expires_at": "2026-11-11T13:07:05.300Z",
+      "payload": {
+        "session_id": "01a1cab3-7cf8-7f23-8fdf-c01d84c79403",
+        "auth_key": "TEST-ONLY-vpn-auth-key-0000000000000000",
+        "node_name": "gw-planta1-linhaa",
+        "session_expires_at": "2026-11-11T16:30:00Z",
+        "idle_timeout_s": 900,
+        "approval": "eyJhbGciOiJFZERTQSIsImtpZCI6InRlc3QtYXBwcm92YWwtMjAyNi0xIn0.eyJ0eXAiOiJlbmdlbWFzZS52cG5fYXBwcm92YWwudjEiLCJnYXRld2F5X2lkIjoiMDFhMTU5OWMtYTMwMC03ZjUxLTk4NjQtMTA3M2RjOTc4MWNhIiwic2Vzc2lvbl9pZCI6IjAxYTFjYWIzLTdjZjgtN2YyMy04ZmRmLWMwMWQ4NGM3OTQwMyIsInJlcXVlc3RlZF9ieSI6InVfOVFtVDRrWHIyTHBWN2NOeiIsImFwcHJvdmVkX2J5IjoidV8zSGRXOHNZYjZSZkoxYUtlIiwiYXBwcm92ZWRfYXQiOiIyMDI2LTExLTExVDEzOjAwOjMwWiIsIm5vdF9hZnRlciI6IjIwMjYtMTEtMTFUMTY6MzA6MDBaIiwiYWxsb3dfb3RfZm9yd2FyZCI6dHJ1ZX0.Q5_N6ZU8Gm4R4-zuG9joho6hUupkmvWSgiQWq_pPuS15neaVsJv3gxM52NOoaynib-jicHMy_5weQsg-BLy1BA"
+      }
+    },
+    {
+      "id": "01a1cab3-7140-71b7-bb90-dd1057d31fe9",
+      "type": "vpn.status",
+      "issued_at": "2026-11-11T13:02:05.300Z",
+      "expires_at": "2026-11-11T13:04:05.300Z",
+      "payload": {
+        "session_id": "01a1cab3-7cf8-7f23-8fdf-c01d84c79403"
+      }
+    },
+    {
+      "id": "01a1cab3-7528-73c9-b692-6e56b454d05d",
+      "type": "ot.forward.open",
+      "issued_at": "2026-11-11T13:02:05.300Z",
+      "expires_at": "2026-11-11T13:07:05.300Z",
+      "payload": {
+        "session_id": "01a1cab3-7cf8-7f23-8fdf-c01d84c79403",
+        "forward_id": "01a1cab3-5db8-7cc1-b976-af6c144eba3d",
+        "device_id": "01a1599e-7f90-7b47-976d-2b40a6cb24c1",
+        "host": "192.168.10.23",
+        "port": 502,
+        "forward_expires_at": "2026-11-11T13:32:00Z",
+        "max_connections": 1,
+        "approval": "eyJhbGciOiJFZERTQSIsImtpZCI6InRlc3QtYXBwcm92YWwtMjAyNi0xIn0.eyJ0eXAiOiJlbmdlbWFzZS5vdF9mb3J3YXJkX2FwcHJvdmFsLnYxIiwiZ2F0ZXdheV9pZCI6IjAxYTE1OTljLWEzMDAtN2Y1MS05ODY0LTEwNzNkYzk3ODFjYSIsInNlc3Npb25faWQiOiIwMWExY2FiMy03Y2Y4LTdmMjMtOGZkZi1jMDFkODRjNzk0MDMiLCJmb3J3YXJkX2lkIjoiMDFhMWNhYjMtNWRiOC03Y2MxLWI5NzYtYWY2YzE0NGViYTNkIiwiZGV2aWNlX2lkIjoiMDFhMTU5OWUtN2Y5MC03YjQ3LTk3NmQtMmI0MGE2Y2IyNGMxIiwiaG9zdCI6IjE5Mi4xNjguMTAuMjMiLCJwb3J0Ijo1MDIsImFwcHJvdmVkX2J5IjoidV8zSGRXOHNZYjZSZkoxYUtlIiwiYXBwcm92ZWRfYXQiOiIyMDI2LTExLTExVDEzOjAxOjQwWiIsIm5vdF9hZnRlciI6IjIwMjYtMTEtMTFUMTM6MzI6MDBaIiwibWF4X2Nvbm5lY3Rpb25zIjoxfQ.ZXqAFFuWW52mQ9--tOfTfKp8-KNycexWG-zLnM2pl05ygSTJlxf2YwIK1RpiYq2FcE8JO1Qc1sQ5xQfxO_VeAg"
+      }
+    },
+    {
+      "id": "01a1cab3-7910-7e62-8c88-888f9222f5d9",
+      "type": "ot.forward.close",
+      "issued_at": "2026-11-11T13:02:05.300Z",
+      "expires_at": "2026-11-11T14:02:05.300Z",
+      "payload": {
+        "session_id": "01a1cab3-7cf8-7f23-8fdf-c01d84c79403",
+        "forward_id": "01a1cab3-5db8-7cc1-b976-af6c144eba3d",
+        "reason": "requested"
+      }
+    },
+    {
+      "id": "01a1cab3-6d58-7d30-ae21-4f8c243d297d",
+      "type": "vpn.disable",
+      "issued_at": "2026-11-11T13:02:05.300Z",
+      "expires_at": "2026-11-11T14:02:05.300Z",
+      "payload": {
+        "session_id": "01a1cab3-7cf8-7f23-8fdf-c01d84c79403",
+        "reason": "requested"
+      }
+    }
+  ],
+  "next_sync_s": 1,
+  "min_agent_version": "1.0.0"
+}

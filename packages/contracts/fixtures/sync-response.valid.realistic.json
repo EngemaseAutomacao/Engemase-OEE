@@ -1,0 +1,26 @@
+{
+  "ack_seq": 18245,
+  "server_time": "2026-11-11T13:02:05.410Z",
+  "config": {
+    "latest_version": 43
+  },
+  "commands": [
+    {
+      "id": "01a1cab3-55e8-7cf0-a52e-692c5f1aac62",
+      "type": "tag.read",
+      "issued_at": "2026-11-11T13:02:05.300Z",
+      "expires_at": "2026-11-11T13:04:05.300Z",
+      "payload": {
+        "device_id": "01a1599e-7f90-7b47-976d-2b40a6cb24c1",
+        "address": {
+          "area": "holding_register",
+          "offset": 1004
+        },
+        "type": "uint32",
+        "word_order": "CDAB"
+      }
+    }
+  ],
+  "next_sync_s": 1,
+  "min_agent_version": "1.0.0"
+}

@@ -1,0 +1,1191 @@
+{
+  "$comment": "Gerado por `pnpm --filter @engemase/contracts build:fixtures`; não edite à mão. valid=false + layer=schema: o JSON Schema (schema/<schema>.json) já rejeita. valid=false + layer=semantic: o JSON Schema aceita; só as regras semânticas (expect.rule) rejeitam. expect.path usa pontos e índices base 0. As aprovações JWS são assinadas com a chave de test-keys.json.",
+  "fixtures": [
+    {
+      "file": "enroll-request.valid.json",
+      "schema": "enroll-request",
+      "valid": true,
+      "description": "Enroll de um reComputer R1000 com dados de bancada (hw.json)."
+    },
+    {
+      "file": "enroll-response.valid.json",
+      "schema": "enroll-response",
+      "valid": true,
+      "description": "Resposta 201 do enroll."
+    },
+    {
+      "file": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "schema": "gateway-config",
+      "valid": true,
+      "description": "Config do docs/03: 1 CLP Modbus TCP com o bloco OEE padrão (HR 1000, 14 registradores) e 2 escravos RTU (unit 1 e 2) no mesmo barramento RS-485; modos state_code, signals e count_derived."
+    },
+    {
+      "file": "gateway-config.valid.tcp-only-io.json",
+      "schema": "gateway-config",
+      "valid": true,
+      "description": "Config mínima só TCP: I/O remoto (unit id 255) com bloco de discrete inputs e contador fora de bloco."
+    },
+    {
+      "file": "sync-request.valid.realistic.json",
+      "schema": "sync-request",
+      "valid": true,
+      "description": "/sync realista: 3 máquinas, eventos (estado, produto, reset), 6 minutos fechados, live, amostras e 3 resultados de comando."
+    },
+    {
+      "file": "sync-request.valid.health-only.json",
+      "schema": "sync-request",
+      "valid": true,
+      "description": "Sync só de saúde (fila vazia, sem faixa de seq)."
+    },
+    {
+      "file": "sync-request.valid.samples-queue.json",
+      "schema": "sync-request",
+      "valid": true,
+      "description": "Amostras com fila própria (samples_seq_from/samples_seq_to)."
+    },
+    {
+      "file": "sync-request.valid.all-event-types.json",
+      "schema": "sync-request",
+      "valid": true,
+      "description": "Um evento de cada tipo."
+    },
+    {
+      "file": "sync-request.valid.all-command-results.json",
+      "schema": "sync-request",
+      "valid": true,
+      "description": "Um resultado de sucesso de cada tipo de comando, mais falhas (error, expired, rejected)."
+    },
+    {
+      "file": "sync-response.valid.realistic.json",
+      "schema": "sync-response",
+      "valid": true,
+      "description": "Resposta do docs/04: ack, nova versão de config e um tag.read em modo interativo."
+    },
+    {
+      "file": "sync-response.valid.all-command-types.json",
+      "schema": "sync-response",
+      "valid": true,
+      "description": "Um comando de cada tipo (inclusive vpn.* e ot.forward.* com aprovação assinada) e ack da fila de amostras."
+    },
+    {
+      "file": "sync-response.valid.idle.json",
+      "schema": "sync-response",
+      "valid": true,
+      "description": "Resposta sem comandos, ritmo normal (10 s)."
+    },
+    {
+      "file": "command-envelope.valid.future-type.json",
+      "schema": "command-envelope",
+      "valid": true,
+      "description": "Tipo de comando de versão futura (agent.update): o envelope aceita; o agente responde rejected/unsupported."
+    },
+    {
+      "file": "error-response.valid.invalid-payload.json",
+      "schema": "error-response",
+      "valid": true,
+      "description": "400 com o problema e o id da regra."
+    },
+    {
+      "file": "error-response.valid.rate-limited.json",
+      "schema": "error-response",
+      "valid": true,
+      "description": "429 com retry_after_s."
+    },
+    {
+      "file": "vpn-approval-claims.valid.json",
+      "schema": "vpn-approval-claims",
+      "valid": true,
+      "description": "Claims (payload decodificado) do JWS de aprovação de vpn.enable."
+    },
+    {
+      "file": "ot-forward-approval-claims.valid.json",
+      "schema": "ot-forward-approval-claims",
+      "valid": true,
+      "description": "Claims (payload decodificado) do JWS de aprovação de ot.forward.open."
+    },
+    {
+      "file": "gateway-config.invalid.rtu-unit-id-zero.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Unit id 0 em RTU (0 é broadcast; faixa 1–247).",
+      "layer": "schema",
+      "expect": {
+        "path": "devices.1.params.unit_id"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.1.params.unit_id",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.rtu-unit-id-248.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Unit id 248 em RTU (máximo 247).",
+      "layer": "schema",
+      "expect": {
+        "path": "devices.2.params.unit_id"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.2.params.unit_id",
+          "value": 248
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.offset-out-of-range.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Offset 65536 (base 0, máximo 65535).",
+      "layer": "schema",
+      "expect": {
+        "path": "devices.0.tags.7.address.offset"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.0.tags.7.address.offset",
+          "value": 65536
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.block-126-registers.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Bloco de holding registers com 126 registradores (máximo 125 por leitura).",
+      "layer": "schema",
+      "expect": {
+        "path": "devices.0.blocks.0.count"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.0.blocks.0.count",
+          "value": 126
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.data-bits-7.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "7 bits de dados (Modbus RTU exige 8; 7 bits é Modbus ASCII).",
+      "layer": "schema",
+      "expect": {
+        "path": "serial_buses.0.data_bits"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "serial_buses.0.data_bits",
+          "value": 7
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.illustrative-id.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Id com prefixo dos exemplos da documentação (a API usa UUID).",
+      "layer": "schema",
+      "expect": {
+        "path": "devices.0.id"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.0.id",
+          "value": "dev_inj03"
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.unknown-protocol.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Protocolo fora do MVP.",
+      "layer": "schema",
+      "expect": {
+        "path": "devices.0.protocol"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.0.protocol",
+          "value": "s7"
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.state-map-no-comm.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "NO_COMM no mapa de state_code (NO_COMM é só do gateway).",
+      "layer": "schema",
+      "expect": {
+        "path": "machines.0.state_rules.map.6"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "machines.0.state_rules.map.6",
+          "value": "NO_COMM"
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.uint32-without-word-order.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "uint32 sem word_order.",
+      "layer": "semantic",
+      "expect": {
+        "path": "devices.0.tags.3.word_order",
+        "rule": "address.word_order"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "remove",
+          "path": "devices.0.tags.3.word_order"
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.coil-not-bool.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Coil lida como uint16.",
+      "layer": "semantic",
+      "expect": {
+        "path": "devices.1.tags.0.type",
+        "rule": "address.bit_area"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.1.tags.0.type",
+          "value": "uint16"
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.register-bool-without-bit.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "bool em holding register sem indicar o bit.",
+      "layer": "semantic",
+      "expect": {
+        "path": "devices.1.tags.1.address.bit",
+        "rule": "address.register_bool_bit"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "remove",
+          "path": "devices.1.tags.1.address.bit"
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.role-type.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Contador (count.total) declarado como float32.",
+      "layer": "semantic",
+      "expect": {
+        "path": "devices.0.tags.3.type",
+        "rule": "tag.role_type"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.0.tags.3.type",
+          "value": "float32"
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.bus-unit-id-duplicate.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Dois escravos com unit id 1 no mesmo barramento.",
+      "layer": "semantic",
+      "expect": {
+        "path": "devices.2.params.unit_id",
+        "rule": "bus.unit_unique"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.2.params.unit_id",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.bus-ref-missing.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Dispositivo RTU apontando para barramento inexistente.",
+      "layer": "semantic",
+      "expect": {
+        "path": "devices.1.params.bus",
+        "rule": "bus.ref"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.1.params.bus",
+          "value": "01a1cab3-0000-7000-8000-000000000bad"
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.tag-partial-block.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "uint32 em HR 1013–1014 com o bloco terminando em 1013.",
+      "layer": "semantic",
+      "expect": {
+        "path": "devices.0.tags.4.address.offset",
+        "rule": "tag.block_partial"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.0.tags.4.address.offset",
+          "value": 1013
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.tag-without-poll.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Tag fora de bloco sem poll_ms.",
+      "layer": "semantic",
+      "expect": {
+        "path": "devices.2.tags.0.poll_ms",
+        "rule": "tag.poll_source"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "remove",
+          "path": "devices.2.tags.0.poll_ms"
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.tag-in-block-with-poll.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Tag dentro de bloco com poll_ms próprio (ambíguo).",
+      "layer": "semantic",
+      "expect": {
+        "path": "devices.0.tags.1.poll_ms",
+        "rule": "tag.poll_source"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.0.tags.1.poll_ms",
+          "value": 500
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.rtu-poll-too-fast.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "poll_ms 100 em RTU (mínimo 200).",
+      "layer": "semantic",
+      "expect": {
+        "path": "devices.1.tags.0.poll_ms",
+        "rule": "poll.rtu_min"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.1.tags.0.poll_ms",
+          "value": 100
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.block-overlap.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Dois blocos de holding registers sobrepostos (1000–1013 e 1010–1019).",
+      "layer": "semantic",
+      "expect": {
+        "path": "devices.0.blocks.1",
+        "rule": "block.overlap"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.0.blocks",
+          "value": [
+            {
+              "area": "holding_register",
+              "start": 1000,
+              "count": 14,
+              "poll_ms": 500
+            },
+            {
+              "area": "holding_register",
+              "start": 1010,
+              "count": 10,
+              "poll_ms": 1000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.duplicate-tag-id.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Id de tag repetido em dispositivos diferentes.",
+      "layer": "semantic",
+      "expect": {
+        "path": "devices.2.tags.0.id",
+        "rule": "ids.unique"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.2.tags.0.id",
+          "value": "01a159ac-75c8-7302-ac5e-eea971e7d771"
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.tag-machine-unknown.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Tag ligada a máquina que não está em machines.",
+      "layer": "semantic",
+      "expect": {
+        "path": "devices.2.tags.0.machine_id",
+        "rule": "tag.machine_ref"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.2.tags.0.machine_id",
+          "value": "01a1cab3-0000-7000-8000-000000000bad"
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.machine-missing-role.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Modo signals numa máquina sem tag state.running.",
+      "layer": "semantic",
+      "expect": {
+        "path": "machines.2.state_rules.mode",
+        "rule": "machine.mode_roles"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "machines.2.state_rules",
+          "value": {
+            "mode": "signals"
+          }
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.comm-loss-too-short.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "comm_loss_after_s de 1 s com tags lidas a cada 500 ms (mínimo 3 × poll).",
+      "layer": "semantic",
+      "expect": {
+        "path": "machines.1.state_rules.comm_loss_after_s",
+        "rule": "machine.comm_loss"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "machines.1.state_rules.comm_loss_after_s",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "file": "gateway-config.invalid.heartbeat-without-tag.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "heartbeat_timeout_s numa máquina sem tag plc.heartbeat.",
+      "layer": "semantic",
+      "expect": {
+        "path": "machines.1.state_rules.heartbeat_timeout_s",
+        "rule": "machine.heartbeat"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "machines.1.state_rules.heartbeat_timeout_s",
+          "value": 5
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.event-id-not-v7.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "Id de evento UUIDv4 (o contrato exige UUIDv7).",
+      "layer": "schema",
+      "expect": {
+        "path": "events.0.id"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "events.0.id",
+          "value": "3b241101-e2bb-4255-8caf-4136c566a962"
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.timestamp-with-offset.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "Timestamp com fuso -03:00 (o contrato exige UTC com 'Z').",
+      "layer": "schema",
+      "expect": {
+        "path": "events.3.at"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "events.3.at",
+          "value": "2026-11-11T10:01:42.250-03:00"
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.timestamp-without-zone.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "Timestamp sem fuso.",
+      "layer": "schema",
+      "expect": {
+        "path": "live.0.at"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "live.0.at",
+          "value": "2026-11-11T13:02:05.000"
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.minute-not-aligned.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "Minuto que não começa no segundo zero.",
+      "layer": "schema",
+      "expect": {
+        "path": "minutes.0.t"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "minutes.0.t",
+          "value": "2026-11-11T13:00:30Z"
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.minute-without-setup.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "Minuto sem setup_s.",
+      "layer": "schema",
+      "expect": {
+        "path": "minutes.0.setup_s"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "remove",
+          "path": "minutes.0.setup_s"
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.negative-count.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "Contagem negativa no minuto.",
+      "layer": "schema",
+      "expect": {
+        "path": "minutes.0.total"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "minutes.0.total",
+          "value": -1
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.cpu-over-100.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "cpu_pct acima de 100.",
+      "layer": "schema",
+      "expect": {
+        "path": "agent.cpu_pct"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "agent.cpu_pct",
+          "value": 140
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.unknown-event-type.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "Tipo de evento desconhecido.",
+      "layer": "schema",
+      "expect": {
+        "path": "events.1.type"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "events.1.type",
+          "value": "product_change"
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.command-result-without-type.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "Resultado de comando sem type (formato antigo do exemplo do docs/04).",
+      "layer": "schema",
+      "expect": {
+        "path": "command_results.0.type"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "remove",
+          "path": "command_results.0.type"
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.minute-seconds-sum.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "Segundos do minuto somando 59 (deve ser 60).",
+      "layer": "semantic",
+      "expect": {
+        "path": "minutes.0.run_s",
+        "rule": "minute.seconds_sum"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "minutes.0.run_s",
+          "value": 59
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.seq-out-of-range.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "seq fora da faixa seq_from–seq_to do lote.",
+      "layer": "semantic",
+      "expect": {
+        "path": "events.0.seq",
+        "rule": "batch.seq_range"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "events.0.seq",
+          "value": 18230
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.seq-duplicate.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "Dois itens com o mesmo seq.",
+      "layer": "semantic",
+      "expect": {
+        "path": "minutes.1.seq",
+        "rule": "batch.seq_unique"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "minutes.1.seq",
+          "value": 18234
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.seq-range-missing.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "Lote com itens e sem seq_from/seq_to.",
+      "layer": "semantic",
+      "expect": {
+        "path": "batch.seq_from",
+        "rule": "batch.seq_required"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "remove",
+          "path": "batch.seq_from"
+        },
+        {
+          "op": "remove",
+          "path": "batch.seq_to"
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.duplicate-event-id.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "Dois eventos com o mesmo id.",
+      "layer": "semantic",
+      "expect": {
+        "path": "events.1.id",
+        "rule": "event.id_unique"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "events.1.id",
+          "value": "01a1cab1-cc5a-7af4-9800-bf5c8c603e5f"
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.duplicate-minute.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "Mesmo minuto (machine_id, t) duas vezes no lote.",
+      "layer": "semantic",
+      "expect": {
+        "path": "minutes.3.t",
+        "rule": "minute.unique"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "minutes.3.t",
+          "value": "2026-11-11T13:00:00Z"
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.live-since-after-at.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "state_since posterior a at.",
+      "layer": "semantic",
+      "expect": {
+        "path": "live.0.state_since",
+        "rule": "live.since"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "live.0.state_since",
+          "value": "2026-11-11T13:02:06.000Z"
+        }
+      ]
+    },
+    {
+      "file": "sync-request.invalid.live-duplicate.json",
+      "schema": "sync-request",
+      "valid": false,
+      "description": "Duas linhas live da mesma máquina.",
+      "layer": "semantic",
+      "expect": {
+        "path": "live.1.machine_id",
+        "rule": "live.unique"
+      },
+      "derived_from": "sync-request.valid.realistic.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "live.1.machine_id",
+          "value": "01a159a1-4a68-72de-9057-14e72d836a47"
+        }
+      ]
+    },
+    {
+      "file": "sync-response.invalid.command-without-expiry.json",
+      "schema": "sync-response",
+      "valid": false,
+      "description": "Comando sem expires_at (todo comando expira).",
+      "layer": "schema",
+      "expect": {
+        "path": "commands.0.expires_at"
+      },
+      "derived_from": "sync-response.valid.all-command-types.json",
+      "patch": [
+        {
+          "op": "remove",
+          "path": "commands.0.expires_at"
+        }
+      ]
+    },
+    {
+      "file": "sync-response.invalid.next-sync-zero.json",
+      "schema": "sync-response",
+      "valid": false,
+      "description": "next_sync_s = 0 (mínimo 1).",
+      "layer": "schema",
+      "expect": {
+        "path": "next_sync_s"
+      },
+      "derived_from": "sync-response.valid.all-command-types.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "next_sync_s",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "file": "sync-response.invalid.unknown-command-type.json",
+      "schema": "sync-response",
+      "valid": false,
+      "description": "Tipo de comando fora do v1 na resposta tipada (o envelope aceitaria).",
+      "layer": "schema",
+      "expect": {
+        "path": "commands.3.type"
+      },
+      "derived_from": "sync-response.valid.all-command-types.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "commands.3.type",
+          "value": "agent.update"
+        }
+      ]
+    },
+    {
+      "file": "sync-response.invalid.scan-unit-zero.json",
+      "schema": "sync-response",
+      "valid": false,
+      "description": "Varredura a partir do unit id 0.",
+      "layer": "schema",
+      "expect": {
+        "path": "commands.5.payload.unit_from"
+      },
+      "derived_from": "sync-response.valid.all-command-types.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "commands.5.payload.unit_from",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "file": "sync-response.invalid.probe-126-registers.json",
+      "schema": "sync-response",
+      "valid": false,
+      "description": "Leitura de teste de 126 registradores (máximo 125).",
+      "layer": "schema",
+      "expect": {
+        "path": "commands.1.payload.probe.count"
+      },
+      "derived_from": "sync-response.valid.all-command-types.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "commands.1.payload.probe.count",
+          "value": 126
+        }
+      ]
+    },
+    {
+      "file": "sync-response.invalid.approval-not-jws.json",
+      "schema": "sync-response",
+      "valid": false,
+      "description": "vpn.enable sem aprovação assinada (JWS).",
+      "layer": "schema",
+      "expect": {
+        "path": "commands.6.payload.approval"
+      },
+      "derived_from": "sync-response.valid.all-command-types.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "commands.6.payload.approval",
+          "value": "aprovado"
+        }
+      ]
+    },
+    {
+      "file": "sync-response.invalid.tag-read-without-word-order.json",
+      "schema": "sync-response",
+      "valid": false,
+      "description": "tag.read de uint32 sem word_order.",
+      "layer": "semantic",
+      "expect": {
+        "path": "commands.0.payload.word_order",
+        "rule": "address.word_order"
+      },
+      "derived_from": "sync-response.valid.all-command-types.json",
+      "patch": [
+        {
+          "op": "remove",
+          "path": "commands.0.payload.word_order"
+        }
+      ]
+    },
+    {
+      "file": "sync-response.invalid.scan-range-inverted.json",
+      "schema": "sync-response",
+      "valid": false,
+      "description": "Varredura com unit_from (40) maior que unit_to (32).",
+      "layer": "semantic",
+      "expect": {
+        "path": "commands.5.payload.unit_to",
+        "rule": "scan.range"
+      },
+      "derived_from": "sync-response.valid.all-command-types.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "commands.5.payload.unit_from",
+          "value": 40
+        }
+      ]
+    },
+    {
+      "file": "sync-response.invalid.device-test-bus-mismatch.json",
+      "schema": "sync-response",
+      "valid": false,
+      "description": "device.test com serial_bus de id diferente de params.bus.",
+      "layer": "semantic",
+      "expect": {
+        "path": "commands.2.payload.serial_bus",
+        "rule": "device_test.bus"
+      },
+      "derived_from": "sync-response.valid.all-command-types.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "commands.2.payload.serial_bus.id",
+          "value": "01a1cab3-0000-7000-8000-000000000bad"
+        }
+      ]
+    },
+    {
+      "file": "sync-response.invalid.expiry-before-issue.json",
+      "schema": "sync-response",
+      "valid": false,
+      "description": "expires_at anterior a issued_at.",
+      "layer": "semantic",
+      "expect": {
+        "path": "commands.0.expires_at",
+        "rule": "command.expiry"
+      },
+      "derived_from": "sync-response.valid.all-command-types.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "commands.0.expires_at",
+          "value": "2026-11-11T13:02:05.000Z"
+        }
+      ]
+    },
+    {
+      "file": "sync-response.invalid.duplicate-command-id.json",
+      "schema": "sync-response",
+      "valid": false,
+      "description": "Dois comandos com o mesmo id.",
+      "layer": "semantic",
+      "expect": {
+        "path": "commands.1.id",
+        "rule": "command.unique"
+      },
+      "derived_from": "sync-response.valid.all-command-types.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "commands.1.id",
+          "value": "01a1cab3-55e8-7cf0-a52e-692c5f1aac62"
+        }
+      ]
+    },
+    {
+      "file": "enroll-request.invalid.code-format.json",
+      "schema": "enroll-request",
+      "valid": false,
+      "description": "Código de ativação com 9 caracteres.",
+      "layer": "schema",
+      "expect": {
+        "path": "code"
+      },
+      "derived_from": "enroll-request.valid.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "code",
+          "value": "ABCD-12345"
+        }
+      ]
+    },
+    {
+      "file": "enroll-request.invalid.arch.json",
+      "schema": "enroll-request",
+      "valid": false,
+      "description": "Arquitetura não suportada.",
+      "layer": "schema",
+      "expect": {
+        "path": "hw.arch"
+      },
+      "derived_from": "enroll-request.valid.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "hw.arch",
+          "value": "mips"
+        }
+      ]
+    },
+    {
+      "file": "enroll-response.invalid.token-format.json",
+      "schema": "enroll-response",
+      "valid": false,
+      "description": "Token sem o prefixo gw_live_/gw_test_.",
+      "layer": "schema",
+      "expect": {
+        "path": "token"
+      },
+      "derived_from": "enroll-response.valid.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "token",
+          "value": "8f2c4e1a"
+        }
+      ]
+    },
+    {
+      "file": "command-envelope.invalid.type-name.json",
+      "schema": "command-envelope",
+      "valid": false,
+      "description": "Nome de tipo de comando fora do padrão (minúsculas separadas por ponto).",
+      "layer": "schema",
+      "expect": {
+        "path": "type"
+      },
+      "derived_from": "command-envelope.valid.future-type.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "type",
+          "value": "Agent Update"
+        }
+      ]
+    },
+    {
+      "file": "error-response.invalid.unknown-code.json",
+      "schema": "error-response",
+      "valid": false,
+      "description": "Código de erro fora da tabela.",
+      "layer": "schema",
+      "expect": {
+        "path": "error.code"
+      },
+      "derived_from": "error-response.valid.rate-limited.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "error.code",
+          "value": "teapot"
+        }
+      ]
+    },
+    {
+      "file": "vpn-approval-claims.invalid.typ.json",
+      "schema": "vpn-approval-claims",
+      "valid": false,
+      "description": "Claims de outro tipo de aprovação (impede reaproveitar a assinatura).",
+      "layer": "schema",
+      "expect": {
+        "path": "typ"
+      },
+      "derived_from": "vpn-approval-claims.valid.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "typ",
+          "value": "engemase.ot_forward_approval.v1"
+        }
+      ]
+    }
+  ]
+}

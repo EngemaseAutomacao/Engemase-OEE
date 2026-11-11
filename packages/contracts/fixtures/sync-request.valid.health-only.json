@@ -1,0 +1,23 @@
+{
+  "batch": {
+    "sent_at": "2026-11-11T13:02:15.118Z"
+  },
+  "agent": {
+    "version": "1.2.0",
+    "uptime_s": 86410,
+    "config_version": 42,
+    "cpu_pct": 7.5,
+    "mem_mb": 38,
+    "disk_free_mb": 21000,
+    "buffer_pending": 0,
+    "clock_offset_ms": 12
+  },
+  "devices": [
+    {
+      "id": "01a1599e-7f90-7b47-976d-2b40a6cb24c1",
+      "status": "connected",
+      "latency_ms": 17,
+      "errors_1m": 0
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "rate_limited",
+    "message": "Limite de taxa. Tente de novo em 30 s.",
+    "retry_after_s": 30
+  }
+}

@@ -18,7 +18,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "build:schema": "tsx scripts/build-schema.ts"
+    "build:schema": "tsx scripts/build-schema.ts",
+    "build:fixtures": "tsx scripts/build-fixtures.ts"
   },
   "dependencies": {
     "zod": "^4.6.7"

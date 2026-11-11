@@ -1,0 +1,13 @@
+{
+  "typ": "engemase.ot_forward_approval.v1",
+  "gateway_id": "01a1599c-a300-7f51-9864-1073dc9781ca",
+  "session_id": "01a1cab3-7cf8-7f23-8fdf-c01d84c79403",
+  "forward_id": "01a1cab3-5db8-7cc1-b976-af6c144eba3d",
+  "device_id": "01a1599e-7f90-7b47-976d-2b40a6cb24c1",
+  "host": "192.168.10.23",
+  "port": 502,
+  "approved_by": "u_3HdW8sYb6RfJ1aKe",
+  "approved_at": "2026-11-11T13:01:40Z",
+  "not_after": "2026-11-11T13:32:00Z",
+  "max_connections": 1
+}

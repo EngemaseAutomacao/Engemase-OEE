@@ -1,0 +1,14 @@
+{
+  "$comment": "Chave pública de TESTE (Ed25519) que assina as aprovações das fixtures. Nunca usar em produção.",
+  "keys": [
+    {
+      "crv": "Ed25519",
+      "x": "wOOkQ57btWW38Bq_9hYk6semLMgFOF-uvIpFfVdROzo",
+      "kty": "OKP",
+      "kid": "test-approval-2026-1",
+      "alg": "EdDSA",
+      "use": "sig"
+    }
+  ],
+  "approval_kid": "test-approval-2026-1"
+}

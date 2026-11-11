@@ -16,6 +16,14 @@ export function useZodPortugueseMessages(): void {
   z.config(z.locales.ptBR())
 }
 
+/**
+ * Mensagem de erro para formatos (uuid, datetime, ipv4): "obrigatório" quando o campo
+ * falta e o texto dado quando o valor existe, mas está fora do formato.
+ */
+function formatError(message: string) {
+  return (issue: { input?: unknown }) => (issue.input === undefined ? "campo obrigatório" : message)
+}
+
 /** Versão do contrato, igual ao segmento de versão do path da API. */
 export const CONTRACT_VERSION = "v1" as const
 
@@ -37,7 +45,7 @@ export const API_ROUTES = {
  * Apelidos como "mch_inj03" nos exemplos da documentação são só ilustrativos.
  */
 export const EntityIdSchema = z
-  .uuid({ message: "id deve ser um UUID (a nuvem gera UUIDv7)" })
+  .uuid({ error: formatError("id deve ser um UUID (a nuvem gera UUIDv7)") })
   .describe("Id de entidade (UUID; a nuvem gera UUIDv7)")
 
 /** Identificador de pessoa/usuário (Better Auth), usado só em auditoria e aprovações. */
@@ -45,18 +53,18 @@ export const UserRefSchema = z.string().min(1).max(200)
 
 /** Timestamp ISO 8601 em UTC, obrigatoriamente com sufixo "Z" (ex.: 2026-11-11T13:02:05.120Z). */
 export const UtcDateTimeSchema = z.iso
-  .datetime({ message: "timestamp inválido: use ISO 8601 em UTC com 'Z' (ex.: 2026-11-11T13:02:05.120Z)" })
+  .datetime({ error: formatError("timestamp inválido: use ISO 8601 em UTC com 'Z' (ex.: 2026-11-11T13:02:05.120Z)") })
   .describe("Timestamp ISO 8601 em UTC com sufixo Z")
 
 /** Início de um minuto em UTC: segundos e frações iguais a zero (ex.: 2026-11-11T13:01:00Z). */
 export const MinuteStartSchema = z.iso
-  .datetime({ message: "timestamp inválido: use ISO 8601 em UTC com 'Z'" })
+  .datetime({ error: formatError("timestamp inválido: use ISO 8601 em UTC com 'Z'") })
   .check(z.regex(/T\d{2}:\d{2}:00(?:\.0+)?Z$/, "o minuto deve começar no segundo zero (ex.: 2026-11-11T13:01:00Z)"))
   .describe("Início do minuto em UTC (segundos = 0)")
 
 /** UUID versão 7 (ordenável no tempo), gerado na borda para idempotência. */
 export const UuidV7Schema = z
-  .uuidv7({ message: "id deve ser um UUIDv7" })
+  .uuidv7({ error: formatError("id deve ser um UUIDv7") })
   .describe("UUIDv7 gerado pelo gateway")
 
 /** Versão semântica (ex.: 1.2.0 ou 1.3.0-beta.1). */
@@ -82,7 +90,7 @@ export const HostnameSchema = z
   )
 
 /** Endereço IPv4 em notação decimal. */
-export const Ipv4Schema = z.ipv4({ message: "IPv4 inválido" })
+export const Ipv4Schema = z.ipv4({ error: formatError("IPv4 inválido") })
 
 /** Host de rede: IPv4 ou nome de host. */
 export const HostSchema = z.union([Ipv4Schema, HostnameSchema])

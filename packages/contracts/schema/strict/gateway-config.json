@@ -116,42 +116,78 @@
                 "maxItems": 256,
                 "type": "array",
                 "items": {
-                  "type": "object",
-                  "properties": {
-                    "area": {
-                      "type": "string",
-                      "enum": [
-                        "coil",
-                        "discrete_input",
-                        "input_register",
-                        "holding_register"
-                      ]
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "area": {
+                          "type": "string",
+                          "enum": [
+                            "input_register",
+                            "holding_register"
+                          ]
+                        },
+                        "start": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 65535,
+                          "description": "Offset Modbus em base 0 (0–65535)"
+                        },
+                        "poll_ms": {
+                          "type": "integer",
+                          "minimum": 100,
+                          "maximum": 3600000
+                        },
+                        "count": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 125
+                        }
+                      },
+                      "required": [
+                        "area",
+                        "start",
+                        "poll_ms",
+                        "count"
+                      ],
+                      "additionalProperties": false
                     },
-                    "start": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 65535,
-                      "description": "Offset Modbus em base 0 (0–65535)"
-                    },
-                    "count": {
-                      "type": "integer",
-                      "minimum": 1,
-                      "maximum": 2000,
-                      "description": "Até 125 registradores ou 2000 bits"
-                    },
-                    "poll_ms": {
-                      "type": "integer",
-                      "minimum": 100,
-                      "maximum": 3600000
+                    {
+                      "type": "object",
+                      "properties": {
+                        "area": {
+                          "type": "string",
+                          "enum": [
+                            "coil",
+                            "discrete_input"
+                          ]
+                        },
+                        "start": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 65535,
+                          "description": "Offset Modbus em base 0 (0–65535)"
+                        },
+                        "poll_ms": {
+                          "type": "integer",
+                          "minimum": 100,
+                          "maximum": 3600000
+                        },
+                        "count": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 2000
+                        }
+                      },
+                      "required": [
+                        "area",
+                        "start",
+                        "poll_ms",
+                        "count"
+                      ],
+                      "additionalProperties": false
                     }
-                  },
-                  "required": [
-                    "area",
-                    "start",
-                    "count",
-                    "poll_ms"
-                  ],
-                  "additionalProperties": false
+                  ]
                 }
               },
               "tags": {
@@ -370,42 +406,78 @@
                 "maxItems": 256,
                 "type": "array",
                 "items": {
-                  "type": "object",
-                  "properties": {
-                    "area": {
-                      "type": "string",
-                      "enum": [
-                        "coil",
-                        "discrete_input",
-                        "input_register",
-                        "holding_register"
-                      ]
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "area": {
+                          "type": "string",
+                          "enum": [
+                            "input_register",
+                            "holding_register"
+                          ]
+                        },
+                        "start": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 65535,
+                          "description": "Offset Modbus em base 0 (0–65535)"
+                        },
+                        "poll_ms": {
+                          "type": "integer",
+                          "minimum": 100,
+                          "maximum": 3600000
+                        },
+                        "count": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 125
+                        }
+                      },
+                      "required": [
+                        "area",
+                        "start",
+                        "poll_ms",
+                        "count"
+                      ],
+                      "additionalProperties": false
                     },
-                    "start": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 65535,
-                      "description": "Offset Modbus em base 0 (0–65535)"
-                    },
-                    "count": {
-                      "type": "integer",
-                      "minimum": 1,
-                      "maximum": 2000,
-                      "description": "Até 125 registradores ou 2000 bits"
-                    },
-                    "poll_ms": {
-                      "type": "integer",
-                      "minimum": 100,
-                      "maximum": 3600000
+                    {
+                      "type": "object",
+                      "properties": {
+                        "area": {
+                          "type": "string",
+                          "enum": [
+                            "coil",
+                            "discrete_input"
+                          ]
+                        },
+                        "start": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 65535,
+                          "description": "Offset Modbus em base 0 (0–65535)"
+                        },
+                        "poll_ms": {
+                          "type": "integer",
+                          "minimum": 100,
+                          "maximum": 3600000
+                        },
+                        "count": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 2000
+                        }
+                      },
+                      "required": [
+                        "area",
+                        "start",
+                        "poll_ms",
+                        "count"
+                      ],
+                      "additionalProperties": false
                     }
-                  },
-                  "required": [
-                    "area",
-                    "start",
-                    "count",
-                    "poll_ms"
-                  ],
-                  "additionalProperties": false
+                  ]
                 }
               },
               "tags": {
@@ -614,42 +686,78 @@
                 "maxItems": 256,
                 "type": "array",
                 "items": {
-                  "type": "object",
-                  "properties": {
-                    "area": {
-                      "type": "string",
-                      "enum": [
-                        "coil",
-                        "discrete_input",
-                        "input_register",
-                        "holding_register"
-                      ]
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "area": {
+                          "type": "string",
+                          "enum": [
+                            "input_register",
+                            "holding_register"
+                          ]
+                        },
+                        "start": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 65535,
+                          "description": "Offset Modbus em base 0 (0–65535)"
+                        },
+                        "poll_ms": {
+                          "type": "integer",
+                          "minimum": 100,
+                          "maximum": 3600000
+                        },
+                        "count": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 125
+                        }
+                      },
+                      "required": [
+                        "area",
+                        "start",
+                        "poll_ms",
+                        "count"
+                      ],
+                      "additionalProperties": false
                     },
-                    "start": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 65535,
-                      "description": "Offset Modbus em base 0 (0–65535)"
-                    },
-                    "count": {
-                      "type": "integer",
-                      "minimum": 1,
-                      "maximum": 2000,
-                      "description": "Até 125 registradores ou 2000 bits"
-                    },
-                    "poll_ms": {
-                      "type": "integer",
-                      "minimum": 100,
-                      "maximum": 3600000
+                    {
+                      "type": "object",
+                      "properties": {
+                        "area": {
+                          "type": "string",
+                          "enum": [
+                            "coil",
+                            "discrete_input"
+                          ]
+                        },
+                        "start": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 65535,
+                          "description": "Offset Modbus em base 0 (0–65535)"
+                        },
+                        "poll_ms": {
+                          "type": "integer",
+                          "minimum": 100,
+                          "maximum": 3600000
+                        },
+                        "count": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 2000
+                        }
+                      },
+                      "required": [
+                        "area",
+                        "start",
+                        "poll_ms",
+                        "count"
+                      ],
+                      "additionalProperties": false
                     }
-                  },
-                  "required": [
-                    "area",
-                    "start",
-                    "count",
-                    "poll_ms"
-                  ],
-                  "additionalProperties": false
+                  ]
                 }
               },
               "tags": {

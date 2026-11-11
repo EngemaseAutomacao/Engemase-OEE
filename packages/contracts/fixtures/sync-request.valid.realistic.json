@@ -1,0 +1,283 @@
+{
+  "batch": {
+    "seq_from": 18231,
+    "seq_to": 18245,
+    "sent_at": "2026-11-11T13:02:05.120Z"
+  },
+  "agent": {
+    "version": "1.2.0",
+    "uptime_s": 86400,
+    "config_version": 42,
+    "cpu_pct": 7.5,
+    "mem_mb": 38,
+    "disk_free_mb": 21000,
+    "buffer_pending": 15,
+    "clock_offset_ms": 12,
+    "config_status": {
+      "version": 42,
+      "state": "applied",
+      "at": "2026-11-11T12:58:12.000Z"
+    },
+    "buffer_oldest_s": 113,
+    "samples_pending": 0,
+    "quarantined": 0,
+    "temp_c": 47.5,
+    "emmc_wear_pct": 3,
+    "ntp_synced": true,
+    "boot_id": "41ff610f-e874-4dc0-bc5a-eb253706854f",
+    "unclean_boots_24h": 0
+  },
+  "devices": [
+    {
+      "id": "01a1599e-7f90-7b47-976d-2b40a6cb24c1",
+      "status": "connected",
+      "latency_ms": 18,
+      "errors_1m": 0,
+      "timeouts_1m": 0,
+      "last_ok_at": "2026-11-11T13:02:04.900Z"
+    },
+    {
+      "id": "01a1599f-6dd8-7db6-9a8a-791a5e7de581",
+      "status": "connected",
+      "latency_ms": 24,
+      "errors_1m": 0
+    },
+    {
+      "id": "01a159a0-5c20-7fb9-ad36-a2297f2a5938",
+      "status": "degraded",
+      "latency_ms": 41,
+      "errors_1m": 2,
+      "timeouts_1m": 2,
+      "exceptions_1m": {
+        "11": 0
+      },
+      "last_ok_at": "2026-11-11T13:02:04.500Z",
+      "last_error": "Timeout de leitura (300 ms) no unit id 2."
+    }
+  ],
+  "buses": [
+    {
+      "id": "01a1599d-9148-75c2-9673-d03229272dbb",
+      "status": "ok",
+      "cycle_ms": 380,
+      "busy_pct": 42.5,
+      "overruns_1m": 0,
+      "unsolicited_bytes_1m": 0
+    }
+  ],
+  "events": [
+    {
+      "id": "01a1cab1-cc5a-7af4-9800-bf5c8c603e5f",
+      "seq": 18231,
+      "type": "state",
+      "machine_id": "01a159a2-38b0-7555-be5d-085243562821",
+      "at": "2026-11-11T13:00:12.250Z",
+      "state": "RUNNING",
+      "previous_state": "STOPPED"
+    },
+    {
+      "id": "01a1cab2-06f2-7a82-ad95-74bafabec1c8",
+      "seq": 18232,
+      "type": "product",
+      "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47",
+      "at": "2026-11-11T13:00:27.250Z",
+      "product": "7",
+      "previous_product": "6"
+    },
+    {
+      "id": "01a1cab2-418a-77af-a200-8aa6ff00d3eb",
+      "seq": 18233,
+      "type": "counter_reset",
+      "machine_id": "01a159a3-26f8-7054-97ed-cbbedbcc67da",
+      "tag_id": "01a159ae-5258-7f45-aa37-28b47afdb40d",
+      "role": "count.total",
+      "at": "2026-11-11T13:00:42.250Z",
+      "previous_raw": 50213,
+      "raw": 3
+    },
+    {
+      "id": "01a1cab3-2bea-7244-bb03-702b326efb32",
+      "seq": 18240,
+      "type": "state",
+      "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47",
+      "at": "2026-11-11T13:01:42.250Z",
+      "state": "FAULT",
+      "fault_code": 47,
+      "previous_state": "RUNNING"
+    }
+  ],
+  "minutes": [
+    {
+      "seq": 18234,
+      "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47",
+      "t": "2026-11-11T13:00:00Z",
+      "run_s": 60,
+      "stop_s": 0,
+      "fault_s": 0,
+      "setup_s": 0,
+      "no_comm_s": 0,
+      "total": 15,
+      "reject": 0,
+      "product": "7"
+    },
+    {
+      "seq": 18235,
+      "machine_id": "01a159a2-38b0-7555-be5d-085243562821",
+      "t": "2026-11-11T13:00:00Z",
+      "run_s": 48,
+      "stop_s": 12,
+      "fault_s": 0,
+      "setup_s": 0,
+      "no_comm_s": 0,
+      "total": 8,
+      "reject": 0
+    },
+    {
+      "seq": 18236,
+      "machine_id": "01a159a3-26f8-7054-97ed-cbbedbcc67da",
+      "t": "2026-11-11T13:00:00Z",
+      "run_s": 54,
+      "stop_s": 6,
+      "fault_s": 0,
+      "setup_s": 0,
+      "no_comm_s": 0,
+      "total": 9,
+      "reject": 0
+    },
+    {
+      "seq": 18241,
+      "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47",
+      "t": "2026-11-11T13:01:00Z",
+      "run_s": 42,
+      "stop_s": 0,
+      "fault_s": 18,
+      "setup_s": 0,
+      "no_comm_s": 0,
+      "total": 14,
+      "reject": 1,
+      "product": "7"
+    },
+    {
+      "seq": 18242,
+      "machine_id": "01a159a2-38b0-7555-be5d-085243562821",
+      "t": "2026-11-11T13:01:00Z",
+      "run_s": 60,
+      "stop_s": 0,
+      "fault_s": 0,
+      "setup_s": 0,
+      "no_comm_s": 0,
+      "total": 10,
+      "reject": 0
+    },
+    {
+      "seq": 18243,
+      "machine_id": "01a159a3-26f8-7054-97ed-cbbedbcc67da",
+      "t": "2026-11-11T13:01:00Z",
+      "run_s": 54,
+      "stop_s": 0,
+      "fault_s": 0,
+      "setup_s": 0,
+      "no_comm_s": 6,
+      "total": 9,
+      "reject": 0
+    }
+  ],
+  "live": [
+    {
+      "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47",
+      "at": "2026-11-11T13:02:05.000Z",
+      "state": "FAULT",
+      "state_since": "2026-11-11T13:01:42.250Z",
+      "fault_code": 47,
+      "counter_total": 1048213,
+      "product": "7",
+      "speed": 0
+    },
+    {
+      "machine_id": "01a159a2-38b0-7555-be5d-085243562821",
+      "at": "2026-11-11T13:02:05.000Z",
+      "state": "RUNNING",
+      "state_since": "2026-11-11T13:00:12.250Z",
+      "counter_total": 88123
+    },
+    {
+      "machine_id": "01a159a3-26f8-7054-97ed-cbbedbcc67da",
+      "at": "2026-11-11T13:02:04.500Z",
+      "state": "RUNNING",
+      "state_since": "2026-11-11T12:41:03.000Z",
+      "counter_total": 21
+    }
+  ],
+  "samples": [
+    {
+      "seq": 18237,
+      "tag_id": "01a159aa-9938-7379-92bb-ea1d43c0b4ad",
+      "at": "2026-11-11T13:00:30Z",
+      "v": 211.9,
+      "q": "good"
+    },
+    {
+      "seq": 18238,
+      "tag_id": "01a159a9-aaf0-72ed-8156-c9e95d16bd41",
+      "at": "2026-11-11T13:00:45Z",
+      "v": 14.5
+    },
+    {
+      "seq": 18239,
+      "tag_id": "01a159aa-9938-7379-92bb-ea1d43c0b4ad",
+      "at": "2026-11-11T13:01:30Z",
+      "v": 212.1
+    },
+    {
+      "seq": 18244,
+      "tag_id": "01a159a9-aaf0-72ed-8156-c9e95d16bd41",
+      "at": "2026-11-11T13:01:45Z",
+      "v": 0
+    },
+    {
+      "seq": 18245,
+      "tag_id": "01a159aa-9938-7379-92bb-ea1d43c0b4ad",
+      "at": "2026-11-11T13:02:00Z",
+      "v": 212.4
+    }
+  ],
+  "command_results": [
+    {
+      "id": "01a1cab3-4a30-7ebd-8d23-3e773df04d25",
+      "type": "tag.read",
+      "status": "ok",
+      "finished_at": "2026-11-11T13:01:56.031Z",
+      "duration_ms": 25,
+      "result": {
+        "value": 1048213,
+        "raw": [
+          65173,
+          15
+        ],
+        "quality": "good",
+        "read_ms": 21
+      }
+    },
+    {
+      "id": "01a1cab3-4e18-7c1c-abb8-748cc06b2bb7",
+      "type": "device.test",
+      "status": "error",
+      "finished_at": "2026-11-11T13:01:58.410Z",
+      "duration_ms": 64,
+      "error": {
+        "code": "modbus_exception",
+        "message": "O dispositivo respondeu com a exceção 02 (endereço inválido) ao ler HR 2000.",
+        "modbus_exception": 2
+      }
+    },
+    {
+      "id": "01a1cab3-5200-7abc-893a-62f99640b0df",
+      "type": "agent.update",
+      "status": "rejected",
+      "error": {
+        "code": "unsupported",
+        "message": "Tipo de comando desconhecido para o agente 1.2.0."
+      }
+    }
+  ]
+}

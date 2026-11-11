@@ -111,6 +111,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@engemase/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       drizzle-orm:
         specifier: ^0.45.4
         version: 0.45.4(@electric-sql/pglite@0.5.16)

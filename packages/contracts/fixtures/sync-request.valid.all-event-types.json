@@ -1,0 +1,153 @@
+{
+  "batch": {
+    "seq_from": 1,
+    "seq_to": 15,
+    "sent_at": "2026-11-11T07:00:01.000Z"
+  },
+  "agent": {
+    "version": "1.2.0",
+    "uptime_s": 3601,
+    "config_version": 42,
+    "cpu_pct": 7.5,
+    "mem_mb": 38,
+    "disk_free_mb": 21000,
+    "buffer_pending": 15,
+    "clock_offset_ms": 12
+  },
+  "events": [
+    {
+      "id": "01a1c931-1700-78e9-bf0c-17676c8420d3",
+      "seq": 1,
+      "at": "2026-11-11T06:00:00.000Z",
+      "type": "agent_start",
+      "version": "1.2.0",
+      "boot_id": "41ff610f-e874-4dc0-bc5a-eb253706854f",
+      "clean_shutdown": false
+    },
+    {
+      "id": "01a1c931-1796-7fc2-ba42-7a7ea78d0f92",
+      "seq": 2,
+      "at": "2026-11-11T06:00:00.150Z",
+      "type": "power_restored",
+      "down_s": 340
+    },
+    {
+      "id": "01a1c931-1afc-7ea3-8b7c-8bc8566a3143",
+      "seq": 3,
+      "at": "2026-11-11T06:00:01.020Z",
+      "type": "clock_jump",
+      "jump_ms": 4200
+    },
+    {
+      "id": "01a1c931-20c4-72c7-89c2-5b00c20bb930",
+      "seq": 4,
+      "at": "2026-11-11T06:00:02.500Z",
+      "type": "config_applied",
+      "version": 42,
+      "previous_version": 41
+    },
+    {
+      "id": "01a1c931-29c0-78b0-96ed-37e537b5615f",
+      "seq": 5,
+      "at": "2026-11-11T06:00:04.800Z",
+      "type": "state",
+      "machine_id": "01a159a2-38b0-7555-be5d-085243562821",
+      "state": "RUNNING",
+      "previous_state": "NO_COMM"
+    },
+    {
+      "id": "01a1c931-2a88-7206-8e3d-d5c4b803fd7d",
+      "seq": 6,
+      "at": "2026-11-11T06:00:05.000Z",
+      "type": "product",
+      "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47",
+      "product": "7",
+      "previous_product": "6"
+    },
+    {
+      "id": "01a1c931-2b82-70e9-a07b-11419891e496",
+      "seq": 7,
+      "at": "2026-11-11T06:00:05.250Z",
+      "type": "counter_reset",
+      "machine_id": "01a159a3-26f8-7054-97ed-cbbedbcc67da",
+      "tag_id": "01a159ae-5258-7f45-aa37-28b47afdb40d",
+      "role": "count.total",
+      "previous_raw": 50213,
+      "raw": 3
+    },
+    {
+      "id": "01a1c931-2c7c-780d-aebc-b418b00a03b8",
+      "seq": 8,
+      "at": "2026-11-11T06:00:05.500Z",
+      "type": "counter_jump",
+      "machine_id": "01a159a2-38b0-7555-be5d-085243562821",
+      "tag_id": "01a159ac-75c8-7302-ac5e-eea971e7d771",
+      "role": "count.total",
+      "previous_raw": 88000,
+      "raw": 1088000,
+      "discarded_delta": 1000000
+    },
+    {
+      "id": "01a1c931-2e70-77d2-bd66-b853df628b45",
+      "seq": 9,
+      "at": "2026-11-11T06:00:06.000Z",
+      "type": "counter_rebaseline",
+      "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47",
+      "tag_id": "01a159a6-e018-779c-9647-cae69dd0eeb2",
+      "role": "count.total",
+      "previous_raw": 1047000,
+      "raw": 12
+    },
+    {
+      "id": "01a1c931-2ed4-782a-854a-7ac6b807fd05",
+      "seq": 10,
+      "at": "2026-11-11T06:00:06.100Z",
+      "type": "data_loss",
+      "reason": "retention_limit",
+      "lost_seq_from": 100,
+      "lost_seq_to": 199,
+      "items": 100,
+      "period_from": "2026-10-10T08:00:00Z",
+      "period_to": "2026-10-10T09:39:00Z"
+    },
+    {
+      "id": "01a1c931-2f38-7e77-8eb0-a094cfb2eb54",
+      "seq": 11,
+      "at": "2026-11-11T06:00:06.200Z",
+      "type": "buffer_corrupted",
+      "detail": "buffer.db recriado após falha de integridade."
+    },
+    {
+      "id": "01a1c931-3258-721b-a111-7a542c84fab5",
+      "seq": 12,
+      "at": "2026-11-11T06:00:07.000Z",
+      "type": "config_rejected",
+      "version": 43,
+      "error": "devices.1.params.unit_id: unit_id repetido no mesmo barramento.",
+      "reverted_to": 42
+    },
+    {
+      "id": "01a1c93a-3ec0-78d7-80bf-261f4b022658",
+      "seq": 13,
+      "at": "2026-11-11T06:10:00.000Z",
+      "type": "remote_access",
+      "action": "session_started",
+      "session_id": "01a1cab3-7cf8-7f23-8fdf-c01d84c79403",
+      "actor": "suporte-engemase:ana"
+    },
+    {
+      "id": "01a1c967-fdb0-7453-95bf-28f6a90ff51e",
+      "seq": 14,
+      "at": "2026-11-11T06:59:58.000Z",
+      "type": "power_fail"
+    },
+    {
+      "id": "01a1c968-038c-7fe1-9608-4797db91e22c",
+      "seq": 15,
+      "at": "2026-11-11T06:59:59.500Z",
+      "type": "agent_stop",
+      "reason": "shutdown",
+      "detail": "Falta de energia (UPS)."
+    }
+  ]
+}

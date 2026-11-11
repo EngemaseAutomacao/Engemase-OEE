@@ -1,0 +1,18 @@
+{
+  "error": {
+    "code": "invalid_payload",
+    "message": "Payload inválido.",
+    "issues": [
+      {
+        "path": [
+          "minutes",
+          0,
+          "run_s"
+        ],
+        "message": "A soma dos segundos do minuto é 61 (deve ser 60).",
+        "rule": "minute.seconds_sum"
+      }
+    ],
+    "request_id": "req_7f3a9c21"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "code": "ABCD-1234",
+  "hostname": "gw-planta1-linhaA",
+  "agent_version": "1.0.0",
+  "hw": {
+    "arch": "mips",
+    "model": "reComputer R1000",
+    "mem_mb": 2048,
+    "serial_number": "R1000-2611-00427",
+    "board_revision": "v1.1",
+    "profile": "recomputer-r1000",
+    "serial_ports": [
+      "rs485-1",
+      "rs485-2",
+      "rs485-3"
+    ]
+  }
+}

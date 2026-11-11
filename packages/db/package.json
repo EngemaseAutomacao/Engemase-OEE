@@ -25,6 +25,7 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@engemase/contracts": "workspace:*",
     "drizzle-orm": "^0.45.4"
   },
   "devDependencies": {

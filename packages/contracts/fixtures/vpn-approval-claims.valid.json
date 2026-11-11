@@ -1,0 +1,10 @@
+{
+  "typ": "engemase.vpn_approval.v1",
+  "gateway_id": "01a1599c-a300-7f51-9864-1073dc9781ca",
+  "session_id": "01a1cab3-7cf8-7f23-8fdf-c01d84c79403",
+  "requested_by": "u_9QmT4kXr2LpV7cNz",
+  "approved_by": "u_3HdW8sYb6RfJ1aKe",
+  "approved_at": "2026-11-11T13:00:30Z",
+  "not_after": "2026-11-11T16:30:00Z",
+  "allow_ot_forward": true
+}

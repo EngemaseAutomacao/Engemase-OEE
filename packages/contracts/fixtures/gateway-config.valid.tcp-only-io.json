@@ -1,0 +1,62 @@
+{
+  "config_version": 7,
+  "serial_buses": [],
+  "devices": [
+    {
+      "id": "01a159af-40a0-7396-b13d-85d8997cfd99",
+      "name": "I/O remoto Prensa 07",
+      "protocol": "modbus-tcp",
+      "params": {
+        "host": "io-linha2.local",
+        "port": 502,
+        "unit_id": 255
+      },
+      "blocks": [
+        {
+          "area": "discrete_input",
+          "start": 0,
+          "count": 8,
+          "poll_ms": 200
+        }
+      ],
+      "tags": [
+        {
+          "id": "01a159b1-1d30-7223-994f-433a46876c8f",
+          "address": {
+            "area": "discrete_input",
+            "offset": 0
+          },
+          "type": "bool",
+          "role": "state.running",
+          "machine_id": "01a159b0-2ee8-7c06-9e35-43ec7154c7bf"
+        },
+        {
+          "id": "01a159b2-0b78-7bd0-9d7a-6fa70b7e9436",
+          "name": "Contador rápido (hardware)",
+          "address": {
+            "area": "input_register",
+            "offset": 0
+          },
+          "type": "uint32",
+          "word_order": "ABCD",
+          "poll_ms": 1000,
+          "role": "count.total",
+          "machine_id": "01a159b0-2ee8-7c06-9e35-43ec7154c7bf"
+        }
+      ]
+    }
+  ],
+  "machines": [
+    {
+      "id": "01a159b0-2ee8-7c06-9e35-43ec7154c7bf",
+      "state_rules": {
+        "mode": "signals"
+      }
+    }
+  ],
+  "uplink": {
+    "sync_interval_s": 10,
+    "max_batch_items": 500,
+    "max_batch_bytes": 524288
+  }
+}

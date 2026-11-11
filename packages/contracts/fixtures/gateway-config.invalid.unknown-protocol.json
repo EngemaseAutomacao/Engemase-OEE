@@ -1,0 +1,258 @@
+{
+  "config_version": 42,
+  "gateway_id": "01a1599c-a300-7f51-9864-1073dc9781ca",
+  "generated_at": "2026-11-11T12:58:00.000Z",
+  "serial_buses": [
+    {
+      "id": "01a1599d-9148-75c2-9673-d03229272dbb",
+      "name": "RS-485 1 (sopradoras)",
+      "port": "rs485-1",
+      "baud": 19200,
+      "parity": "E",
+      "data_bits": 8,
+      "stop_bits": 1
+    }
+  ],
+  "devices": [
+    {
+      "id": "01a1599e-7f90-7b47-976d-2b40a6cb24c1",
+      "name": "CLP Injetora 03",
+      "protocol": "s7",
+      "params": {
+        "host": "192.168.10.23",
+        "port": 502,
+        "unit_id": 1,
+        "timeout_ms": 500
+      },
+      "blocks": [
+        {
+          "area": "holding_register",
+          "start": 1000,
+          "count": 14,
+          "poll_ms": 500
+        }
+      ],
+      "tags": [
+        {
+          "id": "01a159a4-1540-74dd-a3e5-239a6a4ca4df",
+          "name": "Heartbeat do CLP",
+          "address": {
+            "area": "holding_register",
+            "offset": 1001
+          },
+          "type": "uint16",
+          "role": "plc.heartbeat",
+          "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47"
+        },
+        {
+          "id": "01a159a5-0388-7c92-8248-4dd1953e51e0",
+          "name": "Estado da máquina",
+          "address": {
+            "area": "holding_register",
+            "offset": 1002
+          },
+          "type": "uint16",
+          "role": "state.code",
+          "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47"
+        },
+        {
+          "id": "01a159a5-f1d0-76fa-a2bb-a449aa22b3e3",
+          "name": "Código do alarme",
+          "address": {
+            "area": "holding_register",
+            "offset": 1003
+          },
+          "type": "uint16",
+          "role": "fault.code",
+          "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47"
+        },
+        {
+          "id": "01a159a6-e018-779c-9647-cae69dd0eeb2",
+          "name": "Contador total",
+          "address": {
+            "area": "holding_register",
+            "offset": 1004
+          },
+          "type": "uint32",
+          "word_order": "CDAB",
+          "role": "count.total",
+          "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47"
+        },
+        {
+          "id": "01a159a7-ce60-7646-890e-0d4462a5fa79",
+          "name": "Contador de refugo",
+          "address": {
+            "area": "holding_register",
+            "offset": 1006
+          },
+          "type": "uint32",
+          "word_order": "CDAB",
+          "role": "count.reject",
+          "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47"
+        },
+        {
+          "id": "01a159a8-bca8-76bf-9ec7-ea2e7cc0597a",
+          "name": "Produto / receita",
+          "address": {
+            "area": "holding_register",
+            "offset": 1010
+          },
+          "type": "uint16",
+          "role": "product.code",
+          "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47"
+        },
+        {
+          "id": "01a159a9-aaf0-72ed-8156-c9e95d16bd41",
+          "name": "Velocidade atual",
+          "address": {
+            "area": "holding_register",
+            "offset": 1011
+          },
+          "type": "uint16",
+          "scale": {
+            "mul": 0.1
+          },
+          "role": "speed.actual",
+          "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47",
+          "sampling": {
+            "deadband": 1,
+            "min_interval_s": 10,
+            "max_interval_s": 300
+          }
+        },
+        {
+          "id": "01a159aa-9938-7379-92bb-ea1d43c0b4ad",
+          "name": "Temperatura do molde (°C)",
+          "address": {
+            "area": "input_register",
+            "offset": 20
+          },
+          "type": "float32",
+          "word_order": "CDAB",
+          "poll_ms": 1000,
+          "role": "custom",
+          "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47",
+          "sampling": {
+            "deadband": 0.5,
+            "min_interval_s": 5,
+            "max_interval_s": 60
+          }
+        }
+      ]
+    },
+    {
+      "id": "01a1599f-6dd8-7db6-9a8a-791a5e7de581",
+      "name": "CLP Sopradora 01",
+      "protocol": "modbus-rtu",
+      "params": {
+        "bus": "01a1599d-9148-75c2-9673-d03229272dbb",
+        "unit_id": 1,
+        "timeout_ms": 300
+      },
+      "tags": [
+        {
+          "id": "01a159ab-8780-75bf-a95b-c279438d3082",
+          "address": {
+            "area": "coil",
+            "offset": 0
+          },
+          "type": "bool",
+          "poll_ms": 250,
+          "role": "state.running",
+          "machine_id": "01a159a2-38b0-7555-be5d-085243562821"
+        },
+        {
+          "id": "01a159ad-6410-788a-a1b2-917c7dd87fd8",
+          "address": {
+            "area": "holding_register",
+            "offset": 110,
+            "bit": 3
+          },
+          "type": "bool",
+          "poll_ms": 250,
+          "role": "state.fault",
+          "machine_id": "01a159a2-38b0-7555-be5d-085243562821"
+        },
+        {
+          "id": "01a159ac-75c8-7302-ac5e-eea971e7d771",
+          "address": {
+            "area": "holding_register",
+            "offset": 100
+          },
+          "type": "uint32",
+          "word_order": "CDAB",
+          "poll_ms": 500,
+          "role": "count.total",
+          "machine_id": "01a159a2-38b0-7555-be5d-085243562821"
+        }
+      ]
+    },
+    {
+      "id": "01a159a0-5c20-7fb9-ad36-a2297f2a5938",
+      "name": "Módulo I/O Sopradora 02",
+      "protocol": "modbus-rtu",
+      "params": {
+        "bus": "01a1599d-9148-75c2-9673-d03229272dbb",
+        "unit_id": 2,
+        "timeout_ms": 300
+      },
+      "tags": [
+        {
+          "id": "01a159ae-5258-7f45-aa37-28b47afdb40d",
+          "address": {
+            "area": "input_register",
+            "offset": 16
+          },
+          "type": "uint32",
+          "word_order": "CDAB",
+          "poll_ms": 500,
+          "role": "count.total",
+          "machine_id": "01a159a3-26f8-7054-97ed-cbbedbcc67da"
+        }
+      ]
+    }
+  ],
+  "machines": [
+    {
+      "id": "01a159a1-4a68-72de-9057-14e72d836a47",
+      "name": "Injetora 03",
+      "state_rules": {
+        "mode": "state_code",
+        "map": {
+          "0": "STOPPED",
+          "1": "RUNNING",
+          "2": "FAULT",
+          "3": "SETUP",
+          "4": "STOPPED",
+          "5": "FAULT"
+        },
+        "default_state": "STOPPED",
+        "comm_loss_after_s": 10,
+        "debounce_s": 1,
+        "heartbeat_timeout_s": 5
+      },
+      "max_rate_per_s": 2
+    },
+    {
+      "id": "01a159a2-38b0-7555-be5d-085243562821",
+      "name": "Sopradora 01",
+      "state_rules": {
+        "mode": "signals",
+        "comm_loss_after_s": 10
+      }
+    },
+    {
+      "id": "01a159a3-26f8-7054-97ed-cbbedbcc67da",
+      "name": "Sopradora 02",
+      "state_rules": {
+        "mode": "count_derived",
+        "ideal_cycle_s": 6,
+        "idle_after_cycles": 3
+      }
+    }
+  ],
+  "uplink": {
+    "sync_interval_s": 10,
+    "max_batch_items": 2000
+  }
+}

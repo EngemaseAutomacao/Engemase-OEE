@@ -1,0 +1,224 @@
+{
+  "batch": {
+    "sent_at": "2026-11-11T13:21:05.000Z"
+  },
+  "agent": {
+    "version": "1.2.0",
+    "uptime_s": 86400,
+    "config_version": 42,
+    "cpu_pct": 7.5,
+    "mem_mb": 38,
+    "disk_free_mb": 21000,
+    "buffer_pending": 0,
+    "clock_offset_ms": 12
+  },
+  "command_results": [
+    {
+      "id": "01a1cab3-55e8-7cf0-a52e-692c5f1aac62",
+      "finished_at": "2026-11-11T13:02:07.325Z",
+      "duration_ms": 25,
+      "type": "tag.read",
+      "status": "ok",
+      "result": {
+        "value": 1048213,
+        "raw": [
+          65173,
+          15
+        ],
+        "quality": "good",
+        "read_ms": 21
+      }
+    },
+    {
+      "id": "01a1cab3-59d0-74e2-aa70-5ede7ef9053c",
+      "finished_at": "2026-11-11T13:02:07.440Z",
+      "duration_ms": 140,
+      "type": "device.test",
+      "status": "ok",
+      "result": {
+        "latency_ms": 38,
+        "probe": {
+          "raw": [
+            1,
+            0,
+            2,
+            47,
+            15,
+            0,
+            0,
+            0,
+            7,
+            120
+          ],
+          "read_ms": 31
+        }
+      }
+    },
+    {
+      "id": "01a1cab3-7528-7875-b9e9-449f0be70ebb",
+      "finished_at": "2026-11-11T13:02:12.300Z",
+      "duration_ms": 5000,
+      "type": "device.test",
+      "status": "error",
+      "error": {
+        "code": "read_timeout",
+        "message": "Sem resposta do unit id 2 em 300 ms (9600 8N2)."
+      }
+    },
+    {
+      "id": "01a1cab3-5db8-7495-9ef3-d1edb6c3051b",
+      "finished_at": "2026-11-11T13:02:08.120Z",
+      "duration_ms": 820,
+      "type": "config.reload",
+      "status": "ok",
+      "result": {
+        "version": 42,
+        "outcome": "unchanged"
+      }
+    },
+    {
+      "id": "01a1cab3-61a0-7cba-9290-43975497e9b6",
+      "finished_at": "2026-11-11T13:02:07.303Z",
+      "duration_ms": 3,
+      "type": "agent.restart",
+      "status": "ok",
+      "result": {
+        "restart_at": "2026-11-11T13:03:12.000Z"
+      }
+    },
+    {
+      "id": "01a1cab3-6588-7732-8c1b-c364878a0e1f",
+      "finished_at": "2026-11-11T13:02:14.200Z",
+      "duration_ms": 6900,
+      "type": "modbus.scan",
+      "status": "ok",
+      "result": {
+        "mode": "unit_ids",
+        "found": [
+          {
+            "unit_id": 1,
+            "latency_ms": 22
+          },
+          {
+            "unit_id": 2,
+            "latency_ms": 25
+          },
+          {
+            "unit_id": 9,
+            "latency_ms": 31,
+            "exception": 2
+          }
+        ],
+        "scanned": 32,
+        "duration_ms": 6880
+      }
+    },
+    {
+      "id": "01a1cab3-6970-7364-b760-3a437894d006",
+      "finished_at": "2026-11-11T13:02:11.500Z",
+      "duration_ms": 4200,
+      "type": "vpn.enable",
+      "status": "ok",
+      "result": {
+        "session_id": "01a1cab3-7cf8-7f23-8fdf-c01d84c79403",
+        "state": "active",
+        "node_ip": "100.101.12.7",
+        "connection": "relay",
+        "session_expires_at": "2026-11-11T16:30:00Z"
+      }
+    },
+    {
+      "id": "01a1cab3-7140-71b7-bb90-dd1057d31fe9",
+      "finished_at": "2026-11-11T13:02:07.312Z",
+      "duration_ms": 12,
+      "type": "vpn.status",
+      "status": "ok",
+      "result": {
+        "state": "active",
+        "session_id": "01a1cab3-7cf8-7f23-8fdf-c01d84c79403",
+        "node_ip": "100.101.12.7",
+        "connection": "relay",
+        "session_expires_at": "2026-11-11T16:30:00Z",
+        "idle_s": 42,
+        "active_connections": 1,
+        "forwards": [
+          {
+            "forward_id": "01a1cab3-5db8-7cc1-b976-af6c144eba3d",
+            "device_id": "01a1599e-7f90-7b47-976d-2b40a6cb24c1",
+            "host": "192.168.10.23",
+            "port": 502,
+            "listen_port": 15020,
+            "forward_expires_at": "2026-11-11T13:32:00Z",
+            "connections": 1
+          }
+        ],
+        "local_policy": {
+          "allowed": true,
+          "allow_ot_forward": true,
+          "locked": false
+        }
+      }
+    },
+    {
+      "id": "01a1cab3-7528-73c9-b692-6e56b454d05d",
+      "finished_at": "2026-11-11T13:02:07.335Z",
+      "duration_ms": 35,
+      "type": "ot.forward.open",
+      "status": "ok",
+      "result": {
+        "forward_id": "01a1cab3-5db8-7cc1-b976-af6c144eba3d",
+        "listen_port": 15020,
+        "forward_expires_at": "2026-11-11T13:32:00Z"
+      }
+    },
+    {
+      "id": "01a1cab3-7910-7e62-8c88-888f9222f5d9",
+      "finished_at": "2026-11-11T13:02:07.320Z",
+      "duration_ms": 20,
+      "type": "ot.forward.close",
+      "status": "ok",
+      "result": {
+        "forward_id": "01a1cab3-5db8-7cc1-b976-af6c144eba3d",
+        "closed_at": "2026-11-11T13:20:41.000Z",
+        "connections_total": 3,
+        "bytes_in": 48220,
+        "bytes_out": 1204331
+      }
+    },
+    {
+      "id": "01a1cab3-6d58-7d30-ae21-4f8c243d297d",
+      "finished_at": "2026-11-11T13:02:08.200Z",
+      "duration_ms": 900,
+      "type": "vpn.disable",
+      "status": "ok",
+      "result": {
+        "session_id": "01a1cab3-7cf8-7f23-8fdf-c01d84c79403",
+        "started_at": "2026-11-11T13:02:09.000Z",
+        "ended_at": "2026-11-11T13:21:00.000Z",
+        "end_reason": "requested",
+        "bytes_in": 312400,
+        "bytes_out": 2901133,
+        "ssh_logins": 1,
+        "forwards_opened": 1
+      }
+    },
+    {
+      "id": "01a1cab3-4a30-7ebd-8d23-3e773df04d25",
+      "type": "tag.read",
+      "status": "expired",
+      "error": {
+        "code": "expired",
+        "message": "Comando recebido depois de expires_at (2026-11-11T12:59:00Z)."
+      }
+    },
+    {
+      "id": "01a1cac4-6130-786d-8e2e-29eaedc59ac5",
+      "type": "vpn.enable",
+      "status": "rejected",
+      "error": {
+        "code": "policy_denied",
+        "message": "Acesso remoto bloqueado localmente (remote-access off --lock)."
+      }
+    }
+  ]
+}

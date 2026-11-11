@@ -1,0 +1,67 @@
+{
+  "batch": {
+    "seq_from": 501,
+    "seq_to": 502,
+    "samples_seq_from": 9001,
+    "samples_seq_to": 9003,
+    "sent_at": "2026-11-11T13:03:05.020Z"
+  },
+  "agent": {
+    "version": "1.2.0",
+    "uptime_s": 86400,
+    "config_version": 42,
+    "cpu_pct": 7.5,
+    "mem_mb": 38,
+    "disk_free_mb": 21000,
+    "buffer_pending": 2,
+    "clock_offset_ms": 12,
+    "samples_pending": 3
+  },
+  "events": [
+    {
+      "id": "01a1cab3-ed14-7889-8e1b-529525ea0161",
+      "seq": 501,
+      "type": "state",
+      "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47",
+      "at": "2026-11-11T13:02:31.700Z",
+      "state": "RUNNING"
+    }
+  ],
+  "minutes": [
+    {
+      "seq": 502,
+      "machine_id": "01a159a1-4a68-72de-9057-14e72d836a47",
+      "t": "2026-11-11T13:02:00Z",
+      "run_s": 28,
+      "stop_s": 0,
+      "fault_s": 32,
+      "setup_s": 0,
+      "no_comm_s": 0,
+      "total": 9,
+      "reject": 0,
+      "good": 9,
+      "product": "7"
+    }
+  ],
+  "samples": [
+    {
+      "seq": 9001,
+      "tag_id": "01a159aa-9938-7379-92bb-ea1d43c0b4ad",
+      "at": "2026-11-11T13:02:30Z",
+      "v": 212.9
+    },
+    {
+      "seq": 9002,
+      "tag_id": "01a159aa-9938-7379-92bb-ea1d43c0b4ad",
+      "at": "2026-11-11T13:03:00Z",
+      "v": 213.4
+    },
+    {
+      "seq": 9003,
+      "tag_id": "01a159a9-aaf0-72ed-8156-c9e95d16bd41",
+      "at": "2026-11-11T13:02:45Z",
+      "v": 15.2,
+      "q": "good"
+    }
+  ]
+}

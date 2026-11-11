@@ -373,33 +373,63 @@
             },
             "probe": {
               "description": "Leitura opcional para validar o acesso (padrão: só conectar)",
-              "type": "object",
-              "properties": {
-                "area": {
-                  "type": "string",
-                  "enum": [
-                    "coil",
-                    "discrete_input",
-                    "input_register",
-                    "holding_register"
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "area": {
+                      "type": "string",
+                      "enum": [
+                        "input_register",
+                        "holding_register"
+                      ]
+                    },
+                    "offset": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 65535,
+                      "description": "Offset Modbus em base 0 (0–65535)"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 125
+                    }
+                  },
+                  "required": [
+                    "area",
+                    "offset",
+                    "count"
                   ]
                 },
-                "offset": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 65535,
-                  "description": "Offset Modbus em base 0 (0–65535)"
-                },
-                "count": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 2000
+                {
+                  "type": "object",
+                  "properties": {
+                    "area": {
+                      "type": "string",
+                      "enum": [
+                        "coil",
+                        "discrete_input"
+                      ]
+                    },
+                    "offset": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 65535,
+                      "description": "Offset Modbus em base 0 (0–65535)"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2000
+                    }
+                  },
+                  "required": [
+                    "area",
+                    "offset",
+                    "count"
+                  ]
                 }
-              },
-              "required": [
-                "area",
-                "offset",
-                "count"
               ]
             }
           },
