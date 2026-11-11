@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { Fragment, useMemo, useState } from "react"
 import { BoxesIcon, SearchIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -120,46 +120,53 @@ function ProductBody({
           </Empty>
         ) : (
           <div role="radiogroup" aria-label="Produtos" className="grid gap-2">
-            {visible.map((p) => {
+            {visible.map((p, i) => {
               const current = p.code === currentCode
               const active = selected === p.id
+              const groupStart = i === 0 || visible[i - 1].configured !== p.configured
               return (
-                <button
-                  key={p.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  disabled={current}
-                  onClick={() => setSelected(p.id)}
-                  className={cn(
-                    "flex min-h-18 touch-manipulation items-center gap-4 rounded-xl border-2 px-4 py-3 text-left transition-colors select-none",
-                    "focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.99]",
-                    active ? "border-primary bg-primary/10" : "border-input bg-card hover:bg-accent",
-                    current && "cursor-default border-dashed opacity-70 hover:bg-card active:scale-100",
+                <Fragment key={p.id}>
+                  {groupStart && (
+                    <div className={cn("text-xs font-semibold tracking-wide text-muted-foreground uppercase", i > 0 && "mt-3")}>
+                      {p.configured ? "Produtos desta máquina" : "Outros produtos do cliente"}
+                    </div>
                   )}
-                >
-                  <span
-                    aria-hidden
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    disabled={current}
+                    onClick={() => setSelected(p.id)}
                     className={cn(
-                      "flex size-6 shrink-0 items-center justify-center rounded-full border-2",
-                      active ? "border-primary" : "border-muted-foreground/40",
+                      "flex min-h-18 touch-manipulation items-center gap-4 rounded-xl border-2 px-4 py-3 text-left transition-colors select-none",
+                      "focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.99]",
+                      active ? "border-primary bg-primary/10" : "border-input bg-card hover:bg-accent",
+                      current && "cursor-default border-dashed opacity-70 hover:bg-card active:scale-100",
                     )}
                   >
-                    {active && <span className="size-3 rounded-full bg-primary" />}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-lg leading-tight font-semibold">{p.name}</span>
-                    <span className="mt-0.5 block text-sm text-muted-foreground">
-                      Código {p.code} ·{" "}
-                      {p.configured ? `ciclo ideal ${cycle(p.idealCycleS)}` : `sem ciclo cadastrado, usa o da máquina (${cycle(defaultCycleS)})`}
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "flex size-6 shrink-0 items-center justify-center rounded-full border-2",
+                        active ? "border-primary" : "border-muted-foreground/40",
+                      )}
+                    >
+                      {active && <span className="size-3 rounded-full bg-primary" />}
                     </span>
-                  </span>
-                  {current && (
-                    <span className="shrink-0 rounded-full bg-state-running/15 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-state-running">
-                      Em produção
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-lg leading-tight font-semibold">{p.name}</span>
+                      <span className="mt-0.5 block text-sm text-muted-foreground">
+                        Código {p.code} ·{" "}
+                        {p.configured ? `ciclo ideal ${cycle(p.idealCycleS)}` : `sem ciclo cadastrado, usa o da máquina (${cycle(defaultCycleS)})`}
+                      </span>
                     </span>
-                  )}
-                </button>
+                    {current && (
+                      <span className="shrink-0 rounded-full bg-state-running/15 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-state-running">
+                        Em produção
+                      </span>
+                    )}
+                  </button>
+                </Fragment>
               )
             })}
           </div>

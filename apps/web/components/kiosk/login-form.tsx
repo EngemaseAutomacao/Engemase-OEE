@@ -145,7 +145,7 @@ function EmailLogin() {
       </FieldGroup>
 
       <Button type="submit" size="lg" className="h-11 w-full text-base" disabled={pending}>
-        {pending && <Spinner />}
+        {pending && <Spinner aria-label="Carregando" />}
         {pending ? "Entrando…" : "Entrar"}
       </Button>
 
@@ -325,7 +325,7 @@ function OperatorLogin({ active, href }: { active: boolean; href: string }) {
       )}
 
       <Button type="button" size="lg" className="h-14 w-full text-lg" onClick={submit} disabled={pending}>
-        {pending && <Spinner />}
+        {pending && <Spinner aria-label="Carregando" />}
         {pending ? "Entrando…" : "Entrar"}
       </Button>
       <p className="text-center text-sm text-muted-foreground">Esqueceu o PIN? Peça ao supervisor do turno para gerar um novo.</p>

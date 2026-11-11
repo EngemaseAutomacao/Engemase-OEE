@@ -18,8 +18,9 @@ export function useChartTheme() {
   return {
     dark,
     series: dark ? SERIES.dark : SERIES.light,
-    /** Barras neutras (ex.: tempo planejado). */
-    neutral: dark ? "#71717a" : "#94a3b8",
+    /** Barras neutras (ex.: tempo planejado) e o texto que vai dentro delas. */
+    neutral: dark ? "#52606f" : "#c3cdd9",
+    neutralText: dark ? "#f4f4f5" : "#1e293b",
     /** Linhas de referência (meta, 80%). */
     reference: dark ? "#a1a1aa" : "#64748b",
     /** Tinta forte para linhas de destaque (ex.: % acumulado). */

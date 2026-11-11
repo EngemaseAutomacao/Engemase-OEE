@@ -181,6 +181,7 @@ export function OperatorConsole({ data, panelHref }: { data: OperatorData; panel
   }
 
   const nowIso = new Date(now).toISOString()
+  const classifiedTotal = data.classifiedStops + Object.keys(classified).length
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
@@ -347,7 +348,7 @@ export function OperatorConsole({ data, panelHref }: { data: OperatorData; panel
             <ActionButton
               icon={PackageXIcon}
               title="Lançar refugo"
-              subtitle={hasData ? "Peças descartadas no turno" : "Sem produção no turno"}
+              subtitle={hasData ? "Peças descartadas" : "Sem produção no turno"}
               iconClassName="bg-state-fault text-white"
               disabled={!hasData}
               onClick={() => setRejectOpen(true)}
@@ -382,10 +383,11 @@ export function OperatorConsole({ data, panelHref }: { data: OperatorData; panel
                     <EmptyMedia variant="icon" className="bg-state-running/15 text-emerald-700 dark:text-state-running">
                       <ListChecksIcon />
                     </EmptyMedia>
-                    <EmptyTitle>Tudo classificado</EmptyTitle>
+                    <EmptyTitle>{hasData ? "Tudo classificado" : "Sem dados neste turno"}</EmptyTitle>
                     <EmptyDescription>
-                      Nenhuma parada pendente neste turno. Quando a máquina parar por mais de {duration(machine.microStopThresholdS)}, ela aparece
-                      aqui.
+                      {hasData
+                        ? `Nenhuma parada pendente neste turno. Quando a máquina parar por mais de ${duration(machine.microStopThresholdS)}, ela aparece aqui.`
+                        : "Assim que o gateway enviar os dados da máquina, as paradas a classificar aparecem aqui."}
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
@@ -403,10 +405,12 @@ export function OperatorConsole({ data, panelHref }: { data: OperatorData; panel
             <div className="flex items-start gap-2 border-t px-4 py-3 text-xs text-muted-foreground">
               <InfoIcon className="mt-px size-4 shrink-0" />
               <span>
-                {data.microStops > 0
-                  ? `${data.microStops} micro-paradas (menos de ${duration(machine.microStopThresholdS)}) contam na performance e não precisam de motivo. `
-                  : `Paradas menores que ${duration(machine.microStopThresholdS)} são micro-paradas e não precisam de motivo. `}
-                {data.classifiedStops + Object.keys(classified).length} paradas já classificadas neste turno.
+                {data.microStops === 1
+                  ? `1 micro-parada (menos de ${duration(machine.microStopThresholdS)}) conta na performance e não precisa de motivo. `
+                  : data.microStops > 1
+                    ? `${data.microStops} micro-paradas (menos de ${duration(machine.microStopThresholdS)}) contam na performance e não precisam de motivo. `
+                    : `Paradas menores que ${duration(machine.microStopThresholdS)} são micro-paradas e não precisam de motivo. `}
+                {classifiedTotal === 1 ? "1 parada já classificada" : `${classifiedTotal} paradas já classificadas`} neste turno.
               </span>
             </div>
           </section>

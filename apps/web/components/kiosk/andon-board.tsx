@@ -138,7 +138,7 @@ export async function AndonBoard({ params }: { params: Promise<{ cliente: string
                   {area ? ` · ${area.name}` : ""}
                 </span>
               </div>
-              <h1 className="mt-2 truncate text-[clamp(2rem,3.3vw,4.5rem)] leading-none font-extrabold tracking-tight">{line.name}</h1>
+              <h1 className="mt-2 truncate pb-[0.1em] text-[clamp(2rem,3.3vw,4.5rem)] leading-none font-extrabold tracking-tight">{line.name}</h1>
             </div>
             <ul className="flex flex-wrap gap-x-5 gap-y-2 text-[clamp(1rem,1.15vw,1.5rem)] font-semibold">
               {STATE_ORDER.filter((s) => byState.has(s)).map((s) => (
@@ -188,13 +188,15 @@ export async function AndonBoard({ params }: { params: Promise<{ cliente: string
 
           <section className="flex min-w-0 flex-col justify-between gap-3 rounded-2xl border bg-card p-[clamp(1rem,1.3vw,1.75rem)]">
             <h2 className="text-[clamp(0.875rem,0.95vw,1.25rem)] font-bold tracking-[0.18em] text-muted-foreground uppercase">Peças boas no turno</h2>
-            <div className="text-[clamp(3rem,4.6vw,6.5rem)] leading-none font-black tracking-tight tabular-nums">{num(good)}</div>
+            <div className="text-[clamp(3rem,4.6vw,6.5rem)] leading-none font-black tracking-tight tabular-nums">
+              {fresh.length > 0 ? num(good) : "—"}
+            </div>
             <dl className="grid grid-cols-2 gap-2 text-[clamp(0.875rem,0.95vw,1.25rem)]">
               <div>
                 <dt className="text-muted-foreground">Refugo</dt>
                 <dd className="text-[clamp(1.25rem,1.7vw,2.5rem)] leading-tight font-bold tabular-nums">
-                  {num(reject)}
-                  <span className="ml-1.5 text-[0.6em] font-semibold text-muted-foreground">{total > 0 ? pct(reject / total, 1) : "—"}</span>
+                  {fresh.length > 0 ? num(reject) : "—"}
+                  {total > 0 && <span className="ml-1.5 text-[0.6em] font-semibold text-muted-foreground">{pct(reject / total, 1)}</span>}
                 </dd>
               </div>
               <div>
@@ -260,7 +262,7 @@ export async function AndonBoard({ params }: { params: Promise<{ cliente: string
 
         {/* Rodapé: legenda */}
         <footer className="flex shrink-0 flex-col gap-3 border-t pt-3 lg:flex-row lg:items-center lg:justify-between xl:pt-[clamp(0.75rem,0.9vw,1.25rem)]">
-          <ul className="flex flex-wrap gap-x-6 gap-y-2 text-[clamp(0.875rem,1vw,1.375rem)] font-medium">
+          <ul className="flex flex-wrap gap-x-5 gap-y-2 text-[clamp(0.875rem,1vw,1.375rem)] font-medium">
             {STATE_ORDER.map((s) => (
               <li key={s} className="inline-flex items-center gap-2">
                 <span className={cn("size-[1em] rounded", STATE_META[s].bg, s === "NO_COMM" && "bg-stripes")} />
@@ -268,8 +270,8 @@ export async function AndonBoard({ params }: { params: Promise<{ cliente: string
               </li>
             ))}
           </ul>
-          <div className="flex flex-wrap items-center gap-3 text-[clamp(0.75rem,0.85vw,1.125rem)] text-muted-foreground">
-            <span>Marcador na barra = ritmo esperado para a meta · Engemase OEE</span>
+          <div className="flex flex-wrap items-center gap-3 text-[clamp(0.75rem,0.85vw,1.125rem)] text-muted-foreground lg:shrink-0">
+            <span className="hidden 2xl:inline">Marcador na barra = ritmo esperado para a meta · Engemase OEE</span>
             <FullscreenButton />
             <Link
               href={`/${client.slug}`}
