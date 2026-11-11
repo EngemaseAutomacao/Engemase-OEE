@@ -47,6 +47,7 @@ flowchart LR
 
 | # | Documento | Conteúdo |
 |---|---|---|
+| 00 | [Status e próximos passos](docs/00-status.md) | O que está pronto, o que está em andamento e o que falta |
 | 01 | [Visão e requisitos](docs/01-visao-e-requisitos.md) | Objetivo, perfis, requisitos, premissas e **perguntas em aberto** |
 | 02 | [Arquitetura geral](docs/02-arquitetura.md) | Componentes, fluxos, escalabilidade, estrutura do repositório |
 | 03 | [Gateway (borda)](docs/03-gateway.md) | Hardware, agente Go, drivers por marca, buffer, OTA |
