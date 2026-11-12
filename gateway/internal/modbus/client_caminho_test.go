@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -326,6 +327,69 @@ func TestRTUOverTCPCaminhoCaidoNaoEntregaRequisicoesVelhas(t *testing.T) {
 	}
 }
 
+// O caminho volta DURANTE o escoamento (queda mais curta que a espera do ACK, ou que
+// termina pouco antes do fim da linha quieta): a retransmissão entrega a requisição
+// retida e o ACK volta, mas o escravo ainda vai responder. O escoamento tomava o ACK
+// por linha quieta e devolvia a linha na hora; a próxima requisição saía, a resposta
+// atrasada da antiga era aceita no lugar da dela (mesmo unit, função e tamanho) e
+// todas as leituras seguintes ficavam deslocadas de uma (HR200 → 111, HR100 → 222). O
+// silêncio tem de recomeçar no ACK.
+func TestRTUOverTCPCaminhoVoltaNoEscoamentoNaoDesalinhaRespostas(t *testing.T) {
+	const timeout = 200 * time.Millisecond
+	casos := []struct {
+		nome    string
+		religar time.Duration // depois da escrita da requisição
+		atraso  time.Duration // latência do escravo
+	}{
+		{"na espera do ACK", 5 * timeout / 2, 15 * time.Millisecond},
+		{"pouco antes do fim da linha quieta", 2*timeout - 20*time.Millisecond, 60 * time.Millisecond},
+		// A resposta chega depois do limite original do escoamento: fechar ali (RST) e
+		// rediscar entregaria a resposta à conexão nova.
+		{"perto do limite da espera do ACK", 4*timeout - 40*time.Millisecond, 80 * time.Millisecond},
+	}
+	for _, cs := range casos {
+		for _, retries := range []int{0, modbus.DefaultRetries} {
+			t.Run(fmt.Sprintf("%s/retries=%d", cs.nome, retries), func(t *testing.T) {
+				srv := startServer(t, mbtest.RTU)
+				srv.SetHolding(100, 111)
+				srv.SetHolding(200, 222)
+				srv.SetDelay(cs.atraso)
+				cv := startConversorCaminho(t, srv.Addr())
+				r, err := modbus.AbrirComPendentes(modbus.Target{Transport: modbus.TransportRTUOverTCP, Address: cv.Addr(),
+					Timeout: timeout, Retries: retries}, cv.pendentes)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer r.Close()
+				if v, err := lerHR(r, 100); err != nil || v != 111 {
+					t.Fatalf("leitura inicial: %d (%v)", v, err)
+				}
+
+				cv.cortar()
+				type resultado struct {
+					v   uint16
+					err error
+				}
+				res := make(chan resultado, 1)
+				go func() {
+					v, err := lerHR(r, 100)
+					res <- resultado{v, err}
+				}()
+				cv.esperarRetido(t, quadroRTU(1, 0x03, 0, 100, 0, 1))
+				time.Sleep(cs.religar)
+				cv.religar()
+				if got := <-res; got.err == nil && got.v != 111 {
+					t.Fatalf("HR100 = %d, quer 111 ou erro", got.v)
+				}
+				if certas, trocadas, falhas, ultimo := lerAlternado(r, 10); certas != 10 {
+					t.Fatalf("depois da volta do caminho: %d certas, %d com valor de outro endereço, %d falhas (último erro %v); quer 10 certas",
+						certas, trocadas, falhas, ultimo)
+				}
+			})
+		}
+	}
+}
+
 // Conversor desligado e religado: não chega RST nem FIN, e a fila de envio fica sem
 // ACK. O socket antigo não pode ficar aberto à espera da retransmissão do TCP (até
 // 2 min entre tentativas): a leitura seguinte à volta do conversor tem de discar de
@@ -405,11 +469,14 @@ func TestTCPReconectaAposCLPDesligado(t *testing.T) {
 // Leitura interrompida (contexto) antes do escoamento, com a requisição ainda sem ACK:
 // o Close tem de usar RST. Com FIN o kernel ainda entregaria a requisição, e o
 // conversor mandaria a resposta para a conexão do próximo Reader (recarga da config).
+// O Close termina a espera da linha quieta, mas não espera o ACK depois dela: o socket
+// vai fechar de qualquer jeito, e a parada do agente não deve esperar um caminho caído.
 func TestRTUOverTCPCloseDescartaRequisicaoSemACK(t *testing.T) {
+	const timeout = 200 * time.Millisecond
 	srv := startServer(t, mbtest.RTU)
 	cv := startConversorCaminho(t, srv.Addr())
 	r, err := modbus.AbrirComPendentes(modbus.Target{Transport: modbus.TransportRTUOverTCP, Address: cv.Addr(),
-		Timeout: 100 * time.Millisecond, Retries: 0}, cv.pendentes)
+		Timeout: timeout, Retries: 0}, cv.pendentes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -417,13 +484,18 @@ func TestRTUOverTCPCloseDescartaRequisicaoSemACK(t *testing.T) {
 		t.Fatalf("leitura inicial: %v", err)
 	}
 	cv.cortar()
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond) // acaba no escoamento
+	ctx, cancel := context.WithTimeout(context.Background(), 3*timeout/2) // acaba no escoamento
 	defer cancel()
 	if _, err := r.ReadBlock(ctx, 1, modbus.Span{Area: modbus.HoldingRegister, Start: 100, Count: 1}); err == nil {
 		t.Fatal("esperava erro com o caminho caído")
 	}
+	start := time.Now()
 	if err := r.Close(); err != nil {
 		t.Fatal(err)
+	}
+	// Resta meio Timeout de linha quieta; a espera do ACK iria a 2 Timeouts além dela.
+	if el := time.Since(start); el > 3*timeout/2 {
+		t.Fatalf("Close levou %v com o caminho caído: esperou o ACK depois da linha quieta", el)
 	}
 	cv.esperarFechamentos(t)
 	if n := cv.fechadasComRST(); n != 1 {

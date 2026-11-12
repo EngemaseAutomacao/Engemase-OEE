@@ -407,6 +407,37 @@ func TestGapBeforeFirstReadIsNoComm(t *testing.T) {
 	checkMinute(t, mins[61], 60, 0, 0, 0, 0, 0, 0)
 }
 
+// Mesma lacuna no count_derived com a máquina parada: a parada começa na última peça
+// + janela ociosa, mas não recua para dentro da lacuna (o NO_COMM decidido pela
+// leitura de volta, antes do Tick, não fica com duração zero).
+func TestCountDerivedGapBeforeFirstReadIsNoComm(t *testing.T) {
+	cfg := buildConfig(t, `{"mode":"count_derived","ideal_cycle_s":2,"comm_loss_after_s":10}`, tTotal)
+	s := &sim{e: newEngine(t, cfg, t0)}
+	read := func(now float64) ([]engine.Sample, bool) {
+		return []engine.Sample{{TagID: tTotal, Value: u32(map[bool]uint32{true: 1}[now >= 5])}}, true
+	}
+	s.runUntil(60, 1, read)
+	s.now = 3659 // uma hora sem leitura nem Tick; o sim lê antes do Tick
+	s.runUntil(3720, 1, read)
+
+	checkStates(t, s.stateEvents(), []wantEv{
+		{"2026-11-11T13:00:01.000Z", "STOPPED", "", -1},
+		{"2026-11-11T13:00:05.000Z", "RUNNING", "STOPPED", -1},
+		{"2026-11-11T13:00:11.000Z", "STOPPED", "RUNNING", -1},
+		{"2026-11-11T13:01:00.000Z", "NO_COMM", "STOPPED", -1},
+		{"2026-11-11T14:01:00.000Z", "STOPPED", "NO_COMM", -1},
+	})
+	mins := s.minutes()
+	if len(mins) != 62 {
+		t.Fatalf("minutos fechados: %d, quer 62", len(mins))
+	}
+	checkMinute(t, mins[0], 6, 53, 0, 0, 1, 1, 0)
+	for _, m := range mins[1:61] {
+		checkMinute(t, m, 0, 0, 0, 0, 60, 0, 0)
+	}
+	checkMinute(t, mins[61], 0, 60, 0, 0, 0, 0, 0)
+}
+
 // Mesma lacuna, mas o primeiro resultado depois dela é uma falha de leitura: o
 // tempo não observado continua no_comm desde a última leitura boa.
 func TestGapBeforeFirstFailureIsNoComm(t *testing.T) {
@@ -665,6 +696,143 @@ func TestPieceConservationAcrossRestart(t *testing.T) {
 	// intervalo sem gateway: 279 (última leitura do minuto) − 159 (persistido).
 	if m := s2.minutes()[0]; m.NoCommS != 10 || m.RunS != 50 || m.Total != 279-159 {
 		t.Fatalf("minuto do retorno: %+v", m)
+	}
+}
+
+func totalPieces(mins []contracts.Minute) int64 {
+	var n int64
+	for _, m := range mins {
+		n += m.Total
+	}
+	return n
+}
+
+// Evento de contador (salto descartado, reset) no minuto ainda aberto e reinício (ou
+// troca de config) antes de ele fechar: o motor novo não refaz a decisão com outro Δt
+// a partir do fim do último minuto fechado. O salto já descartado não vira produção,
+// o evento não sai de novo e as peças do minuto aberto não se perdem.
+func TestCounterEventSurvivesRestart(t *testing.T) {
+	cases := []struct {
+		name    string
+		event   string
+		counter func(now float64) uint32 // 1 peça/s; evento em 13:01:10
+		// Peças perdidas se a base for restaurada sem Carry (a tabela counter_state
+		// ainda não guarda Carry): as do minuto aberto antes de um reset.
+		lostWithoutCarry int64
+	}{
+		{"salto descartado", contracts.EventCounterJump, func(now float64) uint32 {
+			if now >= 70 {
+				return 5100 + uint32(now)
+			}
+			return 100 + uint32(now)
+		}, 0},
+		{"reset", contracts.EventCounterReset, func(now float64) uint32 {
+			if now >= 70 {
+				return uint32(now) - 70
+			}
+			return 50000 + uint32(now)
+		}, 10},
+	}
+	for _, c := range cases {
+		cfg := buildConfig(t, `{"mode":"signals"}`, tRunning, tTotal)
+		read := func(now float64) ([]engine.Sample, bool) {
+			return []engine.Sample{{TagID: tRunning, Value: boolV(true)}, {TagID: tTotal, Value: u32(c.counter(now))}}, true
+		}
+		ref := &sim{e: newEngine(t, cfg, t0)}
+		ref.runUntil(240, 0.5, read)
+		want := totalPieces(ref.minutes())
+
+		for _, withCarry := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s carry=%v", c.name, withCarry), func(t *testing.T) {
+				s1 := &sim{e: newEngine(t, cfg, t0)}
+				s1.runUntil(75, 0.5, read) // "crash" em 13:01:15: o minuto 13:01 se perde
+				persisted := append([]engine.CounterState(nil), s1.counters...)
+				if !withCarry {
+					for i := range persisted {
+						persisted[i].Carry = 0
+					}
+				}
+				s2 := &sim{e: newEngine(t, cfg, at(75)), now: 75}
+				s2.e.RestoreCounters(persisted)
+				s2.runUntil(240, 0.5, read)
+
+				all := &sim{records: append(s1.records, s2.records...)}
+				lost := int64(0)
+				if !withCarry {
+					lost = c.lostWithoutCarry
+				}
+				if got := totalPieces(all.minutes()); got != want-lost {
+					t.Fatalf("peças nos minutos = %d, quer %d", got, want-lost)
+				}
+				if evs := all.eventsOfType(c.event); len(evs) != 1 || evs[0].At != "2026-11-11T13:01:10.000Z" {
+					t.Fatalf("%s: %+v", c.event, evs)
+				}
+			})
+		}
+	}
+}
+
+// O evento cai no minuto 13:01 enquanto o 13:00 ainda espera um candidato (debounce
+// de 10 s). Quando o 13:00 fecha, o contador persistido continua sendo o checkpoint
+// do evento (sem as peças que agora estão no 13:00), não o fim do 13:00, que refaria
+// o salto. Reinício antes e depois do fechamento do 13:00.
+func TestCounterCheckpointAcrossEarlierMinuteClose(t *testing.T) {
+	cfg := buildConfig(t, `{"mode":"signals","debounce_s":10}`, tRunning, tTotal)
+	read := func(now float64) ([]engine.Sample, bool) {
+		v := 100 + uint32(now)
+		if now >= 62 {
+			v += 5000 // salto descartado em 13:01:02
+		}
+		return []engine.Sample{{TagID: tRunning, Value: boolV(now < 55)}, {TagID: tTotal, Value: u32(v)}}, true
+	}
+	ref := &sim{e: newEngine(t, cfg, t0)}
+	ref.runUntil(240, 0.5, read)
+	want := totalPieces(ref.minutes())
+
+	for _, crash := range []float64{63, 68} {
+		t.Run(fmt.Sprintf("reinício em %v s", crash), func(t *testing.T) {
+			s1 := &sim{e: newEngine(t, cfg, t0)}
+			s1.runUntil(crash, 0.5, read)
+			if closed := len(s1.minutes()); (crash < 65) != (closed == 0) {
+				t.Fatalf("cenário: %d minutos fechados até %v s", closed, crash)
+			}
+			s2 := &sim{e: newEngine(t, cfg, at(crash)), now: crash}
+			s2.e.RestoreCounters(s1.counters)
+			s2.runUntil(240, 0.5, read)
+			all := &sim{records: append(s1.records, s2.records...)}
+			if got := totalPieces(all.minutes()); got != want {
+				t.Fatalf("peças nos minutos = %d, quer %d", got, want)
+			}
+			if jumps := all.eventsOfType(contracts.EventCounterJump); len(jumps) != 1 {
+				t.Fatalf("counter_jump: %+v", jumps)
+			}
+		})
+	}
+}
+
+// Endereço do contador trocado na config: a nova base (counter_rebaseline) vale
+// também se o gateway reiniciar antes de fechar o minuto em que ela foi feita.
+func TestCounterRebaselineSurvivesRestart(t *testing.T) {
+	cfg := buildConfig(t, `{"mode":"signals"}`, tRunning, tTotal)
+	old := engine.CounterState{TagID: tTotal, MachineID: machineID, Role: "count.total", Bits: 32, AddrKey: "endereço antigo", LastRaw: 7, LastAt: t0.Add(-time.Hour)}
+	read := func(now float64) ([]engine.Sample, bool) {
+		return []engine.Sample{{TagID: tRunning, Value: boolV(true)}, {TagID: tTotal, Value: u32(1000 + uint32(now))}}, true
+	}
+	s1 := &sim{e: newEngine(t, cfg, t0)}
+	s1.e.RestoreCounters([]engine.CounterState{old})
+	s1.runUntil(30, 0.5, read)
+	// O que estaria na tabela: o estado antigo e, por cima, o que o motor gravou.
+	s2 := &sim{e: newEngine(t, cfg, at(30)), now: 30}
+	s2.e.RestoreCounters(append([]engine.CounterState{old}, s1.counters...))
+	s2.runUntil(61, 0.5, read)
+
+	all := &sim{records: append(s1.records, s2.records...)}
+	if evs := all.eventsOfType(contracts.EventCounterRebaseline); len(evs) != 1 || evs[0].At != "2026-11-11T13:00:00.500Z" {
+		t.Fatalf("counter_rebaseline: %+v", evs)
+	}
+	// Base em 1000 (0,5 s); 1 peça/s até a última leitura do minuto (59,5 s).
+	if m := s2.minutes(); len(m) != 1 || m[0].Total != 59 {
+		t.Fatalf("minutos do segundo motor: %+v", m)
 	}
 }
 

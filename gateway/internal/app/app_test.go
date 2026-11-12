@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -1072,6 +1073,88 @@ func TestCollectLoopTickDoesNotOvertakeQueuedReadings(t *testing.T) {
 		}
 		if st := liveState(a); st != contracts.StateRunning {
 			t.Fatalf("rodada %d: tick rodou antes da leitura que já estava na fila (live %q)", i, st)
+		}
+	}
+}
+
+// waitSendersBlocked espera n rotinas criadas pelo teste paradas no envio a um canal
+// cheio: o poller esperando na entrega (contrapressão).
+func waitSendersBlocked(t *testing.T, n int) {
+	t.Helper()
+	buf := make([]byte, 1<<20)
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
+		blocked := 0
+		for _, g := range strings.Split(string(buf[:runtime.Stack(buf, true)]), "\n\n") {
+			if strings.Contains(g, "[chan send") && strings.Contains(g, "."+t.Name()+".func") {
+				blocked++
+			}
+		}
+		if blocked == n {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d rotinas paradas no envio, quer %d", blocked, n)
+		}
+	}
+}
+
+// Coleta atrasada com a fila cheia (gravação lenta): pollers esperam na entrega
+// (contrapressão) com leituras de antes do tick. Cada leitura que a drenagem tira da
+// fila dá a vaga à de um deles, e o tick só roda depois de aplicá-las: drenar só o
+// que len mostrava no início deixava na fila a leitura que desmente o candidato, e o
+// tick confirmava um STOPPED que não houve.
+func TestTickDrainsReadingsBlockedInDelivery(t *testing.T) {
+	a, clk, _, path := watchdogAgent(t)
+	eng := stoppingEngine(t, fakeWall)
+	readings := make(chan poller.Reading, 1)
+	readings <- stateRead(t, fakeWall.Add(2400*time.Millisecond), 0) // fila cheia
+	var wg sync.WaitGroup
+	for i, r := range []poller.Reading{ // dois pollers à espera, nesta ordem (o canal é FIFO)
+		stateRead(t, fakeWall.Add(2600*time.Millisecond), 1), // desmente o STOPPED
+		stateRead(t, fakeWall.Add(2800*time.Millisecond), 1),
+	} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			readings <- r
+		}()
+		waitSendersBlocked(t, i+1)
+	}
+	sent := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(sent)
+	}()
+	clk.set(3400 * time.Millisecond) // 1,2 s depois do candidato: passou do debounce
+
+	a.tick(context.Background(), eng, nil, readings)
+	var left []time.Duration // o que o tick não aplicou, na fila ou ainda à espera da entrega
+pending:
+	for {
+		select {
+		case r := <-readings:
+			left = append(left, r.At.Sub(fakeWall))
+		case <-sent:
+			for len(readings) > 0 {
+				left = append(left, (<-readings).At.Sub(fakeWall))
+			}
+			break pending
+		}
+	}
+	if len(left) != 0 {
+		t.Fatalf("leituras de antes do tick (em 3,4 s) ficaram para depois dele: %v", left)
+	}
+	if st := liveState(a); st != contracts.StateRunning {
+		t.Fatalf("live depois do tick: %q; a leitura RUNNING de antes do tick desmente o STOPPED", st)
+	}
+	store, err := buffer.Open(path, buffer.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	for _, it := range outbox(t, store) {
+		if p := payloadOf(t, it); p["type"] == contracts.EventState && p["state"] == contracts.StateStopped {
+			t.Fatalf("STOPPED confirmado com a leitura que o desmente à espera da entrega: %v", p)
 		}
 	}
 }

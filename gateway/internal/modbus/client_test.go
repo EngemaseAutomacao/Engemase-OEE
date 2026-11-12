@@ -491,6 +491,52 @@ func TestRTUOverTCPPicoDeLatenciaNaoDesalinhaRespostas(t *testing.T) {
 	}
 }
 
+// Recarga da config: o contexto do poller acaba no meio de uma leitura que expirou (a
+// leitura da grid-x não olha o contexto) e a espera da linha quieta fica por fazer. O
+// Close liberava a linha na hora e o Reader novo, no mesmo conversor, escrevia a
+// primeira requisição em milissegundos: o conversor transparente entregava a ele a
+// resposta atrasada da requisição do antigo, e todas as leituras do novo ficavam
+// deslocadas de uma. O Close tem de terminar a espera antes de soltar a linha.
+func TestRTUOverTCPCloseTerminaEsperaDaLinhaAntesDoProximoReader(t *testing.T) {
+	srv := startServer(t, mbtest.RTU)
+	srv.SetHolding(100, 111)
+	srv.SetHolding(200, 222)
+	cv := startConversor(t, srv.Addr())
+	alvo := modbus.Target{Transport: modbus.TransportRTUOverTCP, Address: cv.Addr(), Timeout: 100 * time.Millisecond, Retries: modbus.DefaultRetries}
+	antigo, err := modbus.Open(alvo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, err := lerHR(antigo, 100); err != nil || v != 111 {
+		t.Fatalf("leitura inicial: %d (%v)", v, err)
+	}
+
+	srv.SetDelay(150 * time.Millisecond) // um pico: responde 50 ms depois do timeout
+	// A recarga: o contexto acaba no meio da leitura.
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := antigo.ReadBlock(ctx, 1, modbus.Span{Area: modbus.HoldingRegister, Start: 100, Count: 1}); err == nil {
+		t.Fatal("leitura lenta: esperava erro")
+	}
+	srv.SetDelay(15 * time.Millisecond) // respostas em quadros separados
+	start := time.Now()
+	if err := antigo.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if el := time.Since(start); el > time.Second {
+		t.Fatalf("Close levou %v", el)
+	}
+
+	novo, err := modbus.Open(alvo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer novo.Close()
+	if certas, trocadas, falhas, ultimo := lerAlternado(novo, 10); certas != 10 {
+		t.Fatalf("Reader novo: %d certas, %d com valor de outro endereço, %d falhas (último erro %v); quer 10 certas", certas, trocadas, falhas, ultimo)
+	}
+}
+
 // Escravo sempre mais lento que o timeout (timeout_ms mal configurado): as leituras
 // podem falhar, mas nunca devolver o valor de outro endereço.
 func TestRTUOverTCPEscravoLentoNuncaDevolveValorDeOutroEndereco(t *testing.T) {

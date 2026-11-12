@@ -118,6 +118,11 @@ type Syncer struct {
 	// execução). Começa false para o primeiro sucesso apagar um marcador antigo.
 	markerGone bool
 	outage     outage
+	// Limite entre quedas (enlace instável): a janela vai de lastOpen até
+	// lastOpen+FailureLogEvery (ver failed).
+	lastOpen time.Time // última abertura registrada que começou uma janela
+	recent   []string  // classes vistas desde lastOpen, em todas as quedas
+	skipped  int       // quedas que terminaram sem nenhuma linha desde a última abertura
 }
 
 // outage acompanha a falha atual do /sync para o log com limite de repetição.
@@ -128,6 +133,7 @@ type outage struct {
 	failures int       // tentativas que falharam desde since
 	quiet    int       // falhas sem linha de log desde lastLog
 	classes  []string  // classes já vistas nesta queda, na ordem
+	silent   bool      // começou sem linha (enlace instável) e ainda não registrou nada
 }
 
 func (s *Syncer) init() {
@@ -577,17 +583,20 @@ var errorStringType = reflect.TypeOf(errors.New(""))
 // transport.go): a padrão ("Proxy Authentication Required", "Forbidden"), uma
 // própria do proxy ("Authentication Required", "Tunnel or SSL Forbidden"), vazia
 // ("HTTP/1.1 407 ") ou "unknown status code" (linha sem frase). Comparar com
-// http.StatusText perdia as frases fora do padrão. Os outros erros sem tipo que o
-// cliente HTTP devolve embrulhados no url.Error são do próprio Go (prefixo
-// "net/http:"/"http:"), o fim de conexão (io.EOF), o cancelamento e o limite de
-// redirecionamentos, todos excluídos aqui.
+// http.StatusText perdia as frases fora do padrão. Outros erros sem tipo também
+// chegam assim no url.Error, com ou sem proxy, e são excluídos aqui: os do próprio
+// cliente HTTP (prefixo "net/http:"/"http:"/"http2:"), o fim de conexão (io.EOF),
+// o cancelamento, o limite de redirecionamentos e as falhas de handshake que o
+// crypto/tls devolve como texto (prefixo "tls: "/"x509: ": versão de TLS antiga,
+// certificado que nem é lido, como o de serial negativo de algumas inspeções SSL),
+// que são da classe tls.
 func isConnectRefusal(err error) bool {
 	if err == nil || reflect.TypeOf(err) != errorStringType ||
 		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, context.Canceled) {
 		return false
 	}
 	msg := err.Error()
-	for _, own := range []string{"net/http:", "http:", "http2:", "stopped after "} {
+	for _, own := range []string{"net/http:", "http:", "http2:", "stopped after ", "tls: ", "x509: "} {
 		if strings.HasPrefix(msg, own) {
 			return false
 		}
@@ -633,6 +642,13 @@ func (s *Syncer) noteResult(err error) {
 // quando o cache do resolvedor expira, proxy instável) sai no máximo uma vez a
 // cada FailureLogEvery, senão uma queda que alterna entre duas classes registraria
 // toda tentativa. O 401 só entra na conta da queda: o alarme dele é o OnBlocked.
+//
+// O limite vale também entre quedas: num enlace instável (roteador 4G, proxy
+// sobrecarregado) cada sucesso fecha a queda, e cada falha seguinte abriria outra
+// com linha na hora. Uma queda que começa menos de FailureLogEvery depois da
+// abertura que começou a janela (lastOpen), com uma classe já vista desde então,
+// fica quieta: a repetição conta daquela abertura, e a volta dela só sai se ela
+// registrou alguma linha. A próxima abertura leva quantas ficaram sem linha.
 func (s *Syncer) failed(err error) {
 	const (
 		quiet = iota
@@ -648,6 +664,13 @@ func (s *Syncer) failed(err error) {
 	prev := o.class
 	if prev == "" {
 		*o = outage{since: now}
+		switch {
+		case class == ClassUnauthorized:
+		case now.Sub(s.lastOpen) >= s.FailureLogEvery:
+			s.lastOpen, s.recent = now, nil // abertura que começa outra janela
+		case slices.Contains(s.recent, class):
+			o.silent, o.lastLog = true, s.lastOpen
+		}
 	}
 	o.failures++
 	o.class = class
@@ -655,10 +678,16 @@ func (s *Syncer) failed(err error) {
 	if !seen {
 		o.classes = append(o.classes, class)
 	}
+	if slices.Contains(s.recent, class) {
+		seen = seen || o.silent // na queda quieta, vista em outra queda da janela não é nova
+	} else {
+		s.recent = append(s.recent, class)
+	}
 	kind := quiet
 	switch {
 	case class == ClassUnauthorized:
-	case prev == "":
+		o.silent = false // a volta do 401 é sempre registrada
+	case prev == "" && !o.silent:
 		kind = first
 	case !seen:
 		kind = changed
@@ -675,12 +704,19 @@ func (s *Syncer) failed(err error) {
 	if len(o.classes) > 1 {
 		classes = slices.Clone(o.classes)
 	}
-	o.lastLog, o.quiet = now, 0
+	var skipped int
+	if kind == first {
+		skipped, s.skipped = s.skipped, 0
+	}
+	o.lastLog, o.quiet, o.silent = now, 0, false
 	s.mu.Unlock()
 
 	attrs := []any{"classe", class, "erro", err}
 	if classes != nil {
 		attrs = append(attrs, "classes", classes)
+	}
+	if skipped > 0 {
+		attrs = append(attrs, "quedas_omitidas", skipped)
 	}
 	var he *HTTPError
 	if errors.As(err, &he) {
@@ -701,14 +737,19 @@ func (s *Syncer) failed(err error) {
 	}
 }
 
-// recovered fecha a queda (se havia uma) com a duração e o número de falhas.
+// recovered fecha a queda (se havia uma) com a duração e o número de falhas; a
+// queda curta que não registrou nada (enlace instável) só entra na conta da
+// próxima abertura.
 func (s *Syncer) recovered() {
 	now := s.Now()
 	s.mu.Lock()
 	o := s.outage
 	s.outage = outage{}
+	if o.silent {
+		s.skipped++
+	}
 	s.mu.Unlock()
-	if o.class == "" {
+	if o.class == "" || o.silent {
 		return
 	}
 	attrs := []any{"classe", o.class, "duracao", roundDuration(now.Sub(o.since)), "falhas", o.failures}

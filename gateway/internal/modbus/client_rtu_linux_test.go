@@ -256,6 +256,43 @@ func TestRTUSerialPicoDeLatenciaNaoDesalinhaRespostas(t *testing.T) {
 	}
 }
 
+// Recarga da config com a porta serial: o contexto acaba no meio de uma leitura que
+// expirou e a porta, fechada no timeout, ficava livre na hora do Close. O Reader novo
+// a reabria em milissegundos e recebia a resposta atrasada da requisição do antigo no
+// lugar da sua, e todas as leituras seguintes ficavam deslocadas de uma. O Close tem
+// de esperar o resto do intervalo de guarda.
+func TestRTUSerialCloseTerminaEsperaDaLinhaAntesDoProximoReader(t *testing.T) {
+	esc, porta := iniciarEscravoPTY(t)
+	antigo := abrirRTUSerial(t, porta, modbus.DefaultRetries)
+	if v, err := lerHR(antigo, 100); err != nil || v != 111 {
+		t.Fatalf("leitura inicial: %d (%v)", v, err)
+	}
+
+	esc.setDelay(150 * time.Millisecond) // um pico: responde 50 ms depois do timeout
+	// A recarga: o contexto acaba no meio da leitura.
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := antigo.ReadBlock(ctx, 1, modbus.Span{Area: modbus.HoldingRegister, Start: 100, Count: 1}); err == nil {
+		t.Fatal("leitura lenta: esperava erro")
+	}
+	esc.setDelay(0)
+	start := time.Now()
+	if err := antigo.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if el := time.Since(start); el > 500*time.Millisecond {
+		t.Fatalf("Close levou %v", el)
+	}
+
+	novo := abrirRTUSerial(t, porta, modbus.DefaultRetries)
+	if certas, trocadas, falhas, ultimo := lerAlternado(novo, 8); certas != 8 {
+		t.Fatalf("Reader novo: %d certas, %d com valor de outro endereço, %d falhas (último erro %v); quer 8 certas", certas, trocadas, falhas, ultimo)
+	}
+	if n := esc.respostasDescartadas(); n != 1 {
+		t.Fatalf("respostas emitidas com a porta fechada = %d, quer 1 (a do Reader antigo)", n)
+	}
+}
+
 // Escravo sempre mais lento que o timeout: as leituras podem falhar, mas nunca devolver
 // o valor de outro endereço.
 func TestRTUSerialEscravoLentoNuncaDevolveValorDeOutroEndereco(t *testing.T) {

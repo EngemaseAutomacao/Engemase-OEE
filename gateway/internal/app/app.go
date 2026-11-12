@@ -453,6 +453,13 @@ func (a *agent) collectWith(ctx context.Context, cfg *config.GatewayConfig) erro
 		a.beatStop() // sem motor até outra config: nada a conferir (reiniciar não resolve)
 		select {
 		case <-ctx.Done():
+			// A saída que a parada da config anterior não gravou (buffer falhando na
+			// troca) só existe em memória. Como na parada da coleta: uma última tentativa
+			// de gravar, sem a espera entre tentativas, e o que não for gravado vai para o
+			// log (a perda nunca é silenciosa).
+			now, _ := a.readClock()
+			a.flush(ctx, now)
+			a.logUnsentAtExit()
 			return ctx.Err()
 		case <-a.reconfigure:
 			return nil
@@ -533,12 +540,18 @@ func applyReading(eng *engine.Engine, r poller.Reading) {
 // outras. Com a coleta atrasada (gravação lenta, rajada dos pollers), o tick e as
 // leituras ficam prontos juntos e o select escolhe ao acaso: sem isto, o tick podia
 // rodar com leituras mais antigas que ele ainda na fila, confirmando um candidato que
-// uma delas desmente ou fechando o minuto sem elas. O limite é o que está na fila
-// agora (len): leituras que chegam durante a drenagem ficam para depois, e uma
-// enxurrada não adia o tick (o watchdog confere o motor). Consumir aqui também libera
-// o poller que espera na entrega (contrapressão, poller.Liveness.Delivering).
+// uma delas desmente ou fechando o minuto sem elas.
+//
+// A drenagem vai até a fila esvaziar, não só o que len mostra no início: com a fila
+// cheia, cada leitura retirada dá a vaga à de um poller que espera na entrega
+// (contrapressão, poller.Liveness.Delivering), carimbada antes do tick (às vezes
+// segundos antes). Tudo o que entra aqui é de antes do tick, que só lê o relógio
+// depois. O limite é a fila cheia mais uma leitura à espera por poller (um laço de
+// entrega por poller, no máximo um poller por dispositivo); como o canal é FIFO, ele
+// alcança tudo o que estava na fila ou à espera no início, e uma enxurrada não adia o
+// tick (o watchdog confere o motor).
 func drainReadings(eng *engine.Engine, readings <-chan poller.Reading) {
-	for n := len(readings); n > 0; n-- {
+	for n := cap(readings) + config.MaxDevices; n > 0; n-- {
 		select {
 		case r := <-readings:
 			applyReading(eng, r)

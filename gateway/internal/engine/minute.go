@@ -25,10 +25,11 @@ type minuteAcc struct {
 	product string
 	// Valor de cada contador no fim do minuto (para persistir junto com o minuto).
 	counterEnd map[string]CounterState
+	pieces     map[string]int64 // peças contadas por tag de contador
 }
 
 func newMinuteAcc(start time.Time) *minuteAcc {
-	return &minuteAcc{start: start, counterEnd: map[string]CounterState{}}
+	return &minuteAcc{start: start, counterEnd: map[string]CounterState{}, pieces: map[string]int64{}}
 }
 
 // seconds converte os milissegundos em segundos inteiros que somam exatamente 60,

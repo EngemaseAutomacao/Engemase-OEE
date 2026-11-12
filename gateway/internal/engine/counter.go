@@ -4,9 +4,16 @@ import (
 	"time"
 )
 
-// CounterState é o estado persistido de um contador (tabela counter_state). LastRaw
-// é sempre o valor ao FIM do último minuto fechado: assim, depois de um crash, o
-// próximo delta parte dele e nenhuma peça se perde nem é contada duas vezes.
+// CounterState é o estado persistido de um contador (tabela counter_state): a base
+// do próximo delta depois de um crash ou de uma troca de config, para nenhuma peça se
+// perder nem ser contada duas vezes. Normalmente LastRaw é o valor ao FIM do último
+// minuto fechado (o minuto aberto se perde e é recontado pelo delta).
+//
+// Um evento (reset, salto, nova base) num minuto ainda aberto não se refaz pelo delta
+// (com outro Δt a decisão seria outra, e as peças antes de um reset sumiriam): ele
+// grava junto um checkpoint com a base depois do evento menos as peças que a tag já
+// contou nos minutos abertos (sem dar a volta), o resto dessas peças em Carry, e
+// LastAt no início delas. A primeira leitura depois de restaurar soma Carry ao delta.
 type CounterState struct {
 	TagID     string
 	MachineID string
@@ -15,6 +22,7 @@ type CounterState struct {
 	AddrKey   string // área, offset, tipo e ordem: mudou → nova base
 	LastRaw   uint32
 	LastAt    time.Time
+	Carry     int64 // peças já contadas que LastRaw não cobre (só em checkpoint)
 }
 
 // CounterResult é o efeito de uma leitura de contador.
@@ -49,6 +57,41 @@ type counterTracker struct {
 	// cadence é o maior Δt de uma leitura normal da tag (2 × poll + 1 s, como o
 	// silêncio de holdPoint). A janela de overflow não cresce além dela.
 	cadence time.Duration
+	// anchor é o LastAt da base persistida mais recente (fim do último minuto
+	// fechado, restaurada ou primeira leitura): as peças contadas depois dela estão
+	// em minutos abertos.
+	anchor time.Time
+	ck     *counterCheckpoint // evento num minuto ainda aberto (nil = nenhum)
+}
+
+// counterCheckpoint é a base depois de um evento num minuto ainda aberto.
+type counterCheckpoint struct {
+	raw    uint32    // valor depois do evento
+	minute int64     // início (ms) do minuto em que o evento caiu
+	carry  int64     // peças da tag nos minutos abertos até o evento (inclusive)
+	from   time.Time // LastAt da base anterior a essas peças
+}
+
+// checkpoint devolve o estado a persistir para o checkpoint atual.
+func (c *counterTracker) checkpoint() CounterState {
+	s := c.state // identidade: tag, máquina, papel, bits, endereço
+	v := max(min(c.ck.carry, int64(c.ck.raw)), 0)
+	s.LastRaw, s.LastAt, s.Carry = c.ck.raw-uint32(v), c.ck.from, c.ck.carry-v
+	return s
+}
+
+// closed devolve o estado a persistir quando fecha o minuto (início em ms) em que a
+// tag contou pieces peças e terminou em end. Com um evento num minuto posterior ainda
+// aberto, vale o checkpoint dele, sem as peças que agora estão no minuto fechado.
+func (c *counterTracker) closed(minute, pieces int64, end CounterState) CounterState {
+	c.anchor = end.LastAt
+	if c.ck == nil || c.ck.minute <= minute {
+		c.ck = nil
+		return end
+	}
+	c.ck.carry -= pieces
+	c.ck.from = end.LastAt
+	return c.checkpoint()
 }
 
 func (c *counterTracker) maxValue() uint64 {
@@ -82,17 +125,20 @@ func (c *counterTracker) maxValue() uint64 {
 // distinguem e, na dúvida, é reset: o counter_reset deixa rastro. A meia faixa vale
 // quando o limite passa da faixa: aí recuar é mais curto que dar a volta.
 func (c *counterTracker) update(cur uint32, at time.Time) CounterResult {
+	var carry int64
 	if !c.valid {
 		r := c.restored
 		c.restored = nil
 		if r == nil {
 			c.setBase(cur, at)
+			c.anchor = at
 			return CounterResult{Kind: CounterFirst}
 		}
+		c.anchor, carry = r.LastAt, max(r.Carry, 0)
 		if r.AddrKey != c.state.AddrKey || r.Bits != c.state.Bits {
 			prev := r.LastRaw
 			c.setBase(cur, at)
-			return CounterResult{Kind: CounterRebaseline, PreviousRaw: prev, HasPrevious: true}
+			return CounterResult{Kind: CounterRebaseline, PreviousRaw: prev, HasPrevious: true, Delta: carry}
 		}
 		c.state.LastRaw, c.state.LastAt, c.valid = r.LastRaw, r.LastAt, true
 	}
@@ -128,6 +174,7 @@ func (c *counterTracker) update(cur uint32, at time.Time) CounterResult {
 		}
 	}
 	c.state.LastRaw, c.state.LastAt = cur, at
+	res.Delta += carry // peças de um checkpoint: já validadas antes do reinício
 	return res
 }
 

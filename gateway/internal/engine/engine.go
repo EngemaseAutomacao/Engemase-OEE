@@ -76,6 +76,9 @@ type Engine struct {
 	devices  map[string][]*machine // dispositivo → máquinas com tags de estado/contador nele
 	ids      *ids.Generator
 	pending  []Record
+	// Checkpoints dos contadores com evento no minuto aberto: saem no próximo Tick,
+	// na mesma Output (e transação) que o evento.
+	pendingCounters []CounterState
 }
 
 type binding struct {
@@ -135,6 +138,7 @@ func New(cfg *config.GatewayConfig, start time.Time, opts Options) (*Engine, err
 			}
 			if tag.Role == config.RoleHeartbeat {
 				m.hasHeartbeat = true
+				m.hbTag = tag.ID
 			}
 			if config.IsStateOrCounterRole(tag.Role) {
 				if poll > m.expectedPoll {
@@ -152,8 +156,9 @@ func New(cfg *config.GatewayConfig, start time.Time, opts Options) (*Engine, err
 }
 
 // RestoreCounters carrega os contadores persistidos (antes da primeira leitura).
-// Na primeira leitura de cada tag, o delta parte do valor salvo; se o endereço, o
-// tipo ou a ordem mudaram, gera counter_rebaseline.
+// Na primeira leitura de cada tag, o delta parte do valor salvo, mais o Carry de um
+// checkpoint (veja CounterState); se o endereço, o tipo ou a ordem mudaram, gera
+// counter_rebaseline. Com mais de um estado da mesma tag, vale o último.
 func (e *Engine) RestoreCounters(states []CounterState) {
 	for i := range states {
 		s := states[i]
@@ -180,8 +185,14 @@ func (e *Engine) OnRead(at time.Time, samples []Sample) {
 			// que comm_loss_after_s vira NO_COMM (tempo não observado), não tempo do
 			// último estado. Os prazos extrapolados são estritos (evaluate, rawState):
 			// a leitura que desmente o candidato exatamente no fim do prazo não o
-			// confirma; depois do fim, confirma, como um Tick no meio confirmaria.
+			// confirma; depois do fim, confirma, como um Tick no meio confirmaria. Se
+			// a leitura traz heartbeat novo, a dúvida do heartbeat até ela já se
+			// resolveu (o CLP estava vivo): o candidato pode ser extrapolado até ela.
+			if m.hbTag != "" {
+				m.hbIncoming = m.heartbeatChangeIn(at, samples)
+			}
 			m.evaluate(at)
+			m.hbIncoming = time.Time{}
 		}
 		b.machine.apply(b, s.Value, at)
 		touched[b.machine] = true
@@ -218,7 +229,8 @@ func (e *Engine) Tick(now time.Time) Output {
 		m.closeMinutes(&out)
 	}
 	out.Records = append(e.pending, out.Records...)
-	e.pending = nil
+	out.Counters = append(e.pendingCounters, out.Counters...) // os de minuto fechado valem mais
+	e.pending, e.pendingCounters = nil, nil
 	return out
 }
 
@@ -326,6 +338,7 @@ type machine struct {
 	defaultState string
 	hasGood      bool
 	hasHeartbeat bool
+	hbTag        string // tag plc.heartbeat
 	totalTag     *binding
 
 	// Sinais
@@ -337,6 +350,7 @@ type machine struct {
 	hbValue        optInt
 	hbLastChange   time.Time
 	hbLastRead     time.Time
+	hbIncoming     time.Time // OnRead, antes de aplicar: instante da leitura em curso se ela muda o heartbeat
 	lastGood       time.Time // última leitura boa de tag state.* ou count.*
 	firstFail      time.Time // primeira falha depois da última leitura boa
 	lastPieceAt    time.Time // count_derived
@@ -439,6 +453,7 @@ func (m *machine) applyCounter(b *binding, v modbus.Value, at time.Time) {
 	res := c.update(v.Raw(), at)
 	acc := m.acc(at)
 	acc.counterEnd[c.state.TagID] = c.state
+	acc.pieces[c.state.TagID] += res.Delta
 
 	switch b.tag.Role {
 	case config.RoleCountTotal:
@@ -477,6 +492,15 @@ func (m *machine) applyCounter(b *binding, v modbus.Value, at time.Time) {
 		ev.DiscardedDelta = &d
 	}
 	m.e.emit(m, at, ev)
+
+	// Checkpoint (veja CounterState): a base do fim do último minuto fechado não
+	// refaz este evento depois de um reinício.
+	var carry int64
+	for _, a := range m.minutes {
+		carry += a.pieces[c.state.TagID]
+	}
+	c.ck = &counterCheckpoint{raw: c.state.LastRaw, minute: acc.start.UnixMilli(), carry: carry, from: c.anchor}
+	m.e.pendingCounters = append(m.e.pendingCounters, c.checkpoint())
 }
 
 // acc devolve o minuto aberto que contém at. Leitura atrasada para um minuto já
@@ -514,9 +538,10 @@ func (m *machine) rawState(now time.Time) (key stateKey, since time.Time, noComm
 	}
 	// CLP "congelado": heartbeat parado. Visto parado pelo prazo inteiro (leitura em
 	// hbLastRead) ou, extrapolando a última leitura até now, parado por mais que o
-	// prazo (estrito: veja evaluate).
+	// prazo (estrito: veja evaluate). A extrapolação não atravessa falha de leitura
+	// (observedUntil): aí o NO_COMM é o da comunicação, desde a primeira falha.
 	if m.hbTimeout > 0 && m.hbValue.ok &&
-		(m.hbLastRead.Sub(m.hbLastChange) >= m.hbTimeout || now.Sub(m.hbLastChange) > m.hbTimeout) {
+		(m.hbLastRead.Sub(m.hbLastChange) >= m.hbTimeout || m.observedUntil(now).Sub(m.hbLastChange) > m.hbTimeout) {
 		return stateKey{state: contracts.StateNoComm}, m.hbLastChange, true, true
 	}
 
@@ -550,7 +575,9 @@ func (m *machine) rawState(now time.Time) (key stateKey, since time.Time, noComm
 		}
 		return withFault(st), now, false, true
 	case config.ModeCountDerived:
-		if !m.lastPieceAt.IsZero() && now.Sub(m.lastPieceAt) < m.idleWindow {
+		// Ociosa só até o horizonte (horizon): leitura falha não é "nenhuma peça" (a
+		// leitura de volta traz o contador acumulado, e com ele a resposta).
+		if !m.lastPieceAt.IsZero() && m.horizon(now).Sub(m.lastPieceAt) < m.idleWindow {
 			return withFault(contracts.StateRunning), now, false, true
 		}
 		since := now
@@ -570,7 +597,18 @@ func (m *machine) rawState(now time.Time) (key stateKey, since time.Time, noComm
 // debounce. Estrito porque a leitura que o desmente em now mostra que ele acabou
 // antes de now: no fim exato do prazo, não se manteve pelo prazo. Assim um Tick em
 // now e a leitura que desmente o candidato em now decidem igual, em qualquer ordem.
+//
+// A extrapolação vai só até o horizonte (horizon): não atravessa falha de leitura,
+// silêncio nem a dúvida do heartbeat. Visto pelo debounce inteiro, confirma igual.
 func (m *machine) evaluate(now time.Time) {
+	// count_derived: o candidato RUNNING acaba sozinho no fim da janela ociosa, sem
+	// leitura que o desminta. Decide-o nesse instante, como a leitura que desmente um
+	// candidato (estrito); senão só um Tick dentro da janela o confirmaria.
+	if m.cand != nil && m.mode == config.ModeCountDerived && m.cand.key.state == contracts.StateRunning {
+		if end := m.lastPieceAt.Add(m.idleWindow); !end.After(m.horizon(now)) && end.Sub(m.cand.since) > m.debounce {
+			m.confirm(m.cand.key, m.cand.since)
+		}
+	}
 	key, since, noComm, ok := m.rawState(now)
 	if !ok || key == m.confirmed {
 		if ok {
@@ -584,12 +622,67 @@ func (m *machine) evaluate(now time.Time) {
 		return
 	}
 	if m.cand == nil || m.cand.key != key {
-		m.cand = &candidate{key: key, since: maxTime(since, m.accounted)}
+		start := maxTime(since, m.accounted)
+		if m.confirmed.state == contracts.StateNoComm {
+			// Depois de um NO_COMM, o tempo antes da leitura que o encerrou não foi
+			// observado. No count_derived a parada começa na última peça + janela
+			// ociosa, que pode cair dentro da lacuna (relógio adiantado, processo
+			// congelado, NO_COMM decidido pela própria leitura de volta antes do Tick).
+			start = maxTime(start, m.lastGood)
+		}
+		m.cand = &candidate{key: key, since: start}
 	}
-	if m.lastGood.Sub(m.cand.since) >= m.debounce || now.Sub(m.cand.since) > m.debounce {
+	if m.lastGood.Sub(m.cand.since) >= m.debounce || m.horizon(now).Sub(m.cand.since) > m.debounce {
 		m.confirm(m.cand.key, m.cand.since)
 	}
 }
+
+// horizon é até onde os sinais da última leitura boa valem além dela para as decisões
+// que dependem do tempo (candidato extrapolado em evaluate, janela ociosa do
+// count_derived): o tempo observado (observedUntil) e, com heartbeat, só até a última
+// mudança vista dele (o tempo depois dela está em dúvida, holdPoint) ou até a leitura
+// em curso, se ela muda o heartbeat. Nunca antes da última leitura boa. Assim um Tick
+// no meio não decide nada que a leitura seguinte, sabendo mais, decidiria diferente.
+func (m *machine) horizon(now time.Time) time.Time {
+	h := m.observedUntil(now)
+	if m.hbTimeout > 0 && m.hbValue.ok {
+		h = minTime(h, maxTime(m.hbLastChange, m.hbIncoming))
+	}
+	return maxTime(h, m.lastGood)
+}
+
+// heartbeatChangeIn devolve at se as amostras trazem o heartbeat da máquina com valor
+// novo dentro do prazo desde a última mudança (o CLP esteve vivo até at); senão, zero.
+func (m *machine) heartbeatChangeIn(at time.Time, samples []Sample) time.Time {
+	for _, s := range samples {
+		if s.TagID == m.hbTag {
+			if m.hbValue.ok && m.hbValue.v != s.Value.Int64() && !at.After(m.hbLastChange.Add(m.hbTimeout)) {
+				return at
+			}
+			break
+		}
+	}
+	return time.Time{}
+}
+
+// observedUntil é até onde os sinais da última leitura boa podem ser estendidos: now,
+// mas não além da primeira falha depois dela nem do silêncio (sem leitura há mais que
+// 2 × poll + 1 s, como em holdPoint). Sem leitura, não se sabe o que a máquina fez.
+func (m *machine) observedUntil(now time.Time) time.Time {
+	obs := now
+	if m.firstFail.After(m.lastGood) && m.firstFail.Before(obs) {
+		obs = m.firstFail
+	}
+	if !m.lastGood.IsZero() {
+		if lim := m.lastGood.Add(m.silence()); lim.Before(obs) {
+			obs = lim
+		}
+	}
+	return obs
+}
+
+// silence é o maior intervalo normal entre duas leituras boas da máquina.
+func (m *machine) silence() time.Duration { return 2*m.expectedPoll + time.Second }
 
 // confirm troca o estado confirmado e gera o evento (instante = início do candidato).
 func (m *machine) confirm(key stateKey, at time.Time) {
@@ -626,26 +719,29 @@ func (m *machine) holdPoint(now time.Time) time.Time {
 	if m.firstFail.After(m.lastGood) && m.firstFail.Before(hold) {
 		hold = m.firstFail
 	}
-	silence := 2*m.expectedPoll + time.Second
-	if !m.lastGood.IsZero() && now.Sub(m.lastGood) > silence && m.lastGood.Before(hold) {
+	if !m.lastGood.IsZero() && now.Sub(m.lastGood) > m.silence() && m.lastGood.Before(hold) {
 		hold = m.lastGood
 	}
 	// Heartbeat: o tempo depois da última mudança vista fica em dúvida até a próxima
 	// leitura mostrar outra mudança (senão, se ele parou, o NO_COMM começa nela e um
-	// Tick no meio teria contado parte disso como o estado anterior).
+	// Tick no meio teria contado parte disso como o estado anterior). Pelo mesmo
+	// motivo, as decisões extrapoladas não passam dela (horizon).
 	if m.hbTimeout > 0 && m.hbValue.ok && m.hbLastChange.Before(hold) {
 		hold = m.hbLastChange
 	}
 	return hold
 }
 
-// account atribui [accounted, until) ao estado confirmado, minuto a minuto.
+// account atribui [accounted, until) ao estado confirmado, minuto a minuto. Os
+// milissegundos são contados pelas posições truncadas dentro do minuto: trechos
+// seguidos se somam sem perda, e o total de cada estado não depende de onde os Ticks
+// cortaram o tempo (só dos instantes de mudança de estado).
 func (m *machine) account(until time.Time) {
 	idx := secondsIndex(m.confirmed.state)
 	for m.accounted.Before(until) {
 		start := m.accounted.Truncate(time.Minute)
 		end := minTime(until, start.Add(time.Minute))
-		m.acc(m.accounted).ms[idx] += end.Sub(m.accounted).Milliseconds()
+		m.acc(m.accounted).ms[idx] += end.Sub(start).Milliseconds() - m.accounted.Sub(start).Milliseconds()
 		m.accounted = end
 	}
 }
@@ -688,7 +784,7 @@ func (m *machine) closeMinutes(out *Output) {
 		}
 		sort.Strings(tagIDs)
 		for _, id := range tagIDs {
-			out.Counters = append(out.Counters, a.counterEnd[id])
+			out.Counters = append(out.Counters, m.e.tags[id].counter.closed(k, a.pieces[id], a.counterEnd[id]))
 		}
 		m.lastProduct = product
 		m.closedUntil = end

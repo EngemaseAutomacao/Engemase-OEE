@@ -183,6 +183,23 @@ func TestCounterTracker(t *testing.T) {
 			restored: &CounterState{AddrKey: "outro", Bits: 32, LastRaw: 500, LastAt: t0},
 			steps:    []step{{9000, 1, 0, CounterRebaseline}, {9004, 2, 4, CounterNormal}},
 		},
+		{
+			// Checkpoint de um reset no minuto aberto (veja CounterState): as peças já
+			// contadas antes do reinício entram uma vez, no primeiro delta.
+			name: "Carry restaurado soma no primeiro delta", bits: 32, maxRate: 10,
+			restored: &CounterState{AddrKey: "k", Bits: 32, LastRaw: 0, LastAt: t0.Add(-time.Minute), Carry: 13},
+			steps:    []step{{8, 0, 8 + 13, CounterNormal}, {9, 1, 1, CounterNormal}},
+		},
+		{
+			name: "Carry restaurado soma mesmo com reset ou salto na volta", bits: 32, maxRate: 1,
+			restored: &CounterState{AddrKey: "k", Bits: 32, LastRaw: 500, LastAt: t0.Add(-time.Second), Carry: 7},
+			steps:    []step{{3, 0, 3 + 7, CounterReset}, {1_000_000, 1, 0, CounterJump}},
+		},
+		{
+			name: "Carry restaurado soma com nova base", bits: 32, maxRate: 10,
+			restored: &CounterState{AddrKey: "outro", Bits: 32, LastRaw: 500, LastAt: t0, Carry: 4},
+			steps:    []step{{9000, 1, 4, CounterRebaseline}},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -231,5 +248,56 @@ func TestMinuteSecondsAlwaysSum60(t *testing.T) {
 	a = &minuteAcc{ms: [numSecs]int64{30000, 0, 0, 0, 0}}
 	if s := a.seconds(); s[secRun] != 30 || s[secNoComm] != 30 {
 		t.Fatalf("tempo não observado deveria ir para no_comm: %v", s)
+	}
+}
+
+// O checkpoint de um evento no minuto aberto guarda a base que refaz as peças já
+// contadas pelo delta (sem dar a volta) e o resto em Carry; quando um minuto anterior
+// fecha, as peças dele saem do checkpoint.
+func TestCounterCheckpoint(t *testing.T) {
+	t0 := time.Date(2026, 11, 11, 13, 0, 0, 0, time.UTC)
+	tr := &counterTracker{state: CounterState{TagID: "tag", Bits: 32, AddrKey: "k"}, maxRate: 10}
+
+	// Salto: a base depois do evento cobre as peças contadas.
+	tr.ck = &counterCheckpoint{raw: 5170, minute: t0.Add(time.Minute).UnixMilli(), carry: 10, from: t0}
+	if s := tr.checkpoint(); s.LastRaw != 5160 || s.Carry != 0 || !s.LastAt.Equal(t0) || s.TagID != "tag" || s.AddrKey != "k" {
+		t.Fatalf("checkpoint do salto: %+v", s)
+	}
+	// Reset para 3 com 13 peças contadas: base 0 e o resto em Carry.
+	tr.ck = &counterCheckpoint{raw: 3, minute: t0.Add(time.Minute).UnixMilli(), carry: 13, from: t0}
+	if s := tr.checkpoint(); s.LastRaw != 0 || s.Carry != 10 {
+		t.Fatalf("checkpoint do reset: %+v", s)
+	}
+	// Fecha o minuto 13:00 (anterior ao evento) com 4 peças da tag: vale o checkpoint,
+	// sem elas, a partir da última leitura do 13:00.
+	end := CounterState{TagID: "tag", Bits: 32, AddrKey: "k", LastRaw: 50069, LastAt: t0.Add(59 * time.Second)}
+	if s := tr.closed(t0.UnixMilli(), 4, end); s.LastRaw != 0 || s.Carry != 6 || !s.LastAt.Equal(end.LastAt) {
+		t.Fatalf("checkpoint depois do 13:00: %+v", s)
+	}
+	// Fecha o minuto do evento: vale o fim dele e o checkpoint acaba.
+	end2 := CounterState{TagID: "tag", Bits: 32, AddrKey: "k", LastRaw: 50, LastAt: t0.Add(119 * time.Second)}
+	if s := tr.closed(t0.Add(time.Minute).UnixMilli(), 40, end2); s != end2 || tr.ck != nil || !tr.anchor.Equal(end2.LastAt) {
+		t.Fatalf("fim do minuto do evento: %+v (checkpoint %+v)", s, tr.ck)
+	}
+}
+
+// O total de cada estado no minuto não depende de onde os Ticks cortam o tempo, mesmo
+// com instantes fora do milissegundo (janela ociosa, relógio em ns): cada trecho conta
+// pelas posições truncadas dentro do minuto.
+func TestAccountIndependentOfSegmentation(t *testing.T) {
+	t0 := time.Date(2026, 11, 11, 13, 0, 0, 0, time.UTC)
+	cuts := [][]time.Duration{
+		{2001 * time.Millisecond},
+		{1000500 * time.Microsecond, 2001 * time.Millisecond},
+		{300700 * time.Microsecond, 1000500 * time.Microsecond, 1999900 * time.Microsecond, 2001 * time.Millisecond},
+	}
+	for _, c := range cuts {
+		m := &machine{e: &Engine{}, confirmed: stateKey{state: "RUNNING"}, accounted: t0, closedUntil: t0, minutes: map[int64]*minuteAcc{}}
+		for _, d := range c {
+			m.account(t0.Add(d))
+		}
+		if got := m.minutes[t0.UnixMilli()].ms[secRun]; got != 2001 {
+			t.Fatalf("cortes %v: %d ms, quer 2001", c, got)
+		}
 	}
 }

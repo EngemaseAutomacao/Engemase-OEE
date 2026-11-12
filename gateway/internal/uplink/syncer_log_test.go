@@ -4,13 +4,19 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	stdlog "log"
 	"log/slog"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -612,6 +618,218 @@ func TestConnectRefusalWithAnyReasonPhraseIsProxy(t *testing.T) {
 	} {
 		if got := uplink.FailureClass(c.err); got != c.want {
 			t.Errorf("%v: classe %q, quer %q", c.err, got, c.want)
+		}
+	}
+}
+
+// Enlace instável (roteador 4G, proxy sobrecarregado, timeout ocasional): quedas
+// curtas em sequência dividem o limite do log. Antes, cada sucesso fechava a queda
+// e zerava o limite, e cada falha seguinte abria outra com linha na hora: um /sync
+// a cada 10 s alternando falha e sucesso dava 360 linhas em 1 h.
+func TestFlappingLinkLogVolumeIsBounded(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		pattern []error // um /sync a cada 10 s, em ciclo
+		want    int     // linhas em 1 h
+		skipped float64 // quedas_omitidas na segunda abertura
+	}{
+		// Por janela de 10 min: abertura e volta.
+		{"falha e sucesso alternados", []error{context.DeadlineExceeded, nil}, 12, 29},
+		// A segunda falha da queda curta não pode sair como "persiste" na hora.
+		{"duas falhas e um sucesso", []error{context.DeadlineExceeded, context.DeadlineExceeded, nil}, 12, 19},
+		// A classe vista numa queda anterior da janela não é nova na seguinte: por
+		// janela, abertura, mudança de causa e volta.
+		{"duas classes por queda", []error{context.DeadlineExceeded, dnsErr(), nil}, 18, 19},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sink, log := newLogSink()
+			snd := &scriptSender{}
+			clk := &clock{now: t0}
+			sy := &uplink.Syncer{Sender: snd, Queue: emptyQueue{}, Now: clk.Now, Log: log}
+			for i := 0; i < 360; i++ {
+				clk.advance(10 * time.Second)
+				snd.set(tc.pattern[i%len(tc.pattern)])
+				_, _ = sy.SyncOnce(context.Background())
+			}
+			lines := sink.lines(t)
+			if len(lines) != tc.want {
+				t.Fatalf("enlace instável: %d linhas em 1 h, quer %d", len(lines), tc.want)
+			}
+			var opens []map[string]any
+			for _, l := range lines {
+				if strings.HasPrefix(l["msg"].(string), "falha no sync com a nuvem: a coleta continua") {
+					opens = append(opens, l)
+				}
+			}
+			if len(opens) != 6 {
+				t.Fatalf("quer uma abertura a cada 10 min (6), teve %d", len(opens))
+			}
+			if _, ok := opens[0]["quedas_omitidas"]; ok {
+				t.Errorf("a primeira abertura não omitiu queda nenhuma: %v", opens[0])
+			}
+			// As quedas curtas que ficaram sem linha aparecem na abertura seguinte.
+			if got := opens[1]["quedas_omitidas"]; got != tc.skipped {
+				t.Errorf("quedas_omitidas = %v, quer %v (%v)", got, tc.skipped, opens[1])
+			}
+		})
+	}
+}
+
+// Quedas curtas dividem o limite: a que começa menos de FailureLogEvery depois da
+// última abertura registrada, com uma classe já vista desde então, fica quieta (e
+// a volta dela também); se durar, a regra de repetição de sempre, contada daquela
+// abertura, a registra. Classe nova abre na hora, e a volta do 401 sempre sai.
+func TestShortOutagesShareTheFailureLogLimit(t *testing.T) {
+	sink, log := newLogSink()
+	snd := &scriptSender{}
+	clk := &clock{now: t0}
+	sy := &uplink.Syncer{Sender: snd, Queue: emptyQueue{}, Now: clk.Now, Log: log}
+	step := func(err error, d time.Duration) {
+		t.Helper()
+		clk.advance(d)
+		snd.set(err)
+		_, _ = sy.SyncOnce(context.Background())
+	}
+	const s10 = 10 * time.Second
+
+	step(dnsErr(), 0)                                                // t0: abre (1)
+	step(nil, s10)                                                   // t0+10 s: recuperado (2)
+	step(dnsErr(), s10)                                              // t0+20 s: queda curta, classe já vista: quieta
+	step(dnsErr(), s10)                                              // t0+30 s: idem, sem "persiste" na hora
+	step(nil, s10)                                                   // t0+40 s: volta sem linha
+	step(&uplink.HTTPError{Status: 503}, s10)                        // t0+50 s: classe nova: abre (3)
+	step(nil, s10)                                                   // t0+60 s: recuperado (4)
+	step(dnsErr(), s10)                                              // t0+70 s: quieta...
+	step(&uplink.HTTPError{Status: 401, Code: "token_revoked"}, s10) // t0+80 s: ...até o 401 (alarme do OnBlocked)
+	sy.Unblock()                                                     //
+	step(nil, s10)                                                   // t0+90 s: a volta do 401 sai sempre (5)
+	step(dnsErr(), s10)                                              // t0+100 s: queda quieta que vai durar
+	for i := 0; i < 9; i++ {
+		step(dnsErr(), time.Minute) // até t0+10 min 40 s: persiste (6)
+	}
+	step(nil, s10)      // t0+10 min 50 s: recuperado (7)
+	step(dnsErr(), s10) // t0+11 min: janela nova, abre (8)
+
+	lines := sink.lines(t)
+	open := "falha no sync com a nuvem: a coleta continua e os dados ficam no buffer"
+	want := []struct {
+		msg, class string
+		extra      map[string]any
+	}{
+		{open, uplink.ClassDNS, nil},
+		{"sync com a nuvem recuperado", uplink.ClassDNS, map[string]any{"duracao": "10s", "falhas": 1.0}},
+		{open, uplink.ClassHTTP5xx, map[string]any{"quedas_omitidas": 1.0, "status": 503.0}},
+		{"sync com a nuvem recuperado", uplink.ClassHTTP5xx, nil},
+		{"sync com a nuvem recuperado", uplink.ClassUnauthorized, map[string]any{"duracao": "20s", "falhas": 2.0}},
+		{"falha no sync com a nuvem persiste", uplink.ClassDNS, map[string]any{"duracao": "9m0s", "falhas": 10.0, "omitidas": 9.0}},
+		{"sync com a nuvem recuperado", uplink.ClassDNS, map[string]any{"duracao": "9m10s", "falhas": 10.0}},
+		{open, uplink.ClassDNS, nil},
+	}
+	if len(lines) != len(want) {
+		var msgs []string
+		for _, l := range lines {
+			msgs = append(msgs, fmt.Sprintf("%v (%v)", l["msg"], l["classe"]))
+		}
+		t.Fatalf("quer %d linhas, teve %d:\n%s", len(want), len(lines), strings.Join(msgs, "\n"))
+	}
+	for i, w := range want {
+		l := lines[i]
+		if l["msg"] != w.msg || l["classe"] != w.class {
+			t.Errorf("linha %d = %v; quer %q classe %s", i, l, w.msg, w.class)
+		}
+		for k, v := range w.extra {
+			if l[k] != v {
+				t.Errorf("linha %d: %s = %v, quer %v (%v)", i, k, l[k], v, l)
+			}
+		}
+	}
+	for _, i := range []int{0, 7} {
+		if _, ok := lines[i]["quedas_omitidas"]; ok {
+			t.Errorf("linha %d: nenhuma queda ficou sem linha desde a abertura anterior: %v", i, lines[i])
+		}
+	}
+}
+
+// oldTLSServer responde ao ClientHello com um ServerHello em TLS 1.0 (middlebox
+// antigo): o crypto/tls recusa com um erro sem tipo ("tls: server selected
+// unsupported protocol version 301").
+func oldTLSServer(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				_, _ = c.Read(make([]byte, 4096))
+				body := append([]byte{0x03, 0x01}, make([]byte, 32)...) // versão e random
+				body = append(body, 0x00, 0x00, 0x2f, 0x00)             // sessão, cifra, compressão
+				hs := append([]byte{0x02, 0, 0, byte(len(body))}, body...)
+				_, _ = c.Write(append([]byte{0x16, 0x03, 0x01, 0, byte(len(hs))}, hs...))
+				_, _ = io.Copy(io.Discard, c)
+			}()
+		}
+	}()
+	return "https://" + ln.Addr().String()
+}
+
+// Falhas de handshake que o crypto/tls devolve sem tipo (errors.New/fmt.Errorf sem
+// %w) são "tls", mesmo sem proxy nenhum; antes caíam na recusa do CONNECT
+// ("proxy") e mandavam o técnico procurar um proxy que não existe.
+func TestUntypedTLSHandshakeErrorsAreTLS(t *testing.T) {
+	noProxy := func() *http.Transport {
+		return &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
+	}
+	if err := syncErr(t, oldTLSServer(t), noProxy(), 5*time.Second); uplink.FailureClass(err) != uplink.ClassTLS {
+		t.Errorf("TLS 1.0, sem proxy: classe %q, quer tls (erro: %v)", uplink.FailureClass(err), err)
+	}
+
+	// Inspeção SSL com certificado de serial negativo: o Go >= 1.23 recusa no parse.
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{SerialNumber: big.NewInt(0x40), Subject: pkix.Name{CommonName: "127.0.0.1"},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := bytes.Index(der, []byte{0xa0, 0x03, 0x02, 0x01, 0x02, 0x02, 0x01, 0x40}) // versão v3, serial 0x40
+	if i < 0 {
+		t.Fatal("serial não achado no DER")
+	}
+	der[i+7] = 0xc0 // INTEGER com o bit de sinal: serial negativo
+	ln, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &http.Server{Handler: http.NotFoundHandler(), ErrorLog: stdlog.New(io.Discard, "", 0)}
+	go func() { _ = srv.Serve(ln) }()
+	defer srv.Close()
+	if err := syncErr(t, "https://"+ln.Addr().String(), noProxy(), 5*time.Second); uplink.FailureClass(err) != uplink.ClassTLS {
+		t.Errorf("serial negativo, sem proxy: classe %q, quer tls (erro: %v)", uplink.FailureClass(err), err)
+	}
+
+	// Os mesmos erros depois de um CONNECT aceito chegam iguais no url.Error.
+	ue := func(err error) error {
+		return &url.Error{Op: "Post", URL: "https://oee.exemplo.com.br/api/gateway/v1/sync", Err: err}
+	}
+	for _, e := range []error{
+		errors.New("tls: server selected unsupported protocol version 301"),
+		errors.New("tls: failed to parse certificate from server: x509: negative serial number"),
+		errors.New("tls: server's certificate contains an unsupported type of public key: *dsa.PublicKey"),
+		errors.New("x509: malformed certificate"),
+	} {
+		if got := uplink.FailureClass(ue(e)); got != uplink.ClassTLS {
+			t.Errorf("%v: classe %q, quer tls", e, got)
 		}
 	}
 }

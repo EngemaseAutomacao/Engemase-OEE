@@ -7,13 +7,11 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
-	"unsafe"
 
 	mb "github.com/grid-x/modbus"
 	"github.com/grid-x/serial"
@@ -330,6 +328,16 @@ func (c *client) Info() string { return c.target.String() }
 func (c *client) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	// Espera da linha quieta interrompida pelo contexto (recarga da config: a leitura da
+	// grid-x não olha o contexto, e o poller fecha o Reader logo depois de ela expirar).
+	// Ela termina aqui, antes de soltar a linha: o Reader novo, no mesmo conversor ou
+	// barramento, escreve a primeira requisição em milissegundos e receberia a resposta
+	// atrasada desta (a porta serial reaberta, ou o conversor transparente, que entrega
+	// à conexão do momento o que o escravo responder). Limitada a 3 Timeouts depois do
+	// erro (serial: 1), sem esperar ACK depois do silêncio (fecha com RST).
+	if !c.quietUntil.IsZero() {
+		_ = c.settle(context.Background(), true)
+	}
 	if c.sock != nil {
 		// Requisição ainda sem ACK (leitura interrompida antes do escoamento): o close
 		// normal deixaria o kernel entregá-la depois, e a resposta iria para a conexão
@@ -357,7 +365,7 @@ func (c *client) ReadBlock(ctx context.Context, unit uint8, s Span) (Raw, error)
 	for attempt := 0; attempt <= c.target.Retries; attempt++ {
 		// Depois de um erro num transporte RTU, nenhuma requisição (nem esta repetição)
 		// sai antes de a linha ficar quieta.
-		if err := c.settle(ctx); err != nil {
+		if err := c.settle(ctx, false); err != nil {
 			return Raw{}, err
 		}
 		c.conferirACK()
@@ -380,10 +388,11 @@ func (c *client) ReadBlock(ctx context.Context, unit uint8, s Span) (Raw, error)
 	// A linha fica quieta aqui, ainda dentro da leitura que falhou, e não no começo da
 	// próxima: no barramento a próxima costuma ser de outro dispositivo, e o poller
 	// mediria a espera como latência dele. Se o contexto acabar no meio, o resto da
-	// espera fica para a próxima leitura (quietUntil continua marcado). No RTU sobre
-	// TCP o socket segue aberto até a próxima leitura, que antes passa por ele mais uma
-	// vez (a resposta de um escravo mais lento que 2 Timeouts pode chegar nesse meio).
-	if !c.quietUntil.IsZero() && c.settle(ctx) == nil {
+	// espera fica para a próxima leitura ou para o Close (quietUntil continua marcado).
+	// No RTU sobre TCP o socket segue aberto até a próxima leitura, que antes passa por
+	// ele mais uma vez (a resposta de um escravo mais lento que 2 Timeouts pode chegar
+	// nesse meio).
+	if !c.quietUntil.IsZero() && c.settle(ctx, false) == nil {
 		c.recolher = c.target.Transport == TransportRTUOverTCP
 	}
 	return Raw{}, err
@@ -477,7 +486,9 @@ func (c *client) readOnce(ctx context.Context, unit uint8, s Span) (Raw, error) 
 //     espera, fecha com RST, que descarta a fila. É também o que percebe o conversor
 //     desligado (sem RST nem FIN): sem isso o socket ficava aberto, e só a
 //     retransmissão do TCP, com espera crescente de até 2 min, encontrava o conversor
-//     religado.
+//     religado. E o ACK que chega no meio do escoamento (o caminho voltou) não é linha
+//     quieta: a requisição acabou de chegar ao conversor e o escravo ainda vai
+//     responder, então o silêncio conta de novo a partir dele.
 //   - RTU serial: a porta é fechada agora e só é reaberta depois do intervalo. A grid-x
 //     não expõe o descritor (não dá para chamar tcflush); numa UART, o último close
 //     descarta o buffer de entrada e, com a porta fechada, nada é recebido, então a
@@ -508,21 +519,21 @@ func (c *client) dropAfterError(err error) {
 }
 
 // settle segura a próxima requisição até a linha ficar quieta (ver dropAfterError).
-// Só devolve erro quando o contexto acaba.
-func (c *client) settle(ctx context.Context) error {
+// Só devolve erro quando o contexto acaba. fechando: chamado pelo Close (ver drain).
+func (c *client) settle(ctx context.Context, fechando bool) error {
 	if c.quietUntil.IsZero() {
 		if !c.recolher {
 			return nil
 		}
 		// Passada rápida: até a linha ficar quieta só se algo tiver chegado.
-		if err := c.drain(ctx, time.Time{}); err != nil {
+		if err := c.drain(ctx, time.Time{}, fechando); err != nil {
 			return err
 		}
 		c.recolher = false
 		return nil
 	}
 	if c.target.Transport == TransportRTUOverTCP {
-		if err := c.drain(ctx, c.quietUntil); err != nil {
+		if err := c.drain(ctx, c.quietUntil, fechando); err != nil {
 			return err
 		}
 		c.recolher = false
@@ -545,7 +556,18 @@ func (c *client) settle(ctx context.Context) error {
 // Socket morto é fechado (a próxima leitura disca de novo), assim como o de uma linha
 // que não sossega, ou de uma requisição que ninguém reconheceu, em 2 Timeouts além
 // disso.
-func (c *client) drain(ctx context.Context, until time.Time) error {
+//
+// O ACK que chega aqui (o caminho voltou: switch reiniciando, cabo solto) é uma
+// requisição que acabou de chegar ao conversor, e o escravo ainda vai responder. Não é
+// linha quieta: o silêncio conta de novo a partir dele, com mais um Timeout de folga no
+// limite para a resposta. Por isso a fila é consultada a cada passoACK enquanto houver
+// bytes sem ACK, inclusive antes de until (o ACK que chega pouco antes do fim da
+// espera). No pior caso (ACK no limite) o escoamento vai a until + 4 Timeouts.
+//
+// fechando (Close): com a linha quieta e bytes ainda sem ACK, fecha com RST na hora,
+// sem a espera do ACK (o socket vai fechar de qualquer jeito); fica em até until + 2
+// Timeouts.
+func (c *client) drain(ctx context.Context, until time.Time, fechando bool) error {
 	conn := c.sock
 	if conn == nil {
 		return nil // nada aberto: a próxima leitura disca um socket novo
@@ -557,6 +579,8 @@ func (c *client) drain(ctx context.Context, until time.Time) error {
 		until = earliest
 	}
 	limit := until.Add(2 * guard)
+	// Bytes enviados ainda sem ACK. Sem consulta (fora do Linux), vale o silêncio.
+	pend, _ := c.pendentes(conn)
 	// Contexto cancelado interrompe a leitura em curso. Na saída, espera o AfterFunc
 	// que já começou, para ele não mexer no prazo da próxima requisição.
 	cancelado := make(chan struct{})
@@ -570,11 +594,10 @@ func (c *client) drain(ctx context.Context, until time.Time) error {
 		}
 	}()
 	buf := make([]byte, 256)
-	esperaACK := false
 	for {
 		deadline := until
-		if esperaACK {
-			deadline = time.Now().Add(passoACK)
+		if pend > 0 {
+			deadline = time.Now().Add(passoACK) // consulta a fila a cada passo
 		}
 		if limit.Before(deadline) {
 			deadline = limit
@@ -590,33 +613,53 @@ func (c *client) drain(ctx context.Context, until time.Time) error {
 		now := time.Now()
 		if n > 0 {
 			until = now.Add(guard) // a linha falou: o silêncio conta de novo
-			esperaACK = false
 		}
 		switch {
 		case err == nil:
-			continue
 		case !errors.Is(err, os.ErrDeadlineExceeded):
 			c.closeConn() // EOF, reset: socket morto
 			return nil
 		case ctx.Err() != nil:
 			return ctx.Err()
+		}
+		if pend > 0 {
+			agora, ok := c.pendentes(conn)
+			if !ok {
+				agora = 0
+			}
+			if agora < pend {
+				// ACK: requisição que acabou de chegar ao conversor. O silêncio conta
+				// de novo daqui, para a resposta dela, que ainda vem.
+				until = later(until, now.Add(guard))
+				limit = later(limit, until.Add(guard))
+			}
+			pend = agora
+		}
+		switch {
+		case err == nil:
+			continue
 		case now.Before(until):
 			if !now.Before(limit) {
 				c.closeConn() // a linha não sossega: recomeça numa conexão nova
 				return nil
 			}
 			continue
-		}
-		// Linha quieta. Sem consulta (fora do Linux), vale o silêncio.
-		if pend, ok := c.pendentes(conn); !ok || pend == 0 {
+		case pend == 0: // linha quieta e tudo reconhecido
 			return nil
-		}
-		if !now.Before(limit) {
+		case fechando || !now.Before(limit):
 			c.closeConn() // nada reconhecido: caminho caído ou conversor desligado
 			return nil
 		}
-		esperaACK = true // ACK atrasado (delayed ACK) ou retransmissão: espera mais um pouco
+		// ACK atrasado (delayed ACK) ou retransmissão: espera mais um pouco.
 	}
+}
+
+// later devolve o mais tarde de a e b.
+func later(a, b time.Time) time.Time {
+	if a.After(b) {
+		return a
+	}
+	return b
 }
 
 // passoACK é o intervalo entre consultas à fila de envio enquanto o escoamento espera
@@ -662,31 +705,4 @@ func abortar(conn net.Conn) {
 	if tc, ok := conn.(interface{ SetLinger(int) error }); ok {
 		_ = tc.SetLinger(0)
 	}
-}
-
-// bytesNaoReconhecidos devolve quantos bytes escritos no socket o outro lado ainda não
-// reconheceu: na fila de envio ou enviados sem ACK (ioctl SIOCOUTQ, igual a TIOCOUTQ).
-// ok=false fora do Linux ou se o socket não permite a consulta (já fechado).
-func bytesNaoReconhecidos(conn net.Conn) (int, bool) {
-	if runtime.GOOS != "linux" {
-		return 0, false
-	}
-	sc, ok := conn.(syscall.Conn)
-	if !ok {
-		return 0, false
-	}
-	rc, err := sc.SyscallConn()
-	if err != nil {
-		return 0, false
-	}
-	var (
-		n     int32
-		errno syscall.Errno
-	)
-	if err := rc.Control(func(fd uintptr) {
-		_, _, errno = syscall.Syscall(syscall.SYS_IOCTL, fd, uintptr(syscall.TIOCOUTQ), uintptr(unsafe.Pointer(&n)))
-	}); err != nil || errno != 0 {
-		return 0, false
-	}
-	return int(n), true
 }

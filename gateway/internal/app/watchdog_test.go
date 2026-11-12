@@ -243,6 +243,69 @@ func TestWatchdogIdleWhileConfigCannotBuildPollers(t *testing.T) {
 	}
 }
 
+// Parada (SIGTERM) à espera de outra config, com saída do motor que a parada da config
+// anterior não gravou (buffer falhando na troca): ela só existe em memória. Como na
+// parada da coleta, há uma última tentativa de gravar, sem a espera entre tentativas.
+// Com o buffer de volta, a saída é gravada (antes do clean_shutdown do Run); com ele
+// ainda falhando, a perda vai para o log: nunca é silenciosa.
+func TestStopWhileConfigCannotBuildPollersKeepsUnsent(t *testing.T) {
+	for _, recovered := range []bool{false, true} {
+		name := "buffer-falhando"
+		if recovered {
+			name = "buffer-de-volta"
+		}
+		t.Run(name, func(t *testing.T) {
+			a, _, logs, path := watchdogAgent(t)
+			setWriteFailure(t, path, true)
+			cfg, err := config.ParseRemote(testutil.ReadFixture(t, "gateway-config.valid.tcp-and-rtu-bus.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			a.local = config.DefaultLocal()
+			a.local.Hardware.Profile = "generic" // sem mapeamento da porta serial: os pollers não montam
+			a.reconfigure = make(chan *config.GatewayConfig, 1)
+			a.setConfig(cfg, "applied", "")
+			// A gravação da parada da config anterior falhou: a próxima só depois da espera.
+			a.addUnsent(buffer.Write{Items: []buffer.Item{stateItem(ids.NewGenerator(nil), fakeWall)}})
+			a.retryWait, a.retryAt = commitRetryMax, commitRetryMax
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			done := make(chan error, 1)
+			go func() { done <- a.collectWith(ctx, cfg) }()
+			for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+				a.mu.Lock()
+				st := a.cfgStatus.State
+				a.mu.Unlock()
+				if st == "rejected" {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("a config deveria ser recusada por não montar os pollers")
+				}
+			}
+			if recovered {
+				setWriteFailure(t, path, false)
+			}
+			cancel() // SIGTERM
+			if err := <-done; !errors.Is(err, context.Canceled) {
+				t.Fatalf("collectWith: %v", err)
+			}
+
+			n, out := len(outbox(t, a.store)), logs.String()
+			lostLogged := strings.Contains(out, "saída do motor perdida") && strings.Contains(out, "itens_perdidos=1")
+			if recovered && (n != 1 || len(a.unsent.Items) != 0 || lostLogged) {
+				t.Fatalf("buffer de volta: %d itens na outbox, %d em memória (quer 1 e 0), perda no log: %v\n%s",
+					n, len(a.unsent.Items), lostLogged, out)
+			}
+			if !recovered && (n != 0 || len(a.unsent.Items) != 1 || !lostLogged) {
+				t.Fatalf("buffer falhando: %d itens na outbox, %d em memória (quer 0 e 1); a perda deveria ir para o log\n%s",
+					n, len(a.unsent.Items), out)
+			}
+		})
+	}
+}
+
 // A coleta registra os pollers no watchdog e o logger neles: as mudanças de estado
 // de conexão vão para o log do agente, e um laço de leitura fora do prazo para o
 // watchdog, com o nome do poller. Na troca de config, os registros saem.
