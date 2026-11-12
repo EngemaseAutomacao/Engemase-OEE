@@ -177,19 +177,27 @@ Devolve a config completa do gateway com `ETag`; com `If-None-Match` igual à ve
 
 | Dado | Persistência | Idempotência |
 |---|---|---|
-| `events` | `machine_state_event` (fecha o intervalo anterior e abre o novo) | `id` UUIDv7 gerado na borda → `ON CONFLICT (id) DO NOTHING` |
-| `minutes` | `production_minute` | PK `(machine_id, bucket_start)` → upsert (a borda só envia minutos fechados) |
-| `live` | `machine_live` (uma linha por máquina) | Upsert, só se `at` for mais novo que o gravado |
+| `events` (`state`) | `machine_state_event` (fecha o intervalo anterior e abre o novo; aceita eventos fora de ordem) | `id` UUIDv7 gerado na borda → `ON CONFLICT (id) DO NOTHING` |
+| `events` (`product`) | `production_run` | Por `id` |
+| `events` (`remote_access`) | `remote_access_event` | Por `id` |
+| `events` (os outros 12 tipos) | `audit_log`, com ator "gateway" e o `id` do evento como id da linha | Por `id` |
+| `minutes` | `production_minute` (inclui `good`, quando o CLP tem contador de boas) | PK `(machine_id, bucket_start)` → upsert (a borda só envia minutos fechados) |
+| `live` | `machine_live` (uma linha por máquina, com `speed`) | Upsert, só se `at` for mais novo que o gravado |
 | `samples` | `tag_sample` (particionada, retenção curta) | PK `(tag_id, at)` → `DO NOTHING` |
-| `agent`, `devices` | `gateway` e `gateway_device_status` (última foto) + histórico de saúde resumido | Upsert |
+| `agent`, `devices`, `buses` | `gateway` e `gateway_device_status` (última foto). Histórico de saúde resumido: F1 | Upsert |
 | `command_results` | `gateway_command` | Por `id` |
 
 Além disso:
 
-- Se `minutes` ou `events` caem em um **turno já consolidado**, o turno é marcado como "sujo" (`oee_shift.dirty = true`) e recalculado pelo cron. Ver [07](07-calculo-oee.md#dados-atrasados).
-- Tudo de um `/sync` é gravado **em uma transação**. O `ack_seq` só é devolvido após o commit.
-- A API valida que cada `machine_id` e `tag_id` pertence ao gateway autenticado (vínculo `gateway_machine`, com `organization_id` e chaves compostas). Um gateway nunca escreve em máquina de outro gateway ou de outra organização.
-- Timestamps no futuro além de uma tolerância (ex.: `server_time` + 2 min) são rejeitados; reescrita de um minuto já gravado com valor diferente gera alerta e guarda a versão anterior.
+- Se `minutes` ou `events` caem em um **turno já consolidado**, o turno é marcado como "sujo" (`oee_shift.dirty = true`) e recalculado pelo cron. Os horários do turno usam o fuso da unidade, inclusive turnos que atravessam a meia-noite. Ver [07](07-calculo-oee.md#dados-atrasados).
+- Tudo de um `/sync` é gravado **em uma transação**. O `ack_seq` só é devolvido após o commit. O token é conferido de novo **dentro** da transação, junto com o bloqueio da linha do gateway: um token revogado ou rotacionado durante o envio não grava nada.
+- A API valida que cada `machine_id`, `tag_id`, `device_id` e id de comando pertence ao gateway autenticado (vínculo `gateway_machine`, com `organization_id` e chaves compostas). Um gateway nunca escreve em máquina de outro gateway ou de outra organização.
+  - Nos itens **da fila** (eventos, minutos, amostras), uma referência alheia devolve `400 unknown_reference` com o caminho do item, para o agente isolá-lo.
+  - Na **foto do ciclo** (`live`, `devices`, `command_results`), a referência alheia é **ignorada em silêncio**: o agente não tem como isolar esses itens, e um 400 travaria a fila inteira.
+- Timestamps no futuro além de `server_time` + 2 min são rejeitados (inclusive em `live`). Um minuto reenviado com valores diferentes é atualizado e a versão anterior vai para o `audit_log`; o **alerta** dessa reescrita é da F1.
+- **Comandos:** cada resposta leva até 20 comandos abertos; os não respondidos são reenviados (o agente descarta repetidos pelo `id`). Comando vencido vira `expired`. Comando que não passa no schema do contrato (tipo fora da v1, payload inválido, validade acima de 24 h) é marcado `rejected` na nuvem e nunca é enviado.
+- **`next_sync_s`:** 1 enquanto houver comando aberto com menos de 5 min; senão, o `sync_interval_s` da config publicada (padrão 10). O modo interativo da tela de comissionamento aberta é da F1.
+- **Ainda não implementado na API:** `429` (fica com o Firewall da Vercel) e `409 config_outdated`.
 - **Suspensão do cliente não interrompe a ingestão:** o gateway continua enviando e nada se perde ([15](15-multi-cliente-e-acesso.md#6-ciclo-de-vida-do-cliente)).
 
 ## Erros e retentativas
