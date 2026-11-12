@@ -89,14 +89,21 @@ export function getMachinesWithLive(clientId: string, filter: { unitId?: string;
  * (aqui aproximado ponderando pelo tempo planejado igual entre máquinas com dados).
  */
 export function aggregateOee(list: { live?: MachineLive }[]): OeeValues & { machinesWithData: number } {
-  const withData = list.filter((m) => m.live && !m.live.stale && m.live.countShift > 0)
+  const withData = list.filter((m) => m.live && !m.live.stale && m.live.countShift > 0 && m.live.basis)
   if (withData.length === 0) return { availability: 0, performance: 0, quality: 0, oee: 0, machinesWithData: 0 }
-  const avg = (k: keyof OeeValues) => withData.reduce((s, m) => s + (m.live!.shift[k] ?? 0), 0) / withData.length
+  // Regra de docs/07: soma das bases, nunca média simples dos OEEs das máquinas.
+  const sum = (k: keyof NonNullable<MachineLive["basis"]>) => withData.reduce((s, m) => s + m.live!.basis![k], 0)
+  const planned = sum("plannedS")
+  const run = sum("runS")
+  const total = sum("total")
+  const good = sum("good")
+  const ideal = sum("idealS")
+  const goodIdeal = sum("goodIdealS")
   return {
-    availability: avg("availability"),
-    performance: avg("performance"),
-    quality: avg("quality"),
-    oee: avg("oee"),
+    availability: planned > 0 ? run / planned : 0,
+    performance: run > 0 ? ideal / run : 0,
+    quality: total > 0 ? good / total : 0,
+    oee: planned > 0 ? goodIdeal / planned : 0,
     machinesWithData: withData.length,
   }
 }

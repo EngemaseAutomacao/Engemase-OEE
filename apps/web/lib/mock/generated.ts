@@ -215,9 +215,10 @@ function shiftStats(machine: Machine) {
   const { idealCycleS, product } = idealCycleFor(machine)
   const total = p.noData ? 0 : Math.round((runS * p.perf) / idealCycleS)
   const reject = Math.round(total * (1 - p.quality))
-  const availability = plannedS > 0 ? runS / plannedS : 0
-  const performance = runS > 0 ? (total * idealCycleS) / runS : 0
-  const quality = total > 0 ? (total - reject) / total : 0
+  // docs/07 passo 7: sem tempo planejado (ou sem dados) o indicador é "sem dado" (NaN → exibido como "—"), nunca 0%.
+  const availability = p.noData || plannedS <= 0 ? Number.NaN : runS / plannedS
+  const performance = p.noData || runS <= 0 ? Number.NaN : (total * idealCycleS) / runS
+  const quality = p.noData || total <= 0 ? Number.NaN : (total - reject) / total
   const fullPlannedS = (SHIFT_END_MS - SHIFT_START_MS) / 1000 - (BREAK_END_MS - BREAK_START_MS) / 1000
   return {
     total,
@@ -225,6 +226,7 @@ function shiftStats(machine: Machine) {
     target: Math.round(fullPlannedS / idealCycleS),
     product,
     oee: { availability, performance, quality, oee: availability * performance * quality } satisfies OeeValues,
+    basis: { plannedS, runS, total, good: total - reject, idealS: total * idealCycleS, goodIdealS: (total - reject) * idealCycleS },
   }
 }
 
@@ -244,6 +246,7 @@ const lives = new Map<string, MachineLive>(
       rejectShift: s.reject,
       targetShift: s.target,
       shift: s.oee,
+      basis: p.noData ? undefined : s.basis,
       lastUpdate: p.stale ? iso(NOW_MS - (p.noData ? 0 : p.sinceMin) * MIN) : iso(NOW_MS - 4_000),
       stale: Boolean(p.stale),
     }

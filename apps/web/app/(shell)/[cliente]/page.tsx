@@ -157,7 +157,7 @@ export default async function Page({ params }: PageProps<"/[cliente]">) {
                     className="row-span-2 flex size-9 items-center justify-center rounded-full text-[11px] font-bold"
                     style={{ background: `color-mix(in oklab, ${STATE_META[m.state].hex} 15%, transparent)`, color: STATE_META[m.state].hex }}
                   >
-                    {m.name.match(/\d+/)?.[0] ?? m.name.slice(0, 2)}
+                    {m.initials}
                   </span>
                   <span className="min-w-0 truncate text-sm font-medium group-hover:text-primary">
                     {m.name} <span className="text-xs font-normal text-muted-foreground">· {m.line}</span>

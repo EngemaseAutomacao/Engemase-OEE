@@ -309,7 +309,7 @@ export function TwoFactorCard({
           <Button
             variant="ghost"
             size="sm"
-            className="justify-self-start text-xs text-muted-foreground"
+            className="h-auto max-w-full justify-self-start text-left text-xs whitespace-normal text-muted-foreground"
             disabled={required}
             onClick={() => {
               setEnabled(false)

@@ -48,7 +48,7 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
-      <SidebarInset className="bg-background">
+      <SidebarInset className="min-w-0 bg-background">
         <AppHeader
           user={{
             name: me.name,
@@ -60,7 +60,7 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
           bell={bell}
           entities={entities}
         />
-        <main className="flex-1">{children}</main>
+        <main className="min-w-0 flex-1">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   )

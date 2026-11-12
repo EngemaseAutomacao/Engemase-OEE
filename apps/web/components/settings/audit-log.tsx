@@ -338,10 +338,10 @@ function TimelineItem({ row }: { row: AuditRow }) {
           <ActorBadge row={row} />
           {row.ticket && <SoftBadge tone="slate">chamado {row.ticket}</SoftBadge>}
         </div>
-        <p className="mt-0.5 text-sm">
+        <p className="mt-0.5 text-sm [overflow-wrap:anywhere]">
           {row.actionLabel} <span className="font-medium">· {row.entityName}</span>
         </p>
-        {row.details && <p className="mt-0.5 text-xs text-muted-foreground">{row.details}</p>}
+        {row.details && <p className="mt-0.5 text-xs text-muted-foreground [overflow-wrap:anywhere]">{row.details}</p>}
         {row.impersonatedBy && <p className="mt-1 text-[11px] font-medium text-[#cf5539]">Via {row.impersonatedBy}</p>}
       </div>
     </li>

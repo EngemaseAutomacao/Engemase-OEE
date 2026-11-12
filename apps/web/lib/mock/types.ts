@@ -100,6 +100,11 @@ export interface MachineLive {
   rejectShift: number
   targetShift: number
   shift: OeeValues
+  /**
+   * Base do cálculo do turno (docs/07), para agregar linha/unidade corretamente:
+   * OEE agregado = Σ(boas × ciclo ideal) ÷ Σ tempo planejado (nunca média simples).
+   */
+  basis?: { plannedS: number; runS: number; total: number; good: number; idealS: number; goodIdealS: number }
   lastUpdate: string
   stale: boolean
 }

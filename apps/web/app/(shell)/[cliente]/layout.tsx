@@ -82,7 +82,7 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/[
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
-      <SidebarInset className="bg-background">
+      <SidebarInset className="min-w-0 bg-background">
         {client.status === "suspended" && (
           <div className="flex items-center gap-2 bg-state-fault px-4 py-1.5 text-xs text-white">
             <PauseCircleIcon className="size-3.5 shrink-0" />
@@ -101,7 +101,7 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/[
               : undefined
           }
         />
-        <main className="flex-1">{children}</main>
+        <main className="min-w-0 flex-1">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   )

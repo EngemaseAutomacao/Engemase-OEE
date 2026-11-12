@@ -87,7 +87,7 @@ export function AppHeader({
       <SidebarTrigger className="-ml-1 text-muted-foreground" />
       <GlobalSearch model={model} entities={entities} />
 
-      <div className="ml-auto flex items-center gap-1.5">
+      <div className="ml-auto flex min-w-0 items-center gap-1 sm:gap-1.5">
         {platformNotice && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -124,9 +124,13 @@ export function AppHeader({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <HelpButton href={helpHref} />
+        <span className="hidden sm:inline-flex">
+          <HelpButton href={helpHref} />
+        </span>
         <NotificationBell items={bell} allHref={bellHref} />
-        <ThemeToggle />
+        <span className="hidden sm:inline-flex">
+          <ThemeToggle />
+        </span>
 
         <span className="mx-1 hidden h-8 w-px bg-border sm:block" />
         <UserChip user={user} />
@@ -164,10 +168,11 @@ function GlobalSearch({ model, entities }: { model: ReturnType<typeof clientNav>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex h-10 w-full max-w-[360px] items-center gap-2 rounded-xl border bg-background px-3 text-left text-sm text-muted-foreground shadow-xs transition hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        aria-label="Buscar (Ctrl+K)"
+        className="flex h-10 w-10 min-w-0 shrink-0 items-center justify-center gap-2 rounded-xl border bg-background text-left text-sm text-muted-foreground shadow-xs transition hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:w-full sm:max-w-[360px] sm:shrink sm:justify-start sm:px-3"
       >
         <SearchIcon className="size-4 shrink-0" />
-        <span className="truncate">Buscar máquinas, linhas, gateways…</span>
+        <span className="hidden truncate sm:inline">Buscar máquinas, linhas, gateways…</span>
         <Kbd className="ml-auto hidden sm:inline-flex">Ctrl K</Kbd>
       </button>
       <CommandDialog open={open} onOpenChange={setOpen} title="Buscar" description="Busque telas, máquinas e gateways">

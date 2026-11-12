@@ -106,6 +106,7 @@ export function buildOverview(clientId: string, slug: string) {
       state: m.live!.state,
       count: m.live!.countShift,
       href: `/${slug}/maquinas/${m.id}`,
+      initials: initials(m.name.replace(/\d+/g, "")) + (m.code.match(/\d+/)?.[0] ?? ""),
     }))
     .sort((a, b) => b.oee - a.oee)
 

@@ -194,3 +194,21 @@ body::-webkit-scrollbar,
 [data-slot="sidebar"][data-sidebar="sidebar"] {
   background-image: linear-gradient(180deg, color-mix(in oklab, var(--sidebar) 92%, white) 0%, var(--sidebar) 38%, color-mix(in oklab, var(--sidebar) 78%, black) 100%);
 }
+
+/*
+ * Itens de grid não podem "estourar" a coluna por causa do conteúdo
+ * (tabelas largas devem rolar dentro do próprio contêiner; textos longos, truncar).
+ */
+@layer base {
+  [class~="grid"] > *,
+  [class*=":grid"] > * {
+    min-width: 0;
+  }
+}
+
+/* Contêineres com rolagem horizontal prendem elementos absolutos (ex.: textos sr-only das tabelas). */
+@layer base {
+  [class~="overflow-x-auto"] {
+    position: relative;
+  }
+}
