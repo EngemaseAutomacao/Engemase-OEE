@@ -20,7 +20,7 @@ import {
   users,
 } from "./data"
 import { dailyOeeFor, hourlyFor, liveFor, paretoFor, shiftHistoryFor, timelineFor } from "./generated"
-import type { Client, Machine, MachineLive, OeeValues, User } from "./types"
+import type { Client, Machine, MachineLive, MemberScope, OeeValues, PlatformRole, User } from "./types"
 
 export * from "./types"
 export { MOCK_NOW, DEFAULT_TZ } from "./clock"
@@ -34,6 +34,56 @@ export type { ShiftOeeRow } from "./generated"
 export function getCurrentUser(): User {
   return users.find((u) => u.id === CURRENT_USER_ID)!
 }
+
+/**
+ * Quem pode o quê na configuração do cliente (decisões D12 e D13).
+ * - Unidades, linhas, máquinas, gateways, conexões, tags, terminais, turnos, produtos, motivos de parada,
+ *   aparência e políticas: SÓ a equipe Engemase (super admin ou engenheiro de campo).
+ * - Usuários do cliente (convidar, papéis, escopos, desativar): o admin do cliente. O super admin da Engemase
+ *   também pode, para criar o primeiro admin e apoiar o cliente.
+ * - Ações do chão (classificar paradas, refugo, troca de produto) seguem com o cliente.
+ */
+export const ENGEMASE_CONFIG_ROLES: readonly PlatformRole[] = ["super_admin", "field_engineer"]
+
+export interface ConfigAccess {
+  /** Usuário atual é da equipe Engemase (qualquer papel de plataforma). */
+  isEngemase: boolean
+  /** Pode editar a configuração do cliente. */
+  canConfigure: boolean
+  /** Pode gerenciar os usuários do cliente. */
+  canManageUsers: boolean
+}
+
+export function getConfigAccess(clientId: string): ConfigAccess {
+  const me = getCurrentUser()
+  if (me.platformRole) {
+    return {
+      isEngemase: true,
+      canConfigure: ENGEMASE_CONFIG_ROLES.includes(me.platformRole),
+      canManageUsers: me.platformRole === "super_admin",
+    }
+  }
+  const membership = me.memberships.find((m) => m.clientId === clientId)
+  return { isEngemase: false, canConfigure: false, canManageUsers: membership?.role === "client_admin" }
+}
+
+/** A máquina está no escopo do vínculo? Fail-closed: lista vazia = nenhuma máquina (D11). */
+export function scopeAllowsMachine(scope: MemberScope, machine: Pick<Machine, "id" | "unitId">): boolean {
+  switch (scope.kind) {
+    case "all":
+      return true
+    case "units":
+      return scope.unitIds.includes(machine.unitId)
+    case "machines":
+      return scope.machineIds.includes(machine.id)
+  }
+}
+
+/**
+ * Máquinas do cliente que o escopo permite. É a base de todo agregado para a pessoa
+ * (OEE de linha e de unidade, relatórios, exportações): nunca soma máquinas fora do escopo.
+ */
+export const getMachinesInScope = (clientId: string, scope: MemberScope) => getMachines(clientId).filter((m) => scopeAllowsMachine(scope, m))
 
 /** Clientes que o usuário atual pode acessar (plataforma vê todos). */
 export function getAccessibleClients(): Client[] {

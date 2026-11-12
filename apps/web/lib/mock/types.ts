@@ -198,11 +198,19 @@ export interface Tag {
 
 export type UserStatus = "active" | "invited" | "disabled"
 
+/**
+ * Escopo do vínculo (docs/15 §2, decisão D11): todo o cliente, algumas unidades ou algumas máquinas.
+ * Fail-closed: lista vazia = nenhum acesso. Agregados (OEE de linha/unidade, relatórios,
+ * exportações) só somam as máquinas que o escopo permite.
+ */
+export type MemberScope = { kind: "all" } | { kind: "units"; unitIds: string[] } | { kind: "machines"; machineIds: string[] }
+
+export type MemberScopeKind = MemberScope["kind"]
+
 export interface Membership {
   clientId: string
   role: ClientRole
-  /** "all" = todas as unidades do cliente; ou lista de IDs de unidade. */
-  unitScope: "all" | string[]
+  scope: MemberScope
 }
 
 export interface User {

@@ -21,7 +21,11 @@ import type {
 /** "Agora" fixo e fuso do protótipo: definidos em `./clock` (módulo leve, seguro para o navegador). */
 export { MOCK_NOW, DEFAULT_TZ } from "./clock"
 
-/** Usuário "logado" no protótipo: super admin da Engemase (vê tudo, inclusive o console). */
+/**
+ * Usuário "logado" no protótipo: super admin da Engemase (vê tudo, inclusive o console, e edita a configuração).
+ * Troque por "usr_marcos" (admin do cliente) ou "usr_pedro" (engenheiro do cliente) para ver as telas de
+ * configuração como o cliente vê: só leitura, com a faixa "Configurado pela Engemase" (D12/D13).
+ */
 export const CURRENT_USER_ID = "usr_ana"
 
 export const clients: Client[] = [
@@ -265,28 +269,34 @@ export const tags: Tag[] = [
   ...standardTags("mch_cnc02", "dev_cnc02", "cnc02", 15_904),
 ]
 
+/** Escopo "todo o cliente" (inclui unidades e máquinas criadas no futuro). */
+const ALL = { kind: "all" } as const
+
 export const users: User[] = [
   // Equipe Engemase (plataforma)
   { id: "usr_ana", name: "Ana Ribeiro", email: "ana.ribeiro@engemase.exemplo.com.br", username: null, platformRole: "super_admin", memberships: [], status: "active", lastLoginAt: "2026-11-11T11:05:00.000Z", twoFactor: true },
   { id: "usr_carlos", name: "Carlos Mendes", email: "carlos.mendes@engemase.exemplo.com.br", username: null, platformRole: "support", memberships: [], status: "active", lastLoginAt: "2026-11-10T19:12:00.000Z", twoFactor: true },
   { id: "usr_diego", name: "Diego Souza", email: "diego.souza@engemase.exemplo.com.br", username: null, platformRole: "field_engineer", memberships: [], status: "active", lastLoginAt: "2026-11-11T09:40:00.000Z", twoFactor: false },
   // Plastiform
-  { id: "usr_marcos", name: "Marcos Lima", email: "marcos.lima@plastiform.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "client_admin", unitScope: "all" }], status: "active", lastLoginAt: "2026-11-11T12:30:00.000Z", twoFactor: true },
-  { id: "usr_juliana", name: "Juliana Costa", email: "juliana.costa@plastiform.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "supervisor", unitScope: ["uni_jlle"] }], status: "active", lastLoginAt: "2026-11-11T09:02:00.000Z", twoFactor: false },
-  { id: "usr_pedro", name: "Pedro Alves", email: "pedro.alves@plastiform.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "engineer", unitScope: "all" }], status: "active", lastLoginAt: "2026-11-09T14:10:00.000Z", twoFactor: false },
-  { id: "usr_fernanda", name: "Fernanda Rocha", email: "fernanda.rocha@plastiform.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "supervisor", unitScope: ["uni_ctba"] }], status: "invited", lastLoginAt: null, twoFactor: false },
-  { id: "usr_opinja", name: "Operador Injeção A", email: null, username: "op.injecao-a", platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "operator", unitScope: ["uni_jlle"] }], status: "active", lastLoginAt: "2026-11-11T09:01:00.000Z", twoFactor: false },
-  { id: "usr_tvinja", name: "TV Linha Injeção A", email: null, username: "tv.injecao-a", platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "viewer", unitScope: ["uni_jlle"] }], status: "active", lastLoginAt: "2026-11-11T06:00:00.000Z", twoFactor: false },
+  { id: "usr_marcos", name: "Marcos Lima", email: "marcos.lima@plastiform.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "client_admin", scope: ALL }], status: "active", lastLoginAt: "2026-11-11T12:30:00.000Z", twoFactor: true },
+  { id: "usr_juliana", name: "Juliana Costa", email: "juliana.costa@plastiform.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "supervisor", scope: { kind: "units", unitIds: ["uni_jlle"] } }], status: "active", lastLoginAt: "2026-11-11T09:02:00.000Z", twoFactor: false },
+  { id: "usr_pedro", name: "Pedro Alves", email: "pedro.alves@plastiform.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "engineer", scope: ALL }], status: "active", lastLoginAt: "2026-11-09T14:10:00.000Z", twoFactor: false },
+  { id: "usr_fernanda", name: "Fernanda Rocha", email: "fernanda.rocha@plastiform.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "supervisor", scope: { kind: "units", unitIds: ["uni_ctba"] } }], status: "invited", lastLoginAt: null, twoFactor: false },
+  { id: "usr_opinja", name: "Operador Injeção A", email: null, username: "op.injecao-a", platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "operator", scope: { kind: "units", unitIds: ["uni_jlle"] } }], status: "active", lastLoginAt: "2026-11-11T09:01:00.000Z", twoFactor: false },
+  // Escopo por máquina (D11): vê só as três primeiras injetoras da Linha Injeção A.
+  { id: "usr_bruno", name: "Bruno Azevedo", email: "bruno.azevedo@plastiform.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "supervisor", scope: { kind: "machines", machineIds: ["mch_inj01", "mch_inj02", "mch_inj03"] } }], status: "active", lastLoginAt: "2026-11-11T07:45:00.000Z", twoFactor: false },
+  { id: "usr_tvinja", name: "TV Linha Injeção A", email: null, username: "tv.injecao-a", platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "viewer", scope: { kind: "units", unitIds: ["uni_jlle"] } }], status: "active", lastLoginAt: "2026-11-11T06:00:00.000Z", twoFactor: false },
   // Serra Azul
-  { id: "usr_renata", name: "Renata Faria", email: "renata@serraazul.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_serra", role: "client_admin", unitScope: "all" }], status: "active", lastLoginAt: "2026-11-11T10:15:00.000Z", twoFactor: true },
-  { id: "usr_tiago", name: "Tiago Nunes", email: "tiago.nunes@serraazul.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_serra", role: "supervisor", unitScope: "all" }], status: "active", lastLoginAt: "2026-11-10T22:40:00.000Z", twoFactor: false },
-  { id: "usr_opest", name: "Operador Estamparia", email: null, username: "op.estamparia", platformRole: null, memberships: [{ clientId: "cli_serra", role: "operator", unitScope: "all" }], status: "active", lastLoginAt: "2026-11-11T08:00:00.000Z", twoFactor: false },
+  { id: "usr_renata", name: "Renata Faria", email: "renata@serraazul.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_serra", role: "client_admin", scope: ALL }], status: "active", lastLoginAt: "2026-11-11T10:15:00.000Z", twoFactor: true },
+  { id: "usr_tiago", name: "Tiago Nunes", email: "tiago.nunes@serraazul.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_serra", role: "supervisor", scope: ALL }], status: "active", lastLoginAt: "2026-11-10T22:40:00.000Z", twoFactor: false },
+  { id: "usr_gustavo", name: "Gustavo Reis", email: "gustavo.reis@serraazul.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_serra", role: "engineer", scope: { kind: "machines", machineIds: ["mch_cnc01", "mch_cnc02"] } }], status: "active", lastLoginAt: "2026-11-10T16:20:00.000Z", twoFactor: false },
+  { id: "usr_opest", name: "Operador Estamparia", email: null, username: "op.estamparia", platformRole: null, memberships: [{ clientId: "cli_serra", role: "operator", scope: ALL }], status: "active", lastLoginAt: "2026-11-11T08:00:00.000Z", twoFactor: false },
   // Bom Sabor
-  { id: "usr_luis", name: "Luís Andrade", email: "luis.andrade@bomsabor.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_bomsabor", role: "client_admin", unitScope: "all" }], status: "invited", lastLoginAt: null, twoFactor: false },
+  { id: "usr_luis", name: "Luís Andrade", email: "luis.andrade@bomsabor.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_bomsabor", role: "client_admin", scope: ALL }], status: "invited", lastLoginAt: null, twoFactor: false },
   // Vale Verde
-  { id: "usr_paula", name: "Paula Teixeira", email: "paula@valeverde.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_valeverde", role: "client_admin", unitScope: "all" }], status: "disabled", lastLoginAt: "2026-09-30T13:00:00.000Z", twoFactor: false },
+  { id: "usr_paula", name: "Paula Teixeira", email: "paula@valeverde.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_valeverde", role: "client_admin", scope: ALL }], status: "disabled", lastLoginAt: "2026-09-30T13:00:00.000Z", twoFactor: false },
   // Consultor com acesso a dois clientes
-  { id: "usr_rafael", name: "Rafael Prado", email: "rafael@consultoria-lean.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "viewer", unitScope: "all" }, { clientId: "cli_serra", role: "viewer", unitScope: "all" }], status: "active", lastLoginAt: "2026-11-08T16:00:00.000Z", twoFactor: false },
+  { id: "usr_rafael", name: "Rafael Prado", email: "rafael@consultoria-lean.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "viewer", scope: ALL }, { clientId: "cli_serra", role: "viewer", scope: ALL }], status: "active", lastLoginAt: "2026-11-08T16:00:00.000Z", twoFactor: false },
 ]
 
 export const products: Product[] = [
@@ -348,13 +358,13 @@ export const faultTexts: Record<number, string> = {
 }
 
 export const auditLog: AuditEntry[] = [
-  { id: "aud_01", clientId: "cli_plastiform", actorName: "Pedro Alves", impersonatedBy: null, action: "config.publish", entity: "gateway", entityName: "GW Joinville Injeção", at: "2026-11-11T12:58:00.000Z", details: "Publicou a configuração v42 (2 tags alteradas na Injetora 03)" },
+  { id: "aud_01", clientId: "cli_plastiform", actorName: "Diego Souza", impersonatedBy: null, action: "config.publish", entity: "gateway", entityName: "GW Joinville Injeção", at: "2026-11-11T12:58:00.000Z", details: "Publicou a configuração v42 (2 tags alteradas na Injetora 03)" },
   { id: "aud_02", clientId: "cli_plastiform", actorName: "Ana Ribeiro", impersonatedBy: null, action: "tag.test_read", entity: "tag", entityName: "Contador de ciclos · Injetora 03", at: "2026-11-11T12:55:00.000Z", details: "Leitura de teste: 512998 (21 ms)" },
   { id: "aud_03", clientId: "cli_plastiform", actorName: "Marcos Lima", impersonatedBy: null, action: "user.invite", entity: "usuario", entityName: "fernanda.rocha@plastiform.exemplo.com.br", at: "2026-11-10T17:20:00.000Z", details: "Convite como Supervisor · Unidade Curitiba" },
   { id: "aud_04", clientId: "cli_plastiform", actorName: "Juliana Costa", impersonatedBy: null, action: "stop.classify", entity: "maquina", entityName: "Injetora 02", at: "2026-11-11T13:12:00.000Z", details: "Parada de 14 min classificada como \"Falta de material\"" },
   { id: "aud_05", clientId: "cli_serra", actorName: "Carlos Mendes", impersonatedBy: "Carlos Mendes (suporte Engemase)", action: "support.impersonate", entity: "cliente", entityName: "Metalúrgica Serra Azul", at: "2026-11-10T14:00:00.000Z", details: "Sessão de suporte de 25 min (chamado #1042)" },
-  { id: "aud_06", clientId: "cli_serra", actorName: "Renata Faria", impersonatedBy: null, action: "shift.update", entity: "turno", entityName: "Tarde", at: "2026-11-09T11:30:00.000Z", details: "Fim do turno alterado de 21:30 para 22:00" },
-  { id: "aud_07", clientId: "cli_bomsabor", actorName: "Ana Ribeiro", impersonatedBy: null, action: "client.create", entity: "cliente", entityName: "Bom Sabor Alimentos", at: "2026-11-03T12:00:00.000Z", details: "Plano Pro · gerenciado pela Engemase" },
+  { id: "aud_06", clientId: "cli_serra", actorName: "Diego Souza", impersonatedBy: null, action: "shift.update", entity: "turno", entityName: "Tarde", at: "2026-11-09T11:30:00.000Z", details: "Fim do turno alterado de 21:30 para 22:00 (pedido da Renata Faria, chamado #1051)" },
+  { id: "aud_07", clientId: "cli_bomsabor", actorName: "Ana Ribeiro", impersonatedBy: null, action: "client.create", entity: "cliente", entityName: "Bom Sabor Alimentos", at: "2026-11-03T12:00:00.000Z", details: "Plano Pro · 20 máquinas contratadas" },
   { id: "aud_08", clientId: "cli_bomsabor", actorName: "Diego Souza", impersonatedBy: null, action: "gateway.create", entity: "gateway", entityName: "GW Chapecó Envase", at: "2026-11-04T15:30:00.000Z", details: "Código de ativação gerado (expira em 24 h)" },
   { id: "aud_09", clientId: "cli_valeverde", actorName: "Ana Ribeiro", impersonatedBy: null, action: "client.suspend", entity: "cliente", entityName: "Têxtil Vale Verde", at: "2026-10-05T13:00:00.000Z", details: "Suspenso por inadimplência; dados preservados" },
   { id: "aud_10", clientId: null, actorName: "Ana Ribeiro", impersonatedBy: null, action: "platform.user_create", entity: "usuario", entityName: "Diego Souza", at: "2026-09-01T12:00:00.000Z", details: "Papel: Engenheiro de campo" },
