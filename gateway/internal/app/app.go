@@ -532,10 +532,30 @@ func (a *agent) collectWith(ctx context.Context, cfg *config.GatewayConfig) erro
 			}
 		}(p)
 	}
+	// Parada (troca de config ou SIGTERM): os leitores voltam antes da gravação final, e
+	// cada um leva até o StopBound dele (a leitura em curso termina pelo prazo e o Close
+	// do transporte espera a linha quieta). Nesse meio a rotina de coleta só espera: o
+	// motor antigo não roda, e o último tick, com todos de volta, aplica o que eles
+	// entregaram. Sem tick, o watchdog confere a parada contra o limite dela, e não o
+	// motor (ver beatStopBegin). No SIGTERM, o watchdog do agente para junto (runCtx), e
+	// o do systemd também, com o STOPPING=1: quem limita a parada é o TimeoutStopSec da
+	// unit, que cobre o maior StopBound no máximo do contrato e a gravação final
+	// (TestTimeoutStopSecCobreAParadaDosPollers, internal/poller).
+	//
+	// O tempo da parada não é observado em nenhuma máquina: leitor parado não lê, e o
+	// motor novo só parte depois dela. Se ela passar de comm_loss_after_s (um leitor
+	// lento para voltar segura a parada inteira), o último tick confirma NO_COMM desde a
+	// última leitura, também nas máquinas dos leitores que voltaram logo, e fecha com
+	// no_comm os minutos que terminaram nela. É a regra de qualquer lacuna de leitura
+	// (docs/16, tempo não observado). Rodar o último tick no instante do início da parada
+	// esconderia a lacuna nos eventos (o estado anterior seguiria até o motor novo) e,
+	// com a parada atravessando a virada do minuto, o minuto em que ela começou não seria
+	// enviado: o motor antigo não o fecharia e o novo parte depois dele.
 	stop := func() {
+		a.beatStopBegin(pollers)
 		stopPollers()
 		wg.Wait()
-		a.beatPollers(nil)                  // laços parados de propósito: o watchdog não os confere na gravação final
+		a.beatStopEnd()                     // laços parados de propósito: o watchdog não os confere na gravação final
 		a.retryAt = 0                       // na parada, tenta gravar mesmo durante a espera entre tentativas
 		a.tick(ctx, eng, pollers, readings) // aplica as leituras que ficaram na fila e grava o que já fechou
 		a.beatStop()
@@ -1101,6 +1121,9 @@ type beats struct {
 	flushing  bool             // tentativa de gravação no buffer em curso
 	flushAt   time.Duration    // início da tentativa em curso, ou fim da última
 	flushNext time.Duration    // próxima tentativa prevista: já (gravou) ou depois da espera (falhou)
+	stopping  bool             // parada dos leitores em curso (troca de config ou SIGTERM)
+	stopAt    time.Duration    // início da parada dos leitores
+	stopLimit time.Duration    // limite da parada: o maior StopBound dos leitores mais tickStaleAfter
 }
 
 // beatStart marca o início da coleta de uma config: o motor e a gravação passam a ser
@@ -1113,7 +1136,7 @@ func (a *agent) beatStart() {
 	b := &a.beats
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.running, b.tick, b.pollers = true, mono, nil
+	b.running, b.tick, b.pollers, b.stopping = true, mono, nil, false
 	b.flushing, b.flushAt, b.flushNext = false, mono, max(mono, a.retryAt)
 }
 
@@ -1122,7 +1145,41 @@ func (a *agent) beatStop() {
 	b := &a.beats
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.running, b.pollers = false, nil
+	b.running, b.pollers, b.stopping = false, nil, false
+}
+
+// beatStopBegin marca o início da parada dos leitores, antes de cancelá-los. Até
+// beatStopEnd não há tick do motor nem tentativa de gravação (a rotina de coleta
+// espera os leitores voltarem), e isso não é coleta travada: um leitor leva até o
+// StopBound dele para voltar (até 6 × timeout_ms num conversor RTU sobre TCP, 60 s no
+// máximo do contrato), e recarregar a config não pode custar um reinício pelo
+// watchdog. O limite da parada é o maior StopBound dos leitores mais tickStaleAfter (a
+// folga que o motor teria): além dele, um leitor travou ao parar e o watchdog deixa de
+// ser alimentado (ver healthCheck).
+func (a *agent) beatStopBegin(ps []*poller.Poller) {
+	_, mono := a.readClock()
+	var bound time.Duration
+	for _, p := range ps {
+		bound = max(bound, p.StopBound())
+	}
+	b := &a.beats
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.stopping, b.stopAt, b.stopLimit = true, mono, bound+a.tickStaleAfter()
+}
+
+// beatStopEnd marca o fim da parada dos leitores: eles saem do watchdog (laços parados
+// de propósito) e o motor e a gravação voltam a ser conferidos, contados de agora. O
+// último tick (a gravação final) vem logo em seguida; sem isso, uma parada mais longa
+// que tickStaleAfter ou flushStuckAfter acusaria motor travado ou caminho de gravação
+// parado antes dele.
+func (a *agent) beatStopEnd() {
+	_, mono := a.readClock()
+	b := &a.beats
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.pollers, b.stopping = nil, false
+	b.tick, b.flushNext = max(b.tick, mono), max(b.flushNext, mono)
 }
 
 // beatPollers registra os leitores da config em uso (o watchdog confere o laço de cada um).
@@ -1189,6 +1246,13 @@ func (a *agent) tickStaleAfter() time.Duration { return max(tickStaleMin, 3*a.op
 //     espera é da rotina de coleta, conferida acima. Na parada da coleta, os pollers
 //     saem daqui antes da gravação final.
 //
+// Durante a parada dos leitores (troca de config ou SIGTERM; ver beatStopBegin), a
+// rotina de coleta espera eles voltarem, sem tick nem tentativa de gravação: o motor e
+// a gravação parada não são conferidos. Em vez deles, a parada não pode passar do
+// limite dela (o maior StopBound dos leitores mais tickStaleAfter): além dele, um
+// leitor travou ao parar (verificação leitor). A gravação em curso e o laço de cada
+// leitor continuam conferidos.
+//
 // Sem coleta rodando (sem config, ou config sem pollers montáveis à espera de outra)
 // não há o que conferir.
 func (a *agent) healthCheck(now time.Time, mono time.Duration) *healthFailure {
@@ -1196,6 +1260,7 @@ func (a *agent) healthCheck(now time.Time, mono time.Duration) *healthFailure {
 	b.mu.Lock()
 	running, tick, pollers := b.running, b.tick, b.pollers
 	flushing, flushAt, flushNext := b.flushing, b.flushAt, b.flushNext
+	stopping, stopAt, stopLimit := b.stopping, b.stopAt, b.stopLimit
 	b.mu.Unlock()
 	if !running {
 		return nil
@@ -1204,16 +1269,20 @@ func (a *agent) healthCheck(now time.Time, mono time.Duration) *healthFailure {
 		return &healthFailure{check: "gravacao", msg: "gravação no buffer em curso além do limite (escritor travado)",
 			attrs: []any{"em_curso_ha_ms", d.Milliseconds(), "limite_ms", flushStuckAfter.Milliseconds()}}
 	}
+	if d := mono - stopAt; stopping && d > stopLimit {
+		return &healthFailure{check: "leitor", msg: "parada dos leitores além do limite (leitor travado ao parar)",
+			attrs: []any{"parada_ha_ms", d.Milliseconds(), "limite_ms", stopLimit.Milliseconds(), "leitores", len(pollers)}}
+	}
 	// Sem gravação em curso, flushAt é o fim da última. Depois do último tick, ela é do
 	// tick em curso: o limite conta do fim dela.
-	if d, limit := mono-max(tick, flushAt), a.tickStaleAfter(); !flushing && d > limit {
+	if d, limit := mono-max(tick, flushAt), a.tickStaleAfter(); !flushing && !stopping && d > limit {
 		attrs := []any{"ultimo_tick_ha_ms", (mono - tick).Milliseconds(), "limite_ms", limit.Milliseconds()}
 		if flushAt > tick {
 			attrs = append(attrs, "fim_gravacao_ha_ms", d.Milliseconds())
 		}
 		return &healthFailure{check: "motor", msg: "motor sem tick além do limite (coleta travada)", attrs: attrs}
 	}
-	if d := mono - flushNext; !flushing && d > flushStuckAfter {
+	if d := mono - flushNext; !flushing && !stopping && d > flushStuckAfter {
 		return &healthFailure{check: "gravacao", msg: "nenhuma tentativa de gravação no buffer além do limite (caminho de gravação parado)",
 			attrs: []any{"ultima_tentativa_ha_ms", (mono - flushAt).Milliseconds(), "atraso_ms", d.Milliseconds(),
 				"limite_ms", flushStuckAfter.Milliseconds()}}

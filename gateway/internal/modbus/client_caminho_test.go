@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -500,6 +501,130 @@ func TestRTUOverTCPCloseDescartaRequisicaoSemACK(t *testing.T) {
 	cv.esperarFechamentos(t)
 	if n := cv.fechadasComRST(); n != 1 {
 		t.Fatalf("conexões fechadas com RST = %d, quer 1", n)
+	}
+}
+
+// conversorTagarela é um conversor RTU sobre TCP com o escravo mudo e a linha falando:
+// depois da primeira requisição de cada conexão, um byte de lixo a cada intervalo
+// (menos que o Timeout: a linha nunca fica quieta). reqs recebe um aviso a cada
+// conexão, quando chega a primeira requisição.
+func conversorTagarela(t *testing.T, intervalo time.Duration) (string, <-chan struct{}) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqs := make(chan struct{}, 16)
+	fim := make(chan struct{})
+	var (
+		mu    sync.Mutex
+		conns []net.Conn
+		wg    sync.WaitGroup
+	)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			conns = append(conns, c)
+			mu.Unlock()
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				buf := make([]byte, 8)
+				if _, err := io.ReadFull(c, buf); err != nil {
+					return
+				}
+				select {
+				case reqs <- struct{}{}:
+				default:
+				}
+				wg.Add(1)
+				go func() { // outras requisições, até o fechamento
+					defer wg.Done()
+					_, _ = io.Copy(io.Discard, c)
+				}()
+				tk := time.NewTicker(intervalo)
+				defer tk.Stop()
+				for {
+					select {
+					case <-tk.C:
+					case <-fim:
+						return
+					}
+					if _, err := c.Write([]byte{0}); err != nil {
+						return // o cliente fechou
+					}
+				}
+			}()
+		}
+	}()
+	t.Cleanup(func() {
+		close(fim)
+		_ = ln.Close()
+		mu.Lock()
+		for _, c := range conns {
+			_ = c.Close()
+		}
+		mu.Unlock()
+		wg.Wait()
+	})
+	return ln.Addr().String(), reqs
+}
+
+// Close com a leitura interrompida pelo contexto (recarga da config), a linha falando e
+// o ACK da requisição chegando antes do limite do escoamento (3 Timeouts depois do
+// erro), como num caminho que volta no fim de uma queda: o ACK é a requisição chegando
+// ao conversor, o escravo ainda vai responder, e o silêncio recomeça nele também no
+// Close. O Close vai além de until + 2 Timeouts (3 depois do erro: o que a documentação
+// dizia antes) e fica dentro de until + 4 (5 depois do erro), que o poller.StopBound
+// (6T, com a leitura em curso) cobre.
+func TestRTUOverTCPCloseComACKTardioEALinhaFalando(t *testing.T) {
+	const timeout = 200 * time.Millisecond
+	addr, reqs := conversorTagarela(t, 3*timeout/5)
+	var ackEm atomic.Int64 // UnixNano a partir do qual a requisição está reconhecida (0: nunca)
+	pendentes := func(net.Conn) (int, bool) {
+		if at := ackEm.Load(); at != 0 && time.Now().UnixNano() >= at {
+			return 0, true
+		}
+		return 8, true
+	}
+	r, err := modbus.AbrirComPendentes(modbus.Target{Transport: modbus.TransportRTUOverTCP, Address: addr,
+		Timeout: timeout, Retries: 0}, pendentes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { // o contexto acaba com a leitura em curso
+		select {
+		case <-reqs:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	if _, err := r.ReadBlock(ctx, 1, modbus.Span{Area: modbus.HoldingRegister, Start: 100, Count: 1}); !errors.Is(err, modbus.ErrTimeout) {
+		t.Fatalf("escravo mudo: esperava ErrTimeout, veio %v", err)
+	}
+	if ctx.Err() == nil {
+		t.Fatal("a requisição não chegou ao conversor")
+	}
+	erro := time.Now() // a leitura expirou e o escoamento parou com o contexto
+	ackEm.Store(erro.Add(5 * timeout / 2).UnixNano())
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	el := time.Since(erro)
+	t.Logf("Close: %v (until + 4 Timeouts = %v depois do erro)", el, 5*timeout)
+	if el < 4*timeout {
+		t.Fatalf("Close levou %v: o ACK não estendeu o escoamento (fecharia em 3 Timeouts depois do erro)", el)
+	}
+	if el > 5*timeout+timeout/4 {
+		t.Fatalf("Close levou %v, além de until + 4 Timeouts (5 depois do erro)", el)
 	}
 }
 

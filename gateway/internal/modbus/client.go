@@ -333,8 +333,14 @@ func (c *client) Close() error {
 	// Ela termina aqui, antes de soltar a linha: o Reader novo, no mesmo conversor ou
 	// barramento, escreve a primeira requisição em milissegundos e receberia a resposta
 	// atrasada desta (a porta serial reaberta, ou o conversor transparente, que entrega
-	// à conexão do momento o que o escravo responder). Limitada a 3 Timeouts depois do
-	// erro (serial: 1), sem esperar ACK depois do silêncio (fecha com RST).
+	// à conexão do momento o que o escravo responder). No serial, é o resto de 1 Timeout
+	// depois do erro. No RTU sobre TCP (ver drain), até 3 Timeouts depois do erro com a
+	// linha falando, ou 5 se o ACK da requisição chega antes desse limite: o ACK é a
+	// requisição chegando ao conversor, o escravo ainda vai responder, e o silêncio
+	// recomeça nele também aqui. Com a linha quieta e a requisição ainda sem ACK, não
+	// espera o ACK: fecha com RST. Com a leitura em curso quando o contexto acaba (até T,
+	// ou 2T no serial), a parada do poller vai a 6T no RTU sobre TCP e 3T no serial
+	// (poller.StopBound).
 	if !c.quietUntil.IsZero() {
 		_ = c.settle(context.Background(), true)
 	}
@@ -562,11 +568,17 @@ func (c *client) settle(ctx context.Context, fechando bool) error {
 // linha quieta: o silêncio conta de novo a partir dele, com mais um Timeout de folga no
 // limite para a resposta. Por isso a fila é consultada a cada passoACK enquanto houver
 // bytes sem ACK, inclusive antes de until (o ACK que chega pouco antes do fim da
-// espera). No pior caso (ACK no limite) o escoamento vai a until + 4 Timeouts.
+// espera). No pior caso (ACK no limite, until + 2 Timeouts, e a linha falando até o
+// limite novo) o escoamento vai a until + 4 Timeouts. Cada queda da fila estende de
+// novo, mas só uma requisição fica sem ACK (8 bytes, um segmento: a próxima só sai
+// depois de uma resposta, com a fila vazia no fim do escoamento ou numa conexão nova),
+// então há um ACK só.
 //
 // fechando (Close): com a linha quieta e bytes ainda sem ACK, fecha com RST na hora,
-// sem a espera do ACK (o socket vai fechar de qualquer jeito); fica em até until + 2
-// Timeouts.
+// sem a espera do ACK (o socket vai fechar de qualquer jeito). O ACK que chega antes
+// disso estende o silêncio e o limite como acima: o Close fica em até until + 2
+// Timeouts sem ACK e até until + 4 com o ACK no limite e a linha falando (com until o
+// fim da linha quieta, 1 Timeout depois do erro: até 5 Timeouts depois do erro).
 func (c *client) drain(ctx context.Context, until time.Time, fechando bool) error {
 	conn := c.sock
 	if conn == nil {

@@ -23,13 +23,13 @@ Telas no layout novo (menu em degradê, busca Ctrl+K, cartões com ícones, barr
 
 | Entrega | Onde | O que faz | Testes |
 |---|---|---|---|
-| Contrato gateway ↔ nuvem v1 | `packages/contracts` | Zod 4 de `/enroll`, `/sync`, config, comandos e erros; JSON Schema; 75 fixtures | 240 |
+| Contrato gateway ↔ nuvem v1 | `packages/contracts` | Zod 4 de `/enroll`, `/sync`, config, comandos e erros; JSON Schema; 78 fixtures compartilhadas com o Go | 243 |
 | Cálculo de OEE | `packages/oee-core` | Algoritmo do docs/07 (turnos com fuso, micro-paradas, A × P × Q, agregação Σ/Σ) | 52 |
 | Banco | `packages/db` | Drizzle + Postgres 18, 51 tabelas, migrações 0000–0004, RLS forçada por cliente (inclusive `organization`), FKs compostas, funções de consulta com estado (código usado/vencido, token revogado) | 92 (PGlite) |
 | API dos gateways | `apps/web/lib/server/gateway`, `app/api/gateway/v1/*` | `/enroll`, `/sync` e `/config` reais: idempotência, isolamento entre clientes, ETag/304, erros do contrato, token rechecado na transação | 80 (+1 de ponta a ponta) |
-| Agente do gateway | `gateway/` (Go) | Modbus TCP/RTU/RTU sobre TCP, estados e contadores, minutos, outbox SQLite, uplink com retentativas, CLI. Revisado: 11 achados corrigidos e verificados por revisores independentes | 100+ com `-race`, 2 de integração |
-| Simulador de CLP | `tools/plc-sim` | Máquinas Modbus TCP com o bloco OEE padrão e cenários | 44 |
-| Implantação | `deploy/gateway`, `deploy/image` | `.deb` da Fase 0 (units endurecidas, firewall, sudo do técnico, udev das 3 RS-485), imagem Debian Trixie (rpi-image-gen), gravação do eMMC com a rede do cliente | `validate.sh`: 136 e 72 checagens |
+| Agente do gateway | `gateway/` (Go) | Modbus TCP/RTU/RTU sobre TCP, estados e contadores, minutos, outbox SQLite, uplink com retentativas, CLI. Watchdog com checagem real (motor, gravação, leitores e prazo de parada), um leitor por linha física, marcador de token recusado. Quatro rodadas de revisão independente, todos os achados corrigidos com teste | 198 com `-race` (480 com subtestes), 2 de integração |
+| Simulador de CLP | `tools/plc-sim` | Máquinas Modbus TCP com o bloco OEE padrão e cenários | 45 |
+| Implantação | `deploy/gateway`, `deploy/image` | `.deb` da Fase 0 (units endurecidas, firewall, sudo do técnico, udev das 3 RS-485), imagem Debian Trixie (rpi-image-gen), gravação do eMMC com a rede do cliente | `validate.sh`: 136 checagens no pacote (com nfpm) e 72 na imagem (com o rpi-image-gen) |
 | Operação | `docs/operacao/` | 6 runbooks, ficha de TI, roteiro de bancada, bloco OEE v1, `FB_OEE_ENGEMASE.st`, guia por fabricante | Mermaid, links e ST validados |
 | CI | `.github/workflows/ci.yml` | Pacotes, web (typecheck, lint, build, testes), Go (gofmt, vet, `-race`, integração, build arm64) e ponta a ponta | — |
 

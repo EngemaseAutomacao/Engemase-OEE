@@ -386,17 +386,18 @@ func attrStrings(attrs []any) []string {
 
 // beatsView é uma cópia dos batimentos do watchdog, lida sob beats.mu.
 type beatsView struct {
-	running, flushing        bool
-	tick, flushAt, flushNext time.Duration
-	pollers                  []*poller.Poller
+	running, flushing, stopping bool
+	tick, flushAt, flushNext    time.Duration
+	stopAt, stopLimit           time.Duration
+	pollers                     []*poller.Poller
 }
 
 func beatsOf(a *agent) beatsView {
 	b := &a.beats
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return beatsView{running: b.running, flushing: b.flushing, tick: b.tick, flushAt: b.flushAt, flushNext: b.flushNext,
-		pollers: b.pollers}
+	return beatsView{running: b.running, flushing: b.flushing, stopping: b.stopping, tick: b.tick, flushAt: b.flushAt,
+		flushNext: b.flushNext, stopAt: b.stopAt, stopLimit: b.stopLimit, pollers: b.pollers}
 }
 
 // waitBeats espera os batimentos satisfazerem cond (a coleta roda em outra rotina).

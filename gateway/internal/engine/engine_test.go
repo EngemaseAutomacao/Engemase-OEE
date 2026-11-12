@@ -716,8 +716,11 @@ func TestCounterEventSurvivesRestart(t *testing.T) {
 		name    string
 		event   string
 		counter func(now float64) uint32 // 1 peça/s; evento em 13:01:10
-		// Peças perdidas se a base for restaurada sem Carry (a tabela counter_state
-		// ainda não guarda Carry): as do minuto aberto antes de um reset.
+		// Peças perdidas se a base for restaurada sem Carry: as do minuto aberto antes
+		// de um reset. O buffer guarda o Carry (colunas carry e carry_ms do
+		// counter_state, acrescentadas no Open); o subcaso carry=false mostra o que se
+		// perde com a linha gravada por um agente anterior, que ignora o carry
+		// (LoadCounters o devolve como 0).
 		lostWithoutCarry int64
 	}{
 		{"salto descartado", contracts.EventCounterJump, func(now float64) uint32 {
