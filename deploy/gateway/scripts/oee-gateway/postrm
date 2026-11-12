@@ -4,13 +4,13 @@
 # O purge NÃO apaga /var/lib/oee-gateway (buffer ainda não enviado e
 # credencial: "nenhuma peça se perde", docs/16 §1) nem os usuários de sistema.
 # Descarte e LGPD usam "oee-gateway factory-reset" (docs/16 §7), não o dpkg.
-# Também ficam os arquivos gerados pelo oee-helper em /etc/oee-gateway
-# (network.json, proxy.env, nftables.nft): a rede da unidade continua de pé.
+# Também ficam os arquivos de rede em /etc/oee-gateway (network.json,
+# proxy.env, nftables.nft): a rede da unidade continua de pé.
 set -e
 set -f
 
 ROOT="${DPKG_ROOT:-}"
-UNITS='oee-gateway.socket oee-gateway-ui.socket oee-helper.socket oee-localui.socket oee-gateway.service var-lib-oee\x2dgateway.mount'
+UNITS='oee-gateway.service var-lib-oee\x2dgateway.mount'
 
 systemd_running() {
 	[ -z "$ROOT" ] && [ -d /run/systemd/system ]
@@ -39,9 +39,6 @@ case "$1" in
 				set -f
 			done
 		fi
-		# Drop-in gerado pelo oee-helper (interface OT da página local).
-		rm -f "$ROOT/etc/systemd/system/oee-localui.socket.d/10-iface.conf"
-		rmdir "$ROOT/etc/systemd/system/oee-localui.socket.d" 2>/dev/null || true
 		if systemd_running; then
 			systemctl daemon-reload || true
 		fi

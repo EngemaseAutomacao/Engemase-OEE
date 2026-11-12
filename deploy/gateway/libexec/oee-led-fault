@@ -1,23 +1,42 @@
 #!/bin/sh
-# Indica "erro crítico (agente)" no LED USER quando o agente para (docs/16 §6:
-# vermelho piscando). Roda como oee no ExecStopPost= do oee-gateway.service.
-# Usa o gatilho "timer" do kernel (500 ms aceso / 500 ms apagado), que continua
-# piscando sem nenhum processo; o agente, ao subir, volta o LED ao estado real.
-# Instalado em /usr/lib/oee-gateway/oee-led-fault. Sem LEDs (bancada): não faz nada.
+# Indicação "erro crítico (agente)" no LED USER (docs/16 §6: vermelho piscando).
+# Instalado em /usr/lib/oee-gateway/oee-led-fault. Roda como oee, dentro do
+# confinamento do oee-gateway.service:
+#
+#   oee-led-fault set     ExecStopPost=: agente parou (ou caiu). Liga o gatilho
+#                         "timer" do kernel no LED vermelho (500/500 ms), que
+#                         continua piscando sem nenhum processo.
+#   oee-led-fault clear   ExecStartPre=: agente (re)iniciando. Apaga o vermelho
+#                         para não deixar uma falha antiga acesa.
+#
+# Os outros estados da tabela (verde, âmbar, azul) são do agente (Fase 1).
+# Sem LEDs (bancada x86) ou sem permissão: não faz nada e sai com 0.
 set -u
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
 
-leds=/sys/class/leds
-[ -d "$leds/led-red" ] || exit 0
+leds=${OEE_LEDS_DIR:-/sys/class/leds}
+red=$leds/led-red
+[ -d "$red" ] || exit 0
 
-for color in green blue; do
-	d="$leds/led-$color"
-	[ -d "$d" ] || continue
-	[ -w "$d/trigger" ] && echo none > "$d/trigger"
-	[ -w "$d/brightness" ] && echo 0 > "$d/brightness"
-done
+off() {
+	[ -w "$1/trigger" ] && echo none >"$1/trigger" 2>/dev/null
+	[ -w "$1/brightness" ] && echo 0 >"$1/brightness" 2>/dev/null
+	return 0
+}
 
-if [ -w "$leds/led-red/trigger" ]; then
-	echo timer > "$leds/led-red/trigger"
-fi
+case "${1:-set}" in
+	set)
+		for color in green blue; do
+			[ -d "$leds/led-$color" ] && off "$leds/led-$color"
+		done
+		[ -w "$red/trigger" ] && echo timer >"$red/trigger" 2>/dev/null
+		;;
+	clear)
+		off "$red"
+		;;
+	*)
+		echo "uso: $0 set|clear" >&2
+		exit 2
+		;;
+esac
 exit 0

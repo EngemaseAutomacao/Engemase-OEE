@@ -1,3 +1,8 @@
+# FASE 1 — NÃO EMPACOTADO AINDA. O agente da Fase 0 não tem o subcomando
+# "oee-gateway helper serve".
+# Esta unit entra no nfpm.yaml (e no postinst/prerm/postrm/install.sh) junto com
+# esse código; até lá, fica só como contrato. Ver deploy/gateway/README.md §2.
+#
 # Socket do ajudante privilegiado (docs/16 §3). Só o agente (grupo oee) e o
 # root (CLI via sudo restrito do tecnico) conectam. O oee-helper ainda confere
 # o chamador por SO_PEERCRED e valida cada pedido por schema.

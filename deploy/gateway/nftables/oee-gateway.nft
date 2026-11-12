@@ -3,10 +3,14 @@
 # Firewall do gateway OEE — MODELO (docs/16 §5). Instalado em
 # /usr/share/oee-gateway/nftables/oee-gateway.nft; NÃO é carregado direto.
 #
-# O oee-helper renderiza este modelo em /etc/oee-gateway/nftables.nft a partir
-# de /etc/oee-gateway/network.json (a única fonte da rede) e da config de
-# dispositivos. A imagem carrega o arquivo renderizado no boot pelo
-# nftables.service (/etc/nftables.conf: include "/etc/oee-gateway/nftables.nft").
+# Renderizado em /etc/oee-gateway/nftables.nft (root 0600):
+#   - Fase 0: na bancada, por "deploy/gateway/install.sh --firewall";
+#   - Fase 1: pelo oee-helper, a partir de /etc/oee-gateway/network.json (a
+#     única fonte da rede) e da config de dispositivos.
+# No boot, o /etc/nftables.conf da imagem (deploy/image) carrega as regras de
+# FÁBRICA na mesma tabela inet oee_gateway e depois inclui este arquivo por
+# curinga: se ele existir, o "delete table" abaixo troca as regras de fábrica
+# por estas na mesma transação; se não existir, ficam as de fábrica.
 #
 # Placeholders (todos nas linhas "define" abaixo):
 #   @IF_OT@          interface OT (ETH0), resolvida pelo MAC. Ex.: eth0
@@ -15,8 +19,8 @@
 #   @UIDS_IT_HTTPS@  UIDs com saída TCP 443 na IT, separados por vírgula:
 #                    oee e _apt (atualizações de segurança); oee-ra na F2
 #
-# Conjuntos: nascem vazios (exceto 169.254.0.0/16 em ot_nets) e o oee-helper os
-# preenche com "add element" no fim do arquivo renderizado ou a quente:
+# Conjuntos: nascem vazios (exceto 169.254.0.0/16 em ot_nets) e quem renderiza
+# os preenche com "add element" no fim do arquivo ou a quente:
 #   ot_nets     sub-redes OT (endereços e rotas da OT)
 #   ot_targets  IP . porta dos dispositivos cadastrados; device.test entra com
 #               "timeout 5m" (IP da sub-rede OT ainda não cadastrado, D-g3)
@@ -128,8 +132,8 @@ table inet oee_gateway {
 	}
 }
 
-# --- Elementos dos conjuntos (preenchidos pelo oee-helper) ---------------------
-# Exemplo do que o oee-helper acrescenta ao renderizar:
+# --- Elementos dos conjuntos (preenchidos por quem renderiza) -------------------
+# Exemplo do que o install.sh --firewall / oee-helper acrescentam:
 #   add element inet oee_gateway ot_nets { 192.168.10.0/24 }
 #   add element inet oee_gateway ot_targets { 192.168.10.21 . 502, 192.168.10.23 . 502 }
 #   add element inet oee_gateway it_dns { 10.20.0.10, 10.20.0.11 }

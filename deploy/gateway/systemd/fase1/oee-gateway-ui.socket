@@ -1,3 +1,8 @@
+# FASE 1 — NÃO EMPACOTADO AINDA. O agente da Fase 0 não aceita ativação por
+# socket (módulo localapi: $LISTEN_FDS/$LISTEN_FDNAMES).
+# Esta unit entra no nfpm.yaml (e no postinst/prerm/postrm/install.sh) junto com
+# esse código; até lá, fica só como contrato. Ver deploy/gateway/README.md §2.
+#
 # Socket entre a página local (oee-localui, usuário oee-ui) e o agente.
 # Nele o agente expõe só as rotas da página e valida a sessão em toda chamada
 # (exceto o login): uma página comprometida não executa nada sem sessão.

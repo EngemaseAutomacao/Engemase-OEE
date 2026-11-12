@@ -1,3 +1,8 @@
+# FASE 1 — NÃO EMPACOTADO AINDA. O agente da Fase 0 não tem o subcomando
+# "oee-gateway localui serve".
+# Esta unit entra no nfpm.yaml (e no postinst/prerm/postrm/install.sh) junto com
+# esse código; até lá, fica só como contrato. Ver deploy/gateway/README.md §2.
+#
 # Página local reduzida (docs/16 §6): processo separado do agente, usuário
 # oee-ui, ativado pelo oee-localui.socket. Fala com o agente só por
 # /run/oee-gateway/ui.sock. Não lê o buffer, a credencial nem a config.

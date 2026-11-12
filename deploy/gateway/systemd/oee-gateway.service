@@ -1,6 +1,15 @@
 # Agente de coleta do gateway OEE (docs/16 §3): usuário oee, sem root.
 # Instalado em /usr/lib/systemd/system/. Ajustes locais: drop-in em
 # /etc/systemd/system/oee-gateway.service.d/*.conf (nunca editar este arquivo).
+#
+# Contrato com o código (gateway/internal/app), conferido na Fase 0:
+#  - envia READY=1 depois de abrir o buffer e aplicar a última config salva, e
+#    STOPPING=1 ao receber SIGTERM (sd_notify próprio, sem cgo);
+#  - envia WATCHDOG=1 + STATUS= a cada WatchdogSec/3 (10 s) SÓ se, com config
+#    carregada, o motor rodou um tick nos últimos 5 s (tolerância de 30 s após
+#    o início). A checagem dos pollers e do gravador SQLite prevista no docs/16
+#    §3 ainda NÃO existe no código: hoje o watchdog pega motor travado;
+#  - NÃO usa ativação por socket (agent.sock/ui.sock são da Fase 1).
 [Unit]
 Description=Engemase OEE - agente de coleta do gateway
 Documentation=file:/usr/share/doc/oee-gateway/README.md
@@ -10,9 +19,6 @@ After=network.target
 # Estado em /var/lib/oee-gateway (bind de /data/oee no R1000). Se a partição de
 # dados falhar, o agente NÃO sobe gravando na raiz.
 RequiresMountsFor=/var/lib/oee-gateway
-# Ajudante privilegiado: o socket precisa existir antes do agente usá-lo.
-Wants=oee-helper.socket
-After=oee-helper.socket
 # Nunca desistir de religar (equipamento sem operador).
 StartLimitIntervalSec=0
 
@@ -20,13 +26,14 @@ StartLimitIntervalSec=0
 Type=notify
 NotifyAccess=main
 ExecStart=/usr/bin/oee-gateway run --config /etc/oee-gateway/gateway.yaml
-# Erro crítico visível sem processo: o LED vermelho fica piscando pelo gatilho
-# "timer" do kernel até o agente subir de novo (docs/16 §6, tabela de LEDs).
-ExecStopPost=-/usr/lib/oee-gateway/oee-led-fault
-# API local: agent.sock (CLI, FileDescriptorName=cli) e ui.sock (página local,
-# FileDescriptorName=ui). O agente identifica os fds por $LISTEN_FDNAMES.
-Sockets=oee-gateway.socket oee-gateway-ui.socket
-# Proxy corporativo: gerado pelo oee-helper a partir do network.json (docs/16 §4).
+# LED de "erro crítico (agente)" (docs/16 §6): aceso piscando pelo gatilho
+# "timer" do kernel enquanto o agente estiver parado; apagado ao (re)iniciar.
+# O agente da Fase 0 ainda não acende os outros estados da tabela de LEDs.
+ExecStartPre=-/usr/lib/oee-gateway/oee-led-fault clear
+ExecStopPost=-/usr/lib/oee-gateway/oee-led-fault set
+# Proxy corporativo (HTTPS_PROXY/NO_PROXY, lido pelo agente). Na Fase 1 é gerado
+# pelo oee-helper a partir do network.json (docs/16 §4); na Fase 0 é escrito à
+# mão na bancada (README §6).
 EnvironmentFile=-/etc/oee-gateway/proxy.env
 Environment=GOMEMLIMIT=120MiB
 # Pilhas de todas as goroutines no journal quando o watchdog mata o processo
@@ -34,24 +41,19 @@ Environment=GOMEMLIMIT=120MiB
 Environment=GOTRACEBACK=all
 User=oee
 Group=oee
-# dialout: RS-485 (/dev/ttyAMA*, /dev/ttyUSB*); gpio: sinal de falta de energia
-# e buzzer por GPIO; systemd-journal: logs.upload e "oee-gateway logs".
-# LEDs e buzzer por evento de entrada usam o grupo oee (regra udev do pacote).
+# dialout: RS-485 (/dev/ttyAMA2/3/5, /dev/ttyUSB*); gpio: sinal de falta de
+# energia (F2); systemd-journal: logs.upload (F2). LEDs: grupo oee (regra udev).
 SupplementaryGroups=dialout gpio systemd-journal
 StateDirectory=oee-gateway
 StateDirectoryMode=0750
-RuntimeDirectory=oee-gateway/agent
-RuntimeDirectoryMode=0755
 UMask=0027
 
 Restart=always
 RestartSec=5s
 # systemd >= 254 (Trixie): espera crescente entre reinícios, até 60 s.
-# No Bookworm (252) estas chaves são ignoradas com aviso.
+# No Bookworm (252, plano B) estas chaves são ignoradas com aviso.
 RestartSteps=5
 RestartMaxDelaySec=60s
-# O agente envia WATCHDOG=1 a cada ~10 s SÓ se o motor, os pollers e o gravador
-# SQLite estiverem vivos (verificação real de saúde, docs/16 §3).
 WatchdogSec=30s
 TimeoutStartSec=60s
 TimeoutStopSec=20s
@@ -77,28 +79,29 @@ PrivateIPC=yes
 DevicePolicy=closed
 # Seriais: R1000 (ttyAMA2/3/5) e bancada (adaptador USB-RS485). Os nomes vêm de
 # /proc/devices; o driver precisa estar carregado quando o serviço sobe.
+# CONFIRMAR NA BANCADA: nomes em /proc/devices do kernel fixado.
 DeviceAllow=char-ttyAMA rw
 DeviceAllow=char-ttyUSB rw
 DeviceAllow=char-ttyACM rw
-# GPIO (falta de energia; buzzer, se for GPIO direto) e buzzer gpio-beeper
-# (dispositivo de entrada EV_SND). Acesso real limitado pelo dono/grupo do nó.
+# GPIO (falta de energia; buzzer por GPIO direto) e buzzer gpio-beeper
+# (dispositivo de entrada EV_SND), F2. Acesso real limitado pelo dono do nó.
 DeviceAllow=char-gpiochip rw
 DeviceAllow=char-input rw
 ProtectKernelTunables=yes
 # LEDs USER do R1000 (led-red/green/blue). O systemd segue o link simbólico de
-# /sys/class/leds até o dispositivo. A confirmar na bancada; plano B:
-# drop-in com ProtectKernelTunables=no.
+# /sys/class/leds até o dispositivo. CONFIRMAR NA BANCADA; plano B: drop-in com
+# ProtectKernelTunables=no.
 ReadWritePaths=-/sys/class/leds/led-red -/sys/class/leds/led-green -/sys/class/leds/led-blue
 ProtectKernelModules=yes
 ProtectKernelLogs=yes
 ProtectControlGroups=yes
-# Bloqueia adjtimex: o estado do NTP é lido pelo D-Bus (timedate1).
+# Bloqueia adjtimex: o estado do NTP deve ser lido pelo D-Bus (timedate1).
 ProtectClock=yes
 ProtectHostname=yes
 # Não usar ProcSubset=pid: a saúde lê /proc/stat, /proc/meminfo e /proc/loadavg.
 ProtectProc=invisible
 # AF_INET6 fica liberado só para o Go não falhar ao sondar IPv6 (o IPv6 está
-# desligado por sysctl e pelo nftables).
+# desligado por sysctl e pelo nftables). AF_NETLINK: lista de interfaces.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 RestrictNamespaces=yes
 RestrictRealtime=yes
@@ -108,6 +111,8 @@ MemoryDenyWriteExecute=yes
 RemoveIPC=yes
 KeyringMode=private
 SystemCallArchitectures=native
+# O runtime do Go tenta subir o limite de arquivos (setrlimit, @resources) e
+# ignora o EPERM. CONFIRMAR NA BANCADA com o binário real.
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
 SystemCallErrorNumber=EPERM

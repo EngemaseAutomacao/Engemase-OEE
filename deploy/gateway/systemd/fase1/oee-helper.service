@@ -1,3 +1,8 @@
+# FASE 1 — NÃO EMPACOTADO AINDA. O agente da Fase 0 não tem o subcomando
+# "oee-gateway helper serve".
+# Esta unit entra no nfpm.yaml (e no postinst/prerm/postrm/install.sh) junto com
+# esse código; até lá, fica só como contrato. Ver deploy/gateway/README.md §2.
+#
 # Ajudante privilegiado (docs/16 §3): UM processo root, ativado por socket, com
 # operações FECHADAS — aplicar rede com checkpoint do NetworkManager, ajustar o
 # relógio, reset de fábrica e ler o pendrive de diagnóstico (OEE/net-reset).

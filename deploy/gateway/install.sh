@@ -7,6 +7,9 @@
 # (sysctl), limita o journald, arma o watchdog de hardware no próximo boot e
 # cria os usuários oee, oee-ui e tecnico, com um sudoers para o tecnico.
 #
+# Fase 0: instala e confere só o agente (oee-gateway.service). A página local,
+# o ajudante e os sockets da CLI são da Fase 1 (README §2).
+#
 # Uso:
 #   sudo deploy/gateway/install.sh [opções]
 #
@@ -14,9 +17,10 @@
 #   --deb ARQ           instala este .deb (senão gera com build-deb.sh)
 #   --dist DIR          binários para gerar o .deb: <DIR>/<arq>/oee-gateway
 #                       (padrão: gateway/dist)
+#   --build             compila o agente antes de gerar o .deb (precisa de Go)
 #   --version VER       versão do .deb gerado (padrão: 0.0.0-dev)
-#   --ot-iface NOME     interface OT, onde a página local escuta (padrão: eth0)
-#   --it-iface NOME     interface IT (padrão: eth1); usada no --firewall
+#   --ot-iface NOME     interface OT (ETH0 no R1000; padrão: eth0); usada no --firewall
+#   --it-iface NOME     interface IT (ETH1 no R1000; padrão: eth1); usada no --firewall
 #   --firewall          renderiza o modelo do nftables e CARREGA (cuidado: pela
 #                       IT só saem 443/DNS/NTP e não entra nada, nem SSH)
 #   --ot-targets LISTA  com --firewall: IP:porta liberados na OT, separados por
@@ -26,7 +30,7 @@
 #   -h, --help
 set -eu
 
-usage() { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; }
 die() {
 	echo "install: ERRO: $*" >&2
 	exit 1
@@ -58,11 +62,13 @@ firewall=no
 ot_targets=""
 check_only=no
 assume_yes=no
+build=no
 
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--deb) deb=${2:?}; shift 2 ;;
 		--dist) dist=${2:?}; shift 2 ;;
+		--build) build=yes; shift ;;
 		--version) version=${2:?}; shift 2 ;;
 		--ot-iface) ot_iface=${2:?}; shift 2 ;;
 		--it-iface) it_iface=${2:?}; shift 2 ;;
@@ -91,7 +97,8 @@ trap cleanup EXIT
 arch=$(dpkg --print-architecture 2>/dev/null || echo desconhecida)
 case "$dist" in /*) dist_abs=$dist ;; *) dist_abs=$repo/$dist ;; esac
 
-UNITS_ENABLED="oee-gateway.socket oee-gateway-ui.socket oee-helper.socket oee-localui.socket oee-gateway.service"
+# Fase 0: só o agente (os sockets e o ajudante entram com a Fase 1).
+UNITS_ENABLED="oee-gateway.service"
 
 # ---------------------------------------------------------------------------
 preflight() {
@@ -133,23 +140,16 @@ preflight() {
 		warn "sudo ausente: o tecnico não terá os subcomandos com sudo"
 	fi
 	if have nft; then ok "nftables presente"; else warn "nftables ausente: o firewall não será aplicado"; fi
-	if have nmcli; then ok "NetworkManager presente"; else warn "NetworkManager ausente: o oee-helper não conseguirá aplicar rede"; fi
+	if have nmcli; then ok "NetworkManager presente"; else info "NetworkManager ausente (normal em VM; no R1000 a imagem o traz)"; fi
 	if [ -e "/sys/class/net/$ot_iface" ]; then
 		ok "interface OT $ot_iface existe"
 	else
-		warn "interface OT $ot_iface não existe: a página local não sobe (use --ot-iface)"
+		warn "interface OT $ot_iface não existe (use --ot-iface; só importa no --firewall)"
 	fi
 	if [ -e "/sys/class/net/$it_iface" ]; then
 		ok "interface IT $it_iface existe"
 	else
-		warn "interface IT $it_iface não existe (use --it-iface)"
-	fi
-	if have ss; then
-		if ss -Hltn 'sport = :443' 2>/dev/null | grep -v "%$ot_iface:" | grep -q .; then
-			warn "outro processo já escuta na porta 443: a página local pode não abrir"
-		else
-			ok "porta 443 livre (fora a própria página local)"
-		fi
+		warn "interface IT $it_iface não existe (use --it-iface; só importa no --firewall)"
 	fi
 	if have mountpoint && mountpoint -q /data; then
 		ok "/data montada: o estado do agente vai para /data/oee (bind em /var/lib/oee-gateway)"
@@ -188,14 +188,18 @@ obtain_deb() {
 		return 0
 	fi
 	bin=$dist_abs/$arch/oee-gateway
-	[ -f "$bin" ] || die "binário ausente: $bin
-  O build do agente (gateway/) ainda não gera gateway/dist/<arq>/oee-gateway.
-  Gere o binário (CGO_ENABLED=0 GOARCH=$arch go build -o $bin ./cmd/oee-gateway,
-  dentro de gateway/) ou passe um pacote pronto com --deb."
-	ea=$(elf_arch "$bin")
-	[ "$ea" = "$arch" ] || die "$bin não é um executável $arch (detectado: $ea)"
+	build_opt=""
+	if [ "$build" = yes ]; then
+		build_opt=--build
+	else
+		[ -f "$bin" ] || die "binário ausente: $bin
+  Use --build (compila com o Go da máquina) ou passe um pacote pronto com --deb."
+		ea=$(elf_arch "$bin")
+		[ "$ea" = "$arch" ] || die "$bin não é um executável $arch (detectado: $ea)"
+	fi
 	tmpdir=$(mktemp -d)
-	"$here/build-deb.sh" --package oee-gateway --arch "$arch" --version "$version" \
+	# shellcheck disable=SC2086 # build_opt vazio ou uma opção
+	"$here/build-deb.sh" $build_opt --package oee-gateway --arch "$arch" --version "$version" \
 		--dist "$dist_abs" --out "$tmpdir"
 	deb=$(find "$tmpdir" -maxdepth 1 -name 'oee-gateway_*.deb' | head -n 1)
 	[ -n "$deb" ] || die "o build não gerou o .deb"
@@ -207,11 +211,10 @@ confirm() {
 	echo "  - instalar /etc/sudoers.d/oee-tecnico (sudo restrito do tecnico);"
 	echo "  - desligar agora o IPv6 e o roteamento IPv4 (sysctl);"
 	echo "  - limitar o journald e armar o watchdog de hardware (10 s) no próximo boot;"
-	echo "  - abrir a porta 443 só na interface $ot_iface (página local);"
-	echo "  - habilitar e iniciar o agente, a página local (socket) e o ajudante (socket)."
+	echo "  - habilitar e iniciar o agente (oee-gateway.service, usuário oee)."
 	if [ "$firewall" = yes ]; then
 		echo "  - CARREGAR o firewall: pela $it_iface só saem 443/DNS/NTP e não entra nada;"
-		echo "    na $ot_iface só a página local entra e o agente só alcança: ${ot_targets:-(nenhum alvo)}."
+		echo "    na $ot_iface só entra a 443 (página local, Fase 1) e o agente só alcança: ${ot_targets:-(nenhum alvo)}."
 	fi
 	[ "$assume_yes" = yes ] && return 0
 	printf 'Continuar? [s/N] '
@@ -220,17 +223,6 @@ confirm() {
 		s | S | sim | y | yes) ;;
 		*) die "cancelado" ;;
 	esac
-}
-
-write_iface_dropin() {
-	d=/etc/systemd/system/oee-localui.socket.d
-	mkdir -p "$d"
-	cat >"$d/10-iface.conf" <<EOF
-# Gerado por deploy/gateway/install.sh (bancada). No R1000, o oee-helper
-# reescreve este arquivo com a interface OT resolvida pelo MAC da ETH0.
-[Socket]
-BindToDevice=$ot_iface
-EOF
 }
 
 install_deb() {
@@ -282,7 +274,7 @@ render_firewall() {
 	ok "firewall carregado de $out (OT: ${nets:-só 169.254/16}; DNS: ${dns:-nenhum}; NTP: ${ntp:-nenhum})"
 	[ -n "$dns" ] || warn "nenhum DNS na IT detectado: a resolução de nomes vai falhar"
 	[ -n "$ntp" ] || warn "nenhum NTP detectado (chronyc): o relógio não sincroniza"
-	info "para carregar no boot: /etc/nftables.conf com include \"$out\" e nftables.service habilitado"
+	info "no boot: a imagem (deploy/image) inclui $out no /etc/nftables.conf; numa bancada x86, acrescente include \"$out\" e habilite o nftables.service"
 }
 
 # ---------------------------------------------------------------------------
@@ -304,14 +296,6 @@ postflight() {
 		st=$(systemctl is-enabled "$u" 2>/dev/null || true)
 		if [ "$st" = enabled ]; then ok "$u habilitada"; else fail "$u: ${st:-desconhecida}"; fi
 	done
-	for s in agent ui helper; do
-		if [ -S "/run/oee-gateway/$s.sock" ]; then ok "/run/oee-gateway/$s.sock"; else fail "/run/oee-gateway/$s.sock ausente"; fi
-	done
-	if have ss && ss -Hltn 'sport = :443' 2>/dev/null | grep -q "%$ot_iface:"; then
-		ok "porta 443 escutando presa à $ot_iface"
-	else
-		warn "porta 443 não está presa à $ot_iface (systemctl status oee-localui.socket)"
-	fi
 	st=$(systemctl is-active oee-gateway.service 2>/dev/null || true)
 	case "$st" in
 		active) ok "agente ativo" ;;
@@ -328,16 +312,21 @@ postflight() {
 		if visudo -cq >/dev/null 2>&1; then ok "sudoers válido (visudo -c)"; else fail "sudoers inválido: visudo -c"; fi
 	fi
 	if [ "$(sysctl -n net.ipv4.ip_forward 2>/dev/null)" = 0 ]; then ok "ip_forward=0"; else fail "ip_forward != 0"; fi
-	if out=$(systemd-analyze verify /usr/lib/systemd/system/oee-gateway.service \
-		/usr/lib/systemd/system/oee-localui.service /usr/lib/systemd/system/oee-helper.service 2>&1); then
+	if out=$(systemd-analyze verify /usr/lib/systemd/system/oee-gateway.service 2>&1); then
 		ok "systemd-analyze verify sem erros"
 	else
 		warn "systemd-analyze verify: $out"
 	fi
-	for svc in oee-gateway.service oee-localui.service oee-helper.service; do
-		score=$(systemd-analyze security --no-pager "$svc" 2>/dev/null | awk '/Overall exposure level/ { print $(NF-1), $NF }')
-		info "exposição $svc: ${score:-?} (meta do agente: <= 2,0)"
-	done
+	if systemctl show -p WatchdogUSec --value oee-gateway.service 2>/dev/null | grep -q '^30s$'; then
+		ok "watchdog do agente: WatchdogSec=30s (o agente envia WATCHDOG=1 a cada 10 s)"
+	fi
+	score=$(systemd-analyze security --no-pager oee-gateway.service 2>/dev/null | awk '/Overall exposure level/ { print $(NF-1), $NF }')
+	info "exposição oee-gateway.service: ${score:-?} (meta: <= 2,0)"
+	if have udevadm; then
+		for n in 1 2 3; do
+			if [ -e "/dev/oee/rs485-$n" ]; then info "/dev/oee/rs485-$n -> $(readlink -f "/dev/oee/rs485-$n")"; fi
+		done
+	fi
 }
 
 check_mode() {
@@ -368,21 +357,20 @@ fi
 
 obtain_deb
 confirm
-write_iface_dropin
 install_deb
 if [ "$firewall" = yes ]; then
 	render_firewall
 fi
-# Dá tempo de o agente e os sockets subirem.
+# Dá tempo de o agente subir (READY=1).
 sleep 3
 postflight
 summary
 cat <<'EOF'
 
-Próximos passos:
-  sudo oee-gateway enroll --code XXXX-XXXX     # ativar na plataforma
-  sudo oee-gateway localui passwd --generate   # senha local (página e tecnico)
-  systemctl status oee-gateway                 # estado e STATUS= do agente
-  journalctl -u oee-gateway -f                 # logs
+Próximos passos (como root na bancada; o técnico usa "sudo oee-gateway ..."):
+  sudo -u oee oee-gateway diag                       # config, credencial, buffer, DNS
+  sudo -u oee oee-gateway enroll --code XXXX-XXXX    # ativar na plataforma (dono certo da credencial)
+  systemctl status oee-gateway                       # estado e STATUS= do agente
+  journalctl -u oee-gateway -f                       # logs
 EOF
 [ "$ERRORS" -eq 0 ]

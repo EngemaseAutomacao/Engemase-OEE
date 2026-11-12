@@ -1,3 +1,8 @@
+# FASE 1 — NÃO EMPACOTADO AINDA. O agente da Fase 0 não aceita ativação por
+# socket (módulo localapi: $LISTEN_FDS/$LISTEN_FDNAMES).
+# Esta unit entra no nfpm.yaml (e no postinst/prerm/postrm/install.sh) junto com
+# esse código; até lá, fica só como contrato. Ver deploy/gateway/README.md §2.
+#
 # API local do agente para a CLI de campo (docs/16 §3, módulo localapi).
 # Comandos de leitura: grupo oee-admin (o técnico é membro). Comandos que mudam
 # o sistema: root (sudo restrito do tecnico, docs/16 §4). O agente confere o

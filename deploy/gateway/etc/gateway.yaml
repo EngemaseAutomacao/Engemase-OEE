@@ -1,14 +1,19 @@
 # /etc/oee-gateway/gateway.yaml — config LOCAL mínima do gateway OEE (docs/16 §4).
 #
-# Conffile do pacote oee-gateway: o dpkg preserva as suas mudanças nas
-# atualizações. Campos desconhecidos são recusados pelo agente (pega erro de
-# digitação); valide com "oee-gateway config validate /etc/oee-gateway/gateway.yaml".
+# Conffile do pacote oee-gateway (root:oee 0640): o dpkg preserva as suas
+# mudanças nas atualizações. Só valem as chaves abaixo (lidas por
+# gateway/internal/config/local.go); chave desconhecida é RECUSADA e o agente não
+# sobe (pega erro de digitação). Depois de editar, confira com
+#   sudo -u oee oee-gateway diag        (linha "config local")
+# e reinicie: systemctl restart oee-gateway.
+# ("oee-gateway config validate" é para a config REMOTA em JSON, não para este.)
 #
 # O que NÃO fica aqui:
 #   - barramentos, dispositivos, tags e máquinas: vêm da nuvem (config remota);
 #   - rede, proxy e CA corporativa: a única fonte é /etc/oee-gateway/network.json
-#     (o oee-helper gera dele o proxy.env e o pacote de CAs);
-#   - credencial: /var/lib/oee-gateway/credentials.json (0600).
+#     (Fase 1: o oee-helper gera dele o proxy.env e o pacote de CAs; na Fase 0
+#     o proxy.env é escrito à mão na bancada);
+#   - credencial: /var/lib/oee-gateway/credentials.json (0600, dono oee).
 schema: 1
 
 cloud:
@@ -17,8 +22,9 @@ cloud:
   url: https://oee.engemase.com.br
   timeout_s: 30
   # PEM com CAs corporativas somadas às do sistema. Vazio = só as do sistema.
-  # Quando houver CA corporativa no network.json, o oee-helper gera
-  # /etc/oee-gateway/ca-bundle.pem e este campo passa a apontar para ele.
+  # Com CA corporativa (inspeção SSL aceita por escrito pelo TI), use
+  # /etc/oee-gateway/ca-bundle.pem (root 0644); na Fase 1 o oee-helper o gera
+  # a partir do network.json.
   extra_ca_file: ""
 
 # Caminhos canônicos (docs/16 §4). Só mude em bancada/desenvolvimento.
@@ -29,12 +35,14 @@ cloud:
 #   identity: /data/identity/hw.json
 
 hardware:
-  # auto | recomputer-r1000 | generic
+  # auto | recomputer-r1000 | generic. "auto" e "recomputer-r1000" mapeiam
+  # rs485-1/2/3 para /dev/ttyAMA2/3/5 (ordem dos bornes a confirmar na bancada).
   profile: auto
-  # Só no perfil "generic" (bancada x86 com adaptador USB-RS485):
+  # Portas lógicas extras ou trocadas (ex.: bancada x86 com adaptador USB-RS485);
+  # valem antes do mapa do perfil:
   # serial_ports:
   #   rs485-1: /dev/ttyUSB0
 
 log:
-  # debug | info | warn | error. A nuvem pode elevar temporariamente, com prazo.
+  # debug | info | warn | error. (F2/D29: a nuvem poderá elevar por um prazo.)
   level: info

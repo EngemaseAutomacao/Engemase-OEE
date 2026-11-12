@@ -18,8 +18,9 @@ set -f
 ROOT="${DPKG_ROOT:-}"
 STATE_DIR=/var/lib/oee-gateway
 MOUNT_UNIT='var-lib-oee\x2dgateway.mount'
-SOCKETS="oee-gateway.socket oee-gateway-ui.socket oee-helper.socket oee-localui.socket"
-ENABLE_UNITS="$SOCKETS oee-gateway.service $MOUNT_UNIT"
+# Fase 0: só o agente e o bind da /data. Os sockets da CLI e da página local e
+# o ajudante (systemd/fase1/) entram aqui junto com o código deles.
+ENABLE_UNITS="oee-gateway.service $MOUNT_UNIT"
 
 log() { echo "oee-gateway: $*"; }
 warn() { echo "oee-gateway: AVISO: $*" >&2; }
@@ -74,7 +75,6 @@ migrate_state_to_data() {
 	fi
 	log "copiando o estado do agente de $STATE_DIR (raiz) para /data/oee"
 	systemctl stop oee-gateway.service >/dev/null 2>&1 || true
-	systemctl stop oee-helper.service >/dev/null 2>&1 || true
 	cp -a "$STATE_DIR/." /data/oee/
 	sync
 }
@@ -89,7 +89,7 @@ reload_udev() {
 	have udevadm || return 0
 	[ -S /run/udev/control ] || return 0
 	udevadm control --reload || true
-	udevadm trigger --action=change --subsystem-match=leds \
+	udevadm trigger --action=change --subsystem-match=tty --subsystem-match=leds \
 		--subsystem-match=input --subsystem-match=gpio || true
 }
 
@@ -100,8 +100,8 @@ apply_sysctl() {
 }
 
 # Habilitação no estilo do debhelper: na 1ª instalação (e para units novas
-# numa atualização) habilita; se o administrador ou o oee-helper desabilitaram
-# depois (ex.: página local desligada na OT por política), respeita.
+# numa atualização) habilita; se o administrador desabilitou depois (ex.:
+# agente parado de propósito numa bancada), respeita.
 enable_units() {
 	if [ -n "$ROOT" ]; then
 		if [ -z "$PREV_VERSION" ]; then
@@ -126,30 +126,17 @@ enable_units() {
 }
 
 start_enabled_units() {
-	for u in $SOCKETS oee-gateway.service; do
-		if systemctl is-enabled --quiet "$u" 2>/dev/null; then
-			systemctl --no-block start "$u" || warn "falha ao iniciar $u."
-		fi
-	done
+	if systemctl is-enabled --quiet oee-gateway.service 2>/dev/null; then
+		systemctl --no-block start oee-gateway.service || warn "falha ao iniciar oee-gateway.service."
+	fi
 }
 
-# Atualização: para a página local e o ajudante (voltam pelo socket), reabre os
-# sockets ativos (a unit pode ter mudado; inativos ficam como estão) e religa o
-# agente só se ele estava rodando.
+# Atualização: religa o agente só se ele estava rodando (binário e unit novos).
 # AGENT_WAS_ACTIVE é lido antes de qualquer parada (a migração para /data também
-# para o agente).
+# para o agente). "restart --no-block" só enfileira: não espera o READY=1.
 restart_after_upgrade() {
-	for u in oee-localui.service oee-helper.service; do
-		systemctl stop "$u" >/dev/null 2>&1 || true
-	done
 	if [ "$AGENT_WAS_ACTIVE" = yes ]; then
-		systemctl stop oee-gateway.service || true
-	fi
-	for u in $SOCKETS; do
-		systemctl --no-block try-restart "$u" >/dev/null 2>&1 || true
-	done
-	if [ "$AGENT_WAS_ACTIVE" = yes ]; then
-		systemctl --no-block start oee-gateway.service || warn "falha ao religar o agente."
+		systemctl --no-block restart oee-gateway.service || warn "falha ao religar o agente."
 	fi
 }
 
@@ -208,6 +195,6 @@ case "$1" in
 esac
 
 if systemd_running; then
-	log "instalado. Estado: systemctl status oee-gateway; ativação: sudo oee-gateway enroll --code XXXX-XXXX"
+	log "instalado. Estado: systemctl status oee-gateway; ativação (como o usuário do agente): sudo -u oee oee-gateway enroll --code XXXX-XXXX"
 fi
 exit 0

@@ -8,7 +8,9 @@
 # ou: OEE_VERSION=0.1.0 OEE_ARCH=arm64 OEE_DIST=gateway/dist \
 #       nfpm pkg --config deploy/gateway/nfpm-updater.yaml --packager deb --target gateway/dist/
 #
-# Binário: $OEE_DIST/$OEE_ARCH/oee-updater (gateway/cmd/oee-updater, a implementar).
+# Binário: $OEE_DIST/$OEE_ARCH/oee-updater (gateway/cmd/oee-updater). AINDA NÃO
+# EXISTE (M4b): até lá este pacote não é gerado e o build-deb.sh recusa com
+# mensagem clara. As units abaixo são o contrato com esse binário.
 
 name: oee-gateway-updater
 arch: ${OEE_ARCH}

@@ -12,12 +12,9 @@ systemd_running() {
 }
 
 stop_all() {
-	# Serviços antes dos sockets, um por vez (unit ausente não interrompe as outras).
-	for u in oee-localui.service oee-localui.socket \
-		oee-helper.service oee-helper.socket \
-		oee-gateway.service oee-gateway.socket oee-gateway-ui.socket; do
-		systemctl stop "$u" >/dev/null 2>&1 || true
-	done
+	# Fase 0: só o agente. O bind de /data/oee fica montado até o próximo boot
+	# (não há o que desmontar com pressa; o buffer continua lá).
+	systemctl stop oee-gateway.service >/dev/null 2>&1 || true
 }
 
 case "$1" in
