@@ -1,7 +1,9 @@
 // Package poller lê os dispositivos no ritmo da config: um Poller por dispositivo
-// TCP (conexão persistente própria) e um por barramento RS-485 (requisições
-// estritamente serializadas: um mestre por barramento). Cada leitura em bloco vira
-// um Reading com as amostras decodificadas das tags, entregue ao motor.
+// Modbus TCP (conexão persistente própria), um por barramento RS-485 e um por
+// conversor serial↔Ethernet transparente (RTU sobre TCP, mesmo host:porta). Nos dois
+// últimos, as requisições são estritamente serializadas: uma linha RS-485, um mestre,
+// uma requisição por vez. Cada leitura em bloco vira um Reading com as amostras
+// decodificadas das tags, entregue ao motor.
 //
 // Cada poller também informa a saúde dos seus dispositivos (Health), registra no log
 // as mudanças do estado de conexão deles (Logger) e expõe o batimento do laço de
@@ -16,6 +18,7 @@ import (
 	"math/rand/v2"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,7 +53,8 @@ type group struct {
 	next     time.Time
 }
 
-// Poller é dono de um transporte (dispositivo TCP ou barramento RTU).
+// Poller é dono de um transporte (dispositivo Modbus TCP, barramento RTU ou conversor
+// RTU sobre TCP).
 type Poller struct {
 	Name string
 	// Logger recebe as mudanças do estado de conexão dos dispositivos (nil: sem log).
@@ -100,22 +104,37 @@ func Build(cfg *config.GatewayConfig, local *config.Local) ([]*Poller, error) {
 	}
 	var out []*Poller
 	byBus := map[string]*Poller{}
+	byConverter := map[string]*Poller{} // host (sem diferença de caixa):porta
 	for i := range cfg.Devices {
 		dev := &cfg.Devices[i]
 		if !dev.IsEnabled() {
 			continue
 		}
 		timeout := time.Duration(dev.Timeout()) * time.Millisecond
+		addr := dev.Params.Host + ":" + strconv.Itoa(dev.Params.Port)
 		var p *Poller
 		switch dev.Protocol {
-		case config.ProtocolTCP, config.ProtocolRTUOverTCP:
-			tr := modbus.TransportTCP
-			if dev.Protocol == config.ProtocolRTUOverTCP {
-				tr = modbus.TransportRTUOverTCP
-			}
-			addr := dev.Params.Host + ":" + strconv.Itoa(dev.Params.Port)
-			p = newPoller(dev.Name+" ("+addr+")", modbus.Target{Transport: tr, Address: addr, Timeout: timeout, Retries: modbus.DefaultRetries})
+		case config.ProtocolTCP:
+			// O servidor Modbus TCP casa cada resposta pelo id de transação e atende
+			// conexões simultâneas: um poller (uma conexão) por dispositivo.
+			p = newPoller(dev.Name+" ("+addr+")", modbus.Target{Transport: modbus.TransportTCP, Address: addr, Timeout: timeout, Retries: modbus.DefaultRetries})
 			out = append(out, p)
+		case config.ProtocolRTUOverTCP:
+			// Os escravos atrás de um conversor transparente estão numa linha RS-485 só, e
+			// o quadro RTU não tem id de transação. Um socket por escravo punha as
+			// requisições em paralelo na mesma linha: colisões, respostas entregues à
+			// conexão do outro e NO_COMM intermitente. Como no barramento serial, o
+			// conversor (host:porta) tem um poller e um socket só: uma requisição por vez.
+			key := strings.ToLower(dev.Params.Host) + ":" + strconv.Itoa(dev.Params.Port)
+			p = byConverter[key]
+			if p == nil {
+				p = newPoller("rtu-tcp "+addr, modbus.Target{Transport: modbus.TransportRTUOverTCP, Address: addr, Timeout: timeout, Retries: modbus.DefaultRetries})
+				byConverter[key] = p
+				out = append(out, p)
+			}
+			if timeout > p.target.Timeout {
+				p.target.Timeout = timeout // o conversor usa o maior timeout dos escravos
+			}
 		case config.ProtocolRTU:
 			bus := buses[dev.Params.Bus]
 			if bus == nil {
@@ -438,7 +457,8 @@ func (p *Poller) Liveness() Liveness {
 
 // LivenessBound é o prazo para o laço completar uma volta depois da anterior, fora
 // das esperas planejadas: 3 × (o maior poll do poller + o pior tempo de uma leitura),
-// no mínimo livenessMin.
+// no mínimo livenessMin. Num barramento ou conversor, o poll é o maior entre os grupos
+// de todos os escravos, e o timeout do alvo já é o maior deles (Build).
 func (p *Poller) LivenessBound() time.Duration {
 	var every time.Duration
 	for _, g := range p.groups {

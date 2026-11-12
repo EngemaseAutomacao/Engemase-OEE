@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -26,7 +27,9 @@ import (
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/ids"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/modbus"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/modbus/mbtest"
+	"github.com/engemaseautomacao/engemase-oee/gateway/internal/poller"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/testutil"
+	"github.com/engemaseautomacao/engemase-oee/gateway/internal/uplink"
 )
 
 const (
@@ -493,9 +496,9 @@ func TestTickKeepsEngineOutputWhenCommitFails(t *testing.T) {
 	a := testAgent(broken)
 	at := func(d time.Duration) { a.clock = func() (time.Time, time.Duration) { return now.Add(d), d } }
 	at(0)
-	a.tick(context.Background(), eng, nil) // o motor fecha os minutos aqui; o Commit falha
+	a.tick(context.Background(), eng, nil, nil) // o motor fecha os minutos aqui; o Commit falha
 	at(commitRetryMin)
-	a.tick(context.Background(), eng, nil) // nova tentativa (depois da espera), ainda falhando
+	a.tick(context.Background(), eng, nil, nil) // nova tentativa (depois da espera), ainda falhando
 
 	store, err := buffer.Open(path, buffer.Options{})
 	if err != nil {
@@ -504,7 +507,7 @@ func TestTickKeepsEngineOutputWhenCommitFails(t *testing.T) {
 	defer store.Close()
 	a.store = store
 	at(3 * commitRetryMin)
-	a.tick(context.Background(), eng, nil) // o buffer voltou; a espera dobrou (2 s) e acabou
+	a.tick(context.Background(), eng, nil, nil) // o buffer voltou; a espera dobrou (2 s) e acabou
 	minutes, states := 0, 0
 	seen := map[string]bool{}
 	for _, it := range outbox(t, store) {
@@ -561,12 +564,12 @@ func TestEngineRestartDuringCommitFailureConservesPieces(t *testing.T) {
 	}
 	feed(engA, t0, t0.Add(2*time.Minute))
 	at(2 * time.Minute)
-	a.tick(context.Background(), engA, nil) // 13:00 e 13:01 gravados (contadores no disco)
+	a.tick(context.Background(), engA, nil, nil) // 13:00 e 13:01 gravados (contadores no disco)
 
 	store.Close() // o buffer para de gravar
 	feed(engA, t0.Add(2*time.Minute), t0.Add(4*time.Minute))
 	at(4 * time.Minute)
-	a.tick(context.Background(), engA, nil) // 13:02 e 13:03 ficam em memória
+	a.tick(context.Background(), engA, nil, nil) // 13:02 e 13:03 ficam em memória
 
 	store, err = buffer.Open(path, buffer.Options{})
 	if err != nil {
@@ -583,7 +586,7 @@ func TestEngineRestartDuringCommitFailureConservesPieces(t *testing.T) {
 	}
 	feed(engB, t0.Add(4*time.Minute), t0.Add(5*time.Minute))
 	at(5 * time.Minute)
-	a.tick(context.Background(), engB, nil) // grava o pendente e 13:04
+	a.tick(context.Background(), engB, nil, nil) // grava o pendente e 13:04
 
 	var sum int64
 	minutes := 0
@@ -683,7 +686,7 @@ func TestTickReportsWallClockJump(t *testing.T) {
 	}
 	for _, s := range steps {
 		a.clock = func() (time.Time, time.Duration) { return s.wall, s.mono }
-		a.tick(context.Background(), eng, nil)
+		a.tick(context.Background(), eng, nil, nil)
 	}
 	var jumps []float64
 	for _, it := range outbox(t, store) {
@@ -744,7 +747,7 @@ func TestCommitRetryBacksOffWhileBufferFails(t *testing.T) {
 	a.addUnsent(buffer.Write{Items: []buffer.Item{stateItem(gen, t0.Add(-time.Minute))}})
 	tickAt := func(d time.Duration) {
 		a.clock = func() (time.Time, time.Duration) { return t0.Add(d), d }
-		a.tick(context.Background(), eng, nil)
+		a.tick(context.Background(), eng, nil, nil)
 	}
 
 	tickAt(0)              // falha: próxima tentativa em 1 s
@@ -867,5 +870,208 @@ func TestDataLossSeqNotShiftedByConcurrentEvents(t *testing.T) {
 	}
 	if losses != rounds {
 		t.Fatalf("%d data_loss, quer %d", losses, rounds)
+	}
+}
+
+// Token revogado (401): o agente grava o marcador auth-blocked ao lado da credencial.
+// É ele que deixa o enroll sem --force (o único que o sudo do técnico permite) trocar
+// a credencial recusada. Com a credencial nova aceita pela nuvem (200), o agente
+// apaga o marcador (um 401 passageiro não deixa a porta aberta). As linhas do sync
+// (volta da nuvem, marcador apagado) vão para o log do agente, não para o padrão.
+func TestRevokedTokenWritesAuthBlockedMarkerAndAcceptedSyncClearsIt(t *testing.T) {
+	const newToken = "gw_test_Q9mZ2xV7cL4kR1pT8wY3sB6nH0jF5dG2aE7uK9iM4oN"
+	var mu sync.Mutex
+	refused, accepted := 0, 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != contracts.RouteSync {
+			http.NotFound(w, r)
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if r.Header.Get("Authorization") != "Bearer "+newToken {
+			refused++
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = io.WriteString(w, `{"error":{"code":"token_revoked","message":"token revogado"}}`)
+			return
+		}
+		accepted++
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ack_seq": 0, "server_time": contracts.FormatTime(time.Now()), "config": map[string]any{"latest_version": 0},
+			"commands": []any{}, "next_sync_s": 1, "min_agent_version": "0.1.0",
+		})
+	}))
+	defer srv.Close()
+	counts := func() (int, int) {
+		mu.Lock()
+		defer mu.Unlock()
+		return refused, accepted
+	}
+
+	dir := t.TempDir()
+	local := config.DefaultLocal()
+	local.Cloud.URL = srv.URL
+	local.Paths.StateDir = dir
+	local.Paths.Buffer = filepath.Join(dir, "buffer.db")
+	local.Paths.Credentials = filepath.Join(dir, "credentials.json")
+	saveToken := func(tok string) {
+		t.Helper()
+		if err := config.SaveCredentials(local.Paths.Credentials, &config.Credentials{GatewayID: "01a1c5d4-9208-752e-89a7-834df2a74de4", Token: tok, Org: "acme", CloudURL: srv.URL}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	saveToken(token) // o token que a nuvem revogou
+	marker := filepath.Join(dir, uplink.BlockedMarkerFile)
+	readMarker := func() *uplink.BlockedMarker {
+		t.Helper()
+		m, err := uplink.ReadBlockedMarker(marker)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	waitFor := func(what string, cond func() bool) {
+		t.Helper()
+		for deadline := time.Now().Add(10 * time.Second); !cond(); time.Sleep(20 * time.Millisecond) {
+			if time.Now().After(deadline) {
+				r, a := counts()
+				t.Fatalf("prazo esgotado esperando %s (401 x%d, 200 x%d)", what, r, a)
+			}
+		}
+	}
+
+	logs := &syncBuffer{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- Run(ctx, Options{Local: local, Logger: slog.New(slog.NewTextHandler(logs, nil)),
+			TickEvery: 200 * time.Millisecond, CredentialsPollEvery: 50 * time.Millisecond})
+	}()
+
+	waitFor("o marcador auth-blocked ao lado da credencial", func() bool { return readMarker() != nil })
+	m := readMarker()
+	if m.Status != http.StatusUnauthorized || m.Code != "token_revoked" || m.Since == "" || m.Last == "" {
+		t.Fatalf("marcador: %+v", m)
+	}
+	if st, err := os.Stat(marker); err != nil || st.Mode().Perm() != 0o600 {
+		t.Fatalf("permissão do marcador: %v (%v)", st.Mode(), err)
+	}
+
+	// Credencial nova (enroll): a nuvem aceita, e o primeiro sync aceito apaga o marcador.
+	saveToken(newToken)
+	waitFor("o marcador apagado depois do sync aceito", func() bool {
+		_, a := counts()
+		return a > 0 && readMarker() == nil
+	})
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	out := logs.String()
+	for _, want := range []string{"nuvem recusou o token", "sync com a nuvem recuperado", "marcador de credencial recusada apagado"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("o log do agente deveria ter %q:\n%s", want, out)
+		}
+	}
+}
+
+// stateRead é uma leitura do código de estado de engineTestConfig (0 STOPPED, 1 RUNNING).
+func stateRead(t *testing.T, at time.Time, code uint16) poller.Reading {
+	t.Helper()
+	v, err := modbus.DecodeRegisters([]uint16{code}, modbus.Uint16, modbus.WordOrderNone, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return poller.Reading{DeviceID: devID, At: at, Samples: []engine.Sample{{TagID: tState, Value: v}}}
+}
+
+// stoppingEngine devolve um motor com a máquina RUNNING desde base e um candidato a
+// STOPPED visto em base+2,2 s (debounce padrão de 1 s correndo). Uma leitura RUNNING
+// em base+2,6 s o desmente; um tick em base+3,4 s sem ela o confirmaria.
+func stoppingEngine(t *testing.T, base time.Time) *engine.Engine {
+	t.Helper()
+	eng, err := engine.New(engineTestConfig(t), base, engine.Options{IDs: ids.NewGenerator(nil)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for ms := 0; ms <= 2000; ms += 200 {
+		r := stateRead(t, base.Add(time.Duration(ms)*time.Millisecond), 1)
+		eng.OnRead(r.At, r.Samples)
+	}
+	r := stateRead(t, base.Add(2200*time.Millisecond), 0)
+	eng.OnRead(r.At, r.Samples)
+	return eng
+}
+
+// liveState é o estado da máquina que o último tick publicou (live).
+func liveState(a *agent) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, l := range a.live {
+		if l.MachineID == mID {
+			return l.State
+		}
+	}
+	return ""
+}
+
+// Leituras já na fila quando o tick roda (coleta atrasada) entram no motor antes dele:
+// o tick não confirma um candidato que uma leitura mais antiga que ele desmente.
+func TestTickAppliesQueuedReadingsFirst(t *testing.T) {
+	a, clk, _, path := watchdogAgent(t)
+	eng := stoppingEngine(t, fakeWall)
+	readings := make(chan poller.Reading, 4)
+	readings <- stateRead(t, fakeWall.Add(2600*time.Millisecond), 1) // desmente o STOPPED
+	clk.set(3400 * time.Millisecond)                                 // 1,2 s depois do candidato: passou do debounce
+
+	a.tick(context.Background(), eng, nil, readings)
+	if n := len(readings); n != 0 {
+		t.Fatalf("%d leituras ficaram na fila depois do tick", n)
+	}
+	if st := liveState(a); st != contracts.StateRunning {
+		t.Fatalf("live depois do tick: %q; a leitura RUNNING de antes do tick desmente o STOPPED", st)
+	}
+	store, err := buffer.Open(path, buffer.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	for _, it := range outbox(t, store) {
+		if p := payloadOf(t, it); p["type"] == contracts.EventState && p["state"] == contracts.StateStopped {
+			t.Fatalf("STOPPED confirmado com a leitura que o desmente ainda na fila: %v", p)
+		}
+	}
+}
+
+// No laço da coleta, o tick pronto junto com leituras (coleta atrasada) não passa à
+// frente delas. O select escolhe ao acaso entre os dois: o cenário roda várias vezes
+// (sem a drenagem antes do tick, cada rodada falharia com chance 1/2).
+func TestCollectLoopTickDoesNotOvertakeQueuedReadings(t *testing.T) {
+	a, clk, _, _ := watchdogAgent(t)
+	a.reconfigure = make(chan *config.GatewayConfig, 1)
+	for i := range 40 {
+		offset := time.Duration(i) * time.Minute
+		base := fakeWall.Add(offset)
+		eng := stoppingEngine(t, base)
+		readings := make(chan poller.Reading, 1)
+		readings <- stateRead(t, base.Add(2600*time.Millisecond), 1)
+		ticks := make(chan time.Time, 1)
+		ticks <- base // tick e leitura prontos juntos
+		tickAt := offset + 3400*time.Millisecond
+		clk.set(tickAt)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan bool, 1)
+		go func() { done <- a.consume(ctx, eng, nil, readings, ticks) }()
+		waitBeats(t, a, func(b beatsView) bool { return b.tick == tickAt })
+		cancel()
+		if <-done {
+			t.Fatal("consume devolveu troca de config")
+		}
+		if st := liveState(a); st != contracts.StateRunning {
+			t.Fatalf("rodada %d: tick rodou antes da leitura que já estava na fila (live %q)", i, st)
+		}
 	}
 }

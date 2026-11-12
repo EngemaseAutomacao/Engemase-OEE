@@ -86,7 +86,7 @@ func TestWatchdogSkipsPingWhenEngineTickStale(t *testing.T) {
 		t.Fatalf("sem coleta rodando não há o que conferir: %+v", f)
 	}
 	a.beatStart()
-	a.tick(context.Background(), eng, nil)
+	a.tick(context.Background(), eng, nil, nil)
 	if f := checkAt(a, tickStaleMin-time.Millisecond); f != nil {
 		t.Fatalf("tick dentro do limite: %+v", f)
 	}
@@ -98,7 +98,7 @@ func TestWatchdogSkipsPingWhenEngineTickStale(t *testing.T) {
 		!strings.Contains(out, "ultimo_tick_ha_ms=6000") {
 		t.Fatalf("log do watchdog não alimentado:\n%s", out)
 	}
-	a.tick(context.Background(), eng, nil)
+	a.tick(context.Background(), eng, nil, nil)
 	if !a.feedWatchdog() {
 		t.Fatal("depois de um tick, o watchdog deveria ser alimentado")
 	}
@@ -118,7 +118,7 @@ func TestWatchdogKeepsFeedingWhileBufferFails(t *testing.T) {
 	a.addUnsent(buffer.Write{Items: []buffer.Item{stateItem(ids.NewGenerator(nil), fakeWall)}})
 	for d := time.Duration(0); d < 10*time.Minute; d += time.Second {
 		clk.set(d)
-		a.tick(context.Background(), eng, nil)
+		a.tick(context.Background(), eng, nil, nil)
 		if f := checkAt(a, d+999*time.Millisecond); f != nil {
 			t.Fatalf("aos %v, com o buffer falhando: %+v\n%s", d, f, logs.String())
 		}
@@ -138,7 +138,7 @@ func TestWatchdogSkipsPingWhenWriterHangs(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.beatStart()
-	a.tick(context.Background(), eng, nil)
+	a.tick(context.Background(), eng, nil, nil)
 
 	// Uma perda pendente faz o flush travar o writeMu, preso por "outra gravação".
 	gen := ids.NewGenerator(nil)
@@ -149,7 +149,7 @@ func TestWatchdogSkipsPingWhenWriterHangs(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		a.tick(context.Background(), eng, nil)
+		a.tick(context.Background(), eng, nil, nil)
 	}()
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
 		a.beats.mu.Lock()
@@ -192,7 +192,7 @@ func TestWatchdogSkipsPingWhenFlushNeverAttempted(t *testing.T) {
 	a.retryAt = time.Hour // defeito simulado: a próxima tentativa nunca chega
 	for d := time.Second; d <= flushStuckAfter+2*time.Second; d += time.Second {
 		clk.set(d)
-		a.tick(context.Background(), eng, nil)
+		a.tick(context.Background(), eng, nil, nil)
 		f := checkAt(a, d)
 		if d <= flushStuckAfter && f != nil {
 			t.Fatalf("aos %v: %+v", d, f)
@@ -403,7 +403,7 @@ func TestWatchdogEngineCheckCountsFromFlushEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.beatStart()
-	a.tick(context.Background(), eng, nil)
+	a.tick(context.Background(), eng, nil, nil)
 
 	// Uma perda pendente faz o flush travar o writeMu: a gravação dura o quanto o teste quiser.
 	gen := ids.NewGenerator(nil)
@@ -415,7 +415,7 @@ func TestWatchdogEngineCheckCountsFromFlushEnd(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		a.tick(context.Background(), eng, nil)
+		a.tick(context.Background(), eng, nil, nil)
 	}()
 	waitBeats(t, a, func(b beatsView) bool { return b.flushing })
 	slow := flushStuckAfter - 9*time.Second // 21 s: gravação lenta, não travada

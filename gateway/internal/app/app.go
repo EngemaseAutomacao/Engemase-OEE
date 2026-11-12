@@ -485,36 +485,74 @@ func (a *agent) collectWith(ctx context.Context, cfg *config.GatewayConfig) erro
 	stop := func() {
 		stopPollers()
 		wg.Wait()
-		a.beatPollers(nil)        // laços parados de propósito: o watchdog não os confere na gravação final
-		a.retryAt = 0             // na parada, tenta gravar mesmo durante a espera entre tentativas
-		a.tick(ctx, eng, pollers) // grava o que já fechou
+		a.beatPollers(nil)                  // laços parados de propósito: o watchdog não os confere na gravação final
+		a.retryAt = 0                       // na parada, tenta gravar mesmo durante a espera entre tentativas
+		a.tick(ctx, eng, pollers, readings) // aplica as leituras que ficaram na fila e grava o que já fechou
 		a.beatStop()
 	}
 
 	ticker := time.NewTicker(a.opts.TickEvery)
 	defer ticker.Stop()
+	if a.consume(ctx, eng, pollers, readings, ticker.C) {
+		stop()
+		return nil
+	}
+	stop()
+	a.logUnsentAtExit()
+	return ctx.Err()
+}
+
+// consume é o laço da coleta: aplica as leituras ao motor e roda o tick a cada valor
+// de ticks, até a troca de config (true) ou o fim do contexto (false).
+func (a *agent) consume(ctx context.Context, eng *engine.Engine, pollers []*poller.Poller,
+	readings <-chan poller.Reading, ticks <-chan time.Time) bool {
 	for {
 		select {
 		case r := <-readings:
-			if r.Err != nil {
-				eng.OnFailure(r.DeviceID, r.At)
-			} else {
-				eng.OnRead(r.At, r.Samples)
-			}
-		case <-ticker.C:
-			a.tick(ctx, eng, pollers)
+			applyReading(eng, r)
+		case <-ticks:
+			a.tick(ctx, eng, pollers, readings)
 		case <-a.reconfigure:
-			stop()
-			return nil
+			return true
 		case <-ctx.Done():
-			stop()
-			a.logUnsentAtExit()
-			return ctx.Err()
+			return false
 		}
 	}
 }
 
-func (a *agent) tick(ctx context.Context, eng *engine.Engine, pollers []*poller.Poller) {
+// applyReading entrega uma leitura do poller ao motor.
+func applyReading(eng *engine.Engine, r poller.Reading) {
+	if r.Err != nil {
+		eng.OnFailure(r.DeviceID, r.At)
+	} else {
+		eng.OnRead(r.At, r.Samples)
+	}
+}
+
+// drainReadings aplica ao motor as leituras que já estão na fila, sem esperar por
+// outras. Com a coleta atrasada (gravação lenta, rajada dos pollers), o tick e as
+// leituras ficam prontos juntos e o select escolhe ao acaso: sem isto, o tick podia
+// rodar com leituras mais antigas que ele ainda na fila, confirmando um candidato que
+// uma delas desmente ou fechando o minuto sem elas. O limite é o que está na fila
+// agora (len): leituras que chegam durante a drenagem ficam para depois, e uma
+// enxurrada não adia o tick (o watchdog confere o motor). Consumir aqui também libera
+// o poller que espera na entrega (contrapressão, poller.Liveness.Delivering).
+func drainReadings(eng *engine.Engine, readings <-chan poller.Reading) {
+	for n := len(readings); n > 0; n-- {
+		select {
+		case r := <-readings:
+			applyReading(eng, r)
+		default:
+			return
+		}
+	}
+}
+
+// tick roda um ciclo do motor. Primeiro aplica as leituras já na fila (readings; nil
+// = nenhuma) e só depois lê o relógio: as leituras aplicadas são todas de antes do
+// instante do tick.
+func (a *agent) tick(ctx context.Context, eng *engine.Engine, pollers []*poller.Poller, readings <-chan poller.Reading) {
+	drainReadings(eng, readings)
 	now, mono := a.readClock()
 	a.checkClock(now, mono)
 	out := eng.Tick(now)
@@ -820,6 +858,12 @@ func (a *agent) startSync(ctx context.Context, creds *config.Credentials, cancel
 		Sender:   client,
 		Queue:    a.store,
 		Snapshot: a.snapshot,
+		// Marcador auth-blocked ao lado da credencial: gravado no 401 e apagado no
+		// primeiro sync aceito. Sem ele, o enroll sem --force (o único que o sudo do
+		// técnico permite) não troca a credencial recusada pela nuvem.
+		MarkerPath: uplink.BlockedMarkerPath(a.local.Paths.Credentials),
+		// Falhas e volta do /sync e o marcador no log do agente (journald), com o nível dele.
+		Log: a.log,
 		OnResponse: func(resp *contracts.SyncResponse) {
 			a.cmds.Confirm()
 			a.cmds.Handle(resp.Commands, time.Now())

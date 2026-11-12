@@ -72,6 +72,7 @@ const (
 	RuleBusPortUnique       = "bus.port_unique"
 	RuleBusUnitUnique       = "bus.unit_unique"
 	RuleTCPEndpointUnique   = "tcp.endpoint_unique"
+	RuleTCPEndpointProtocol = "tcp.endpoint_protocol"
 	RuleLimitsTags          = "limits.tags"
 	RuleMachineModeRoles    = "machine.mode_roles"
 	RuleMachineCommLoss     = "machine.comm_loss"
@@ -457,6 +458,10 @@ func (c *GatewayConfig) validateSemantics(v *validator) {
 	}
 	unitsByBus := map[string]bool{}
 	tcpEndpoints := map[string]bool{}
+	// Protocolo do primeiro dispositivo de cada host:porta. Um endpoint fala Modbus TCP
+	// (MBAP) ou quadros RTU (conversor transparente), nunca os dois; e os escravos de
+	// um conversor RTU sobre TCP são lidos por um socket só, uma requisição por vez.
+	endpointProtocol := map[string]string{}
 	for d, dev := range c.Devices {
 		if dev.Params.UnitID == nil {
 			continue
@@ -472,7 +477,13 @@ func (c *GatewayConfig) validateSemantics(v *validator) {
 			}
 			unitsByBus[key] = true
 		case ProtocolTCP, ProtocolRTUOverTCP:
-			key := fmt.Sprintf("%s:%d#%d", strings.ToLower(dev.Params.Host), dev.Params.Port, *dev.Params.UnitID)
+			endpoint := fmt.Sprintf("%s:%d", strings.ToLower(dev.Params.Host), dev.Params.Port)
+			if proto, ok := endpointProtocol[endpoint]; !ok {
+				endpointProtocol[endpoint] = dev.Protocol
+			} else if proto != dev.Protocol {
+				v.add(RuleTCPEndpointProtocol, "Dispositivos no mesmo host e porta precisam usar o mesmo protocolo (modbus-tcp ou modbus-rtu-over-tcp).", "devices", d, "protocol")
+			}
+			key := fmt.Sprintf("%s#%d", endpoint, *dev.Params.UnitID)
 			if tcpEndpoints[key] {
 				v.add(RuleTCPEndpointUnique, "Dois dispositivos com o mesmo host, porta e unit_id.", "devices", d, "params")
 			}
