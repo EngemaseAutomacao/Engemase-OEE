@@ -15,6 +15,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"runtime"
 	"strconv"
@@ -81,6 +82,88 @@ func (e *HTTPError) Error() string {
 	return fmt.Sprintf("nuvem respondeu %d: %s", e.Status, msg)
 }
 
+// ProxyConnectError é a falha do túnel (CONNECT) no proxy: a recusa (Status
+// diferente de 200, com a frase como o proxy mandou) ou uma resposta que nem é
+// HTTP (Status 0 e Err com o erro do net/http: porta ou esquema do proxy errados).
+// O transporte do Go devolve as duas num erro sem tipo, só com o texto (a frase do
+// status, "malformed HTTP response"), igual a outros erros sem tipo do net/http
+// que aparecem com ou sem proxy; por isso o cliente as tipa aqui, só quando houve
+// CONNECT de verdade: a recusa pelo OnProxyConnectResponse (checkProxyConnect) e
+// a resposta ilegível quando a requisição foi por um proxy (proxyReplyError).
+type ProxyConnectError struct {
+	Proxy  string // host:porta do proxy (sem usuário e senha)
+	Status int    // código do status do CONNECT (ex.: 407); 0 = resposta ilegível
+	Reason string // frase do status como o proxy mandou; pode ser vazia
+	Err    error  // com Status 0: o erro do net/http ao ler a resposta
+}
+
+func (e *ProxyConnectError) Error() string {
+	msg := "proxy"
+	if e.Proxy != "" {
+		msg += " " + e.Proxy
+	}
+	if e.Status == 0 {
+		return msg + " respondeu ao CONNECT com algo que não é HTTP: " + fmt.Sprint(e.Err)
+	}
+	msg += " recusou o túnel (CONNECT): " + strconv.Itoa(e.Status)
+	reason := e.Reason
+	if reason == "" {
+		reason = http.StatusText(e.Status)
+	}
+	if reason != "" {
+		msg += " " + reason
+	}
+	return msg
+}
+
+func (e *ProxyConnectError) Unwrap() error { return e.Err }
+
+// checkProxyConnect é o OnProxyConnectResponse do transporte: o transporte chama
+// antes de conferir o 200, e o erro devolvido aqui chega ao chamador como está
+// (dentro do url.Error).
+func checkProxyConnect(_ context.Context, proxyURL *url.URL, _ *http.Request, res *http.Response) error {
+	if res.StatusCode == http.StatusOK {
+		return nil
+	}
+	e := &ProxyConnectError{Status: res.StatusCode}
+	if proxyURL != nil {
+		e.Proxy = proxyURL.Host
+	}
+	if _, reason, ok := strings.Cut(res.Status, " "); ok {
+		e.Reason = strings.TrimSpace(reason)
+	}
+	return e
+}
+
+// withProxyCheck devolve uma cópia do cliente cujo transporte (*http.Transport)
+// tipa a recusa do CONNECT (checkProxyConnect), depois do OnProxyConnectResponse
+// que já houver. O cliente dado não muda; um transporte de outro tipo fica como
+// está.
+func withProxyCheck(hc *http.Client) *http.Client {
+	rt := hc.Transport
+	if rt == nil {
+		rt = http.DefaultTransport
+	}
+	tr, ok := rt.(*http.Transport)
+	if !ok {
+		return hc
+	}
+	tr = tr.Clone()
+	if prev := tr.OnProxyConnectResponse; prev != nil {
+		tr.OnProxyConnectResponse = func(ctx context.Context, proxyURL *url.URL, req *http.Request, res *http.Response) error {
+			if err := prev(ctx, proxyURL, req, res); err != nil {
+				return err
+			}
+			return checkProxyConnect(ctx, proxyURL, req, res)
+		}
+	} else {
+		tr.OnProxyConnectResponse = checkProxyConnect
+	}
+	out := *hc
+	out.Transport = tr
+	return &out
+}
+
 // Erros sentinela.
 var (
 	// ErrBodyTooLarge: o JSON passou de 1 MiB descompactado antes mesmo de enviar.
@@ -111,7 +194,9 @@ type Options struct {
 	AgentVersion string        // para o User-Agent
 	Timeout      time.Duration // limite total de cada requisição (padrão 30 s)
 	ExtraCAFile  string        // PEM com CAs corporativas, somadas às do sistema
-	// HTTPClient substitui o cliente montado aqui (testes).
+	// HTTPClient substitui o cliente montado aqui (testes). Se o transporte for um
+	// *http.Transport, o New usa uma cópia dele com a recusa do CONNECT tipada
+	// (ProxyConnectError), como no cliente montado aqui.
 	HTTPClient *http.Client
 }
 
@@ -125,8 +210,8 @@ type Client struct {
 	token string
 }
 
-// New monta o cliente: proxy por HTTPS_PROXY/NO_PROXY, CAs do sistema + extras,
-// timeouts curtos de conexão e TLS 1.2+.
+// New monta o cliente: proxy por HTTPS_PROXY/NO_PROXY (falha do CONNECT como
+// ProxyConnectError), CAs do sistema + extras, timeouts curtos de conexão e TLS 1.2+.
 func New(o Options) (*Client, error) {
 	if o.BaseURL == "" {
 		return nil, errors.New("uplink: URL da nuvem vazia")
@@ -141,9 +226,10 @@ func New(o Options) (*Client, error) {
 		base:  strings.TrimRight(o.BaseURL, "/"),
 		ua:    fmt.Sprintf("oee-gateway/%s (%s; %s)", o.AgentVersion, runtime.GOOS, runtime.GOARCH),
 		token: o.Token,
-		http:  o.HTTPClient,
 	}
-	if c.http == nil {
+	if o.HTTPClient != nil {
+		c.http = withProxyCheck(o.HTTPClient)
+	} else {
 		tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12}
 		if o.ExtraCAFile != "" {
 			pool, err := x509.SystemCertPool()
@@ -160,14 +246,15 @@ func New(o Options) (*Client, error) {
 			tlsCfg.RootCAs = pool
 		}
 		tr := &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
-			TLSClientConfig:       tlsCfg,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: o.Timeout,
-			IdleConnTimeout:       90 * time.Second,
-			MaxIdleConns:          2,
-			ForceAttemptHTTP2:     true,
+			Proxy:                  http.ProxyFromEnvironment,
+			OnProxyConnectResponse: checkProxyConnect,
+			DialContext:            (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+			TLSClientConfig:        tlsCfg,
+			TLSHandshakeTimeout:    10 * time.Second,
+			ResponseHeaderTimeout:  o.Timeout,
+			IdleConnTimeout:        90 * time.Second,
+			MaxIdleConns:           2,
+			ForceAttemptHTTP2:      true,
 		}
 		c.http = &http.Client{Transport: tr, Timeout: o.Timeout}
 	}
@@ -185,6 +272,39 @@ func (c *Client) bearer() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.token
+}
+
+// do executa a requisição e tipa a resposta ilegível do proxy ao CONNECT
+// (proxyReplyError).
+func (c *Client) do(r *http.Request) (*http.Response, error) {
+	res, err := c.http.Do(r)
+	if err != nil {
+		return nil, c.proxyReplyError(r, err)
+	}
+	return res, nil
+}
+
+// proxyReplyError troca por ProxyConnectError (Status 0) o "malformed HTTP ..."
+// sem tipo de uma requisição HTTPS que foi por um proxy HTTP: é o transporte lendo
+// a resposta ao CONNECT, que ele devolve como está. Depois do túnel aberto, a mesma
+// falha na resposta da nuvem chega decorada ("net/http: HTTP/1.x transport
+// connection broken: ...") e fica como está; sem proxy, decorada ou crua (resposta
+// antes de qualquer byte da requisição), também.
+func (c *Client) proxyReplyError(r *http.Request, err error) error {
+	var ue *url.Error
+	if r.URL.Scheme != "https" || !errors.As(err, &ue) || ue.Err == nil ||
+		!strings.HasPrefix(ue.Err.Error(), "malformed HTTP ") {
+		return err
+	}
+	tr, ok := c.http.Transport.(*http.Transport)
+	if !ok || tr.Proxy == nil {
+		return err
+	}
+	proxy, perr := tr.Proxy(r)
+	if perr != nil || proxy == nil || (proxy.Scheme != "http" && proxy.Scheme != "https") {
+		return err // sem proxy, ou SOCKS (sem CONNECT)
+	}
+	return &url.Error{Op: ue.Op, URL: ue.URL, Err: &ProxyConnectError{Proxy: proxy.Host, Err: ue.Err}}
 }
 
 // Sync envia um /sync.
@@ -216,7 +336,7 @@ func (c *Client) FetchConfig(ctx context.Context, etag string) (body []byte, new
 	if etag != "" {
 		r.Header.Set("If-None-Match", etag)
 	}
-	res, err := c.http.Do(r)
+	res, err := c.do(r)
 	if err != nil {
 		return nil, "", err
 	}
@@ -269,7 +389,7 @@ func (c *Client) postJSON(ctx context.Context, route string, in, out any, auth b
 	r.Header.Set("Content-Encoding", "gzip")
 	r.Header.Set("Accept-Encoding", "gzip")
 
-	res, err := c.http.Do(r)
+	res, err := c.do(r)
 	if err != nil {
 		return err
 	}

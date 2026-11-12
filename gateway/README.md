@@ -15,13 +15,14 @@ flowchart LR
     direction LR
     P1["poller TCP<br/>1 por dispositivo"] --> ENG
     P2["poller RTU<br/>1 por barramento"] --> ENG
+    P3["poller RTU sobre TCP<br/>1 por conversor"] --> ENG
     ENG["engine<br/>estado · contadores · minuto"] -->|"minuto + contador<br/>na mesma transação"| BUF[("buffer<br/>SQLite WAL")]
     BUF --> UP["uplink<br/>/sync gzip + Bearer"]
     UP -->|"versão nova"| CFG["config<br/>valida e aplica"]
     UP --> CMD["commands"]
-    CFG --> P1 & P2 & ENG
+    CFG --> P1 & P2 & P3 & ENG
   end
-  P1 & P2 -->|"Modbus (somente leitura)"| CLP["CLPs"]
+  P1 & P2 & P3 -->|"Modbus (somente leitura)"| CLP["CLPs"]
   UP <-->|"HTTPS 443"| NUVEM["Nuvem"]
 ```
 
@@ -29,26 +30,26 @@ flowchart LR
 |---|---|
 | `cmd/oee-gateway` | Binário único (agente + CLI) |
 | `internal/cli` | Comandos cobra: `run`, `enroll`, `version`, `diag`, `modbus read`, `config validate` |
-| `internal/app` | Monta o agente: pollers → motor → buffer → uplink; aplica config nova; `agent_start`/`agent_stop`; `sd_notify` e watchdog do systemd; saúde básica |
+| `internal/app` | Monta o agente: pollers → motor → buffer → uplink; aplica config nova; `agent_start`/`agent_stop`; `sd_notify`; watchdog do systemd alimentado (a cada `WatchdogSec`/3) só se a verificação de saúde passa: motor com tick recente, gravação no buffer sem tentativa travada nem caminho parado (buffer que só falha, como disco cheio, não reinicia o agente) e o laço de cada leitor dentro do prazo; se não passa, um warn diz qual verificação falhou e o watchdog não é alimentado; sem batimento por `WatchdogSec` (30 s, ~3 verificações seguidas), o systemd reinicia o agente; saúde básica |
 | `internal/config` | `gateway.yaml` (local), `credentials.json` (0600) e a config remota do contrato, com **validação estrutural + todas as regras semânticas** do `packages/contracts` (mesmos ids de regra e caminhos) |
 | `internal/modbus` | Tipos, decodificação (bool, bit, int16/uint16, int32/uint32, float32; ABCD/CDAB/BADC/DCBA), planejador de blocos (≤ 125 registradores / 2000 bits), bloco OEE padrão, cliente **somente leitura** sobre a `github.com/grid-x/modbus` (timeout 500 ms TCP / 300 ms RTU, 1 nova tentativa só em timeout, erros classificados) |
 | `internal/modbus/mbtest` | Escravo Modbus em memória (MBAP e RTU sobre TCP) para testes |
-| `internal/poller` | Grupos de leitura por dispositivo, prazos sem fila acumulada, backoff do escravo morto (1→2→5→10→30 s), saúde por dispositivo |
+| `internal/poller` | Um leitor por linha física: Modbus TCP, um por dispositivo; RTU, um por barramento; RTU sobre TCP, um por conversor (`host:porta`: um socket e uma requisição por vez, como no barramento, com o maior timeout dos escravos; a regra `tcp.endpoint_protocol` não deixa o mesmo `host:porta` misturar Modbus TCP e RTU sobre TCP). Grupos de leitura por dispositivo, prazos sem fila acumulada, backoff do escravo morto (1→2→5→10→30 s), saúde por dispositivo |
 | `internal/engine` | Máquina de estados (`signals`, `state_code`, `count_derived`, `NO_COMM` por falha/silêncio/heartbeat, debounce), contadores (overflow uint16/uint32, reset, salto absurdo, nova base), minutos e eventos com UUIDv7. **Sem relógio próprio**: todo instante vem de quem chama |
 | `internal/buffer` | Outbox SQLite (`modernc.org/sqlite`, WAL, `synchronous=FULL`), `seq` monotônico (AUTOINCREMENT), peek/ack/quarentena, contadores e config atual/anterior |
-| `internal/uplink` | Cliente HTTP (gzip, Bearer, User-Agent, proxy por `HTTPS_PROXY`, CA extra, TLS 1.2+), backoff com jitter e o `Syncer` (ritmo por `next_sync_s`, envio imediato em mudança de estado) |
+| `internal/uplink` | Cliente HTTP (gzip, Bearer, User-Agent, proxy por `HTTPS_PROXY` com a falha do CONNECT tipada, CA extra, TLS 1.2+), backoff com jitter e o `Syncer` (ritmo por `next_sync_s`, envio imediato em mudança de estado) |
 | `internal/commands` | Deduplicação por id e prazo; por ora responde `rejected/unsupported` (handlers são pendência) |
 | `internal/contracts` | Tipos Go do `/sync`, `/enroll` e eventos |
 | `internal/ids` | UUIDv7 monotônico com timestamp injetável |
 
 ### Regras que garantem a contagem
 
-- **Minuto + contador na mesma transação.** O valor persistido de cada contador é o do **fim do último minuto fechado**; depois de um crash o delta parte dele (nenhuma peça perdida ou duplicada; teste `TestPieceConservationAcrossRestart`).
+- **Minuto + contador na mesma transação.** O valor persistido de cada contador é o do **fim do último minuto fechado**; depois de um crash o delta parte dele (nenhuma peça perdida ou duplicada; teste `TestPieceConservationAcrossRestart`). Um evento de contador (reset, salto, nova base) num minuto ainda aberto grava, na mesma transação do evento, um checkpoint (a base depois do evento menos as peças que a tag já contou nos minutos abertos, sem dar a volta, e o resto dessas peças em `Carry`; o reinício as reconta): um reinício não refaz a decisão, que com outro Δt seria outra e perderia as peças de antes de um reset (teste `TestCounterEventSurvivesRestart`).
 - **Contabilidade sem dúvida.** O tempo só vai para um estado quando não há candidato pendente (debounce) nem indício de perda de comunicação. Por isso o instante do evento e os segundos do minuto sempre batem, e o minuto só fecha depois que a dúvida se resolve.
 - **Minuto sempre soma 60 s** (maior resto); tempo não observado (boot, crash, antes da 1ª leitura) entra em `no_comm_s`. Minuto parcial nunca é enviado; minuto repetido é ignorado na outbox (`UNIQUE(kind, item_id)`).
-- **Contadores:** com `limite = max_rate_per_s × max(Δt, 1 s) + 10`: subida acima do limite é salto (`counter_jump`, descartado); queda com `wrap ≤ limite` é overflow; senão é reset (`counter_reset`, delta = valor atual se plausível). Endereço/tipo/ordem mudou → `counter_rebaseline`.
+- **Contadores:** com `limite = max_rate_per_s × max(Δt, 1 s) + 10`: subida acima do limite é salto (`counter_jump`, descartado; a base passa ao valor lido); queda é overflow só se o anterior estava perto do máximo (`dist ≤ perto`, com `dist` = máximo do tipo − anterior + 1 e `perto = taxa × min(Δt, cadência) + 10`, cadência = 2 × poll + 1 s, limitado a ¼ da faixa do tipo), a volta cabe no limite (`wrap = dist + atual ≤ limite`) e é menor que meia faixa; senão, na dúvida, é reset (`counter_reset`, delta = valor atual se `≤ limite`). A janela "perto" não cresce com a lacuna: CLP religado com contador não retentivo (16 bits, 12000 → 5) é reset, não +53541 peças. Endereço/tipo/ordem mudou → `counter_rebaseline`.
 - **Erros do `/sync`** (docs/04): 200 confirma até `min(ack_seq, seq_to)`; 400 faz bisseção e manda só o item culpado para a quarentena (antes confere com um sync sem itens); 401 para de enviar, mantém o buffer, testa o mesmo token a cada 15 min e grava o marcador `auth-blocked` (ver "Token revogado"); 409 baixa a config; 413 divide o lote; 429 respeita `Retry-After`; 5xx/rede: backoff 1 s → 5 min com jitter.
-- **Log das falhas do `/sync`** (slog, estruturado): cada falha leva a `classe` (`dns`, `tls`, `proxy`, `timeout`, `conexao`, `http_4xx`, `http_5xx`, `buffer`, `outro`), o `erro` e, se veio da nuvem, `status`/`codigo`. A primeira falha e cada classe nova na queda saem na hora; uma classe já vista (a mesma, ou uma que volta: `dns` ↔ `timeout` quando o cache do resolvedor expira, proxy instável) no máximo uma linha a cada 10 min (com `falhas`, `omitidas`, `duracao` e, se a queda teve mais de uma classe, `classes`); na volta, uma linha "sync com a nuvem recuperado" com a duração da queda. O limite vale também entre quedas (enlace instável: roteador 4G, proxy sobrecarregado, timeout ocasional): uma queda que começa menos de 10 min depois da abertura registrada, com uma classe já vista desde então, fica quieta, e a volta dela também; se durar, sai pela mesma regra de 10 min, contada daquela abertura. A abertura seguinte leva `quedas_omitidas` (quantas terminaram sem linha). O 401 não repete aqui: o alarme dele é o do agente (a cada sonda), mas a volta também é registrada. Falha de handshake (versão de TLS antiga, certificado ilegível da inspeção SSL) é `tls`, não `proxy`, mesmo quando o Go a devolve só como texto.
+- **Log das falhas do `/sync`** (slog, estruturado): cada falha leva a `classe` (`dns`, `tls`, `proxy`, `timeout`, `conexao`, `http_4xx`, `http_5xx`, `buffer`, `outro`), o `erro` e, se veio da nuvem, `status`/`codigo`. A primeira falha e cada classe nova na queda saem na hora; uma classe já vista (a mesma, ou uma que volta: `dns` ↔ `timeout` quando o cache do resolvedor expira, proxy instável) no máximo uma linha a cada 10 min (com `falhas`, `omitidas`, `duracao` e, se a queda teve mais de uma classe, `classes`); na volta, uma linha "sync com a nuvem recuperado" com a duração da queda. O limite vale também entre quedas (enlace instável: roteador 4G, proxy sobrecarregado, timeout ocasional): uma queda que começa menos de 10 min depois da abertura registrada, com uma classe já vista desde então, fica quieta, e a volta dela também; se durar, sai pela mesma regra de 10 min, contada daquela abertura. A abertura seguinte leva `quedas_omitidas` (quantas terminaram sem linha). O 401 não repete aqui: o alarme dele é o do agente (a cada sonda), mas a volta também é registrada. Falha de handshake (versão de TLS antiga, certificado ilegível da inspeção SSL) é `tls`, não `proxy`, mesmo quando o Go a devolve só como texto. `proxy` só quando houve proxy de fato: a conexão com ele falhou, ou ele recusou o CONNECT (o erro traz o proxy, o código e a frase: 407, 403, frase vazia) ou o respondeu com algo que nem é HTTP (porta ou esquema do proxy errados). O transporte do Go devolve a recusa sem tipo, só com a frase; o cliente a tipa pelo `OnProxyConnectResponse`, e erro sem tipo do `net/http` sem proxy (resposta malformada, esquema desconhecido) é `outro`.
 - **Somente leitura por construção:** a interface `modbus.Reader` só tem `ReadBlock`, e o teste `TestNoModbusWriteCalls` falha se qualquer arquivo do módulo chamar um método de escrita da biblioteca.
 
 ## Compilar
@@ -85,8 +86,9 @@ make vet                                             # gofmt + go vet
 
 ```bash
 # Ativação: SEMPRE como o usuário do agente (oee). Como root o enroll recusa quando o
-# diretório da credencial é de outro usuário (no gateway, /var/lib/oee-gateway é do
-# oee): a credencial (0600) ficaria com dono root e o agente não conseguiria lê-la.
+# diretório da credencial (ou o primeiro ancestral que já existe) é de outro usuário
+# (no gateway, /var/lib/oee-gateway é do oee): a credencial (0600) ficaria com dono
+# root e o agente não conseguiria lê-la.
 # Com o diretório de root (bancada, teste ponta a ponta como root), segue.
 sudo -u oee oee-gateway enroll --code ABCD-1234
 sudo -u oee oee-gateway enroll --code ABCD-1234 --url https://oee.engemase.com.br   # bancada/administrador
@@ -121,7 +123,8 @@ Config local: [`examples/gateway.yaml`](examples/gateway.yaml) (arquivo ausente 
 
 - **Versões:** `grid-x/modbus v1.5.1`, `modernc.org/sqlite v1.46.1` (a última que declara `go 1.24.0`; da v1.47 em diante exige Go 1.25), `spf13/cobra v1.10.1`, `gopkg.in/yaml.v3`, `santhosh-tekuri/jsonschema/v6 v6.0.3` (testes). O `go.mod` diz `go 1.24.0` porque as dependências declaram `1.24.0` e o `go mod tidy` não aceita `go 1.24` abaixo disso.
 - **Planejador:** tags fora de bloco só se juntam quando encostadas (`max_gap = 0`); vários CLPs respondem exceção 02 em endereço não mapeado.
-- **Debounce padrão 1 s** (contrato/docs/16); `NO_COMM` não tem debounce extra (o próprio `comm_loss_after_s`/`heartbeat_timeout_s` já é o prazo) e leva o instante da primeira falha.
+- **Debounce padrão 1 s** (contrato/docs/16); `NO_COMM` não tem debounce extra (o próprio `comm_loss_after_s`/`heartbeat_timeout_s` já é o prazo) e começa na primeira falha de leitura depois da última boa (sem falha, só silêncio: na última leitura boa; heartbeat parado: na última mudança dele).
+- **`count_derived`:** `RUNNING` enquanto chega peça dentro da janela ociosa (`idle_after_cycles × ideal_cycle_s`). Leitura falha não é "nenhuma peça": a janela só corre no tempo observado, então falhas curtas não inventam parada e, sem comunicação por `comm_loss_after_s`, a máquina vai para `NO_COMM` (desde a primeira falha), não para `STOPPED`. Com leitura, a parada começa na última peça + janela.
 - **Troca de produto** sem debounce; troca do código de falha dentro de `FAULT` gera novo evento `state` (ajuda a classificar paradas pelo código).
 - **Troca de config** recria pollers e motor; o motor novo parte dos contadores persistidos (o minuto aberto do antigo nunca foi enviado, então nada se perde nem duplica). A aplicação por diferença fica para depois.
 - **Uma conexão SQLite** (um gravador); leitores paralelos ficam para quando a API local existir.
@@ -132,7 +135,7 @@ Config local: [`examples/gateway.yaml`](examples/gateway.yaml) (arquivo ausente 
 - Comandos `tag.read`, `device.test`, `config.reload`, `agent.restart` (pela fila do barramento, com `Submit` de prioridade no poller).
 - Máquina de estados da config (observação de 60 s e volta automática à anterior): hoje uma config que passa na validação mas não monta os pollers (ex.: porta lógica ausente no perfil) fica marcada `rejected` e a coleta para até chegar outra.
 - API local (`/run/oee-gateway/agent.sock`) para `status`, `modbus read` e `enroll` passarem pelo agente; `diag` completo (TLS/proxy, NTP, portas seriais, links, integridade do banco).
-- Retenção da outbox (30 dias / 1 GB, evento `data_loss`), fila de amostras `custom`/`speed.actual` (F2), `open_minute` no SIGTERM, `clock_jump`, `power_loss`.
+- Retenção da outbox (30 dias / 1 GB): hoje o `data_loss` só cobre a saída do motor guardada em memória enquanto o buffer não grava (limite de 10 000 itens, `retention_limit`). Fila de amostras `custom`/`speed.actual` (F2), `open_minute` no SIGTERM, `power_loss`; o `clock_jump` já é emitido, mas o motor ainda não trata o passo para trás (a contagem de tempo fica parada até o relógio alcançar a hora anterior).
 - Bisseção do bloco ao receber exceção 02; detector de 2º mestre no RS-485; estatísticas de barramento (`buses[]`).
 - Saúde completa (temperatura, desgaste do eMMC, NTP, links) e logs com redação de segredos e limite de repetição fora do `/sync` (as falhas do `/sync` já têm).
 - Máquina com tags em dois dispositivos: hoje `NO_COMM` só quando **nenhuma** tag de estado/contador lê (regra do docs/03); sinal parado num dispositivo enquanto o outro responde não é detectado.

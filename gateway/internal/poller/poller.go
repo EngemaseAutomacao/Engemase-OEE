@@ -467,20 +467,97 @@ func (p *Poller) LivenessBound() time.Duration {
 	return max(3*(every+readWorst(p.target)), livenessMin)
 }
 
-// readWorst é o pior tempo de uma leitura em bloco que termina, com sucesso ou falha:
-// em cada tentativa (Retries + 1), a conexão, a espera da linha quieta depois de um
-// erro no RTU (até 3 timeouts no RTU sobre TCP), a pausa do RS-485 e o timeout da
-// própria leitura.
+// readWorst é o pior tempo de uma leitura em bloco (ReadBlock do internal/modbus) que
+// termina, com sucesso ou falha. Com T o timeout, C a conexão (ConnectTimeout) e P a
+// pausa entre quadros, cada tentativa (Retries + 1) soma, conforme o transporte:
+//
+//   - Modbus TCP: C + P + T. O prazo da resposta é um só, contado depois da
+//     conexão, mesmo quando a grid-x descarta respostas atrasadas pelo id de
+//     transação; não há espera de linha quieta, e conferirACK só consulta a fila.
+//   - RTU serial: P + E + 3T. E é a espera da grid-x entre escrever a requisição e
+//     começar a contar o timeout (esperaQuadroRTU, no maior quadro de leitura). A
+//     leitura vai a 2T: cada byte espera até T no select da porta e o prazo só é
+//     conferido entre bytes, então um byte que chega no fim do prazo dá mais T de
+//     espera. Depois do erro, a linha fica quieta mais T. A porta abre sem esperar
+//     (O_NDELAY).
+//   - RTU sobre TCP: C + P + 6T. A leitura (T) e, depois do erro, o escoamento da
+//     linha quieta: até 3T depois do erro, ou 5T se o ACK da requisição chega no
+//     limite (o silêncio recomeça no ACK, com mais T de folga). Uma vez por leitura em
+//     bloco, a passada no socket que segue o erro da leitura anterior (recolher) soma
+//     até 2T, se a linha falar nela.
+//
+// Atrasos de agendamento (milissegundos) ficam na folga do 3× de LivenessBound.
 func readWorst(t modbus.Target) time.Duration {
-	timeout := t.Timeout
-	if timeout <= 0 {
-		timeout = modbus.DefaultTCPTimeout // o maior padrão dos transportes
-	}
+	timeout := timeoutOf(t)
 	connect := t.ConnectTimeout
 	if connect <= 0 {
 		connect = modbus.DefaultConnectTimeout
 	}
-	return time.Duration(max(t.Retries, 0)+1) * (connect + 4*timeout + t.TurnaroundDelay)
+	tries := time.Duration(max(t.Retries, 0) + 1)
+	switch t.Transport {
+	case modbus.TransportTCP:
+		return tries * (connect + t.TurnaroundDelay + timeout)
+	case modbus.TransportRTU:
+		return tries * (t.TurnaroundDelay + esperaQuadroRTU(t.Baud, quadroRTUMax) + 3*timeout)
+	default: // RTU sobre TCP
+		return 2*timeout + tries*(connect+t.TurnaroundDelay+6*timeout)
+	}
+}
+
+// StopBound é o pior tempo entre o fim do contexto de Run e a volta dele. A leitura
+// em curso termina pelo prazo (a grid-x não olha o contexto enquanto espera a
+// resposta), e o Close do transporte espera a linha ficar quieta antes de soltá-la:
+// a resposta atrasada de uma requisição interrompida não pode chegar ao Reader
+// seguinte na mesma linha (recarga da config). Com T o timeout:
+//
+//   - Modbus TCP: T (a leitura em curso; o Close não espera).
+//   - RTU serial: 3T (a leitura em curso, até 2T como em readWorst, e mais T de linha
+//     quieta no Close).
+//   - RTU sobre TCP: 6T (a leitura em curso e o escoamento no Close, como numa
+//     tentativa de readWorst: até 3T depois do erro, ou 5T se o ACK da requisição
+//     chega no limite com a linha falando; o silêncio recomeça no ACK, porque o
+//     escravo ainda vai responder a ela. Só com a linha quieta a requisição sem ACK
+//     fecha com RST na hora).
+//
+// A conexão, a pausa entre quadros e a espera do quadro serial acabam com o contexto.
+// Com timeout_ms no máximo do contrato (10 s), a parada de um conversor RTU sobre TCP
+// leva até 60 s: o TimeoutStopSec da unit do agente cobre isso e a gravação final.
+// Sem folga para agendamento: quem espera soma a dele.
+func (p *Poller) StopBound() time.Duration {
+	timeout := timeoutOf(p.target)
+	switch p.target.Transport {
+	case modbus.TransportTCP:
+		return timeout
+	case modbus.TransportRTU:
+		return 3 * timeout
+	default: // RTU sobre TCP
+		return 6 * timeout
+	}
+}
+
+// timeoutOf é o timeout de leitura do alvo; zero vale o maior padrão dos transportes.
+func timeoutOf(t modbus.Target) time.Duration {
+	if t.Timeout > 0 {
+		return t.Timeout
+	}
+	return modbus.DefaultTCPTimeout
+}
+
+// quadroRTUMax é o maior quadro de uma leitura RTU, em bytes: a requisição (8) e a
+// maior resposta (endereço, função, contagem e CRC, 5, mais 250 de dados: 125
+// registradores ou 2000 bits).
+const quadroRTUMax = 8 + 5 + 2*modbus.MaxRegistersPerRead
+
+// esperaQuadroRTU é a espera da grid-x (rtuSerialTransporter.calculateDelay, v1.5.1)
+// entre escrever a requisição de um quadro de n bytes (requisição mais resposta
+// esperada) e começar a contar o timeout da resposta: 15/baud s por byte e 35/baud s
+// de intervalo, ou 750 µs e 1750 µs acima de 19200 bauds.
+func esperaQuadroRTU(baud, n int) time.Duration {
+	porByte, intervalo := 750, 1750 // µs
+	if baud > 0 && baud <= 19200 {
+		porByte, intervalo = 15_000_000/baud, 35_000_000/baud
+	}
+	return time.Duration(porByte*n+intervalo) * time.Microsecond
 }
 
 // beat registra uma volta completa do laço em at: a próxima tem prazo at + o limite.

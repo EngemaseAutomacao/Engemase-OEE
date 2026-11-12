@@ -59,7 +59,14 @@ RestartSteps=5
 RestartMaxDelaySec=60s
 WatchdogSec=30s
 TimeoutStartSec=60s
-TimeoutStopSec=20s
+# Parada (SIGTERM): os leitores voltam primeiro, e a leitura em curso termina pelo
+# prazo e o Close espera a linha quieta antes de soltá-la (resposta atrasada não pode
+# cair no próximo leitor). Com timeout_ms no máximo (10 s): até 10 s no Modbus TCP,
+# 30 s no RS-485 e 60 s no conversor RTU sobre TCP, com o ACK da requisição chegando
+# no limite do escoamento e a linha falando (poller.StopBound). Depois vêm a gravação
+# final, o agent_stop e o fechamento do buffer (20 s, a parada inteira de antes).
+# Conferido por TestTimeoutStopSecCobreAParadaDosPollers (internal/poller).
+TimeoutStopSec=80s
 
 # Prioridade e recursos (R1000: 4 núcleos, 2 GB).
 OOMScoreAdjust=-500

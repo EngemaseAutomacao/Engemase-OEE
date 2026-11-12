@@ -582,22 +582,41 @@ func rawProxy(t *testing.T, statusLine string) *url.URL {
 }
 
 // A recusa do CONNECT é "proxy" seja qual for a frase do status (o transporte do
-// Go só devolve a frase, sem o código); os outros erros sem tipo do cliente HTTP
-// não viram "proxy".
+// Go só devolve a frase, sem o código): o cliente a tipa (ProxyConnectError) com o
+// código e a frase como vieram. Os erros sem tipo, com o mesmo texto ou não, não
+// viram "proxy".
 func TestConnectRefusalWithAnyReasonPhraseIsProxy(t *testing.T) {
 	via := func(u *url.URL) *http.Transport {
 		return &http.Transport{Proxy: http.ProxyURL(u), TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
 	}
-	for _, line := range []string{
-		"HTTP/1.1 407 Authentication Required",
-		"HTTP/1.1 403 Tunnel or SSL Forbidden",
-		"HTTP/1.1 407 ",
-		"HTTP/1.1 407",
-		"HTTP/1.0 502 Proxy Error",
+	for _, c := range []struct {
+		line   string
+		status int
+		reason string
+	}{
+		{"HTTP/1.1 407 Proxy Authentication Required", 407, "Proxy Authentication Required"},
+		{"HTTP/1.1 407 Authentication Required", 407, "Authentication Required"},
+		{"HTTP/1.1 403 Forbidden", 403, "Forbidden"},
+		{"HTTP/1.1 403 Tunnel or SSL Forbidden", 403, "Tunnel or SSL Forbidden"},
+		{"HTTP/1.1 407 ", 407, ""}, // frase vazia
+		{"HTTP/1.1 407", 407, ""},  // sem frase ("unknown status code" no transporte)
+		{"HTTP/1.0 502 Proxy Error", 502, "Proxy Error"},
 	} {
-		err := syncErr(t, "https://oee.exemplo.invalid", via(rawProxy(t, line)), 5*time.Second)
+		proxy := rawProxy(t, c.line)
+		err := syncErr(t, "https://oee.exemplo.invalid", via(proxy), 5*time.Second)
 		if got := uplink.FailureClass(err); got != uplink.ClassProxy {
-			t.Errorf("CONNECT %q: classe %q, quer proxy (erro: %v)", line, got, err)
+			t.Errorf("CONNECT %q: classe %q, quer proxy (erro: %v)", c.line, got, err)
+		}
+		var pr *uplink.ProxyConnectError
+		if !errors.As(err, &pr) {
+			t.Errorf("CONNECT %q: erro sem tipo: %v", c.line, err)
+			continue
+		}
+		if pr.Status != c.status || pr.Reason != c.reason || pr.Proxy != proxy.Host {
+			t.Errorf("CONNECT %q: %+v, quer status %d, frase %q, proxy %s", c.line, *pr, c.status, c.reason, proxy.Host)
+		}
+		if !strings.Contains(err.Error(), fmt.Sprint(c.status)) {
+			t.Errorf("CONNECT %q: o código não aparece no erro: %v", c.line, err)
 		}
 	}
 
@@ -614,11 +633,223 @@ func TestConnectRefusalWithAnyReasonPhraseIsProxy(t *testing.T) {
 		{ue(http.ErrSchemeMismatch), uplink.ClassOther},
 		{ue(errors.New("net/http: request canceled")), uplink.ClassOther},
 		{ue(context.Canceled), uplink.ClassOther},
+		// Erros sem tipo do net/http (badStringError), com ou sem proxy.
+		{ue(errors.New(`malformed HTTP response "lixo"`)), uplink.ClassOther},
+		{ue(errors.New(`malformed HTTP status code "abc"`)), uplink.ClassOther},
+		// O mesmo texto da recusa, sem o tipo, não prova CONNECT nenhum.
+		{ue(errors.New("Proxy Authentication Required")), uplink.ClassOther},
 		{errors.New("Forbidden"), uplink.ClassOther}, // sem url.Error não veio do transporte
+		{fmt.Errorf("embrulhado: %w", &uplink.ProxyConnectError{Status: 407}), uplink.ClassProxy},
 	} {
 		if got := uplink.FailureClass(c.err); got != c.want {
 			t.Errorf("%v: classe %q, quer %q", c.err, got, c.want)
 		}
+	}
+}
+
+// garbageServer lê a requisição e responde com a linha de status dada (HTTP sem
+// TLS): o net/http devolve "malformed HTTP response"/"malformed HTTP status code"
+// num erro sem tipo, o mesmo tipo da recusa do CONNECT.
+func garbageServer(t *testing.T, statusLine string) string {
+	t.Helper()
+	u := rawProxy(t, statusLine) // o mesmo servidor: lê uma requisição e responde a linha
+	return "http://" + u.Host
+}
+
+// tunnelProxy aceita todo CONNECT (200) e liga o túnel ao destino pedido.
+func tunnelProxy(t *testing.T) *url.URL {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				br := bufio.NewReader(c)
+				req, err := http.ReadRequest(br)
+				if err != nil || req.Method != http.MethodConnect {
+					return
+				}
+				dst, err := net.Dial("tcp", req.Host)
+				if err != nil {
+					_, _ = io.WriteString(c, "HTTP/1.1 502 Bad Gateway\r\n\r\n")
+					return
+				}
+				defer dst.Close()
+				if _, err := io.WriteString(c, "HTTP/1.1 200 Connection established\r\n\r\n"); err != nil {
+					return
+				}
+				go func() { _, _ = io.Copy(dst, br); dst.Close() }()
+				_, _ = io.Copy(c, dst)
+			}()
+		}
+	}()
+	u, _ := url.Parse("http://" + ln.Addr().String())
+	return u
+}
+
+// replyFirstConn faz o servidor responder antes de o cliente escrever qualquer byte
+// da requisição: a leitura só começa quando o transporte tenta escrever, e a escrita
+// fica presa até a conexão fechar sem escrever nada. O transporte do Go devolve então
+// o erro da leitura cru (nothingWrittenError, sem "net/http: HTTP/1.x transport
+// connection broken"), do mesmo jeito que devolve a resposta ilegível ao CONNECT.
+type replyFirstConn struct {
+	net.Conn
+	writing, closed      chan struct{}
+	writeOnce, closeOnce sync.Once
+}
+
+func (c *replyFirstConn) Read(p []byte) (int, error) {
+	select {
+	case <-c.writing:
+	case <-c.closed:
+	}
+	return c.Conn.Read(p)
+}
+
+func (c *replyFirstConn) Write([]byte) (int, error) {
+	c.writeOnce.Do(func() { close(c.writing) })
+	<-c.closed
+	return 0, net.ErrClosed
+}
+
+func (c *replyFirstConn) Close() error {
+	c.closeOnce.Do(func() { close(c.closed) })
+	return c.Conn.Close()
+}
+
+// Sem proxy, erro sem tipo do net/http não é "proxy": nem a resposta malformada
+// do servidor (um serviço que não é HTTP na porta), nem o esquema que o transporte
+// não conhece ("unsupported protocol scheme"). Depois de um CONNECT aceito, a
+// resposta malformada da nuvem do outro lado do túnel também não é do proxy.
+//
+// A regra antiga (pelo texto do erro) já excluía o prefixo "net/http:", então os
+// casos em que o servidor lê a requisição e responde lixo, que chegam decorados,
+// só guardam esse caminho contra regressão. O que prova a regra nova é o erro cru,
+// sem decoração, como a recusa do CONNECT chegava (antes era "proxy"): o esquema
+// errado, a resposta antes de qualquer byte da requisição (replyFirstConn) e as
+// linhas sintéticas de TestConnectRefusalWithAnyReasonPhraseIsProxy.
+func TestMalformedResponseIsNotProxy(t *testing.T) {
+	noProxy := func() *http.Transport {
+		return &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
+	}
+	for _, line := range []string{
+		"lixo",            // malformed HTTP response
+		"HTTP/1.1 abc OK", // malformed HTTP status code
+		"HTTP/1.1 99 OK",  // idem (< 100)
+	} {
+		err := syncErr(t, garbageServer(t, line), noProxy(), 5*time.Second)
+		var ue *url.Error
+		if !errors.As(err, &ue) || !strings.HasPrefix(fmt.Sprint(ue.Err), "net/http: HTTP/1.x transport connection broken: malformed HTTP") {
+			t.Fatalf("%q: o teste quer o erro decorado do net/http, veio %v", line, err)
+		}
+		if got := uplink.FailureClass(err); got != uplink.ClassOther {
+			t.Errorf("%q sem proxy: classe %q, quer outro (erro: %v)", line, got, err)
+		}
+	}
+
+	// Sem proxy, a resposta ilegível antes de qualquer byte da requisição: o erro
+	// chega cru, com o mesmo texto da resposta ilegível ao CONNECT.
+	first := noProxy()
+	first.DialContext = func(context.Context, string, string) (net.Conn, error) {
+		cli, srv := net.Pipe()
+		go func() {
+			defer srv.Close()
+			_, _ = io.WriteString(srv, "lixo\r\n\r\n")
+		}()
+		return &replyFirstConn{Conn: cli, writing: make(chan struct{}), closed: make(chan struct{})}, nil
+	}
+	err := syncErr(t, "http://oee.exemplo.invalid", first, 5*time.Second)
+	var ue *url.Error
+	if !errors.As(err, &ue) || !strings.HasPrefix(fmt.Sprint(ue.Err), "malformed HTTP response") {
+		t.Fatalf("resposta antes da requisição: o teste quer o erro cru do net/http, veio %v", err)
+	}
+	if got := uplink.FailureClass(err); got != uplink.ClassOther {
+		t.Errorf("resposta antes da requisição, sem proxy: classe %q, quer outro (erro: %v)", got, err)
+	}
+
+	err = syncErr(t, "htps://oee.exemplo.com.br", noProxy(), 5*time.Second)
+	if !errors.As(err, &ue) || !strings.HasPrefix(ue.Err.Error(), "unsupported protocol scheme") {
+		t.Fatalf("esquema errado: o teste quer o erro cru do net/http, veio %v", err)
+	}
+	if got := uplink.FailureClass(err); got != uplink.ClassOther {
+		t.Errorf("esquema errado, sem proxy: classe %q, quer outro (erro: %v)", got, err)
+	}
+
+	// Pelo túnel: a nuvem (TLS) aceita o handshake e responde lixo dentro dele.
+	cloud := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, buf, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		_, _ = buf.WriteString("lixo\r\n\r\n")
+		_ = buf.Flush()
+	}))
+	cloud.Config.ErrorLog = stdlog.New(io.Discard, "", 0)
+	cloud.StartTLS()
+	defer cloud.Close()
+	pool := x509.NewCertPool()
+	pool.AddCert(cloud.Certificate())
+	tr := &http.Transport{Proxy: http.ProxyURL(tunnelProxy(t)), TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: pool}}
+	err = syncErr(t, cloud.URL, tr, 5*time.Second)
+	if !strings.Contains(err.Error(), "malformed HTTP response") {
+		t.Fatalf("pelo túnel: o teste quer o erro sem tipo do net/http, veio %v", err)
+	}
+	if got := uplink.FailureClass(err); got != uplink.ClassOther {
+		t.Errorf("CONNECT aceito e resposta malformada: classe %q, quer outro (erro: %v)", got, err)
+	}
+}
+
+// O proxy que responde ao CONNECT com algo que nem é HTTP (porta ou esquema do
+// proxy errados: SOCKS, TLS) é "proxy": o transporte devolve o "malformed HTTP
+// ..." cru, e o cliente o tipa só porque a requisição foi por um proxy.
+func TestProxyGarbageConnectReplyIsProxy(t *testing.T) {
+	for _, line := range []string{"lixo", "HTTP/1.1 abc OK", "\x15\x03\x01\x00\x02\x02\x46"} {
+		proxy := rawProxy(t, line)
+		tr := &http.Transport{Proxy: http.ProxyURL(proxy), TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
+		err := syncErr(t, "https://oee.exemplo.invalid", tr, 5*time.Second)
+		var pce *uplink.ProxyConnectError
+		if !errors.As(err, &pce) || pce.Status != 0 || pce.Proxy != proxy.Host || !strings.Contains(fmt.Sprint(pce.Err), "malformed HTTP") {
+			t.Errorf("CONNECT respondido com %q: erro %v, quer ProxyConnectError sem status do proxy %s", line, err, proxy.Host)
+		}
+		if got := uplink.FailureClass(err); got != uplink.ClassProxy {
+			t.Errorf("CONNECT respondido com %q: classe %q, quer proxy (erro: %v)", line, got, err)
+		}
+	}
+}
+
+// Com o cliente de fora (HTTPClient), o OnProxyConnectResponse que já existia
+// continua sendo chamado antes, e o transporte de quem chamou não muda.
+func TestInjectedTransportKeepsItsConnectHook(t *testing.T) {
+	calls := 0
+	tr := &http.Transport{Proxy: http.ProxyURL(rawProxy(t, "HTTP/1.1 407 Proxy Authentication Required")),
+		OnProxyConnectResponse: func(context.Context, *url.URL, *http.Request, *http.Response) error { calls++; return nil }}
+	err := syncErr(t, "https://oee.exemplo.invalid", tr, 5*time.Second)
+	var pr *uplink.ProxyConnectError
+	if !errors.As(err, &pr) || pr.Status != http.StatusProxyAuthRequired || uplink.FailureClass(err) != uplink.ClassProxy {
+		t.Fatalf("erro %v (classe %q), quer ProxyConnectError 407", err, uplink.FailureClass(err))
+	}
+	if calls != 1 {
+		t.Errorf("o gancho de quem chamou rodou %d vez(es), quer 1", calls)
+	}
+	// O gancho do transporte original é o de quem chamou, sem o do cliente.
+	if err := tr.OnProxyConnectResponse(context.Background(), nil, nil, &http.Response{StatusCode: 407, Status: "407 X"}); err != nil {
+		t.Errorf("o New mudou o transporte de quem chamou: %v", err)
+	}
+	// Quando o gancho de quem chamou recusa, vale o erro dele.
+	own := errors.New("recusado pelo gancho de quem chamou")
+	tr2 := &http.Transport{Proxy: tr.Proxy,
+		OnProxyConnectResponse: func(context.Context, *url.URL, *http.Request, *http.Response) error { return own }}
+	if err := syncErr(t, "https://oee.exemplo.invalid", tr2, 5*time.Second); !errors.Is(err, own) {
+		t.Errorf("erro %v, quer o do gancho de quem chamou", err)
 	}
 }
 

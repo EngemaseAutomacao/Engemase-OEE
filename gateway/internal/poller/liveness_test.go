@@ -94,14 +94,15 @@ func waitLiveness(t *testing.T, p *Poller, cond func(Liveness) bool) Liveness {
 }
 
 // O prazo do laço vem do poll e dos timeouts: 3 × (maior poll + pior leitura), no
-// mínimo 30 s. Pior leitura = (retries + 1) × (conexão + 4 timeouts + pausa).
+// mínimo 30 s. Pior leitura no Modbus TCP = (retries + 1) × (conexão + timeout + pausa);
+// os outros transportes estão em TestReadWorstPorTransporte.
 func TestLivenessBoundFromPollAndTimeouts(t *testing.T) {
 	if b := onePoller(t, tcpConfig(t, "127.0.0.1:1502")).LivenessBound(); b != livenessMin {
 		t.Fatalf("poll 100/200 ms, timeout 100 ms: prazo %v, quer o mínimo %v", b, livenessMin)
 	}
-	// Poll 10 s, timeout 5 s, 1 repetição: 3 × (10 s + 2 × (2 s + 20 s)) = 162 s.
-	if b := onePoller(t, singleConfig(t, 5000, 10_000)).LivenessBound(); b != 162*time.Second {
-		t.Fatalf("poll 10 s, timeout 5 s: prazo %v, quer 162s", b)
+	// Poll 10 s, timeout 5 s, 1 repetição: 3 × (10 s + 2 × (2 s + 5 s)) = 72 s.
+	if b := onePoller(t, singleConfig(t, 5000, 10_000)).LivenessBound(); b != 72*time.Second {
+		t.Fatalf("poll 10 s, timeout 5 s: prazo %v, quer 72s", b)
 	}
 }
 

@@ -169,12 +169,21 @@ func Run(ctx context.Context, o Options) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var wg sync.WaitGroup
+	// As rotinas só terminam sozinhas com erro (hoje, só a coleta, quando o motor não
+	// tem como partir: ver collectWith). O agente então para com esse erro e o systemd
+	// o reinicia (Restart=always), em vez de seguir vivo sem coletar até o watchdog
+	// matá-lo (ou para sempre, fora do systemd).
+	failed := make(chan error, 1)
 	start := func(name string, fn func(context.Context) error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			if err := fn(runCtx); err != nil && !errors.Is(err, context.Canceled) {
-				log.Error("rotina terminou com erro", "rotina", name, "erro", err)
+				log.Error("rotina terminou com erro; agente parando (o systemd o reinicia)", "rotina", name, "erro", err)
+				select {
+				case failed <- fmt.Errorf("rotina %s: %w", name, err):
+				default: // outra rotina já parou o agente
+				}
 			}
 		}()
 	}
@@ -184,11 +193,24 @@ func Run(ctx context.Context, o Options) error {
 	start("watchdog", a.watchdog)
 	_ = sdNotify("READY=1\nSTATUS=" + a.statusLine())
 
-	<-ctx.Done()
+	var failure error
+	select {
+	case <-ctx.Done():
+	case failure = <-failed:
+	}
 	_ = sdNotify("STOPPING=1")
 	cancel()
 	wg.Wait()
-	a.recordStop()
+	if failure == nil { // erro junto com o SIGTERM: a parada não foi limpa
+		select {
+		case failure = <-failed:
+		default:
+		}
+	}
+	a.recordStop(failure)
+	if failure != nil {
+		return failure
+	}
 	log.Info("agente parado")
 	return nil
 }
@@ -434,16 +456,37 @@ func (a *agent) collect(ctx context.Context) error {
 // fechado; o minuto aberto do motor antigo nunca foi enviado, então nenhuma peça
 // se perde nem é contada duas vezes (aplicação por diferença: pendência).
 func (a *agent) collectWith(ctx context.Context, cfg *config.GatewayConfig) error {
-	// Daqui em diante o watchdog confere o motor. Se a coleta morrer antes do primeiro
-	// tick (erro ao restaurar os contadores), o tick não vem e o systemd reinicia o agente.
+	// Daqui em diante o watchdog confere o motor: se restaurar os contadores (ou a
+	// gravação abaixo) travar num disco preso, o tick não vem e o systemd reinicia o agente.
 	a.beatStart()
 	now := time.Now()
 	eng, err := engine.New(cfg, now, engine.Options{IDs: a.ids})
-	if err != nil {
-		return err
+	if err == nil {
+		err = a.restoreCounters(ctx, eng)
 	}
-	if err := a.restoreCounters(ctx, eng); err != nil {
-		return err
+	if err != nil {
+		// Sem a base dos contadores (leitura do buffer falhando: disco com erro de E/S,
+		// banco corrompido) o motor não parte: partir sem ela perderia as peças feitas
+		// desde a última base gravada (a primeira leitura viraria só a base nova). A
+		// coleta termina com o erro e o agente para com ele (Run): o systemd o reinicia,
+		// com espera crescente, e a partida seguinte relê os contadores depois da
+		// verificação de integridade do buffer (Open). Esse reinício é a nova
+		// tentativa. Repetir aqui dentro não ganha nada: sem tick, o watchdog deixa de
+		// ser alimentado e o systemd mata o agente em até WatchdogSec (30 s); e
+		// alimentá-lo sem motor deixaria um disco com defeito segurar o agente vivo sem
+		// coletar.
+		//
+		// Antes de parar, a saída que a parada da config anterior não gravou (buffer
+		// falhando na troca) só existe em memória: uma última tentativa de gravar, sem
+		// a espera entre tentativas, e o que não for gravado vai para o log (a perda
+		// nunca é silenciosa). Os batimentos seguem ligados: se a gravação travar, o
+		// watchdog para de ser alimentado.
+		now, mono := a.readClock()
+		a.flushBegin(mono)
+		a.flush(ctx, now)
+		a.flushEnd(mono)
+		a.logUnsentAtExit()
+		return fmt.Errorf("motor sem como partir: %w", err)
 	}
 
 	pollers, err := poller.Build(cfg, a.local)
@@ -661,8 +704,9 @@ func (a *agent) restoreCounters(ctx context.Context, eng *engine.Engine) error {
 }
 
 // addUnsent junta uma saída nova ao que falta gravar. Contadores ficam um por tag
-// (o mais recente): é o mesmo efeito dos upserts em ordem, e RestoreCounters usa o
-// primeiro que encontra.
+// (o mais recente): é o mesmo efeito dos upserts em ordem no buffer, e o mesmo que
+// RestoreCounters faria com a lista inteira (com mais de um estado da mesma tag,
+// vale o último).
 func (a *agent) addUnsent(w buffer.Write) {
 	a.unsent.Items = append(a.unsent.Items, w.Items...)
 	a.unsent.Counters = mergeCounters(a.unsent.Counters, w.Counters)
@@ -968,16 +1012,23 @@ func (a *agent) recordStart(ctx context.Context) error {
 	return err
 }
 
-func (a *agent) recordStop() {
+// recordStop registra a parada (agent_stop). Parada pedida (failure nil, SIGTERM) é
+// desligamento limpo; parada por erro de uma rotina vai com reason error e o erro no
+// detail, e clean_shutdown fica "0" (a próxima partida não a dá como limpa).
+func (a *agent) recordStop(failure error) {
 	now := time.Now()
 	ev := contracts.AgentStopEvent{ID: a.ids.New(now), Type: contracts.EventAgentStop, At: contracts.FormatTime(now), Reason: "shutdown"}
+	meta := map[string]string{"clean_shutdown": "1"}
+	if failure != nil {
+		ev.Reason, ev.Detail, meta = "error", truncate(failure.Error(), 2000), nil
+	}
 	b, err := jsonMarshal(ev)
 	if err != nil {
 		return
 	}
 	if _, err := a.store.Commit(context.Background(), buffer.Write{
 		Items: []buffer.Item{{Kind: buffer.KindEvent, ItemID: ev.ID, At: now, Payload: b}},
-		Meta:  map[string]string{"clean_shutdown": "1"},
+		Meta:  meta,
 	}); err != nil {
 		a.log.Error("falha ao registrar a parada", "erro", err)
 	}

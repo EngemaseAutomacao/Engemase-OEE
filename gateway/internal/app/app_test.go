@@ -403,16 +403,19 @@ func TestConfigRejectedByAnotherBuildIsFetchedAgain(t *testing.T) {
 	}
 }
 
-// Config de uma máquina (estado + contador total), sem CLP: o motor é alimentado à mão.
-func engineTestConfig(t *testing.T) *config.GatewayConfig {
-	t.Helper()
-	cfg, err := config.ParseRemote([]byte(`{"config_version":1,"serial_buses":[],
+// engineTestConfigJSON é uma config de uma máquina (estado + contador total), sem CLP.
+const engineTestConfigJSON = `{"config_version":1,"serial_buses":[],
 	"devices":[{"id":"` + devID + `","protocol":"modbus-tcp","params":{"host":"127.0.0.1","port":502,"unit_id":1},
 	  "blocks":[{"area":"holding_register","start":1000,"count":14,"poll_ms":200}],
 	  "tags":[{"id":"` + tState + `","address":{"area":"holding_register","offset":1002},"type":"uint16","role":"state.code","machine_id":"` + mID + `"},
 	   {"id":"` + tTotal + `","address":{"area":"holding_register","offset":1004},"type":"uint32","word_order":"CDAB","role":"count.total","machine_id":"` + mID + `"}]}],
 	"machines":[{"id":"` + mID + `","state_rules":{"mode":"state_code","map":{"0":"STOPPED","1":"RUNNING"}}}],
-	"uplink":{"sync_interval_s":1,"max_batch_items":2000}}`))
+	"uplink":{"sync_interval_s":1,"max_batch_items":2000}}`
+
+// Config de uma máquina (estado + contador total), sem CLP: o motor é alimentado à mão.
+func engineTestConfig(t *testing.T) *config.GatewayConfig {
+	t.Helper()
+	cfg, err := config.ParseRemote([]byte(engineTestConfigJSON))
 	if err != nil {
 		t.Fatal(err)
 	}

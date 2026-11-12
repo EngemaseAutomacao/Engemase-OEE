@@ -13,10 +13,8 @@ import (
 	"math/rand/v2"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
-	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -564,44 +562,19 @@ func FailureClass(err error) string {
 }
 
 // isProxyError reconhece a falha no proxy: a conexão com o próprio proxy (o
-// transporte do Go a embrulha num net.OpError "proxyconnect") ou a recusa do
-// CONNECT (isConnectRefusal).
+// transporte do Go a embrulha num net.OpError "proxyconnect") ou a falha do túnel
+// (ProxyConnectError: recusa do CONNECT ou resposta que nem é HTTP, tipadas pelo
+// cliente só quando houve CONNECT). Erro sem tipo do net/http nunca é "proxy" pelo
+// texto: a recusa chega só com a frase do status (errors.New), igual a "malformed
+// HTTP response" e outros que aparecem com ou sem proxy, e adivinhar mandava o
+// técnico procurar um proxy que não existe.
 func isProxyError(err error) bool {
-	var opErr *net.OpError
-	if errors.As(err, &opErr) && opErr.Op == "proxyconnect" {
+	var pce *ProxyConnectError
+	if errors.As(err, &pce) {
 		return true
 	}
-	var ue *url.Error
-	return errors.As(err, &ue) && isConnectRefusal(ue.Err)
-}
-
-// errorStringType é o tipo de errors.New.
-var errorStringType = reflect.TypeOf(errors.New(""))
-
-// isConnectRefusal reconhece a recusa do CONNECT pelo proxy. O transporte do Go
-// devolve só a frase do status, sem o código (errors.New(frase), net/http
-// transport.go): a padrão ("Proxy Authentication Required", "Forbidden"), uma
-// própria do proxy ("Authentication Required", "Tunnel or SSL Forbidden"), vazia
-// ("HTTP/1.1 407 ") ou "unknown status code" (linha sem frase). Comparar com
-// http.StatusText perdia as frases fora do padrão. Outros erros sem tipo também
-// chegam assim no url.Error, com ou sem proxy, e são excluídos aqui: os do próprio
-// cliente HTTP (prefixo "net/http:"/"http:"/"http2:"), o fim de conexão (io.EOF),
-// o cancelamento, o limite de redirecionamentos e as falhas de handshake que o
-// crypto/tls devolve como texto (prefixo "tls: "/"x509: ": versão de TLS antiga,
-// certificado que nem é lido, como o de serial negativo de algumas inspeções SSL),
-// que são da classe tls.
-func isConnectRefusal(err error) bool {
-	if err == nil || reflect.TypeOf(err) != errorStringType ||
-		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, context.Canceled) {
-		return false
-	}
-	msg := err.Error()
-	for _, own := range []string{"net/http:", "http:", "http2:", "stopped after ", "tls: ", "x509: "} {
-		if strings.HasPrefix(msg, own) {
-			return false
-		}
-	}
-	return true
+	var opErr *net.OpError
+	return errors.As(err, &opErr) && opErr.Op == "proxyconnect"
 }
 
 func isTLSError(err error) bool {

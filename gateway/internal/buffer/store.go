@@ -24,7 +24,9 @@ import (
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/engine"
 )
 
-const schemaVersion = 1
+// schemaVersion é a versão do esquema deste agente (PRAGMA user_version): uma por
+// migração (ver migrations; as colunas de additions não contam).
+const schemaVersion = len(migrations)
 
 // Kinds da outbox principal.
 const (
@@ -32,7 +34,20 @@ const (
 	KindMinute = engine.KindMinute
 )
 
-var migrations = []string{
+// migrations levam o esquema da versão i à i+1 (índice i), cada uma numa transação
+// junto com o user_version: um buffer.db gravado por um agente anterior (gateways já
+// instalados) passa, ao abrir, só pelas que faltam, e as linhas existentes ficam.
+// Migração que já saiu nunca muda.
+//
+// Um agente anterior recusa abrir um buffer de user_version mais novo (init), e o
+// rollback do OTA reinstala justamente ele (sem /sync em 5 min, o oee-updater volta
+// ao .deb anterior: deploy/gateway/systemd/oee-gateway-updater.service): depois de
+// uma migração nova, o agente revertido não abre o buffer, o systemd o reinicia sem
+// fim e o gateway fica sem coleta e sem OTA. Por isso mudança que um agente anterior
+// consegue ignorar entra em additions, sem subir o user_version. Migração nova só
+// para o que ele não consegue ignorar, e só depois de o atualizador recusar o
+// rollback para um pacote de esquema mais velho.
+var migrations = [...]string{
 	// v1
 	`CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
 
@@ -76,6 +91,26 @@ var migrations = []string{
 		body        BLOB    NOT NULL,
 		received_ms INTEGER NOT NULL
 	) STRICT;`,
+}
+
+// additions são colunas acrescentadas sem subir o user_version, a cada abertura em
+// que faltam (numa transação): um agente anterior do mesmo user_version continua
+// abrindo o buffer (rollback do OTA), porque as ignora (lista as colunas que lê e
+// grava, e o DEFAULT preenche as linhas que ele insere). Ele também não as atualiza:
+// uma coluna cujo valor velho, sob uma linha regravada por ele, contaria errado
+// precisa de um carimbo que mostre isso (carry_ms). Coluna que já saiu nunca muda.
+var additions = [...]struct{ table, column, decl string }{
+	// Carry do checkpoint de contador (engine.CounterState: peças já contadas num
+	// minuto ainda aberto antes de um reset, salto ou nova base, que a base gravada
+	// não cobre). Sem ele, um reinício depois de um reset no minuto aberto perdia
+	// essas peças. As linhas existentes ficam com 0: base ao fim de um minuto fechado.
+	{"counter_state", "carry", "INTEGER NOT NULL DEFAULT 0"},
+	// carry_ms é o updated_ms da gravação que escreveu carry. Um agente anterior
+	// regrava a linha (base nova, updated_ms novo) sem tocar no carry: com carry_ms
+	// diferente do updated_ms, o carry é de uma base que já não vale e conta 0
+	// (somá-lo de novo contaria as mesmas peças duas vezes depois de voltar à versão
+	// nova).
+	{"counter_state", "carry_ms", "INTEGER NOT NULL DEFAULT 0"},
 }
 
 // Item é uma linha da outbox principal.
@@ -153,10 +188,10 @@ func (s *Store) init(ctx context.Context) error {
 	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return err
 	}
-	if version > len(migrations) {
-		return fmt.Errorf("buffer: esquema v%d é mais novo que este agente (v%d)", version, len(migrations))
+	if version > schemaVersion {
+		return fmt.Errorf("buffer: esquema v%d é mais novo que este agente (v%d)", version, schemaVersion)
 	}
-	for v := version; v < len(migrations); v++ {
+	for v := version; v < schemaVersion; v++ {
 		tx, err := s.db.BeginTx(ctx, nil)
 		if err != nil {
 			return err
@@ -173,9 +208,35 @@ func (s *Store) init(ctx context.Context) error {
 			return err
 		}
 	}
+	if err := s.addColumns(ctx); err != nil {
+		return err
+	}
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO uplink_state (id, acked_core_seq, updated_ms) VALUES (1, 0, ?) ON CONFLICT(id) DO NOTHING`, s.nowMS())
 	return err
+}
+
+// addColumns acrescenta as colunas de additions que faltam, numa transação.
+func (s *Store) addColumns(ctx context.Context) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, a := range additions {
+		var n int
+		if err := tx.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, a.table, a.column).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, "ALTER TABLE "+a.table+" ADD COLUMN "+a.column+" "+a.decl); err != nil {
+			return fmt.Errorf("buffer: acrescentando %s.%s: %w", a.table, a.column, err)
+		}
+	}
+	return tx.Commit()
 }
 
 // Close fecha o banco (com checkpoint do WAL).
@@ -224,11 +285,12 @@ func (s *Store) Commit(ctx context.Context, w Write) ([]int64, error) {
 	}
 	for _, c := range w.Counters {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO counter_state (tag_id, machine_id, role, bits, addr_key, last_raw, last_raw_ms, updated_ms)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			`INSERT INTO counter_state (tag_id, machine_id, role, bits, addr_key, last_raw, last_raw_ms, carry, carry_ms, updated_ms)
+			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
 			 ON CONFLICT (tag_id) DO UPDATE SET machine_id=excluded.machine_id, role=excluded.role, bits=excluded.bits,
-			   addr_key=excluded.addr_key, last_raw=excluded.last_raw, last_raw_ms=excluded.last_raw_ms, updated_ms=excluded.updated_ms`,
-			c.TagID, c.MachineID, c.Role, c.Bits, c.AddrKey, int64(c.LastRaw), c.LastAt.UnixMilli(), now); err != nil {
+			   addr_key=excluded.addr_key, last_raw=excluded.last_raw, last_raw_ms=excluded.last_raw_ms, carry=excluded.carry,
+			   carry_ms=excluded.carry_ms, updated_ms=excluded.updated_ms`,
+			c.TagID, c.MachineID, c.Role, c.Bits, c.AddrKey, int64(c.LastRaw), c.LastAt.UnixMilli(), c.Carry, now); err != nil {
 			return nil, fmt.Errorf("buffer: gravando contador: %w", err)
 		}
 	}
@@ -339,10 +401,13 @@ func (s *Store) Stats(ctx context.Context) (Stats, error) {
 	return st, nil
 }
 
-// LoadCounters devolve os contadores persistidos.
+// LoadCounters devolve os contadores persistidos, com o Carry de um checkpoint (0 se
+// a linha foi regravada depois por um agente anterior: ver carry_ms em additions).
 func (s *Store) LoadCounters(ctx context.Context) ([]engine.CounterState, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT tag_id, machine_id, role, bits, addr_key, last_raw, last_raw_ms FROM counter_state ORDER BY tag_id`)
+		`SELECT tag_id, machine_id, role, bits, addr_key, last_raw, last_raw_ms,
+		   CASE WHEN carry_ms = updated_ms THEN carry ELSE 0 END
+		 FROM counter_state ORDER BY tag_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +416,7 @@ func (s *Store) LoadCounters(ctx context.Context) ([]engine.CounterState, error)
 	for rows.Next() {
 		var c engine.CounterState
 		var raw, ms int64
-		if err := rows.Scan(&c.TagID, &c.MachineID, &c.Role, &c.Bits, &c.AddrKey, &raw, &ms); err != nil {
+		if err := rows.Scan(&c.TagID, &c.MachineID, &c.Role, &c.Bits, &c.AddrKey, &raw, &ms, &c.Carry); err != nil {
 			return nil, err
 		}
 		c.LastRaw, c.LastAt = uint32(raw), time.UnixMilli(ms).UTC()

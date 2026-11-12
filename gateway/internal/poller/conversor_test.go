@@ -123,9 +123,9 @@ func TestLivenessBoundRTUOverTCPCoversAllSlaves(t *testing.T) {
 		netDev{protoRTUTCP, "10.0.0.9", 4001, 1, 100, 10_000},
 		netDev{protoRTUTCP, "10.0.0.9", 4001, 2, 5000, 100},
 	))
-	// Poll de um, timeout do outro: 3 × (10 s + 2 × (2 s + 4 × 5 s)) = 162 s.
-	if b := p.LivenessBound(); b != 162*time.Second {
-		t.Fatalf("prazo %v, quer 162s", b)
+	// Poll de um, timeout do outro: 3 × (10 s + 2 × 5 s + 2 × (2 s + 6 × 5 s)) = 252 s.
+	if b := p.LivenessBound(); b != 252*time.Second {
+		t.Fatalf("prazo %v, quer 252s", b)
 	}
 }
 
