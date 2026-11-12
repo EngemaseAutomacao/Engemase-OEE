@@ -76,7 +76,7 @@ Holding registers a partir de `--base` (endereço de protocolo, base 0; 1000 = 4
 | 3 | uint16 | `codigo_falha` | 101, 102, 205, 310, 412 ou 520 durante a falha; 0 fora dela |
 | 4–5 | uint32 | `contador_total` | +1 por ciclo |
 | 6–7 | uint32 | `contador_refugo` | +1 por peça refugada (~2%) |
-| 8–9 | uint32 | `contador_bons` | +1 por peça boa (0 com `--good-counter=false`) |
+| 8–9 | uint32 | `contador_bons` | +1 por peça boa (0 com `--good-counter=false`). Só informativo: o template padrão do gateway não lê este campo e as boas saem de total − refugo |
 | 10 | uint16 | `produto` | 1001, 1002 ou 1003 (troca a cada setup) |
 | 11 | uint16 | `velocidade` | peças/hora pelo último ciclo; 0 fora de produção |
 | 12 | uint16 | `ciclo_ultimo_ms` | duração do último ciclo, em ms (satura em 65535) |

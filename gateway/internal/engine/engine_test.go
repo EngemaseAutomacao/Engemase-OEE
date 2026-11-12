@@ -270,8 +270,9 @@ func TestSlowPolledU16CounterOverflow(t *testing.T) {
 	}
 }
 
-// Sem lacuna de comunicação, a leitura que desmente um candidato não pode
-// confirmá-lo com os sinais anteriores a ela: o candidato não se manteve pelo prazo.
+// A leitura que desmente um candidato exatamente no fim do prazo não pode
+// confirmá-lo com os sinais anteriores a ela: o candidato não se manteve pelo prazo
+// (a ordem com o Tick não importa: TestCandidateDecisionIndependentOfTickOrder).
 // Casos de fronteira com a configuração padrão do template (poll 500 ms, debounce
 // de 1 s), heartbeat lido a cada 1 s e count_derived com peça logo depois da janela
 // ociosa: nenhum evento de estado além do inicial.
@@ -553,6 +554,57 @@ func TestU16CounterDropAfterGap(t *testing.T) {
 				t.Fatalf("counter_reset: %+v", resets)
 			}
 		})
+	}
+}
+
+// Leituras falhas abaixo de comm_loss (Δt maior que a cadência do poll) enquanto um
+// uint16 a 20 do máximo dá a volta: as 20 peças até o máximo não se perdem nem viram
+// counter_reset por causa das peças feitas depois da volta.
+func TestU16CounterOverflowAcrossFailedReads(t *testing.T) {
+	cfg := buildConfig(t, `{"mode":"signals"}`, tRunning, tTotal16)
+	cfg.Machines[0].MaxRatePerS = ptr(5.0)
+	cfg.Devices[0].Blocks[0].PollMS = 1000
+	s := &sim{e: newEngine(t, cfg, t0)}
+	s.runUntil(61, 1, func(now float64) ([]engine.Sample, bool) {
+		if now >= 30 && now < 38 {
+			return nil, false // 8 leituras falhas (comm_loss padrão de 10 s)
+		}
+		total := uint16(65400 + 4*uint32(now)) // 4 peças/s: 65516 em 29 s, 16 em 38 s
+		return []engine.Sample{{TagID: tRunning, Value: boolV(true)}, {TagID: tTotal16, Value: u16(total)}}, true
+	})
+	// Primeira leitura em 1 s; 4 peças/s até 59 s.
+	if m := s.minutes()[0]; m.Total != 4*58 {
+		t.Fatalf("peças no minuto = %d, quer %d", m.Total, 4*58)
+	}
+	if resets := s.eventsOfType(contracts.EventCounterReset); len(resets) != 0 {
+		t.Fatalf("counter_reset inesperado: %+v", resets)
+	}
+}
+
+// Poll lento (20 s, comm_loss 60 s) com a taxa padrão (1000/s): taxa × cadência passa
+// de meia faixa do uint16. CLP religado com contador não retentivo acima da meia faixa
+// durante um reinício do gateway é reset (counter_reset, delta = atual), não um
+// overflow que inventaria 25536 peças.
+func TestU16CounterResetWithSlowPollAboveHalfRange(t *testing.T) {
+	cfg := buildConfig(t, `{"mode":"signals","comm_loss_after_s":60}`, tRunning, tTotal16)
+	cfg.Devices[0].Blocks[0].PollMS = 20000
+	e := newEngine(t, cfg, t0)
+	tag := cfg.Devices[0].Tags[1]
+	e.RestoreCounters([]engine.CounterState{{
+		TagID: tTotal16, MachineID: machineID, Role: "count.total", Bits: 16, AddrKey: tag.AddrKey(),
+		LastRaw: 40000, LastAt: t0.Add(-90 * time.Second),
+	}})
+	s := &sim{e: e}
+	s.runUntil(120, 20, func(now float64) ([]engine.Sample, bool) {
+		return []engine.Sample{{TagID: tRunning, Value: boolV(true)}, {TagID: tTotal16, Value: u16(5 + uint16(now/20) - 1)}}, true
+	})
+	// Leituras do primeiro minuto em 20 e 40 s (5 e 6): 5 do reset + 1.
+	if m := s.minutes()[0]; m.Total != 6 {
+		t.Fatalf("peças no minuto = %d, quer 6", m.Total)
+	}
+	resets := s.eventsOfType(contracts.EventCounterReset)
+	if len(resets) != 1 || *resets[0].PreviousRaw != 40000 || resets[0].Raw != 5 {
+		t.Fatalf("counter_reset: %+v", resets)
 	}
 }
 

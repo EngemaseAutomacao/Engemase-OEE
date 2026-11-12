@@ -7,11 +7,13 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+	"unsafe"
 
 	mb "github.com/grid-x/modbus"
 	"github.com/grid-x/serial"
@@ -236,12 +238,24 @@ type client struct {
 	conn    closer
 	mbc     mb.Client
 	pause   time.Duration
-	// sock é o socket atual do RTU sobre TCP, guardado no Dial (a grid-x não o expõe);
-	// nil quando fechado. Só é lido entre requisições, para escoar a linha.
+	// sock é o socket atual do TCP e do RTU sobre TCP, guardado no Dial (a grid-x não o
+	// expõe); nil quando fechado por nós. Só é usado entre requisições: para escoar a
+	// linha e para conferir se o outro lado reconheceu (ACK) o que foi enviado.
 	sock net.Conn
+	// discadoEm é quando sock foi discado (a escrita da requisição vem logo depois).
+	discadoEm time.Time
 	// quietUntil marca, depois de um erro num transporte RTU, até quando a linha fica
 	// sem requisição nova (zero = livre). Ver dropAfterError.
 	quietUntil time.Time
+	// recolher (RTU sobre TCP) pede, antes da próxima requisição, uma passada no
+	// socket para descartar o que chegou depois da espera da linha quieta.
+	recolher bool
+	// semACKDesde (só Modbus TCP) é quando foi escrita a requisição mais antiga que
+	// expirou e pode ainda estar sem ACK; zero = nada pendente. Ver conferirACK.
+	semACKDesde time.Time
+	// pendentes conta os bytes enviados que o outro lado ainda não reconheceu
+	// (bytesNaoReconhecidos; os testes simulam um caminho caído trocando-a).
+	pendentes func(net.Conn) (int, bool)
 }
 
 // Open cria um Reader para o alvo. A conexão (ou a porta) é aberta na primeira leitura.
@@ -256,13 +270,21 @@ func Open(t Target) (Reader, error) {
 		t.Retries = 0
 	}
 	dial := (&net.Dialer{Timeout: t.ConnectTimeout}).DialContext
-	c := &client{target: t, pause: t.TurnaroundDelay}
+	c := &client{target: t, pause: t.TurnaroundDelay, pendentes: bytesNaoReconhecidos}
+	// A discagem acontece dentro de ReadBlock (no Send da grid-x), com c.mu travado.
+	discar := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		conn, err := dial(ctx, network, addr)
+		if err == nil {
+			c.sock, c.discadoEm, c.semACKDesde = conn, time.Now(), time.Time{}
+		}
+		return conn, err
+	}
 	switch t.Transport {
 	case TransportTCP:
 		if t.Timeout <= 0 {
 			c.target.Timeout = DefaultTCPTimeout
 		}
-		h := mb.NewTCPClientHandler(t.Address, mb.WithDialer(dial))
+		h := mb.NewTCPClientHandler(t.Address, mb.WithDialer(discar))
 		h.Timeout = c.target.Timeout
 		h.IdleTimeout = -1 // conexão persistente, nunca expira
 		h.LinkRecoveryTimeout = 0
@@ -280,13 +302,7 @@ func Open(t Target) (Reader, error) {
 			c.target.Timeout = DefaultTCPTimeout
 		}
 		h := mb.NewRTUOverTCPClientHandler(t.Address)
-		h.Dial = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			conn, err := dial(ctx, network, addr)
-			if err == nil {
-				c.sock = conn // a discagem acontece dentro de ReadBlock, com c.mu travado
-			}
-			return conn, err
-		}
+		h.Dial = discar
 		h.Timeout = c.target.Timeout
 		h.IdleTimeout = -1
 		h.LinkRecoveryTimeout = 0
@@ -314,6 +330,14 @@ func (c *client) Info() string { return c.target.String() }
 func (c *client) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.sock != nil {
+		// Requisição ainda sem ACK (leitura interrompida antes do escoamento): o close
+		// normal deixaria o kernel entregá-la depois, e a resposta iria para a conexão
+		// que um conversor transparente atender em seguida (a do próximo Reader).
+		if n, ok := c.pendentes(c.sock); ok && n > 0 {
+			abortar(c.sock)
+		}
+	}
 	c.sock = nil
 	return c.conn.Close()
 }
@@ -336,6 +360,7 @@ func (c *client) ReadBlock(ctx context.Context, unit uint8, s Span) (Raw, error)
 		if err := c.settle(ctx); err != nil {
 			return Raw{}, err
 		}
+		c.conferirACK()
 		if c.pause > 0 {
 			select {
 			case <-ctx.Done():
@@ -352,6 +377,15 @@ func (c *client) ReadBlock(ctx context.Context, unit uint8, s Span) (Raw, error)
 			break
 		}
 	}
+	// A linha fica quieta aqui, ainda dentro da leitura que falhou, e não no começo da
+	// próxima: no barramento a próxima costuma ser de outro dispositivo, e o poller
+	// mediria a espera como latência dele. Se o contexto acabar no meio, o resto da
+	// espera fica para a próxima leitura (quietUntil continua marcado). No RTU sobre
+	// TCP o socket segue aberto até a próxima leitura, que antes passa por ele mais uma
+	// vez (a resposta de um escravo mais lento que 2 Timeouts pode chegar nesse meio).
+	if !c.quietUntil.IsZero() && c.settle(ctx) == nil {
+		c.recolher = c.target.Transport == TransportRTUOverTCP
+	}
 	return Raw{}, err
 }
 
@@ -362,6 +396,7 @@ func (c *client) readOnce(ctx context.Context, unit uint8, s Span) (Raw, error) 
 		err error
 		fc  byte
 	)
+	inicio := time.Now()
 	switch s.Area {
 	case Coil:
 		fc = mb.FuncCodeReadCoils
@@ -383,9 +418,17 @@ func (c *client) readOnce(ctx context.Context, unit uint8, s Span) (Raw, error) 
 		if errors.As(err, &exc) && exc.Function != fc|0x80 {
 			err = fmt.Errorf("%w: exceção da função %02d numa leitura da função %02d", ErrDesync, exc.Function&0x7F, fc)
 		}
+		if c.target.Transport == TransportTCP && errors.Is(err, ErrTimeout) && c.semACKDesde.IsZero() {
+			// A requisição foi escrita logo depois da discagem, se houve uma nesta tentativa.
+			c.semACKDesde = inicio
+			if c.discadoEm.After(inicio) {
+				c.semACKDesde = c.discadoEm
+			}
+		}
 		c.dropAfterError(err)
 		return Raw{}, err
 	}
+	c.semACKDesde = time.Time{} // uma resposta reconhece tudo o que foi enviado antes
 	raw := Raw{Span: s}
 	if s.Area.IsBit() {
 		// A grid-x não compara o número de bytes com a quantidade pedida nos bits.
@@ -425,7 +468,16 @@ func (c *client) readOnce(ctx context.Context, unit uint8, s Span) (Raw, error) 
 //     criava conexões novas (um unit ausente custava uma por tentativa) sem descartar
 //     nada num conversor de verdade. O socket morto (conversor reiniciou: EOF, reset,
 //     "broken pipe") é percebido no escoamento e fechado; a próxima leitura disca de
-//     novo, o que tira o dispositivo do NO_COMM sem reiniciar o agente.
+//     novo, o que tira o dispositivo do NO_COMM sem reiniciar o agente. O escoamento só
+//     descarta o que CHEGA: requisição escrita que o conversor não reconheceu (ACK)
+//     ainda está na fila de envio do kernel, que a entregaria quando o caminho voltasse
+//     (switch reiniciando, cabo solto), com as requisições seguintes atrás dela, e o
+//     escravo responderia primeiro as velhas. Por isso, com a linha quieta, o
+//     escoamento confere a fila (SIOCOUTQ) e, se nada foi reconhecido até o fim da
+//     espera, fecha com RST, que descarta a fila. É também o que percebe o conversor
+//     desligado (sem RST nem FIN): sem isso o socket ficava aberto, e só a
+//     retransmissão do TCP, com espera crescente de até 2 min, encontrava o conversor
+//     religado.
 //   - RTU serial: a porta é fechada agora e só é reaberta depois do intervalo. A grid-x
 //     não expõe o descritor (não dá para chamar tcflush); numa UART, o último close
 //     descarta o buffer de entrada e, com a porta fechada, nada é recebido, então a
@@ -440,7 +492,7 @@ func (c *client) readOnce(ctx context.Context, unit uint8, s Span) (Raw, error) 
 // segue alinhado. Conexão recusada e porta indisponível não chegaram a escrever nada.
 // No Modbus TCP a própria biblioteca casa o id de transação, descarta respostas
 // atrasadas (ProtocolRecoveryTimeout) e fecha o socket quando perde o alinhamento;
-// ali não mexemos.
+// ali só conferimos o ACK (conferirACK).
 func (c *client) dropAfterError(err error) {
 	if c.target.Transport == TransportTCP {
 		return
@@ -459,12 +511,21 @@ func (c *client) dropAfterError(err error) {
 // Só devolve erro quando o contexto acaba.
 func (c *client) settle(ctx context.Context) error {
 	if c.quietUntil.IsZero() {
+		if !c.recolher {
+			return nil
+		}
+		// Passada rápida: até a linha ficar quieta só se algo tiver chegado.
+		if err := c.drain(ctx, time.Time{}); err != nil {
+			return err
+		}
+		c.recolher = false
 		return nil
 	}
 	if c.target.Transport == TransportRTUOverTCP {
 		if err := c.drain(ctx, c.quietUntil); err != nil {
 			return err
 		}
+		c.recolher = false
 	} else if d := time.Until(c.quietUntil); d > 0 { // serial: a porta já está fechada
 		t := time.NewTimer(d)
 		defer t.Stop()
@@ -480,8 +541,10 @@ func (c *client) settle(ctx context.Context) error {
 
 // drain lê e descarta o que chegar no socket do RTU sobre TCP até a linha ficar
 // quieta: nada recebido até until e, depois de cada byte recebido, por mais um
-// Timeout. Socket morto é fechado (a próxima leitura disca de novo), assim como o de
-// uma linha que não sossega em 2 Timeouts além disso.
+// Timeout. Com a linha quieta, espera o conversor reconhecer (ACK) o que foi enviado.
+// Socket morto é fechado (a próxima leitura disca de novo), assim como o de uma linha
+// que não sossega, ou de uma requisição que ninguém reconheceu, em 2 Timeouts além
+// disso.
 func (c *client) drain(ctx context.Context, until time.Time) error {
 	conn := c.sock
 	if conn == nil {
@@ -507,8 +570,12 @@ func (c *client) drain(ctx context.Context, until time.Time) error {
 		}
 	}()
 	buf := make([]byte, 256)
+	esperaACK := false
 	for {
 		deadline := until
+		if esperaACK {
+			deadline = time.Now().Add(passoACK)
+		}
 		if limit.Before(deadline) {
 			deadline = limit
 		}
@@ -523,24 +590,103 @@ func (c *client) drain(ctx context.Context, until time.Time) error {
 		now := time.Now()
 		if n > 0 {
 			until = now.Add(guard) // a linha falou: o silêncio conta de novo
+			esperaACK = false
 		}
 		switch {
 		case err == nil:
+			continue
 		case !errors.Is(err, os.ErrDeadlineExceeded):
 			c.closeConn() // EOF, reset: socket morto
 			return nil
 		case ctx.Err() != nil:
 			return ctx.Err()
-		case !now.Before(until):
-			return nil // linha quieta
-		case !now.Before(limit):
-			c.closeConn() // a linha não sossega: recomeça numa conexão nova
+		case now.Before(until):
+			if !now.Before(limit) {
+				c.closeConn() // a linha não sossega: recomeça numa conexão nova
+				return nil
+			}
+			continue
+		}
+		// Linha quieta. Sem consulta (fora do Linux), vale o silêncio.
+		if pend, ok := c.pendentes(conn); !ok || pend == 0 {
 			return nil
 		}
+		if !now.Before(limit) {
+			c.closeConn() // nada reconhecido: caminho caído ou conversor desligado
+			return nil
+		}
+		esperaACK = true // ACK atrasado (delayed ACK) ou retransmissão: espera mais um pouco
 	}
 }
 
+// passoACK é o intervalo entre consultas à fila de envio enquanto o escoamento espera
+// o ACK.
+const passoACK = 10 * time.Millisecond
+
+// conferirACK (Modbus TCP) fecha a conexão em que uma requisição que expirou segue sem
+// ACK há mais de max(1 s, 2 Timeouts): o outro lado sumiu sem RST nem FIN (CLP
+// desligado). A grid-x mantém o socket depois de um timeout limpo (para descartar a
+// resposta atrasada pelo id de transação) e, sem isso, a reconexão esperava a
+// retransmissão do TCP encontrar o CLP religado e receber o RST, com espera crescente
+// de até 2 min (ou ~15 min sem RST). Não espera nada: só confere, antes de cada
+// tentativa. Um ACK atrasado (delayed ACK, até 500 ms) fica dentro do prazo.
+func (c *client) conferirACK() {
+	if c.target.Transport != TransportTCP || c.sock == nil || c.semACKDesde.IsZero() {
+		return
+	}
+	pend, ok := c.pendentes(c.sock)
+	switch {
+	case !ok: // sem consulta, ou socket já fechado pela grid-x (a próxima discagem zera)
+	case pend == 0:
+		c.semACKDesde = time.Time{}
+	case time.Since(c.semACKDesde) >= max(time.Second, 2*c.target.Timeout):
+		c.closeConn() // a próxima tentativa disca de novo
+	}
+}
+
+// closeConn fecha a conexão TCP atual com RST (ver abortar); a próxima leitura disca
+// de novo.
 func (c *client) closeConn() {
+	if c.sock != nil {
+		abortar(c.sock)
+	}
 	_ = c.conn.Close()
 	c.sock = nil
+	c.semACKDesde = time.Time{}
+}
+
+// abortar prepara o socket para fechar com RST (SO_LINGER 0): o kernel descarta o que
+// ainda não foi entregue, em vez de seguir retransmitindo e entregar requisições
+// velhas quando o caminho voltar.
+func abortar(conn net.Conn) {
+	if tc, ok := conn.(interface{ SetLinger(int) error }); ok {
+		_ = tc.SetLinger(0)
+	}
+}
+
+// bytesNaoReconhecidos devolve quantos bytes escritos no socket o outro lado ainda não
+// reconheceu: na fila de envio ou enviados sem ACK (ioctl SIOCOUTQ, igual a TIOCOUTQ).
+// ok=false fora do Linux ou se o socket não permite a consulta (já fechado).
+func bytesNaoReconhecidos(conn net.Conn) (int, bool) {
+	if runtime.GOOS != "linux" {
+		return 0, false
+	}
+	sc, ok := conn.(syscall.Conn)
+	if !ok {
+		return 0, false
+	}
+	rc, err := sc.SyscallConn()
+	if err != nil {
+		return 0, false
+	}
+	var (
+		n     int32
+		errno syscall.Errno
+	)
+	if err := rc.Control(func(fd uintptr) {
+		_, _, errno = syscall.Syscall(syscall.SYS_IOCTL, fd, uintptr(syscall.TIOCOUTQ), uintptr(unsafe.Pointer(&n)))
+	}); err != nil || errno != 0 {
+		return 0, false
+	}
+	return int(n), true
 }

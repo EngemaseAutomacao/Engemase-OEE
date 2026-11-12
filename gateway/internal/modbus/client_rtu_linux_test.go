@@ -3,6 +3,7 @@
 package modbus_test
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -270,5 +271,28 @@ func TestRTUSerialEscravoLentoNuncaDevolveValorDeOutroEndereco(t *testing.T) {
 				t.Fatalf("%d leituras devolveram o valor de outro endereço", trocadas)
 			}
 		})
+	}
+}
+
+// A porta fica fechada um Timeout depois de um erro, e essa espera é da leitura que
+// falhou. Antes ela ficava para o começo da leitura seguinte, que no barramento é a de
+// outro escravo: o poller media a espera como latência do escravo saudável.
+func TestRTUSerialEsperaDaLinhaNaoContaNaLeituraSeguinte(t *testing.T) {
+	_, porta := iniciarEscravoPTY(t) // só o unit 1 responde
+	r := abrirRTUSerial(t, porta, 0)
+	if v, err := lerHR(r, 100); err != nil || v != 111 {
+		t.Fatalf("leitura inicial: %d (%v)", v, err)
+	}
+	if _, err := r.ReadBlock(context.Background(), 2, modbus.Span{Area: modbus.HoldingRegister, Start: 100, Count: 1}); !errors.Is(err, modbus.ErrTimeout) {
+		t.Fatalf("unit 2 ausente: esperava ErrTimeout, veio %v", err)
+	}
+	start := time.Now()
+	v, err := lerHR(r, 100)
+	el := time.Since(start)
+	if err != nil || v != 111 {
+		t.Fatalf("unit 1 depois do timeout do unit 2: %d (%v)", v, err)
+	}
+	if el > 50*time.Millisecond { // Timeout de 100 ms
+		t.Fatalf("leitura do unit 1 levou %v: a espera da linha depois do erro do unit 2 entrou no tempo dela", el)
 	}
 }

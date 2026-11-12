@@ -79,6 +79,68 @@ func TestCounterTracker(t *testing.T) {
 			steps:    []step{{96, 0, 132, CounterOverflow}},
 		},
 		{
+			// "Perto do máximo" é a distância do anterior até o máximo, não a volta inteira:
+			// as peças feitas depois da volta numa lacuna maior que a cadência (leituras
+			// falhas abaixo de comm_loss) não transformam o overflow em reset.
+			name: "uint16: overflow perto do máximo depois de leituras falhas continua overflow", bits: 16, maxRate: 5, cadence: 3 * time.Second,
+			steps: []step{{65516, 0, 0, CounterFirst}, {16, 9, 36, CounterOverflow}, {20, 10, 4, CounterNormal}},
+		},
+		{
+			// Reinício: o LastAt restaurado é a última leitura do último minuto fechado, então
+			// a lacuna sempre passa da cadência. 36 do máximo (taxa 20/s, cadência 2 s) é perto.
+			name: "uint16: overflow perto do máximo depois de reinício continua overflow", bits: 16, maxRate: 20, cadence: 2 * time.Second,
+			restored: &CounterState{AddrKey: "k", Bits: 16, LastRaw: 65500, LastAt: t0.Add(-70 * time.Second)},
+			steps:    []step{{35, 1, 71, CounterOverflow}},
+		},
+		{
+			// Fronteira: o anterior a exatamente taxa × cadência + 10 do máximo é overflow;
+			// um a mais já é reset (delta = atual).
+			name: "uint16: distância igual à janela é overflow", bits: 16, maxRate: 5, cadence: 3 * time.Second,
+			steps: []step{{65511, 0, 0, CounterFirst}, {30, 20, 55, CounterOverflow}},
+		},
+		{
+			name: "uint16: distância uma acima da janela é reset", bits: 16, maxRate: 5, cadence: 3 * time.Second,
+			steps: []step{{65510, 0, 0, CounterFirst}, {30, 20, 30, CounterReset}},
+		},
+		{
+			// Do máximo exato para zero: uma peça.
+			name: "uint16: máximo → 0 é uma peça", bits: 16, maxRate: 1,
+			steps: []step{{65535, 0, 0, CounterFirst}, {0, 1, 1, CounterOverflow}},
+		},
+		{
+			// Perto do máximo, mas a volta não cabe na taxa × Δt real: reset.
+			name: "uint16: perto do máximo com volta implausível é reset", bits: 16, maxRate: 5, cadence: 3 * time.Second,
+			steps: []step{{65530, 0, 0, CounterFirst}, {100, 9, 0, CounterReset}},
+		},
+		{
+			// taxa × cadência passa de meia faixa (padrão 1000/s, poll de 20 s): "perto do
+			// máximo" fica limitado a ¼ da faixa. CLP religado com contador não retentivo
+			// acima da meia faixa (40000 → 5) é reset, não +25541 peças inventadas.
+			name: "uint16: janela limitada a ¼ da faixa com poll lento", bits: 16, maxRate: 1000, cadence: 41 * time.Second,
+			restored: &CounterState{AddrKey: "k", Bits: 16, LastRaw: 40000, LastAt: t0.Add(-90 * time.Second)},
+			steps:    []step{{5, 0, 5, CounterReset}},
+		},
+		{
+			name: "uint16: janela limitada a ¼ da faixa com taxa alta", bits: 16, maxRate: 10000, cadence: 3400 * time.Millisecond,
+			restored: &CounterState{AddrKey: "k", Bits: 16, LastRaw: 40000, LastAt: t0.Add(-90 * time.Second)},
+			steps:    []step{{5, 0, 5, CounterReset}},
+		},
+		{
+			// Com a janela limitada, a volta real dentro de ¼ da faixa continua overflow.
+			name: "uint16: volta real com poll lento continua overflow", bits: 16, maxRate: 1000, cadence: 41 * time.Second,
+			steps: []step{{60000, 0, 0, CounterFirst}, {12464, 20, 18000, CounterOverflow}},
+		},
+		{
+			// Taxa mínima (1/s) e Δt < 1 s: Δt vale 1 s, janela de 11.
+			name: "uint16: taxa 1/s e Δt curto", bits: 16, maxRate: 1, cadence: 3 * time.Second,
+			steps: []step{{65530, 0, 0, CounterFirst}, {4, 0.2, 10, CounterOverflow}, {16, 0.4, 0, CounterJump}},
+		},
+		{
+			// Taxa máxima da config (100000/s) num uint32: sem limite prático de ¼ da faixa.
+			name: "uint32: taxa máxima da config, overflow normal", bits: 32, maxRate: 100_000, cadence: 2 * time.Second,
+			steps: []step{{4294900000, 0, 0, CounterFirst}, {30000, 1, 97296, CounterOverflow}},
+		},
+		{
 			// max_rate_per_s acima da faixa de 16 bits (a config aceita até 100000): a janela
 			// cobre a faixa já com Δt = 1 s, mas a volta real perto do máximo é overflow...
 			name: "uint16 com taxa acima da faixa: overflow perto do máximo continua overflow", bits: 16, maxRate: 70000,

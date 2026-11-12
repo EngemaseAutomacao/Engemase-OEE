@@ -86,7 +86,7 @@ Opções:
 	fs.Float64Var(&cfg.speed, "speed", 1, "multiplicador do relógio simulado (10 = dez vezes mais rápido)")
 	fs.Float64Var(&cfg.sim.ScrapRate, "scrap", cfg.sim.ScrapRate, "probabilidade de refugo por peça (0–1)")
 	fs.Float64Var(&cfg.sim.MeanRunCycles, "mean-run", cfg.sim.MeanRunCycles, "média de ciclos produzidos entre paradas/falhas")
-	fs.BoolVar(&cfg.sim.GoodCounter, "good-counter", cfg.sim.GoodCounter, "preencher contador_bons (false: fica 0 e o gateway calcula total − refugo)")
+	fs.BoolVar(&cfg.sim.GoodCounter, "good-counter", cfg.sim.GoodCounter, "preencher contador_bons, só informativo: o template padrão do gateway não o lê (boas = total − refugo); false deixa em 0")
 	startTotal := fs.Uint64("start-total", 0, "valor inicial de contador_total e contador_bons (ex.: 100000 para conferir a ordem das words)")
 	fs.DurationVar(&cfg.sim.ResetEvery, "reset-every", cfg.sim.ResetEvery, "counter-reset: intervalo médio entre resets dos contadores")
 	overflowMargin := fs.Uint64("overflow-margin", uint64(cfg.sim.OverflowMargin), "overflow: peças até contador_total passar de 4294967295 para 0")

@@ -2,12 +2,17 @@
 // TCP (conexão persistente própria) e um por barramento RS-485 (requisições
 // estritamente serializadas: um mestre por barramento). Cada leitura em bloco vira
 // um Reading com as amostras decodificadas das tags, entregue ao motor.
+//
+// Cada poller também informa a saúde dos seus dispositivos (Health), registra no log
+// as mudanças do estado de conexão deles (Logger) e expõe o batimento do laço de
+// leitura (Liveness), que o watchdog do agente confere.
 package poller
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"sort"
 	"strconv"
@@ -47,7 +52,10 @@ type group struct {
 
 // Poller é dono de um transporte (dispositivo TCP ou barramento RTU).
 type Poller struct {
-	Name   string
+	Name string
+	// Logger recebe as mudanças do estado de conexão dos dispositivos (nil: sem log).
+	// Definido antes de Run.
+	Logger *slog.Logger
 	target modbus.Target
 	open   func(modbus.Target) (modbus.Reader, error)
 	groups []*group
@@ -55,10 +63,19 @@ type Poller struct {
 
 	mu      sync.Mutex
 	devices map[string]*devState
+
+	// liveMu protege só o batimento do laço (ver Liveness) e nunca fica travado
+	// durante E/S: o watchdog lê o batimento sem esperar por uma leitura presa.
+	liveMu sync.Mutex
+	live   Liveness
+	bound  time.Duration // LivenessBound, calculado na primeira volta
 }
 
 type devState struct {
 	id           string
+	name         string
+	protocol     string
+	logged       string // último estado de conexão registrado no log ("" = nenhum ainda)
 	failures     int
 	until        time.Time
 	status       string
@@ -141,7 +158,8 @@ func newPoller(name string, t modbus.Target) *Poller {
 // addDevice compila os grupos de leitura do dispositivo: os blocos da config e as
 // tags fora de bloco, agrupadas por poll_ms com o planejador.
 func (p *Poller) addDevice(dev *config.Device) {
-	p.devices[dev.ID] = &devState{id: dev.ID, status: contracts.DeviceDisconnected, exceptions: map[byte][]time.Time{}}
+	p.devices[dev.ID] = &devState{id: dev.ID, name: dev.Name, protocol: dev.Protocol, status: contracts.DeviceDisconnected,
+		exceptions: map[byte][]time.Time{}}
 	unit := dev.UnitID()
 	var groups []*group
 	for i := range dev.Blocks {
@@ -187,9 +205,12 @@ func (p *Poller) addDevice(dev *config.Device) {
 // motor estiver atrasado: contrapressão, nada é descartado em silêncio).
 func (p *Poller) Run(ctx context.Context, out chan<- Reading) error {
 	if len(p.groups) == 0 {
-		<-ctx.Done()
+		<-ctx.Done() // sem laço de leitura: Liveness fica zerado, nada a conferir
 		return ctx.Err()
 	}
+	// Abrir o transporte conta como volta do laço: o supervisor que reinicia o poller
+	// depois de uma falha está vivo, mesmo que a porta não exista.
+	p.beat(p.now())
 	reader, err := p.open(p.target)
 	if err != nil {
 		return fmt.Errorf("%s: %w", p.Name, err)
@@ -206,6 +227,7 @@ func (p *Poller) Run(ctx context.Context, out chan<- Reading) error {
 	for {
 		g, due := p.nextDue()
 		if d := due.Sub(p.now()); d > 0 {
+			p.sleepUntil(due) // espera planejada (ritmo ou backoff), não laço parado
 			timer.Reset(d)
 			select {
 			case <-ctx.Done():
@@ -227,7 +249,9 @@ func (p *Poller) Run(ctx context.Context, out chan<- Reading) error {
 			r.Samples, rerr = decode(raw, g.tags)
 		}
 		r.Err = rerr
-		p.record(g, at, at.Sub(start), rerr)
+		change := p.record(g, at, at.Sub(start), rerr)
+		p.beat(at) // volta completa, com sucesso ou falha: o laço está vivo mesmo sem o CLP
+		p.logChange(change)
 
 		// Próximo prazo, sem fila acumulada: período perdido é pulado (overrun).
 		g.next = g.next.Add(g.every)
@@ -237,11 +261,29 @@ func (p *Poller) Run(ctx context.Context, out chan<- Reading) error {
 			p.mu.Unlock()
 			g.next = at.Add(g.every)
 		}
-		select {
-		case out <- r:
-		case <-ctx.Done():
-			return ctx.Err()
+		if err := p.deliver(ctx, out, r); err != nil {
+			return err
 		}
+	}
+}
+
+// deliver entrega a leitura ao motor. Esperando o motor consumir (contrapressão: a
+// rotina de coleta do agente ocupada, por exemplo numa gravação lenta), o laço não
+// está travado: o prazo fica suspenso (Liveness.Delivering) e recomeça na entrega. O
+// consumidor é conferido à parte pelo watchdog do agente (motor e gravação).
+func (p *Poller) deliver(ctx context.Context, out chan<- Reading, r Reading) error {
+	select {
+	case out <- r: // caso comum: há folga no canal
+		return nil
+	default:
+	}
+	p.setDelivering(true)
+	defer p.setDelivering(false)
+	select {
+	case out <- r:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -275,7 +317,9 @@ func decode(raw modbus.Raw, tags []tagRef) ([]engine.Sample, error) {
 	return out, nil
 }
 
-func (p *Poller) record(g *group, at time.Time, rtt time.Duration, err error) {
+// record atualiza a saúde do dispositivo com o resultado de uma leitura e devolve a
+// mudança de estado de conexão ainda não registrada no log (nil se não houve).
+func (p *Poller) record(g *group, at time.Time, rtt time.Duration, err error) *statusChange {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	d := p.devices[g.deviceID]
@@ -290,7 +334,7 @@ func (p *Poller) record(g *group, at time.Time, rtt time.Duration, err error) {
 		} else {
 			d.latencyEWMA = 0.8*d.latencyEWMA + 0.2*ms
 		}
-		return
+		return d.takeChange()
 	}
 	d.readsErr++
 	d.failures++
@@ -310,6 +354,143 @@ func (p *Poller) record(g *group, at time.Time, rtt time.Duration, err error) {
 		d.status = contracts.DeviceDisconnected
 	} else if d.everOK {
 		d.status = contracts.DeviceDegraded
+	}
+	return d.takeChange()
+}
+
+// statusChange é uma mudança do estado de conexão de um dispositivo, para o log.
+type statusChange struct {
+	id, name, protocol string
+	from, to           string // from "" = primeiro estado definido
+	failures           int
+	lastErr            string
+}
+
+// takeChange devolve a mudança de estado ainda não registrada no log e a marca como
+// registrada (uma vez por transição). O estado inicial (desconectado) só conta depois
+// de definido: na primeira leitura boa ou ao entrar em backoff (3 falhas seguidas); as
+// primeiras falhas de um dispositivo que nunca respondeu não mudam nada. Com p.mu.
+func (d *devState) takeChange() *statusChange {
+	if d.status == d.logged || (!d.everOK && d.failures < 3) {
+		return nil
+	}
+	c := &statusChange{id: d.id, name: d.name, protocol: d.protocol, from: d.logged, to: d.status,
+		failures: d.failures, lastErr: truncate(d.lastErr, 500)}
+	d.logged = d.status
+	return c
+}
+
+// logChange registra a mudança de estado de conexão de um dispositivo: conectado em
+// info; degradado e desconectado em warn. Fora de p.mu (o log pode demorar).
+func (p *Poller) logChange(c *statusChange) {
+	if c == nil || p.Logger == nil {
+		return
+	}
+	level, msg := slog.LevelWarn, "dispositivo desconectado: leituras seguidas falharam; novas tentativas com espera crescente"
+	switch c.to {
+	case contracts.DeviceConnected:
+		level, msg = slog.LevelInfo, "dispositivo conectado"
+	case contracts.DeviceDegraded:
+		msg = "dispositivo degradado: leitura falhou"
+	}
+	p.Logger.Log(context.Background(), level, msg, "dispositivo", c.id, "nome", c.name, "protocolo", c.protocol,
+		"poller", p.Name, "estado", c.to, "anterior", c.from, "falhas_seguidas", c.failures, "ultimo_erro", c.lastErr)
+}
+
+// ---------------------------------------------------------------------------
+// Batimento do laço de leitura (watchdog)
+// ---------------------------------------------------------------------------
+
+// livenessMin é o menor prazo para o laço de leitura completar uma volta.
+const livenessMin = 30 * time.Second
+
+// Liveness é o batimento do laço de leitura, conferido pelo watchdog do agente. Os
+// tempos vêm do relógio do poller (time.Now: com a leitura monotônica, imunes a
+// acertos do relógio de parede).
+type Liveness struct {
+	// Beat é quando o laço completou a última volta: uma leitura terminada, com
+	// sucesso ou falha (o laço está vivo mesmo que o CLP não responda), ou uma
+	// tentativa de abrir o transporte. Zero: o laço ainda não rodou.
+	Beat time.Time
+	// Deadline é até quando a próxima volta tem de terminar: Beat + LivenessBound,
+	// estendido enquanto o laço dorme de propósito até o próximo prazo (ritmo dos
+	// grupos ou backoff de dispositivo sem resposta, até 36 s) e recomeçado quando
+	// uma entrega que esperou o motor termina (entrega + LivenessBound).
+	Deadline time.Time
+	// Delivering diz que o laço espera o motor consumir a leitura (canal cheio:
+	// contrapressão). O prazo fica suspenso: a espera é do consumidor, que o watchdog
+	// do agente confere à parte (motor e gravação), não um leitor travado.
+	Delivering bool
+}
+
+// Stalled diz se o laço passou do prazo em now: travado (leitura presa), não só sem
+// resposta do CLP nem à espera do motor consumir as leituras.
+func (l Liveness) Stalled(now time.Time) bool {
+	return !l.Beat.IsZero() && !l.Delivering && now.After(l.Deadline)
+}
+
+// Liveness devolve o batimento atual do laço (seguro de qualquer goroutine).
+func (p *Poller) Liveness() Liveness {
+	p.liveMu.Lock()
+	defer p.liveMu.Unlock()
+	return p.live
+}
+
+// LivenessBound é o prazo para o laço completar uma volta depois da anterior, fora
+// das esperas planejadas: 3 × (o maior poll do poller + o pior tempo de uma leitura),
+// no mínimo livenessMin.
+func (p *Poller) LivenessBound() time.Duration {
+	var every time.Duration
+	for _, g := range p.groups {
+		every = max(every, g.every)
+	}
+	return max(3*(every+readWorst(p.target)), livenessMin)
+}
+
+// readWorst é o pior tempo de uma leitura em bloco que termina, com sucesso ou falha:
+// em cada tentativa (Retries + 1), a conexão, a espera da linha quieta depois de um
+// erro no RTU (até 3 timeouts no RTU sobre TCP), a pausa do RS-485 e o timeout da
+// própria leitura.
+func readWorst(t modbus.Target) time.Duration {
+	timeout := t.Timeout
+	if timeout <= 0 {
+		timeout = modbus.DefaultTCPTimeout // o maior padrão dos transportes
+	}
+	connect := t.ConnectTimeout
+	if connect <= 0 {
+		connect = modbus.DefaultConnectTimeout
+	}
+	return time.Duration(max(t.Retries, 0)+1) * (connect + 4*timeout + t.TurnaroundDelay)
+}
+
+// beat registra uma volta completa do laço em at: a próxima tem prazo at + o limite.
+func (p *Poller) beat(at time.Time) {
+	p.liveMu.Lock()
+	defer p.liveMu.Unlock()
+	if p.bound == 0 {
+		p.bound = p.LivenessBound()
+	}
+	p.live = Liveness{Beat: at, Deadline: at.Add(p.bound)}
+}
+
+// setDelivering marca o início (true) ou o fim (false) de uma entrega que espera o
+// motor consumir. No fim, o prazo recomeça: a próxima volta tem até agora + o limite.
+func (p *Poller) setDelivering(on bool) {
+	now := p.now()
+	p.liveMu.Lock()
+	defer p.liveMu.Unlock()
+	p.live.Delivering = on
+	if d := now.Add(p.bound); !on && d.After(p.live.Deadline) {
+		p.live.Deadline = d
+	}
+}
+
+// sleepUntil estende o prazo enquanto o laço dorme de propósito até due.
+func (p *Poller) sleepUntil(due time.Time) {
+	p.liveMu.Lock()
+	defer p.liveMu.Unlock()
+	if d := due.Add(p.bound); d.After(p.live.Deadline) {
+		p.live.Deadline = d
 	}
 }
 

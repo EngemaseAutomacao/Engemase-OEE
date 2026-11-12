@@ -15,6 +15,7 @@ import (
 
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/buildinfo"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/config"
+	"github.com/engemaseautomacao/engemase-oee/gateway/internal/uplink"
 )
 
 // Níveis de resultado do diag.
@@ -95,7 +96,16 @@ func runDiag(ctx context.Context, path string) []diagCheck {
 	case creds == nil:
 		add("credencial", diagWarn, "gateway não registrado (oee-gateway enroll --code ...)")
 	default:
-		add("credencial", diagOK, fmt.Sprintf("gateway %s, organização %s", creds.GatewayID, creds.Org))
+		who := fmt.Sprintf("gateway %s, organização %s", creds.GatewayID, creds.Org)
+		switch m, merr := uplink.ReadBlockedMarker(uplink.BlockedMarkerPath(local.Paths.Credentials)); {
+		case merr != nil:
+			add("credencial", diagWarn, who+"; "+merr.Error())
+		case m != nil:
+			add("credencial", diagFail, who+": a nuvem recusa o token"+describeRefusal(m)+
+				"; gere um código novo na plataforma e rode oee-gateway enroll --code ...")
+		default:
+			add("credencial", diagOK, who)
+		}
 	}
 
 	if st, err := os.Stat(local.Paths.Buffer); err != nil {

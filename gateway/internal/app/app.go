@@ -57,6 +57,18 @@ const (
 	commitRetryMax = time.Minute
 )
 
+// Limites da verificação de saúde do watchdog (ver healthCheck).
+const (
+	// tickStaleMin: o motor sem tick por mais que isso (ou que 3 ritmos do tick, se
+	// maior) é a rotina de coleta travada.
+	tickStaleMin = 5 * time.Second
+	// flushStuckAfter: uma tentativa de gravação no buffer em curso há mais que isso é
+	// escritor travado; nenhuma tentativa há mais que isso além da prevista é o caminho
+	// de gravação parado. Buffer que falha (disco cheio, erro de E/S) não trava nada: a
+	// tentativa termina com erro e a próxima vem depois da espera (commitRetryMax).
+	flushStuckAfter = 30 * time.Second
+)
+
 // clockJumpMin é a menor diferença, entre dois ticks, do avanço do relógio de parede
 // para o do monotônico que conta como salto do relógio (passo do NTP ou do RTC).
 // Abaixo disso é ruído (slew do NTP, atraso do tick).
@@ -101,6 +113,9 @@ type agent struct {
 	// writeMu serializa as gravações do app na outbox (coleta e configLoop): o
 	// data_loss lê o próprio seq (Stats) antes do Commit, e nada pode entrar no meio.
 	writeMu sync.Mutex
+
+	// beats são os batimentos que o watchdog confere (ver healthCheck).
+	beats beats
 
 	mu              sync.Mutex
 	cfg             *config.GatewayConfig
@@ -419,6 +434,9 @@ func (a *agent) collect(ctx context.Context) error {
 // fechado; o minuto aberto do motor antigo nunca foi enviado, então nenhuma peça
 // se perde nem é contada duas vezes (aplicação por diferença: pendência).
 func (a *agent) collectWith(ctx context.Context, cfg *config.GatewayConfig) error {
+	// Daqui em diante o watchdog confere o motor. Se a coleta morrer antes do primeiro
+	// tick (erro ao restaurar os contadores), o tick não vem e o systemd reinicia o agente.
+	a.beatStart()
 	now := time.Now()
 	eng, err := engine.New(cfg, now, engine.Options{IDs: a.ids})
 	if err != nil {
@@ -432,6 +450,7 @@ func (a *agent) collectWith(ctx context.Context, cfg *config.GatewayConfig) erro
 	if err != nil {
 		a.log.Error("config sem como montar os pollers", "erro", err)
 		a.setConfig(nil, "rejected", truncate(err.Error(), 2000))
+		a.beatStop() // sem motor até outra config: nada a conferir (reiniciar não resolve)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -439,6 +458,11 @@ func (a *agent) collectWith(ctx context.Context, cfg *config.GatewayConfig) erro
 			return nil
 		}
 	}
+
+	for _, p := range pollers {
+		p.Logger = a.log // mudanças do estado de conexão dos dispositivos
+	}
+	a.beatPollers(pollers)
 
 	pctx, stopPollers := context.WithCancel(ctx)
 	readings := make(chan poller.Reading, 1024)
@@ -461,8 +485,10 @@ func (a *agent) collectWith(ctx context.Context, cfg *config.GatewayConfig) erro
 	stop := func() {
 		stopPollers()
 		wg.Wait()
+		a.beatPollers(nil)        // laços parados de propósito: o watchdog não os confere na gravação final
 		a.retryAt = 0             // na parada, tenta gravar mesmo durante a espera entre tentativas
 		a.tick(ctx, eng, pollers) // grava o que já fechou
+		a.beatStop()
 	}
 
 	ticker := time.NewTicker(a.opts.TickEvery)
@@ -500,12 +526,14 @@ func (a *agent) tick(ctx context.Context, eng *engine.Engine, pollers []*poller.
 		a.addUnsent(w)
 	}
 	if mono >= a.retryAt {
+		a.flushBegin(mono)
 		if a.flush(ctx, now) {
 			a.retryWait = 0
 		} else {
 			a.retryWait = min(max(2*a.retryWait, commitRetryMin), commitRetryMax)
 			a.retryAt = mono + a.retryWait
 		}
+		a.flushEnd(a.retryAt)
 	} else {
 		a.trimUnsent(now) // entre tentativas, o limite de memória continua valendo
 	}
@@ -522,6 +550,7 @@ func (a *agent) tick(ctx context.Context, eng *engine.Engine, pollers []*poller.
 	a.mu.Lock()
 	a.live, a.devices, a.lastTick = eng.Live(now), devs, now
 	a.mu.Unlock()
+	a.tickDone()
 }
 
 // processStart é a referência do relógio monotônico do agente.
@@ -919,7 +948,8 @@ func (a *agent) enqueueEventMeta(ctx context.Context, ev any, at time.Time, meta
 	a.kick()
 }
 
-// watchdog alimenta o watchdog do systemd só se o motor está vivo (tick recente).
+// watchdog alimenta o watchdog do systemd (WatchdogSec/3) só depois de uma
+// verificação real de saúde (feedWatchdog).
 func (a *agent) watchdog(ctx context.Context) error {
 	every := watchdogInterval()
 	if every <= 0 {
@@ -934,15 +964,160 @@ func (a *agent) watchdog(ctx context.Context) error {
 			return ctx.Err()
 		case <-t.C:
 		}
-		a.mu.Lock()
-		last, hasCfg := a.lastTick, a.cfg != nil
-		a.mu.Unlock()
-		if hasCfg && time.Since(last) > 5*time.Second && time.Since(a.started) > 30*time.Second {
-			a.log.Error("motor sem tick há mais de 5 s: watchdog não alimentado")
-			continue
-		}
-		_ = sdNotify("WATCHDOG=1\nSTATUS=" + a.statusLine())
+		a.feedWatchdog()
 	}
+}
+
+// feedWatchdog alimenta o watchdog do systemd (WATCHDOG=1) se a verificação de saúde
+// passa; senão registra em warn qual verificação falhou e não alimenta (sem batimento
+// por WatchdogSec, o systemd reinicia o agente). Diz se alimentou.
+func (a *agent) feedWatchdog() bool {
+	now, mono := a.readClock()
+	if f := a.healthCheck(now, mono); f != nil {
+		a.log.Warn("watchdog não alimentado: "+f.msg, append([]any{"verificacao", f.check}, f.attrs...)...)
+		return false
+	}
+	_ = sdNotify("WATCHDOG=1\nSTATUS=" + a.statusLine())
+	return true
+}
+
+// beats são os batimentos que o watchdog confere antes de alimentar o systemd (doc 16
+// §3: ciclo do motor, leitores e gravação no SQLite). Tempos monotônicos desde
+// processStart (readClock). O mu daqui só protege estes campos e nunca fica travado
+// durante E/S: o watchdog não espera por uma rotina presa.
+type beats struct {
+	mu        sync.Mutex
+	running   bool             // coleta rodando (config aplicada); falso: nada a conferir
+	tick      time.Duration    // fim do último tick do motor (ou início da coleta)
+	pollers   []*poller.Poller // leitores da config em uso
+	flushing  bool             // tentativa de gravação no buffer em curso
+	flushAt   time.Duration    // início da tentativa em curso, ou fim da última
+	flushNext time.Duration    // próxima tentativa prevista: já (gravou) ou depois da espera (falhou)
+}
+
+// beatStart marca o início da coleta de uma config: o motor e a gravação passam a ser
+// conferidos, a partir de agora. A próxima tentativa de gravação continua a prevista
+// pela coleta anterior: se a gravação da parada falhou (buffer falhando numa troca de
+// config), ela só vem depois da espera (retryAt, até commitRetryMax), e esperar não é
+// caminho de gravação parado. Na rotina de coleta (dona de retryAt).
+func (a *agent) beatStart() {
+	_, mono := a.readClock()
+	b := &a.beats
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.running, b.tick, b.pollers = true, mono, nil
+	b.flushing, b.flushAt, b.flushNext = false, mono, max(mono, a.retryAt)
+}
+
+// beatStop marca o fim da coleta (troca de config, config sem pollers montáveis).
+func (a *agent) beatStop() {
+	b := &a.beats
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.running, b.pollers = false, nil
+}
+
+// beatPollers registra os leitores da config em uso (o watchdog confere o laço de cada um).
+func (a *agent) beatPollers(ps []*poller.Poller) {
+	b := &a.beats
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.pollers = ps
+}
+
+// tickDone marca o fim de um tick do motor.
+func (a *agent) tickDone() {
+	_, mono := a.readClock()
+	b := &a.beats
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.tick = mono
+}
+
+// flushBegin marca o início de uma tentativa de gravação no buffer.
+func (a *agent) flushBegin(mono time.Duration) {
+	b := &a.beats
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.flushing, b.flushAt = true, mono
+}
+
+// flushEnd marca o fim de uma tentativa de gravação (com sucesso ou falha); a próxima
+// está prevista para retryAt (espera crescente, se falhou) ou para já (próximo tick).
+func (a *agent) flushEnd(retryAt time.Duration) {
+	_, end := a.readClock()
+	b := &a.beats
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.flushing, b.flushAt, b.flushNext = false, end, max(end, retryAt)
+}
+
+// healthFailure é a verificação de saúde que falhou: o watchdog não é alimentado.
+type healthFailure struct {
+	check string // gravacao | motor | leitor
+	msg   string
+	attrs []any
+}
+
+// tickStaleAfter é o limite sem tick do motor: tickStaleMin ou 3 ritmos do tick.
+func (a *agent) tickStaleAfter() time.Duration { return max(tickStaleMin, 3*a.opts.TickEvery) }
+
+// healthCheck é a verificação real de saúde antes de alimentar o watchdog (nil:
+// saudável). Confere, na ordem:
+//
+//   - gravação em curso: uma tentativa de gravar no buffer (SQLite) há mais que
+//     flushStuckAfter é escritor travado. Buffer que falha não conta: a tentativa
+//     termina, com erro, e a coleta segue (o agente não reinicia em laço por disco
+//     cheio ou erro de E/S);
+//   - motor: um tick nos últimos tickStaleAfter. Durante uma tentativa de gravação
+//     (que roda dentro do tick) quem limita é a verificação acima: disco lento não é
+//     motor travado. Depois dela, o limite conta do fim da gravação até o tick
+//     terminar (o resto do tick, depois de uma gravação lenta, não é motor travado);
+//   - gravação parada: nenhuma tentativa há mais que flushStuckAfter além da prevista
+//     (já, ou depois da espera entre tentativas enquanto o buffer falha);
+//   - leitores: o laço de cada poller completou uma volta (leitura com sucesso ou
+//     falha: o CLP pode não responder) dentro do prazo dele (poller.Liveness). Um
+//     laço à espera de o motor consumir as leituras (contrapressão) não conta: a
+//     espera é da rotina de coleta, conferida acima. Na parada da coleta, os pollers
+//     saem daqui antes da gravação final.
+//
+// Sem coleta rodando (sem config, ou config sem pollers montáveis à espera de outra)
+// não há o que conferir.
+func (a *agent) healthCheck(now time.Time, mono time.Duration) *healthFailure {
+	b := &a.beats
+	b.mu.Lock()
+	running, tick, pollers := b.running, b.tick, b.pollers
+	flushing, flushAt, flushNext := b.flushing, b.flushAt, b.flushNext
+	b.mu.Unlock()
+	if !running {
+		return nil
+	}
+	if d := mono - flushAt; flushing && d > flushStuckAfter {
+		return &healthFailure{check: "gravacao", msg: "gravação no buffer em curso além do limite (escritor travado)",
+			attrs: []any{"em_curso_ha_ms", d.Milliseconds(), "limite_ms", flushStuckAfter.Milliseconds()}}
+	}
+	// Sem gravação em curso, flushAt é o fim da última. Depois do último tick, ela é do
+	// tick em curso: o limite conta do fim dela.
+	if d, limit := mono-max(tick, flushAt), a.tickStaleAfter(); !flushing && d > limit {
+		attrs := []any{"ultimo_tick_ha_ms", (mono - tick).Milliseconds(), "limite_ms", limit.Milliseconds()}
+		if flushAt > tick {
+			attrs = append(attrs, "fim_gravacao_ha_ms", d.Milliseconds())
+		}
+		return &healthFailure{check: "motor", msg: "motor sem tick além do limite (coleta travada)", attrs: attrs}
+	}
+	if d := mono - flushNext; !flushing && d > flushStuckAfter {
+		return &healthFailure{check: "gravacao", msg: "nenhuma tentativa de gravação no buffer além do limite (caminho de gravação parado)",
+			attrs: []any{"ultima_tentativa_ha_ms", (mono - flushAt).Milliseconds(), "atraso_ms", d.Milliseconds(),
+				"limite_ms", flushStuckAfter.Milliseconds()}}
+	}
+	for _, p := range pollers {
+		if l := p.Liveness(); l.Stalled(now) {
+			return &healthFailure{check: "leitor", msg: "laço de leitura sem completar uma volta no prazo (leitor travado)",
+				attrs: []any{"poller", p.Name, "ultima_volta_ha_ms", now.Sub(l.Beat).Milliseconds(),
+					"prazo_ms", l.Deadline.Sub(l.Beat).Milliseconds()}}
+		}
+	}
+	return nil
 }
 
 func (a *agent) statusLine() string {

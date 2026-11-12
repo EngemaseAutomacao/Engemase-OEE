@@ -690,10 +690,19 @@ func TestClassifySoTrataComoExcecaoFuncaoComBit80(t *testing.T) {
 }
 
 // A espera pela linha quieta depois de um erro pode durar alguns Timeouts (até 10 s
-// cada): o desligamento do agente não pode ficar preso nela.
+// cada) e acontece no fim da própria leitura que falhou: o desligamento do agente não
+// pode ficar preso nela. O que sobrar da espera fica para a leitura seguinte, que
+// também respeita o contexto e não envia nada antes de a linha ficar quieta.
 func TestRTUOverTCPEsperaDaLinhaRespeitaContexto(t *testing.T) {
-	addr := startEscravoRoteiro(t, func(n int, req []byte, escrever func(time.Duration, []byte)) {
-		q := respostaHR(req, nil)
+	var (
+		mu  sync.Mutex
+		req int
+	)
+	addr := startEscravoRoteiro(t, func(n int, rq []byte, escrever func(time.Duration, []byte)) {
+		mu.Lock()
+		req++
+		mu.Unlock()
+		q := respostaHR(rq, nil)
 		q[len(q)-1] ^= 0xFF // CRC errado: erro que não é timeout nem exceção
 		escrever(0, q)
 	})
@@ -702,17 +711,30 @@ func TestRTUOverTCPEsperaDaLinhaRespeitaContexto(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Close()
-	if _, err := lerHR(r, 100); err == nil {
-		t.Fatal("esperava erro de CRC")
-	}
+	span := modbus.Span{Area: modbus.HoldingRegister, Start: 100, Count: 1}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	_, err = r.ReadBlock(ctx, 1, modbus.Span{Area: modbus.HoldingRegister, Start: 100, Count: 1})
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("esperava o erro do contexto, veio %v", err)
+	if _, err := r.ReadBlock(ctx, 1, span); err == nil || errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("esperava o erro de CRC da leitura, veio %v", err)
 	}
 	if el := time.Since(start); el > time.Second {
 		t.Fatalf("ReadBlock demorou %v depois do fim do contexto", el)
+	}
+
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel2()
+	start = time.Now()
+	if _, err := r.ReadBlock(ctx2, 1, span); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("leitura seguinte, com a linha ainda na espera: esperava o erro do contexto, veio %v", err)
+	}
+	if el := time.Since(start); el > time.Second {
+		t.Fatalf("ReadBlock seguinte demorou %v depois do fim do contexto", el)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if req != 1 {
+		t.Fatalf("requisições = %d, quer 1 (nada sai antes de a linha ficar quieta)", req)
 	}
 }

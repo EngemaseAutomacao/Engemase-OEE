@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -67,6 +68,9 @@ func NewRoot(stdout, stderr io.Writer) *cobra.Command {
 	return root
 }
 
+// runAgent roda o agente (trocado nos testes).
+var runAgent = app.Run
+
 func loadLocal(cmd *cobra.Command) (*config.Local, error) {
 	path, _ := cmd.Flags().GetString("config")
 	return config.LoadLocal(path)
@@ -82,9 +86,14 @@ func newRunCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// O logger do agente (JSON no stderr, nível da config local) é também o
+			// padrão do processo: o que não recebe um logger explícito (ex.: as falhas
+			// do /sync com Syncer.Log nil) sai no mesmo journal e no mesmo nível.
+			log := app.NewLogger(local.Log.Level)
+			slog.SetDefault(log)
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return app.Run(ctx, app.Options{Local: local})
+			return runAgent(ctx, app.Options{Local: local, Logger: log})
 		},
 	}
 }

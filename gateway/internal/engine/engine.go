@@ -174,18 +174,14 @@ func (e *Engine) OnRead(at time.Time, samples []Sample) {
 			continue
 		}
 		if m := b.machine; !touched[m] {
-			// Lacuna maior que comm_loss_after_s sem Tick no meio: avalia com os sinais
-			// antigos antes que a leitura nova esconda o silêncio, para a lacuna virar
-			// NO_COMM (tempo não observado) e não tempo do último estado. Só nesse
-			// caso: fora dele, avaliar aqui confirmaria com sinais velhos um candidato
-			// que esta leitura desmente (debounce, heartbeat, count_derived).
-			ref := m.lastGood
-			if ref.IsZero() {
-				ref = m.started
-			}
-			if at.Sub(ref) >= m.commLoss {
-				m.evaluate(at)
-			}
+			// Avalia com os sinais antigos antes que a leitura nova os troque, como um
+			// Tick neste instante faria: a decisão não depende de o Tick vir antes ou
+			// depois da leitura (no agente, o select escolhe ao acaso). Uma lacuna maior
+			// que comm_loss_after_s vira NO_COMM (tempo não observado), não tempo do
+			// último estado. Os prazos extrapolados são estritos (evaluate, rawState):
+			// a leitura que desmente o candidato exatamente no fim do prazo não o
+			// confirma; depois do fim, confirma, como um Tick no meio confirmaria.
+			m.evaluate(at)
 		}
 		b.machine.apply(b, s.Value, at)
 		touched[b.machine] = true
@@ -516,8 +512,11 @@ func (m *machine) rawState(now time.Time) (key stateKey, since time.Time, noComm
 		}
 		return stateKey{state: contracts.StateNoComm}, since, true, true
 	}
-	// CLP "congelado": heartbeat parado.
-	if m.hbTimeout > 0 && m.hbValue.ok && now.Sub(m.hbLastChange) >= m.hbTimeout {
+	// CLP "congelado": heartbeat parado. Visto parado pelo prazo inteiro (leitura em
+	// hbLastRead) ou, extrapolando a última leitura até now, parado por mais que o
+	// prazo (estrito: veja evaluate).
+	if m.hbTimeout > 0 && m.hbValue.ok &&
+		(m.hbLastRead.Sub(m.hbLastChange) >= m.hbTimeout || now.Sub(m.hbLastChange) > m.hbTimeout) {
 		return stateKey{state: contracts.StateNoComm}, m.hbLastChange, true, true
 	}
 
@@ -564,6 +563,13 @@ func (m *machine) rawState(now time.Time) (key stateKey, since time.Time, noComm
 }
 
 // evaluate cria, descarta ou confirma o candidato a estado novo.
+//
+// O candidato é confirmado quando foi visto pelo debounce inteiro (a última leitura,
+// lastGood, ainda o mostra) ou quando, extrapolando os sinais da última leitura até
+// now (Tick, falha, OnRead antes de aplicar a leitura nova), passou ESTRITAMENTE do
+// debounce. Estrito porque a leitura que o desmente em now mostra que ele acabou
+// antes de now: no fim exato do prazo, não se manteve pelo prazo. Assim um Tick em
+// now e a leitura que desmente o candidato em now decidem igual, em qualquer ordem.
 func (m *machine) evaluate(now time.Time) {
 	key, since, noComm, ok := m.rawState(now)
 	if !ok || key == m.confirmed {
@@ -580,7 +586,7 @@ func (m *machine) evaluate(now time.Time) {
 	if m.cand == nil || m.cand.key != key {
 		m.cand = &candidate{key: key, since: maxTime(since, m.accounted)}
 	}
-	if now.Sub(m.cand.since) >= m.debounce {
+	if m.lastGood.Sub(m.cand.since) >= m.debounce || now.Sub(m.cand.since) > m.debounce {
 		m.confirm(m.cand.key, m.cand.since)
 	}
 }
@@ -624,8 +630,11 @@ func (m *machine) holdPoint(now time.Time) time.Time {
 	if !m.lastGood.IsZero() && now.Sub(m.lastGood) > silence && m.lastGood.Before(hold) {
 		hold = m.lastGood
 	}
-	if m.hbTimeout > 0 && m.hbValue.ok && m.hbLastRead.After(m.hbLastChange) && m.hbLastChange.Before(hold) {
-		hold = m.hbLastChange // heartbeat não mudou na última leitura
+	// Heartbeat: o tempo depois da última mudança vista fica em dúvida até a próxima
+	// leitura mostrar outra mudança (senão, se ele parou, o NO_COMM começa nela e um
+	// Tick no meio teria contado parte disso como o estado anterior).
+	if m.hbTimeout > 0 && m.hbValue.ok && m.hbLastChange.Before(hold) {
+		hold = m.hbLastChange
 	}
 	return hold
 }

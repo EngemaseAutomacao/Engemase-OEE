@@ -62,16 +62,25 @@ func (c *counterTracker) maxValue() uint64 {
 //
 // Sendo Δt o tempo desde a última leitura (mínimo 1 s) e limite = taxa × Δt + 10:
 //   - cur ≥ prev: delta = cur − prev; acima do limite é salto (descarta e redefine a base);
-//   - cur < prev: wrap = (máx − prev) + cur + 1; é overflow (delta = wrap) só se o
-//     anterior estava perto do máximo (docs/03): wrap ≤ taxa × min(Δt, cadência) + 10
-//     e wrap menor que meia faixa do tipo. Senão é reset (delta = cur, se plausível).
+//   - cur < prev: dist = máx − prev + 1 (peças até dar a volta) e wrap = dist + cur.
+//     É overflow (delta = wrap) só se o anterior estava perto do máximo (docs/03):
+//     dist ≤ perto, com perto = taxa × min(Δt, cadência) + 10 limitado a ¼ da faixa
+//     do tipo, wrap ≤ limite (a volta cabe no Δt real) e wrap menor que meia faixa.
+//     Senão é reset (delta = cur, se plausível).
 //
-// A janela de overflow não cresce com a lacuna: com taxa × Δt, 60 s sem leitura (CLP
+// Overflow e reset só divergem nas dist peças até o máximo (cur conta nos dois): um
+// reset tomado por overflow inventa no máximo "perto" peças e um overflow tomado por
+// reset perde dist, que é produção real da lacuna. Por isso "perto" mede a distância
+// do anterior ao máximo, não a volta inteira: as peças feitas depois da volta numa
+// lacuna maior que a cadência (leituras falhas, reinício) não viram reset.
+//
+// A janela "perto" não cresce com a lacuna: com taxa × Δt, 60 s sem leitura (CLP
 // religado, gateway reiniciado) já cobririam quase toda a faixa de 16 bits e um CLP
 // religado com contador não retentivo (12000 → 5) viraria +53541 peças inventadas.
-// Na dúvida é reset: o erro fica limitado à produção real da lacuna e o
-// counter_reset deixa rastro. A meia faixa vale quando taxa × cadência passa da
-// faixa (max_rate_per_s alto num uint16): aí recuar é mais curto que dar a volta.
+// Pelo mesmo motivo ela para em ¼ da faixa: com taxa × cadência acima disso (taxa
+// padrão e poll de 20 s, ou max_rate_per_s alto num uint16) overflow e reset não se
+// distinguem e, na dúvida, é reset: o counter_reset deixa rastro. A meia faixa vale
+// quando o limite passa da faixa: aí recuar é mais curto que dar a volta.
 func (c *counterTracker) update(cur uint32, at time.Time) CounterResult {
 	if !c.valid {
 		r := c.restored
@@ -105,9 +114,11 @@ func (c *counterTracker) update(cur uint32, at time.Time) CounterResult {
 			res.Kind, res.Delta = CounterNormal, int64(d)
 		}
 	default:
-		wrap := (c.maxValue() - uint64(prev)) + uint64(cur) + 1
-		near := c.maxRate*min(dt, max(c.cadence.Seconds(), 1)) + 10
-		if float64(wrap) <= near && wrap < (c.maxValue()+1)/2 {
+		span := c.maxValue() + 1
+		dist := span - uint64(prev)
+		wrap := dist + uint64(cur)
+		near := min(c.maxRate*min(dt, max(c.cadence.Seconds(), 1))+10, float64(span/4))
+		if float64(dist) <= near && float64(wrap) <= limit && wrap < span/2 {
 			res.Kind, res.Delta = CounterOverflow, int64(wrap)
 		} else {
 			res.Kind = CounterReset

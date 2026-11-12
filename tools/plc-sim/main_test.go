@@ -74,6 +74,29 @@ func TestParseArgsErrors(t *testing.T) {
 	}
 }
 
+// O contador_bons é só informativo (docs/11, seção 3): o template padrão do gateway não o
+// lê e as boas saem de total − refugo. A ajuda não pode prometer que o gateway "calcula"
+// as boas quando o campo fica em 0.
+func TestHelpGoodCounterInformativo(t *testing.T) {
+	var out bytes.Buffer
+	if _, err := parseArgs([]string{"--help"}, &out); !errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("--help: erro %v, esperado flag.ErrHelp", err)
+	}
+	_, after, ok := strings.Cut(out.String(), "  --good-counter\n")
+	if !ok {
+		t.Fatalf("--good-counter ausente da ajuda:\n%s", out.String())
+	}
+	usage, _, _ := strings.Cut(after, "\n")
+	for _, want := range []string{"informativo", "não o lê", "total − refugo"} {
+		if !strings.Contains(usage, want) {
+			t.Errorf("ajuda de --good-counter sem %q: %q", want, usage)
+		}
+	}
+	if strings.Contains(usage, "gateway calcula") {
+		t.Errorf("ajuda de --good-counter ainda diz que o gateway calcula as boas: %q", usage)
+	}
+}
+
 func TestFormatSimTime(t *testing.T) {
 	if got := formatSimTime(26*time.Hour + 3*time.Minute + 4*time.Second + 999*time.Millisecond); got != "26:03:04" {
 		t.Fatalf("formatSimTime = %q", got)

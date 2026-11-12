@@ -91,8 +91,9 @@ type Config struct {
 	ScrapRate float64
 	// MeanRunCycles é a média de ciclos produzidos entre duas paradas/falhas.
 	MeanRunCycles float64
-	// GoodCounter liga o contador_bons. Desligado, ele fica em 0 e o gateway
-	// deve calcular total − refugo (docs/11, seção 3).
+	// GoodCounter liga o contador_bons. O campo é só informativo: o template
+	// padrão do gateway não o lê e as boas saem de total − refugo (docs/11,
+	// seção 3). Desligado, fica em 0, como num CLP que não preenche o campo.
 	GoodCounter bool
 	// StartTotal é o valor inicial de contador_total (e de contador_bons).
 	// Útil para conferir a ordem das words com um valor conhecido (ex.: 100000).

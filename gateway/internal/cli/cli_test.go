@@ -58,6 +58,7 @@ func TestNormalizeActivationCode(t *testing.T) {
 }
 
 func TestEnrollValidatesArguments(t *testing.T) {
+	asUser(t, 999) // senão o teste como root pararia na recusa de root, antes da validação
 	cfgPath, _ := writeLocal(t, "https://oee.exemplo.com.br")
 	cases := map[string][]string{
 		"sem código":         {"enroll", "--config", cfgPath},
@@ -74,7 +75,16 @@ func TestEnrollValidatesArguments(t *testing.T) {
 	}
 }
 
+// asUser faz o enroll enxergar outro euid (os testes rodam como root no contêiner).
+func asUser(t *testing.T, uid int) {
+	t.Helper()
+	prev := geteuid
+	geteuid = func() int { return uid }
+	t.Cleanup(func() { geteuid = prev })
+}
+
 func TestEnrollWritesCredentials(t *testing.T) {
+	asUser(t, 999)
 	var got contracts.EnrollRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		zr, _ := gzip.NewReader(r.Body)
