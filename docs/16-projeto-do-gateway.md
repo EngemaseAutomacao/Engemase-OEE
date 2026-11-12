@@ -65,6 +65,15 @@ O esqueleto já está em `gateway/` (Fase 0).
   - eventos locais.
 - Retenção de 30 dias ou 1 GB. Se for preciso descartar, saem primeiro as amostras e é registrado um evento `data_loss`.
 
+**Watchdog (verificação real de saúde):** o agente só manda `WATCHDOG=1` (a cada 10 s, `WatchdogSec=30s`) quando passam três checagens:
+- **motor:** houve tick nos últimos 5 s, contados a partir do fim da última gravação;
+- **gravação:** nenhuma gravação no SQLite está presa há mais de 30 s, e a próxima tentativa não atrasou mais de 30 s (o backoff de uma gravação que falha é respeitado, também depois de uma troca de config);
+- **leitores:** cada leitor deu sinal de vida dentro de `max(3 × (maior poll + pior leitura), 30 s)`. Leitura que falha conta como sinal de vida (CLP desligado não reinicia o agente); o prazo é estendido durante o backoff e suspenso enquanto o leitor espera o motor consumir.
+
+Se uma falhar, o agente registra `watchdog não alimentado` (warn, `verificacao=motor|gravacao|leitor`) e o systemd o reinicia.
+
+**Um leitor por linha física:** cada barramento RS-485 do gateway e cada conversor RTU sobre TCP (mesmo `host:porta`) tem um único leitor, que faz uma requisição por vez. Vários escravos atrás de um conversor transparente nunca são lidos em paralelo. Dispositivos Modbus TCP nativos têm um leitor cada.
+
 **Tempo não observado:** a soma de cada minuto é sempre 60 s. O tempo em que o gateway não observou a máquina (boot, crash, queda de energia, salto de relógio, máquina removida da config) entra em **`no_comm_s`**. Minuto parcial nunca é enviado.
 
 **Sincronização:** o ritmo é **comandado pelo servidor** (`next_sync_s`). O agente só antecipa o envio quando tem uma mudança de estado (com debounce de 1 s). O modo de comissionamento é o "modo interativo" do [04](04-protocolo-gateway-nuvem.md): `next_sync_s = 1` enquanto houver uma tela de comissionamento aberta, renovado a cada 5 min.

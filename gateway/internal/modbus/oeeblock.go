@@ -14,7 +14,7 @@ type OEEBlock struct {
 	FaultCode   uint16 // codigo_falha
 	Total       uint32 // contador_total
 	Reject      uint32 // contador_refugo
-	Good        uint32 // contador_bons (0 = o gateway calcula total − refugo)
+	Good        uint32 // contador_bons (informativo: o template padrão não o lê; boas = total − refugo, docs/11 §3)
 	Product     uint16 // produto
 	Speed       uint16 // velocidade
 	LastCycleMS uint16 // ciclo_ultimo_ms

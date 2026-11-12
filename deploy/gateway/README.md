@@ -52,7 +52,7 @@ Quando uma peça da Fase 1 ficar pronta: mova a unit de `systemd/fase1/` para `s
 ## 3. Contrato com o código do agente (conferido no código, Fase 0)
 
 - **Notificação:** o agente manda `READY=1` depois de abrir o buffer e aplicar a última config salva, e `STOPPING=1` no `SIGTERM` (`internal/app`, sd_notify próprio, sem cgo). Por isso `Type=notify` e `NotifyAccess=main`.
-- **Watchdog:** com `WatchdogSec=30s`, o agente manda `WATCHDOG=1` + `STATUS=` a cada 10 s, **só se** (com config carregada) o motor rodou um tick nos últimos 5 s. A checagem dos pollers e do gravador SQLite que o docs/16 §3 descreve **ainda não existe**: hoje o watchdog pega motor travado, não poller preso.
+- **Watchdog:** com `WatchdogSec=30s`, o agente manda `WATCHDOG=1` + `STATUS=` a cada 10 s, **só se** (com config carregada) passarem as três checagens do docs/16 §3: o **motor** rodou um tick nos últimos 5 s (contados a partir do fim da última gravação); a **gravação** no SQLite não está presa há mais de 30 s e não deixou de ser tentada além do prazo; e cada **leitor** (poller) deu sinal de vida dentro de `max(3 × (maior poll + pior leitura), 30 s)`, prazo estendido durante o backoff de um CLP que não responde e suspenso enquanto o leitor espera o motor consumir. Quando uma falha, o agente registra `watchdog não alimentado` (nível warn, campo `verificacao=motor|gravacao|leitor`) e não manda o ping; o systemd reinicia o serviço.
 - **Sem ativação por socket:** a unit não declara `Sockets=` (ver §1).
 - **`gateway.yaml`:** o parser recusa chave desconhecida (`KnownFields`). Chaves aceitas: `schema`, `cloud.{url,timeout_s,extra_ca_file}`, `paths.{state_dir,credentials,buffer,identity}`, `hardware.{profile,serial_ports}`, `log.level`. O `etc/gateway.yaml` do pacote é conferido com o parser real no `validate.sh`.
 - **Enroll:** `oee-gateway enroll` grava `credentials.json` com o usuário que o rodou. Por isso o sudo do técnico roda como `oee` (§6) e, na bancada, use `sudo -u oee oee-gateway enroll --code ...`.
@@ -212,6 +212,5 @@ Proxy corporativo numa bancada: `/etc/oee-gateway/proxy.env` (root:oee 0640) com
 
 - E-mail do mantenedor nos `nfpm*.yaml` (`a-definir@engemase.invalid`).
 - Código da Fase 1 no `gateway/`: ativação por socket (`localapi`), `localui serve`, `helper serve`, `status`, `net`, `logs`, `support-bundle`, LEDs; e o `oee-updater` (M4b).
-- Watchdog com a checagem dos pollers e do gravador SQLite (docs/16 §3).
 - Domínio dos gateways (D28) no `gateway.yaml`.
 - Assinatura do `.deb`/manifesto (Ed25519, `tools/release-sign`) e publicação no Vercel Blob: fora deste diretório.

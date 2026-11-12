@@ -292,7 +292,7 @@ export const ARTICLE_BODY: Record<string, ArticleBlock[]> = {
         ["3", "uint16", "codigo_falha", "Código do alarme ativo (0 = nenhum)"],
         ["4–5", "uint32", "contador_total", "Ciclos/peças acumulados (nunca zerar por programa; overflow tratado pelo gateway)"],
         ["6–7", "uint32", "contador_refugo", "Peças refugadas acumuladas"],
-        ["8–9", "uint32", "contador_bons", "Opcional (se 0, o gateway calcula total − refugo)"],
+        ["8–9", "uint32", "contador_bons", "Informativo, para conferência local: o template padrão não o lê (boas = total − refugo)"],
         ["10", "uint16", "produto", "Código do produto/receita atual"],
         ["11", "uint16", "velocidade", "Velocidade atual (unidade definida por máquina)"],
         ["12", "uint16", "ciclo_ultimo_ms", "Duração do último ciclo, em ms (opcional)"],

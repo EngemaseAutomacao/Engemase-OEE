@@ -6,9 +6,12 @@
 #  - envia READY=1 depois de abrir o buffer e aplicar a última config salva, e
 #    STOPPING=1 ao receber SIGTERM (sd_notify próprio, sem cgo);
 #  - envia WATCHDOG=1 + STATUS= a cada WatchdogSec/3 (10 s) SÓ se, com config
-#    carregada, o motor rodou um tick nos últimos 5 s (tolerância de 30 s após
-#    o início). A checagem dos pollers e do gravador SQLite prevista no docs/16
-#    §3 ainda NÃO existe no código: hoje o watchdog pega motor travado;
+#    carregada, passarem as três checagens de saúde (docs/16 §3): motor com
+#    tick nos últimos 5 s (contados do fim da última gravação); gravação no
+#    SQLite sem ficar presa mais de 30 s nem deixar de ser tentada; e cada
+#    leitor (poller) vivo dentro de max(3 × (maior poll + pior leitura), 30 s),
+#    prazo estendido durante backoff e enquanto espera o motor consumir.
+#    Falha em uma delas: log warn "watchdog não alimentado" e o systemd reinicia;
 #  - NÃO usa ativação por socket (agent.sock/ui.sock são da Fase 1).
 [Unit]
 Description=Engemase OEE - agente de coleta do gateway
