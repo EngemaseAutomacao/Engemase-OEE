@@ -14,7 +14,7 @@ Tempo do turno (calendário)
 |---|---|---|
 | **Disponibilidade (A)** | Tempo de operação ÷ Tempo planejado | Paradas |
 | **Performance (P)** | (Tempo de ciclo ideal × Contagem total) ÷ Tempo de operação | Velocidade reduzida e micro-paradas |
-| **Qualidade (Q)** | Peças boas ÷ Contagem total | Refugo e retrabalho |
+| **Qualidade (Q)** | Peças boas ÷ Contagem total (com vários produtos, ponderada pelo ciclo ideal; ver o passo 6 do algoritmo) | Refugo e retrabalho |
 | **OEE** | A × P × Q = (Peças boas × Ciclo ideal) ÷ Tempo planejado | Todas |
 
 ### Exemplo
@@ -76,7 +76,10 @@ Se a máquina **rodou** durante um intervalo de parada planejada (ex.: trabalhou
 3. **Tempo de operação:** soma dos intervalos `RUNNING` dentro do tempo planejado, mais as paradas menores que o limite de micro-parada.
 4. **Contagens:** soma de `total` e `reject` de `production_minute` na janela, menos ajustes manuais de `quality_entry`. Peças boas = total − refugo.
 5. **Tempo ideal:** Σ por produto (contagem do produto × ciclo ideal do produto naquela máquina), usando o `product_code` de cada minuto.
-6. **Indicadores:** A = operação ÷ planejado; P = ideal ÷ operação; Q = boas ÷ total; OEE = A × P × Q.
+6. **Indicadores:** A = operação ÷ planejado; P = ideal ÷ operação; Q = Σ(boas × ciclo ideal) ÷ Σ(total × ciclo ideal); OEE = A × P × Q = Σ(boas × ciclo ideal) ÷ planejado.
+   - Com **um só produto** na janela, Q é exatamente boas ÷ total (o ciclo ideal se cancela), como na tabela do início.
+   - Com **vários produtos de ciclos diferentes**, Q fica ponderado pelo ciclo ideal. Isso garante que A × P × Q continue igual ao OEE. Exemplo: produto A com 100 peças, 0 refugo e ciclo de 1 s; produto B com 100 peças, 50 refugos e ciclo de 10 s. Q ponderado = (100 × 1 + 50 × 10) ÷ (100 × 1 + 100 × 10) = **54,5%**; a porcentagem simples de peças boas é 150 ÷ 200 = **75%**.
+   - O `@engemase/oee-core` devolve os dois valores: `quality` (ponderado, usado no A × P × Q) e `qualityByCount` (boas ÷ total). A interface mostra `quality` como **Qualidade** e, quando os dois diferem, mostra `qualityByCount` como **"% de peças boas"** com a explicação.
 7. **Divisões por zero:** sem tempo planejado, o OEE é `null` ("sem produção planejada"), nunca 0%. Sem contagem, Q é `null`.
 
 Os **tempos** vêm dos eventos (precisão de segundos e motivos aplicados). As **contagens** vêm dos minutos. Os segundos por estado dentro de `production_minute` servem para gráficos rápidos e para conferência cruzada.
