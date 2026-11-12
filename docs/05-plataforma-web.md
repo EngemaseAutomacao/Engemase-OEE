@@ -29,7 +29,7 @@ Rotas do protótipo em `apps/web/app` (grupos `(auth)`, `(shell)`, `(kiosk)` e `
 /conta                                   Perfil, senha, 2FA, sessões, tema, dispositivos com push
 
 /[cliente]                               Visão geral (cards por unidade/linha: estado + OEE do turno)
-/[cliente]/linhas/[lineId]               (prevista) Linha: máquinas, OEE da linha, gargalo
+/[cliente]/linhas/[linhaId]              Linha: máquinas, OEE da linha (soma das bases), máquina que mais perde
 /[cliente]/maquinas                      Lista de máquinas com estado ao vivo
 /[cliente]/maquinas/[maquinaId]          Máquina: estado ao vivo, timeline, OEE (A/P/Q), paradas, produção
 /[cliente]/relatorios/oee                OEE por período / turno / máquina / produto
@@ -52,8 +52,9 @@ Rotas do protótipo em `apps/web/app` (grupos `(auth)`, `(shell)`, `(kiosk)` e `
 /[cliente]/config/aparencia              Cores e logotipos do cliente (F2)
 /[cliente]/config/auditoria              Log de alterações
 
-/terminal/parear                         (prevista) Pareamento de TV/tablet por código (terminal = dispositivo, não pessoa)
-/terminal                                (prevista) Andon (TV) ou tela do operador (tablet), conforme o terminal
+/terminal/parear                         Pareamento de TV/tablet por código (terminal = dispositivo, não pessoa)
+/terminal                                Andon (TV) ou tela do operador (tablet), conforme o token do aparelho
+/terminal/[terminalId][/[maquinaId]]     Só no protótipo: simula o aparelho aberto (na versão real, o id vem do token)
 
 /admin                                   Console Engemase: visão geral da plataforma (clientes, gateways, alertas)
 /admin/clientes                          Clientes: status, plano, uso × limites, gateways com problema
@@ -69,7 +70,7 @@ Rotas do protótipo em `apps/web/app` (grupos `(auth)`, `(shell)`, `(kiosk)` e `
 /api/v1/*                                API pública para integrações (F3)
 ```
 
-- **Terminais:** o protótipo usa, provisoriamente, `/[cliente]/andon/[linhaId]` (TV) e `/[cliente]/operador/[maquinaId]` (tablet), no grupo `(kiosk)`. Na implementação real, o terminal fica no caminho próprio `/terminal`, nunca combinado com a sessão de uma pessoa ([15](15-multi-cliente-e-acesso.md#8-requisitos-de-segurança-da-revisão-adversarial), item 12).
+- **Terminais:** o aparelho pareado usa o caminho próprio `/terminal` (pareamento em `/terminal/parear`), nunca combinado com a sessão de uma pessoa. As rotas `/[cliente]/andon/[linhaId]` e `/[cliente]/operador/[maquinaId]` continuam para **pessoas com login** (ex.: supervisor que abre o Andon no próprio computador) ([15](15-multi-cliente-e-acesso.md#8-requisitos-de-segurança-da-revisão-adversarial), item 12).
 - As rotas `/api/*` só existem na implementação real; o protótipo usa dados simulados.
 
 ## Autogestão: o que o cliente faz sozinho

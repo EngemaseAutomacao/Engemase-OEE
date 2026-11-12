@@ -42,12 +42,19 @@ Content-Encoding: gzip
 
 ```json
 // requisição
-{ "code": "ABCD-1234", "hostname": "gw-planta1-linhaA", "agent_version": "1.0.0",
-  "hw": { "arch": "arm64", "model": "reComputer R1000", "mem_mb": 4096 } }
+{ "code": "ABCD-1234", "hostname": "egw-00042", "agent_version": "1.0.0",
+  "hw": { "arch": "arm64", "model": "reComputer R1000", "mem_mb": 2048,
+          "serial_number": "EGW-00042", "board_revision": "v1.1", "image_version": "2026.11.0",
+          "profile": "recomputer-r1000", "serial_ports": ["rs485-1", "rs485-2", "rs485-3"] } }
 
 // resposta 201
-{ "gateway_id": "01a1c5d4-9208-752e-89a7-834df2a74de4", "token": "gw_live_8f2c...", "org": "acme" }
+{ "gateway_id": "01a1599c-a300-7f51-9864-1073dc9781ca", "token": "gw_live_8f2c...", "org": "acme",
+  "server_time": "2026-11-10T19:42:10.512Z" }
 ```
+
+- O código aceita `ABCD-1234` ou `ABCD1234` (maiúsculas, A–Z e 0–9).
+- Os campos opcionais de `hw` vêm da identidade gravada na bancada (`/data/identity/hw.json`, [16](16-projeto-do-gateway.md#4-caminhos-usuários-e-identidade-canônico)). As portas seriais são **lógicas** (`rs485-1..3`); o perfil do agente as mapeia para `/dev/ttyAMA2`, `/dev/ttyAMA3` e `/dev/ttyAMA5` no R1000.
+- Erros: código inválido → `400 activation_code_invalid`; vencido ou já usado → `410 activation_code_expired` / `activation_code_used`. O técnico vê a mensagem na página local e pede um código novo.
 
 ### `POST /sync`
 
@@ -69,7 +76,7 @@ Frequência padrão: **a cada 10 s**. Há também um envio **imediato** quando a
   "events": [
     { "id": "01a1cab3-2bea-7d21-9a40-2b1c5e8f0a11", "seq": 18240, "type": "state",
       "machine_id": "mch_inj03", "at": "2026-11-11T13:01:42.250Z",
-      "state": "FAULT", "fault_code": 47 }
+      "state": "FAULT", "fault_code": 47, "previous_state": "RUNNING" }
   ],
   "minutes": [
     { "seq": 18241, "machine_id": "mch_inj03", "t": "2026-11-11T13:01:00Z",
@@ -85,10 +92,35 @@ Frequência padrão: **a cada 10 s**. Há também um envio **imediato** quando a
     { "seq": 18245, "tag_id": "tag_temp1", "at": "2026-11-11T13:02:00Z", "v": 212.4 }
   ],
   "command_results": [
-    { "id": "01a1cab3-6970-7128-a24b-e40ad23f0824", "status": "ok", "result": { "value": 1048213, "quality": "good", "read_ms": 21 } }
+    { "id": "01a1cab3-6970-7128-a24b-e40ad23f0824", "type": "tag.read", "status": "ok",
+      "result": { "value": 1048213, "quality": "good", "read_ms": 21 } }
   ]
 }
 ```
+
+Campos que não aparecem no exemplo, todos opcionais e compatíveis com a v1:
+
+- `agent`: `config_status` (aplicando, observando, aplicada, rejeitada, revertida), `buffer_oldest_s`, `samples_pending`, `quarantined`, `temp_c`, `emmc_wear_pct`, `ntp_synced`, `boot_id`, `unclean_boots_24h`.
+- `devices[]`: `timeouts_1m`, `exceptions_1m` (por código de exceção Modbus), `last_ok_at`, `last_error`. Estados: `connected`, `degraded`, `disconnected`, `disabled`.
+- `buses[]`: saúde de cada barramento RS-485 (`status` `ok`/`degraded`/`port_unavailable`, `cycle_ms`, `busy_pct`, `overruns_1m`).
+- **Fila própria de amostras:** as amostras podem ter faixa própria (`batch.samples_seq_from`–`samples_seq_to`), confirmada por `ack_samples_seq` na resposta. Assim, amostras descartáveis não seguram a confirmação de eventos e minutos. Sem essa faixa, as amostras usam a fila principal.
+- Um `/sync` só de saúde (sem itens) manda apenas `batch.sent_at`.
+
+**Tipos de evento** (`events[].type`, 15 no total):
+
+| Tipo | Quando |
+|---|---|
+| `state` | Mudança de estado da máquina (com `previous_state` e, em falha, `fault_code`) |
+| `product` | Troca de produto lida do CLP |
+| `counter_reset` · `counter_jump` · `counter_rebaseline` | Contador zerado no CLP, salto acima do plausível, nova referência após troca de config |
+| `agent_start` · `agent_stop` | Início e parada do agente (motivo: desligamento, reinício, atualização, erro) |
+| `power_loss` · `power_restored` | Falta e volta de energia |
+| `clock_jump` | Correção grande do relógio |
+| `data_loss` · `buffer_corrupted` | Perda de dados por limite de retenção, buffer corrompido ou quarentena vencida |
+| `config_applied` · `config_rejected` | Resultado da aplicação de uma config |
+| `remote_access` | Início, fim e recusas de acesso remoto (VPN e encaminhamento OT) |
+
+Limites por lote: 2000 itens (eventos + minutos + amostras), 256 fotos `live`, 50 resultados de comando, 64 dispositivos e 8 barramentos. Corpo de até 1 MiB descompactado.
 
 Em cada minuto fechado, `run_s + stop_s + fault_s + setup_s + no_comm_s = 60`. O `setup_s` conta os segundos no estado `SETUP` (ex.: estado 3 do [bloco OEE padrão](11-integracao-modbus.md#3-bloco-oee-padrão-engemase)).
 
@@ -101,6 +133,7 @@ Resposta `200`:
   "config": { "latest_version": 43 },
   "commands": [
     { "id": "01a1cab3-7cf8-7181-a54c-66175d9dc9f8", "type": "tag.read",
+      "issued_at": "2026-11-11T13:02:05.300Z", "expires_at": "2026-11-11T13:04:05.300Z",
       "payload": { "device_id": "01a1c5fc-7cc8-7651-8317-1ff4a6a3a450",
                    "address": { "area": "holding_register", "offset": 1004 },
                    "type": "uint32", "word_order": "CDAB" } }
@@ -110,22 +143,34 @@ Resposta `200`:
 }
 ```
 
-`next_sync_s` é 10 no ciclo normal e 1 no modo interativo (como neste exemplo, que entrega um comando).
+`next_sync_s` é 10 no ciclo normal e 1 no modo interativo (como neste exemplo, que entrega um comando). Quando as amostras têm fila própria, a resposta traz também `ack_samples_seq`. No máximo 20 comandos por resposta.
 
 ### Tipos de comando
 
-| Tipo | Uso | Fase |
-|---|---|---|
-| `tag.read` | Teste de leitura de um endereço, antes de salvar a tag | MVP |
-| `device.test` | Testa a conexão com um CLP (IP e parâmetros) | MVP |
-| `config.reload` | Força baixar e aplicar a config | MVP |
-| `agent.restart` | Reinicia o serviço | MVP |
-| `modbus.scan` | Varre unit ids de um barramento RS-485 ou faixa de registradores, para ajudar no comissionamento | F2 |
-| `agent.update` | Atualiza para a versão indicada (OTA) | F2 |
-| `token.rotate` | Rotação de credencial | F2 |
-| `logs.upload` | Envia as últimas N linhas de log para diagnóstico | F2 |
+Todo comando traz `id`, `type`, `payload`, `expires_at` e, opcionalmente, `issued_at`. O agente corrige o relógio pelo `server_time` antes de comparar: comando que chega depois de `expires_at` **não é executado** e volta com status `expired`. Validade máxima: 24 h.
 
-Comandos têm **expiração** (ex.: 2 min para `tag.read`). Um comando expirado não é executado.
+| Tipo | Uso | Validade padrão | Prazo de execução | Fase |
+|---|---|---|---|---|
+| `tag.read` | Teste de leitura de um endereço, antes de salvar a tag ("Ler agora") | 2 min | 5 s | MVP |
+| `device.test` | Testa a conexão com um CLP. Com `device_id`: dispositivo cadastrado. **Sem `device_id`:** IP ainda não cadastrado, só dentro da sub-rede OT, com liberação do firewall por 5 min, limite de taxa e auditoria. Em RTU com parâmetros novos, exige `allow_bus_pause` | 2 min | 10 s | MVP |
+| `config.reload` | Força baixar e aplicar a config | 10 min | 60 s | MVP |
+| `agent.restart` | Reinicia o serviço | 10 min | 10 s | MVP |
+| `modbus.scan` | Varre unit ids de um barramento RS-485 ou uma faixa de registradores, para ajudar no comissionamento | 10 min | 120 s | F2 (contrato pronto) |
+| `vpn.enable` · `vpn.disable` · `vpn.status` | Sessão de acesso remoto sob demanda, com aprovação assinada ([12](12-acesso-remoto-vpn.md)) | 5 min · 1 h · 2 min | 60 s · 30 s · 10 s | F2 (contrato pronto) |
+| `ot.forward.open` · `ot.forward.close` | Encaminhamento temporário para um CLP pela VPN (portas sugeridas 502, 102, 44818) | 5 min · 1 h | 30 s | F2 (contrato pronto) |
+| `agent.update` · `token.rotate` · `logs.upload` | OTA, rotação de credencial e envio de logs | — | — | F2 (fora do contrato v1) |
+
+**Resultados** (`command_results[]`): sempre com `id`, `type` e `status`. `ok` traz `result` tipado pelo `type`; `error`, `expired` e `rejected` trazem `error.code`. Um tipo que o agente não conhece ou ainda não implementa (os marcados F2, no agente do MVP) volta como `rejected` com `unsupported`, sem travar o `/sync`. Códigos de erro de comando: `unsupported`, `invalid_payload`, `expired`, `timeout`, `device_not_found`, `target_not_allowed`, `bus_not_found`, `bus_pause_required`, `port_unavailable`, `connection_failed`, `read_timeout`, `modbus_exception`, `decode_error`, `config_fetch_failed`, `config_invalid`, `policy_denied`, `approval_invalid`, `session_conflict`, `session_not_found`, `vpn_failed`, `internal_error`.
+
+### `GET /config`
+
+Devolve a config completa do gateway com `ETag`; com `If-None-Match` igual à versão atual, responde `304`. Decisões do contrato que valem para a config:
+
+- **Protocolos:** `modbus-tcp`, `modbus-rtu` e `modbus-rtu-over-tcp` (quadro RTU com CRC dentro de TCP, típico de conversor serial↔Ethernet transparente).
+- **Unit id:** 0–255 em Modbus TCP (normalmente 1); 1–247 em RTU e em RTU sobre TCP (0 é broadcast).
+- **Serial:** `data_bits` é sempre 8 (7 bits é Modbus ASCII, fora do MVP); paridade N/E/O; 1 ou 2 stop bits.
+- **Leitura:** até 125 registradores ou 2000 bits por leitura; polling mínimo de 100 ms em TCP e 200 ms em RTU; `uint32`/`int32`/`float32` exigem `word_order`.
+- **Papel `plc.heartbeat`:** contador que o CLP incrementa. Com `heartbeat_timeout_s` na regra da máquina, heartbeat parado vira `NO_COMM` mesmo que o Modbus responda. Exige uma tag com esse papel.
 
 ## Regras de processamento na nuvem
 
@@ -148,15 +193,25 @@ Além disso:
 
 ## Erros e retentativas
 
-| Código | Significado | Ação do agente |
-|---|---|---|
-| `200` | OK | Remove da outbox até `ack_seq` |
-| `400` | Payload inválido | Registra erro, **isola o item problemático** (envia os itens um a um para achar o culpado), não trava a fila |
-| `401` | Token inválido ou revogado | Para de enviar, mantém o buffer, registra alarme local |
-| `409` | Config desatualizada para a operação | Baixa a config e tenta de novo |
-| `413` | Lote grande demais | Divide o lote ao meio |
-| `429` | Limite de taxa | Respeita `Retry-After` |
-| `5xx` / rede | Falha temporária | Backoff exponencial com jitter (1 s → 5 min), mantendo o buffer |
+Toda resposta de erro (4xx/5xx, exceto `304`) tem o corpo `{ "error": { "code", "message", "retry_after_s"?, "issues"?, "request_id"? } }`. Em `invalid_payload`, `issues[]` traz o caminho do item e, quando houver, o id da regra violada (ex.: `minute.seconds_sum`).
+
+| Código | HTTP | Significado | Ação do agente |
+|---|---|---|---|
+| — | `200` | OK | Remove da fila até `ack_seq` (e das amostras até `ack_samples_seq`) |
+| `invalid_payload` | `400` | Schema ou regra semântica | **Isola o item problemático** (bisseção do lote), manda-o para quarentena e não trava a fila |
+| `unknown_reference` | `400` | `machine_id`, `tag_id`, `device_id` ou comando que não pertence ao gateway | Isola o item |
+| `timestamp_out_of_range` | `400` | Timestamp além de `server_time` + 2 min | Isola o item |
+| `activation_code_invalid` | `400` | Código de ativação inválido | Mostra ao técnico |
+| `unauthorized` · `token_revoked` | `401` | Token ausente, inválido ou revogado | Para de enviar, mantém o buffer, registra alarme local |
+| `not_found` | `404` | Rota ou recurso inexistente | Mostra ao técnico |
+| `config_outdated` | `409` | Config desatualizada para a operação | Baixa a config e tenta de novo |
+| `activation_code_expired` · `activation_code_used` | `410` | Código vencido (24 h) ou já usado | Mostra ao técnico |
+| `payload_too_large` | `413` | Lote acima de 1 MiB descompactado | Divide o lote ao meio |
+| `unsupported_media_type` | `415` | Content-Type ou Content-Encoding errado | Mostra ao técnico |
+| `rate_limited` | `429` | Limite de taxa | Respeita `Retry-After` |
+| `internal_error` · `service_unavailable` | `500` · `503` | Falha temporária | Backoff exponencial com jitter (1 s → 5 min), mantendo o buffer |
+
+Sem corpo reconhecível (proxy, rede), o agente decide pelo status HTTP com as mesmas regras.
 
 ## Evolução para MQTT (Fase 3)
 

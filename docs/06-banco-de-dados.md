@@ -90,9 +90,12 @@ erDiagram
 | `organization` | id, slug, nome, criado_em (tabela do Better Auth) |
 | `client_account` | organização (1:1), status, plano, limites, `managed_by_engemase` — só a plataforma grava ([15](15-multi-cliente-e-acesso.md#9-modelo-de-dados-acréscimos)) |
 | `user` | id, nome, e-mail, 2FA... |
+| `session` · `account` · `verification` | Tabelas padrão do Better Auth: sessões, credenciais (hash da senha) e verificações |
 | `member` | organization_id, user_id (tabela do Better Auth) |
 | `member_access` / `member_unit` | papel e escopo de unidades do vínculo (fail-closed) |
 | `account_token` | tokens próprios de uso único (definir senha, verificar e-mail, pareamento), só hash |
+| `platform_assignment` / `platform_assignment_unit` | pessoa da Engemase designada a um cliente (motivo, validade, revogação) e as unidades do escopo ([15](15-multi-cliente-e-acesso.md)) |
+| `support_access_grant` | concessão temporária de acesso de suporte: motivo, chamado, início/fim, aprovado por |
 
 **2. Ativos**
 
@@ -110,7 +113,8 @@ erDiagram
 |---|---|
 | `gateway` | id, organization_id, unit_id, nome, `token_hash`, status, `last_seen_at`, versão, `config_version_applied`, info de hardware (jsonb), métricas de saúde |
 | `gateway_enrollment` | gateway_id, `code_hash`, expira_em, usado_em |
-| `device` | id, gateway_id, nome, protocolo, `params` (jsonb validado por protocolo) |
+| `serial_bus` | id, gateway_id, nome, porta lógica (`rs485-1..3`), baud, paridade, `data_bits` (sempre 8), stop bits. Escravos RTU da mesma porta compartilham o barramento |
+| `device` | id, gateway_id, `serial_bus_id` (só em `modbus-rtu`), nome, protocolo (`modbus-tcp`, `modbus-rtu`, `modbus-rtu-over-tcp`), `params` (jsonb validado por protocolo), `blocks` (leituras em bloco) |
 | `tag` | id, device_id, machine_id, nome, `address` (jsonb), tipo, escala, `poll_ms`, **role**, deadband |
 | `gateway_config_version` | gateway_id, versão, snapshot (jsonb imutável), criado_por, criado_em |
 | `gateway_command` | id, gateway_id, tipo, payload, status (pending/sent/ok/error/expired), resultado, expira_em |
@@ -145,7 +149,28 @@ erDiagram
 | `oee_shift` | (machine_id, shift_date, shift_id) | planned_s, run_s, downtime_s, total, good, reject, ideal_time_s, availability, performance, quality, oee, **dirty**, calculado_em |
 | `oee_hour` (opcional) | (machine_id, hour) | Mesmos campos, para gráficos de tendência rápidos |
 
-**7. Auditoria**
+**7. Terminais, alertas e notificações** ([13](13-notificacoes-e-alertas.md))
+
+| Tabela | Campos principais |
+|---|---|
+| `terminal` | id, unit_id, nome, tipo (TV/tablet), `line_ids`/`machine_ids` do escopo, `token_hash`, pareado por/em, validade, revogação, último contato |
+| `alert_rule` | tipo, alvo (unidade/linha/máquina), parâmetros, severidade, destinatários, escalonamento |
+| `alert_event` | regra, máquina ou gateway, `dedup_key`, estado (aberto/reconhecido/resolvido), severidade, nível de escalonamento |
+| `notification` | pessoa, alerta de origem, título, texto, link, lida em. É a fonte da verdade da central; o push é só um canal |
+| `notification_delivery` | canal, assinatura de push, status, tentativas, próximo envio |
+| `notification_preference` | tipos de alerta, escopo, canais, horário de silêncio |
+| `push_subscription` | pessoa ou terminal, endpoint e chaves do Web Push, aparelho, último sucesso |
+
+**8. Acesso remoto** ([12](12-acesso-remoto-vpn.md))
+
+| Tabela | Campos principais |
+|---|---|
+| `remote_access_policy` | unidade ou gateway, modo, aprovadores, duração máxima, inatividade, encaminhamento OT permitido, janelas |
+| `remote_access_session` | gateway, solicitante, motivo, chamado, duração pedida/aprovada, decisão, IP e nó da VPN, certificado SSH, fim e motivo, bytes |
+| `remote_access_forward` | sessão, dispositivo, host e porta de destino, contato no local, decisão, validade, conexões |
+| `remote_access_event` | trilha da sessão e dos encaminhamentos: tipo, ator, dados, instante |
+
+**9. Auditoria**
 
 | Tabela | Campos principais |
 |---|---|
