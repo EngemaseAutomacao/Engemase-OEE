@@ -1,17 +1,25 @@
 /**
  * POST /api/gateway/v1/enroll: código de ativação de uso único (hash no banco) → token do gateway.
+ * Erros do contrato pelo estado do código (docs/04): desconhecido ou de gateway revogado → 400
+ * `activation_code_invalid`; já usado → 410 `activation_code_used`; vencido → 410
+ * `activation_code_expired`. O slug do cliente sai sob a RLS de `organization`, e a resposta nunca
+ * sai fora do contrato (slug inválido → 500 com tudo desfeito).
  */
 import { createHash } from "node:crypto"
 import { type EnrollRequest, EnrollResponseSchema, ErrorResponseSchema, SyncResponseSchema } from "@engemase/contracts"
+import { ORG_SLUG_PATTERN } from "@engemase/db"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { EnrollIntegrityError } from "@/lib/server/gateway/enroll"
 import { handleEnroll, handleSync } from "@/lib/server/gateway/handlers"
 import {
   createTestDatabase,
   deps,
   enrollRequest,
+  EXAMPLE_CONFIG,
   fixture,
   manifest,
   randomActivationCode,
+  remapIds,
   rows,
   type SeededClient,
   seedClient,
@@ -40,14 +48,32 @@ describe("POST /enroll", () => {
     await t.client.close()
   })
 
-  async function enroll(body: unknown): Promise<{ status: number; json: unknown }> {
-    const res = await handleEnroll(enrollRequest(body), deps(t))
+  async function enroll(body: unknown, now?: Date): Promise<{ status: number; json: unknown }> {
+    const res = await handleEnroll(enrollRequest(body), deps(t, now))
     return { status: res.status, json: await res.json() }
   }
 
-  function expectError(result: { status: number; json: unknown }, status: number, code: string): void {
+  /** Confere status e código do erro e que a resposta não revela ids do banco (gateway, cliente, código). */
+  function expectError(
+    result: { status: number; json: unknown },
+    status: number,
+    code: string,
+    hiddenIds: readonly string[] = [],
+  ): void {
     expect(result.status, JSON.stringify(result.json)).toBe(status)
     expect(ErrorResponseSchema.parse(result.json).error.code).toBe(code)
+    const text = JSON.stringify(result.json)
+    for (const id of [acme.organizationId, ...hiddenIds]) expect(text).not.toContain(id)
+  }
+
+  async function enrollmentState(gatewayId: string): Promise<{ status: string; token_hash: string | null; used: boolean } | undefined> {
+    const [row] = await rows<{ status: string; token_hash: string | null; used: boolean }>(
+      t,
+      `SELECT g.status, g.token_hash, e.used_at IS NOT NULL AS used
+       FROM gateway g JOIN gateway_enrollment e ON e.gateway_id = g.id WHERE g.id = $1`,
+      [gatewayId],
+    )
+    return row
   }
 
   it("caminho feliz (fixture do contrato): 201, token válido, código usado e gateway ativo", async () => {
@@ -93,45 +119,109 @@ describe("POST /enroll", () => {
     expect(res.status).toBe(201)
   })
 
-  it("código reutilizado: recusado e o token emitido antes continua valendo", async () => {
+  it("código reutilizado: 410 activation_code_used e o token emitido antes continua valendo", async () => {
     const code = randomActivationCode()
-    await seedEnrollment(t.db, acme, { code })
+    const { gatewayId, enrollmentId } = await seedEnrollment(t.db, acme, { code })
     const first = await enroll({ ...VALID, code })
     expect(first.status).toBe(201)
     const token = EnrollResponseSchema.parse(first.json).token
 
-    expectError(await enroll({ ...VALID, code }), 400, "activation_code_invalid")
+    expectError(await enroll({ ...VALID, code }), 410, "activation_code_used", [gatewayId, enrollmentId])
+    const [gw] = await rows<{ token_hash: string }>(t, "SELECT token_hash FROM gateway WHERE id = $1", [gatewayId])
+    expect(gw?.token_hash).toBe(sha256(token))
     const sync = await handleSync(syncRequest(HEALTH_ONLY, { token }), deps(t))
     expect(sync.status).toBe(200)
   })
 
-  it("código vencido: recusado, gateway continua aguardando ativação", async () => {
+  it("código vencido: 410 activation_code_expired, gateway continua aguardando ativação", async () => {
     const code = randomActivationCode()
     const now = Date.now()
-    const { gatewayId } = await seedEnrollment(t.db, acme, {
+    const { gatewayId, enrollmentId } = await seedEnrollment(t.db, acme, {
       code,
       createdAt: new Date(now - 48 * 3_600_000),
       expiresAt: new Date(now - 24 * 3_600_000),
     })
-    expectError(await enroll({ ...VALID, code }), 400, "activation_code_invalid")
-    const [gw] = await rows<{ status: string; token_hash: string | null }>(t, "SELECT status, token_hash FROM gateway WHERE id = $1", [gatewayId])
-    expect(gw).toEqual({ status: "pending_enrollment", token_hash: null })
+    expectError(await enroll({ ...VALID, code }), 410, "activation_code_expired", [gatewayId, enrollmentId])
+    expect(await enrollmentState(gatewayId)).toEqual({ status: "pending_enrollment", token_hash: null, used: false })
   })
 
-  it("código inexistente e código de gateway revogado: recusados", async () => {
-    expectError(await enroll({ ...VALID, code: "ZZZZ-9999" }), 400, "activation_code_invalid")
+  it("código que vence entre a busca e a transação (relógio do servidor): 410 expired e nada fica marcado", async () => {
     const code = randomActivationCode()
-    await seedEnrollment(t.db, acme, { code, gatewayStatus: "revoked" })
-    expectError(await enroll({ ...VALID, code }), 400, "activation_code_invalid")
+    const { gatewayId } = await seedEnrollment(t.db, acme, { code, expiresAt: new Date(Date.now() + 3_600_000) })
+    // Para o banco o código ainda vale; para o relógio da requisição já venceu.
+    expectError(await enroll({ ...VALID, code }, new Date(Date.now() + 2 * 3_600_000)), 410, "activation_code_expired", [gatewayId])
+    expect(await enrollmentState(gatewayId)).toEqual({ status: "pending_enrollment", token_hash: null, used: false })
+    // O erro desfez a marcação de uso: no relógio certo, o mesmo código ativa.
+    expect((await enroll({ ...VALID, code })).status).toBe(201)
   })
 
-  it("dois /enroll simultâneos com o mesmo código: só um vence", async () => {
+  it("código inexistente e código de gateway revogado ou excluído: 400 activation_code_invalid", async () => {
+    expectError(await enroll({ ...VALID, code: "ZZZZ-9999" }), 400, "activation_code_invalid")
+
+    const revokedCode = randomActivationCode()
+    const revoked = await seedEnrollment(t.db, acme, { code: revokedCode, gatewayStatus: "revoked" })
+    expectError(await enroll({ ...VALID, code: revokedCode }), 400, "activation_code_invalid", [revoked.gatewayId, revoked.enrollmentId])
+
+    const deletedCode = randomActivationCode()
+    const deleted = await seedEnrollment(t.db, acme, { code: deletedCode })
+    await t.client.query("UPDATE gateway SET deleted_at = now() WHERE id = $1", [deleted.gatewayId])
+    expectError(await enroll({ ...VALID, code: deletedCode }), 400, "activation_code_invalid", [deleted.gatewayId, deleted.enrollmentId])
+    expect(await enrollmentState(deleted.gatewayId)).toEqual({ status: "pending_enrollment", token_hash: null, used: false })
+  })
+
+  it("dois /enroll simultâneos com o mesmo código: só um vence, o outro recebe 410 activation_code_used", async () => {
     const code = randomActivationCode()
     await seedEnrollment(t.db, acme, { code })
     const results = await Promise.all([enroll({ ...VALID, code }), enroll({ ...VALID, code })])
     expect(results.filter((r) => r.status === 201)).toHaveLength(1)
     const loser = results.find((r) => r.status !== 201)
-    expect(["activation_code_invalid", "activation_code_used"]).toContain(ErrorResponseSchema.parse(loser?.json).error.code)
+    expectError(loser!, 410, "activation_code_used")
+  })
+
+  it("slug do cliente sai sob a RLS de organization (que só mostra o cliente da transação)", async () => {
+    const beta = await seedClient(t.db, { slug: "beta", config: remapIds(EXAMPLE_CONFIG, new Map()) })
+
+    // A RLS está de fato ligada e forçada: sem cliente o app_user não vê nenhum; com o beta, só o beta.
+    const [rls] = await rows<{ enabled: boolean; forced: boolean }>(
+      t,
+      "SELECT relrowsecurity AS enabled, relforcerowsecurity AS forced FROM pg_class WHERE oid = 'public.organization'::regclass",
+    )
+    expect(rls).toEqual({ enabled: true, forced: true })
+    const visible = await t.client.transaction(async (tx) => {
+      await tx.query("SET LOCAL ROLE app_user")
+      const none = (await tx.query<{ slug: string }>("SELECT slug FROM organization")).rows
+      await tx.query("SELECT app.set_tenant($1)", [beta.organizationId])
+      const own = (await tx.query<{ slug: string }>("SELECT slug FROM organization")).rows
+      return { none, own }
+    })
+    expect(visible).toEqual({ none: [], own: [{ slug: "beta" }] })
+
+    const { gatewayId, code } = await seedEnrollment(t.db, beta)
+    const res = await enroll({ ...VALID, code })
+    expect(res.status, JSON.stringify(res.json)).toBe(201)
+    const body = EnrollResponseSchema.parse(res.json)
+    expect(body).toMatchObject({ gateway_id: gatewayId, org: "beta" })
+  })
+
+  it("slug do cliente fora do contrato (dado que escapou da CHECK): 500, sem gastar o código nem ativar o gateway", async () => {
+    // Desde a 0004 o banco recusa esse slug (organization_slug_chk); aqui simulamos um dado anterior a ela.
+    await t.client.query("ALTER TABLE organization DROP CONSTRAINT organization_slug_chk")
+    const legacy = await seedClient(t.db, { slug: "Acme_Ltda", config: remapIds(EXAMPLE_CONFIG, new Map()) }).finally(() =>
+      t.client.query(`ALTER TABLE organization ADD CONSTRAINT organization_slug_chk CHECK (slug ~ '${ORG_SLUG_PATTERN}') NOT VALID`),
+    )
+    const { gatewayId, enrollmentId, code } = await seedEnrollment(t.db, legacy)
+
+    const logged: unknown[] = []
+    const res = await handleEnroll(enrollRequest({ ...VALID, code }), { ...deps(t), logError: (_message, error) => logged.push(error) })
+    const json: unknown = await res.json()
+    expect(res.status, JSON.stringify(json)).toBe(500)
+    expect(ErrorResponseSchema.parse(json).error.code).toBe("internal_error")
+    for (const id of [legacy.organizationId, gatewayId, enrollmentId]) expect(JSON.stringify(json)).not.toContain(id)
+    // Tudo desfeito: o código continua valendo e o gateway segue aguardando ativação, sem auditoria.
+    expect(await enrollmentState(gatewayId)).toEqual({ status: "pending_enrollment", token_hash: null, used: false })
+    expect(await rows(t, "SELECT 1 FROM audit_log WHERE entity_id = $1", [gatewayId])).toEqual([])
+    expect(logged).toEqual([expect.any(EnrollIntegrityError)])
+    expect(String(logged[0])).toContain("Acme_Ltda")
   })
 
   it("reativar um gateway ativo (troca de hardware) troca o token: o antigo deixa de valer", async () => {

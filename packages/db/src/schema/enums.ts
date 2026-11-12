@@ -50,6 +50,20 @@ export type StateMode = (typeof STATE_MODES)[number]
 export const DEVICE_CONN_STATUSES = ["connected", "degraded", "disconnected", "disabled"] as const
 export type DeviceConnStatus = (typeof DEVICE_CONN_STATUSES)[number]
 
+/**
+ * Faixa do código de falha do CLP no contrato (`fault_code` em eventos de estado e no live):
+ * uint32, de 0 a 4294967295. Não cabe em `integer` (int4): as colunas são `bigint` com CHECK.
+ */
+export const FAULT_CODE_MIN = 0
+export const FAULT_CODE_MAX = 4_294_967_295
+
+/**
+ * Formato do slug do cliente (`organization.slug`): o do campo `org` da resposta do /enroll
+ * (`EnrollResponseSchema.shape.org`), de 1 a 64 caracteres, minúsculas, dígitos e hífen, sem hífen
+ * nas pontas. Vale igual em JavaScript e no Postgres (`~`, expressão regular ARE).
+ */
+export const ORG_SLUG_PATTERN = "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$"
+
 // --- Plataforma e acesso (docs/15) ----------------------------------------------------------
 
 /** Ciclo de vida do cliente (docs/15, seção 6). */

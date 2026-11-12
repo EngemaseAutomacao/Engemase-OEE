@@ -91,6 +91,10 @@ export const gateway = pgTable(
   (t) => [
     unique("gateway_id_org_uq").on(t.id, t.organizationId),
     unique("gateway_id_unit_org_uq").on(t.id, t.unitId, t.organizationId),
+    // Busca pelo token anterior durante a rotação (app.resolve_gateway_token*, a cada requisição).
+    index("gateway_previous_token_hash_idx")
+      .on(t.previousTokenHash)
+      .where(sql`${t.previousTokenHash} IS NOT NULL`),
     foreignKey({
       name: "gateway_unit_fk",
       columns: [t.unitId, t.organizationId],

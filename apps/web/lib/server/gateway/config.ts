@@ -9,6 +9,7 @@
 import { type GatewayConfig, GatewayConfigSchema } from "@engemase/contracts"
 import { gateway, gatewayConfigVersion, withTenant } from "@engemase/db"
 import { and, eq } from "drizzle-orm"
+import { assertTokenStillValid, tokenStateInTx } from "./auth"
 import { GatewayApiError } from "./errors"
 import { configEtag, ifNoneMatchMatches } from "./http"
 import type { GatewayDb, GatewayPrincipal } from "./types"
@@ -29,11 +30,11 @@ export async function loadGatewayConfig(
 ): Promise<ConfigResult> {
   return withTenant(db, principal.organizationId, async (tx) => {
     const [gw] = await tx
-      .select({ status: gateway.status, deletedAt: gateway.deletedAt, latest: gateway.configVersionLatest })
+      .select({ tokenState: tokenStateInTx(principal.tokenHash), latest: gateway.configVersionLatest })
       .from(gateway)
       .where(eq(gateway.id, principal.gatewayId))
-    if (gw === undefined) throw new GatewayApiError("unauthorized")
-    if (gw.status !== "active" || gw.deletedAt !== null) throw new GatewayApiError("token_revoked")
+    // O token pode ter deixado de valer depois da autenticação (revogação, reativação, fim da rotação).
+    assertTokenStillValid(gw)
     if (gw.latest < 1) throw new GatewayApiError("not_found", "Nenhuma config publicada para este gateway.")
 
     const etag = configEtag(gw.latest)

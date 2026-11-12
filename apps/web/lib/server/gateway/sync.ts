@@ -54,6 +54,7 @@ import {
   withTenant,
 } from "@engemase/db"
 import { and, asc, eq, gt, gte, inArray, isNull, lte, sql } from "drizzle-orm"
+import { assertTokenStillValid, tokenStateInTx } from "./auth"
 import { GatewayApiError, MAX_ERROR_ISSUES, pathFromDotted } from "./errors"
 import { type GatewayPrincipal, type GatewayTx, type GatewayDb, type RequestMeta } from "./types"
 
@@ -65,9 +66,6 @@ export const INTERACTIVE_SYNC_S = 1
 
 /** Duração máxima do modo interativo a partir da criação do comando (docs/04). */
 export const INTERACTIVE_WINDOW_MS = 5 * 60_000
-
-/** Colunas `integer` do banco (fault_code): o contrato aceita até uint32. */
-const INT4_MAX = 2_147_483_647
 
 /** Estados de comando que ainda aceitam resultado do agente. */
 const OPEN_COMMAND_STATUSES = ["pending", "sent"] as const
@@ -93,11 +91,6 @@ function iso(date: Date): string {
   return date.toISOString()
 }
 
-/** `integer` do Postgres: código de falha acima de 2^31−1 (uint32 do contrato) é gravado como nulo. */
-function toInt4(value: number | undefined): number | null {
-  return value === undefined || value > INT4_MAX ? null : value
-}
-
 // ---------------------------------------------------------------------------
 // Entrada
 // ---------------------------------------------------------------------------
@@ -115,7 +108,7 @@ export async function processSync(
   rejectFutureTimestamps(req, ctx.now)
 
   return withTenant(db, principal.organizationId, async (tx) => {
-    const gw = await lockGateway(tx, principal.gatewayId)
+    const gw = await lockGateway(tx, principal)
     const refs = await loadReferences(tx, principal.gatewayId, req)
     assertQueueReferences(req, refs)
 
@@ -177,12 +170,17 @@ interface LockedGateway {
   readonly syncIntervalS: number
 }
 
-async function lockGateway(tx: GatewayTx, gatewayId: string): Promise<LockedGateway> {
+/**
+ * Trava a linha do gateway e confere, NA MESMA consulta, se o token da requisição ainda vale: entre a
+ * autenticação e esta transação o corpo ainda estava chegando, e o gateway pode ter sido revogado,
+ * reativado (token novo) ou ter saído da janela da rotação. Depois do `FOR UPDATE`, uma reativação
+ * concorrente espera este /sync terminar.
+ */
+async function lockGateway(tx: GatewayTx, principal: GatewayPrincipal): Promise<LockedGateway> {
   const [row] = await tx
     .select({
       unitId: gateway.unitId,
-      status: gateway.status,
-      deletedAt: gateway.deletedAt,
+      tokenState: tokenStateInTx(principal.tokenHash),
       configVersionLatest: gateway.configVersionLatest,
       // Colunas qualificadas à mão: dentro de um campo `sql`, o Drizzle as escreve sem a tabela.
       syncInterval: sql<string | null>`(
@@ -191,11 +189,9 @@ async function lockGateway(tx: GatewayTx, gatewayId: string): Promise<LockedGate
       )`,
     })
     .from(gateway)
-    .where(eq(gateway.id, gatewayId))
+    .where(eq(gateway.id, principal.gatewayId))
     .for("update", { of: gateway })
-  if (row === undefined) throw new GatewayApiError("unauthorized")
-  // Revogado entre a autenticação e esta transação.
-  if (row.status !== "active" || row.deletedAt !== null) throw new GatewayApiError("token_revoked")
+  assertTokenStillValid(row)
   const interval = Number(row.syncInterval)
   return {
     unitId: row.unitId,
@@ -394,7 +390,8 @@ async function saveStateEvents(w: Writer, events: readonly StateEvent[]): Promis
         machineId: e.machine_id,
         state: e.state,
         startedAt: new Date(e.at),
-        faultCode: toInt4(e.fault_code),
+        // uint32 do contrato em `bigint` (0..4294967295, CHECK no banco).
+        faultCode: e.fault_code ?? null,
         source: "edge" as const,
       })),
     )
@@ -489,7 +486,7 @@ async function saveAuditEvents(w: Writer, events: readonly Event[]): Promise<voi
 
 type MinuteValues = Pick<
   typeof productionMinute.$inferSelect,
-  "runS" | "stopS" | "faultS" | "setupS" | "noCommS" | "total" | "reject" | "productCode"
+  "runS" | "stopS" | "faultS" | "setupS" | "noCommS" | "total" | "reject" | "good" | "productCode"
 >
 
 function minuteValues(m: Minute): MinuteValues {
@@ -501,6 +498,8 @@ function minuteValues(m: Minute): MinuteValues {
     noCommS: m.no_comm_s,
     total: m.total,
     reject: m.reject,
+    // Só quando a máquina tem contador de boas (`count.good`); sem ele, boas = total − refugo (docs/07).
+    good: m.good ?? null,
     productCode: m.product ?? null,
   }
 }
@@ -514,6 +513,7 @@ function sameMinute(a: MinuteValues, b: MinuteValues): boolean {
     a.noCommS === b.noCommS &&
     a.total === b.total &&
     a.reject === b.reject &&
+    a.good === b.good &&
     a.productCode === b.productCode
   )
 }
@@ -582,6 +582,7 @@ function pickMinute(v: MinuteValues): Record<string, unknown> {
     no_comm_s: v.noCommS,
     total: v.total,
     reject: v.reject,
+    good: v.good,
     product: v.productCode,
   }
 }
@@ -613,9 +614,10 @@ async function saveLive(w: Writer, live: readonly Live[]): Promise<void> {
         organizationId: w.principal.organizationId,
         state: l.state,
         stateSince: new Date(l.state_since),
-        faultCode: toInt4(l.fault_code),
+        faultCode: l.fault_code ?? null,
         counterTotal: l.counter_total ?? null,
         productCode: l.product ?? null,
+        speed: l.speed ?? null,
         at: new Date(l.at),
         updatedAt: w.now,
       })),
@@ -628,6 +630,7 @@ async function saveLive(w: Writer, live: readonly Live[]): Promise<void> {
         faultCode: sql`excluded.fault_code`,
         counterTotal: sql`excluded.counter_total`,
         productCode: sql`excluded.product_code`,
+        speed: sql`excluded.speed`,
         at: sql`excluded.at`,
         updatedAt: sql`excluded.updated_at`,
       },

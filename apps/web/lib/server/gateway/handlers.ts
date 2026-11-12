@@ -3,7 +3,8 @@
  * Next.js só repassam a requisição; os testes chamam estes handlers direto, com um banco PGlite.
  *
  * Ordem em cada rota: banco disponível (503) → autenticação (401, antes de ler o corpo) → corpo
- * (415/413/400) → lógica. Erros do contrato saem com o corpo padrão e `request_id`; o resto vira
+ * (415/413/400) → lógica, que confere o token de novo dentro da transação (ele pode ter deixado de
+ * valer enquanto o corpo chegava). Erros do contrato saem com o corpo padrão e `request_id`; o resto vira
  * 500 `internal_error` (logado com o mesmo id).
  */
 import { randomUUID } from "node:crypto"

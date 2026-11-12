@@ -21,9 +21,10 @@ import {
   pgTable,
   primaryKey,
   text,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core"
-import { createdAt, oneOf, pk, tstz } from "./_columns"
+import { createdAt, faultCode, faultCodeInRange, oneOf, pk, tstz } from "./_columns"
 import { organizationId } from "./_tenant"
 import { machine } from "./assets"
 import { tag } from "./connectivity"
@@ -45,7 +46,8 @@ export const machineStateEvent = pgTable(
     state: text("state", { enum: MACHINE_STATES }).notNull(),
     startedAt: tstz("started_at").notNull(),
     endedAt: tstz("ended_at"),
-    faultCode: integer("fault_code"),
+    /** Código de falha do CLP (uint32 no contrato). */
+    faultCode: faultCode(),
     reasonId: uuid("reason_id"),
     classifiedBy: uuid("classified_by"),
     classifiedAt: tstz("classified_at"),
@@ -70,12 +72,15 @@ export const machineStateEvent = pgTable(
     check("machine_state_event_state_chk", oneOf(t.state, MACHINE_STATES)),
     check("machine_state_event_source_chk", oneOf(t.source, STATE_EVENT_SOURCES)),
     check("machine_state_event_interval_chk", sql`${t.endedAt} IS NULL OR ${t.endedAt} >= ${t.startedAt}`),
+    check("machine_state_event_fault_code_chk", faultCodeInRange(t.faultCode)),
   ],
 )
 
 /**
  * Agregado por minuto vindo da borda. PK `(machine_id, bucket_start)` → upsert idempotente.
  * Em cada minuto fechado, run_s + stop_s + fault_s + setup_s + no_comm_s = 60 (docs/04).
+ * `good` só vem quando a máquina tem contador de boas (`count.good`); senão fica nulo e as boas
+ * saem de total − refugo (docs/07).
  */
 export const productionMinute = pgTable(
   "production_minute",
@@ -90,6 +95,7 @@ export const productionMinute = pgTable(
     noCommS: integer("no_comm_s").notNull(),
     total: integer("total").notNull(),
     reject: integer("reject").notNull(),
+    good: integer("good"),
     productCode: text("product_code"),
     receivedAt: tstz("received_at").notNull().defaultNow(),
   },
@@ -106,6 +112,7 @@ export const productionMinute = pgTable(
         AND ${t.runS} + ${t.stopS} + ${t.faultS} + ${t.setupS} + ${t.noCommS} = 60`,
     ),
     check("production_minute_counts_chk", sql`${t.total} >= 0 AND ${t.reject} >= 0`),
+    check("production_minute_good_chk", sql`${t.good} IS NULL OR ${t.good} >= 0`),
     check("production_minute_bucket_chk", sql`date_trunc('minute', ${t.bucketStart}) = ${t.bucketStart}`),
   ],
 )
@@ -146,6 +153,9 @@ export const productionRun = pgTable(
 /**
  * Lançamento manual de qualidade. `quantity > 0` move peças de boas para refugo;
  * `quantity < 0` estorna um lançamento anterior (`reverses_id`). Regras completas: L3 do docs/17.
+ *
+ * Garantias no banco: o estorno aponta para um lançamento existente do MESMO cliente (FK composta
+ * `(reverses_id, organization_id)`), tem quantidade negativa e não aponta para si mesmo.
  */
 export const qualityEntry = pgTable(
   "quality_entry",
@@ -167,8 +177,21 @@ export const qualityEntry = pgTable(
       columns: [t.machineId, t.organizationId],
       foreignColumns: [machine.id, machine.organizationId],
     }),
+    unique("quality_entry_id_org_uq").on(t.id, t.organizationId),
+    foreignKey({
+      name: "quality_entry_reverses_fk",
+      columns: [t.reversesId, t.organizationId],
+      foreignColumns: [t.id, t.organizationId],
+    }),
     index("quality_entry_machine_time_idx").on(t.machineId, t.at),
+    index("quality_entry_reverses_idx")
+      .on(t.reversesId)
+      .where(sql`${t.reversesId} IS NOT NULL`),
     check("quality_entry_quantity_chk", sql`${t.quantity} <> 0`),
+    check(
+      "quality_entry_reversal_chk",
+      sql`${t.reversesId} IS NULL OR (${t.quantity} < 0 AND ${t.reversesId} <> ${t.id})`,
+    ),
   ],
 )
 
@@ -180,9 +203,12 @@ export const machineLive = pgTable(
     organizationId: organizationId(),
     state: text("state", { enum: MACHINE_STATES }).notNull(),
     stateSince: tstz("state_since").notNull(),
-    faultCode: integer("fault_code"),
+    /** Código de falha do CLP (uint32 no contrato). */
+    faultCode: faultCode(),
     counterTotal: bigint("counter_total", { mode: "number" }),
     productCode: text("product_code"),
+    /** Velocidade instantânea (papel `speed.actual`), na unidade configurada na tag. */
+    speed: doublePrecision("speed"),
     /** Instante da leitura na borda (ordem de chegada não importa). */
     at: tstz("at").notNull(),
     updatedAt: tstz("updated_at").notNull().defaultNow(),
@@ -194,6 +220,7 @@ export const machineLive = pgTable(
       foreignColumns: [machine.id, machine.organizationId],
     }).onDelete("cascade"),
     check("machine_live_state_chk", oneOf(t.state, MACHINE_STATES)),
+    check("machine_live_fault_code_chk", faultCodeInRange(t.faultCode)),
   ],
 )
 

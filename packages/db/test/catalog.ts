@@ -73,6 +73,23 @@ export async function permissivePolicies(db: Queryable): Promise<PolicyRow[]> {
   return result.rows
 }
 
+/**
+ * Tabelas (schema public) em que `app_user` tem algum SELECT (na tabela ou em coluna) e que NÃO têm
+ * RLS habilitada E forçada. O app só pode ler tabela que filtra por cliente — inclusive as que não têm
+ * `organization_id` (ex.: `organization`, `"user"`).
+ */
+export async function tablesReadableByAppUserWithoutForcedRls(db: Queryable): Promise<string[]> {
+  const result = await db.query<{ name: string }>(`
+    SELECT c.relname AS name
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+      AND pg_catalog.has_any_column_privilege('app_user', c.oid, 'SELECT')
+      AND NOT (c.relrowsecurity AND c.relforcerowsecurity)
+    ORDER BY 1`)
+  return result.rows.map((r) => r.name)
+}
+
 /** `organization_id` que aceita nulo (só a auditoria pode). */
 export async function nullableOrganizationIdColumns(db: Queryable): Promise<string[]> {
   const result = await db.query<{ name: string }>(`
@@ -157,6 +174,33 @@ export interface DefinerFunctionRow {
 export async function securityDefinerFunctions(db: Queryable): Promise<DefinerFunctionRow[]> {
   const result = await db.query<DefinerFunctionRow>(`
     SELECT p.proname AS name, pg_get_userbyid(p.proowner) AS owner, array_to_string(p.proconfig, ',') AS config
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'app' AND p.prosecdef
+    ORDER BY 1`)
+  return result.rows
+}
+
+export interface FunctionExecutorsRow {
+  readonly name: string
+  /** Papéis com EXECUTE, em ordem alfabética ("PUBLIC" se qualquer um puder executar). */
+  readonly executors: string
+}
+
+/**
+ * Quem pode executar cada função SECURITY DEFINER do schema `app`. ACL nula = padrão do Postgres
+ * (dono + PUBLIC), o que aparece como "PUBLIC".
+ */
+export async function securityDefinerFunctionExecutors(db: Queryable): Promise<FunctionExecutorsRow[]> {
+  const result = await db.query<FunctionExecutorsRow>(`
+    SELECT p.proname AS name,
+      CASE WHEN p.proacl IS NULL THEN 'PUBLIC' ELSE (
+        SELECT string_agg(g.grantee_name, ',' ORDER BY g.grantee_name)
+        FROM (
+          SELECT DISTINCT CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS grantee_name
+          FROM aclexplode(p.proacl) a
+          WHERE a.privilege_type = 'EXECUTE'
+        ) g
+      ) END AS executors
     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'app' AND p.prosecdef
     ORDER BY 1`)

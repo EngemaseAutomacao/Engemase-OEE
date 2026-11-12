@@ -8,7 +8,9 @@ import {
   applicationRoles,
   nullableOrganizationIdColumns,
   permissivePolicies,
+  securityDefinerFunctionExecutors,
   securityDefinerFunctions,
+  tablesReadableByAppUserWithoutForcedRls,
   tablesWithOrganizationId,
   tenantForeignKeysWithoutOrganization,
   tenantTablesWithoutForcedRls,
@@ -60,6 +62,26 @@ describe("catálogo do banco", () => {
     })
   })
 
+  it("toda tabela que o app_user pode ler tem RLS habilitada E forçada (inclusive organization e user)", async () => {
+    expect(await tablesReadableByAppUserWithoutForcedRls(t.client)).toEqual([])
+    // Sanidade: as tabelas de identidade que o app lê estão no alcance da verificação.
+    const readable = await t.client.query<{ name: string }>(`
+      SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relname IN ('organization', 'user')
+        AND has_any_column_privilege('app_user', c.oid, 'SELECT')
+      ORDER BY 1`)
+    expect(readable.rows.map((r) => r.name)).toEqual(["organization", "user"])
+  })
+
+  it("o teste pega uma tabela sem organization_id legível pelo app e sem RLS", async () => {
+    await t.client.transaction(async (tx) => {
+      await tx.exec("CREATE TABLE public.rogue_lookup (id uuid PRIMARY KEY, label text)")
+      await tx.exec("GRANT SELECT (id) ON public.rogue_lookup TO app_user")
+      expect(await tablesReadableByAppUserWithoutForcedRls(tx)).toEqual(["rogue_lookup"])
+      await tx.rollback()
+    })
+  })
+
   it("organization_id é NOT NULL em todas as tabelas de cliente, exceto a auditoria", async () => {
     expect(await nullableOrganizationIdColumns(t.client)).toEqual([...NULLABLE_TENANT_TABLES])
   })
@@ -95,9 +117,15 @@ describe("catálogo do banco", () => {
     const policies = await permissivePolicies(t.client)
     const unexpected = policies.filter((p) => {
       if (p.policy === "tenant_access") return !(p.roles === "app_user" && TENANT_TABLE_NAMES.includes(p.table))
-      if (p.policy === "auth_service_all") return !(p.roles === "auth_service" && ["member", "user"].includes(p.table))
+      if (p.policy === "auth_service_all") {
+        return !(p.roles === "auth_service" && ["member", "organization", "user"].includes(p.table))
+      }
       if (p.policy === "user_member_of_tenant")
         return !(p.roles === "app_user" && p.table === "user" && p.cmd === "SELECT")
+      if (p.policy === "organization_of_tenant")
+        return !(p.roles === "app_user" && p.table === "organization" && p.cmd === "SELECT")
+      if (p.policy === "lookup_by_slug")
+        return !(p.roles === "app_lookup" && p.table === "organization" && p.cmd === "SELECT")
       if (p.policy === "lookup_by_token_hash") {
         return !(
           p.roles === "app_lookup" &&
@@ -118,13 +146,27 @@ describe("catálogo do banco", () => {
     expect(functions.map((f) => f.name)).toEqual([
       "resolve_account_token",
       "resolve_gateway_enrollment",
+      "resolve_gateway_enrollment_state",
       "resolve_gateway_token",
+      "resolve_gateway_token_state",
+      "resolve_org_slug",
       "resolve_terminal_token",
     ])
     for (const f of functions) {
       expect(f.owner).toBe("app_lookup")
       expect(f.config).toContain("search_path=pg_catalog, pg_temp")
     }
+  })
+
+  it("as funções SECURITY DEFINER só podem ser executadas pelo app_user (nunca PUBLIC)", async () => {
+    const executors = await securityDefinerFunctionExecutors(t.client)
+    expect(executors.length).toBe(7)
+    for (const f of executors) expect(f.executors, f.name).toBe("app_lookup,app_user")
+    // auth_service não resolve token nem slug (não precisa: lê organization pela própria política).
+    const authCanExecute = await t.client.query<{ n: number }>(`
+      SELECT count(*)::int AS n FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'app' AND p.prosecdef AND has_function_privilege('auth_service', p.oid, 'EXECUTE')`)
+    expect(authCanExecute.rows[0]?.n).toBe(0)
   })
 
   it("app_user não tem nenhum privilégio nas tabelas internas do Better Auth", async () => {

@@ -16,8 +16,9 @@
  * A autorização é nossa (docs/15, seção 5): `member.role` do Better Auth NÃO é usado para
  * autorizar; o papel e o escopo valem em `member_access`/`member_unit`.
  */
-import { boolean, pgTable, text, unique, uuid } from "drizzle-orm/pg-core"
-import { createdAt, pk, tstz, updatedAt } from "./_columns"
+import { boolean, check, pgTable, text, unique, uuid } from "drizzle-orm/pg-core"
+import { createdAt, matchesPattern, pk, tstz, updatedAt } from "./_columns"
+import { ORG_SLUG_PATTERN } from "./enums"
 
 export const user = pgTable("user", {
   id: pk(),
@@ -81,15 +82,22 @@ export const verification = pgTable("verification", {
 })
 
 /** Cliente (tenant). O id desta tabela é o `organization_id` de todas as tabelas de cliente. */
-export const organization = pgTable("organization", {
-  id: pk(),
-  name: text("name").notNull(),
-  /** Identificador da URL; nunca reaproveitado (histórico em `client_account.slug_history`). */
-  slug: text("slug").notNull().unique("organization_slug_uq"),
-  logo: text("logo"),
-  metadata: text("metadata"),
-  createdAt: createdAt(),
-})
+export const organization = pgTable(
+  "organization",
+  {
+    id: pk(),
+    name: text("name").notNull(),
+    /**
+     * Identificador da URL; nunca reaproveitado (histórico em `client_account.slug_history`).
+     * Formato do contrato (`ORG_SLUG_PATTERN`): o /enroll devolve o slug ao gateway como `org`.
+     */
+    slug: text("slug").notNull().unique("organization_slug_uq"),
+    logo: text("logo"),
+    metadata: text("metadata"),
+    createdAt: createdAt(),
+  },
+  (t) => [check("organization_slug_chk", matchesPattern(t.slug, ORG_SLUG_PATTERN))],
+)
 
 export const member = pgTable(
   "member",

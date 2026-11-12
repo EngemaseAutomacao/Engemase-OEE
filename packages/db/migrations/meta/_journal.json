@@ -15,6 +15,27 @@
       "when": 1794437774556,
       "tag": "0001_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794496007010,
+      "tag": "0002_contract_columns_quality_reversal",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794496008180,
+      "tag": "0003_organization_rls_state_lookups",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794497916021,
+      "tag": "0004_organization_slug_check",
+      "breakpoints": true
     }
   ]
 }

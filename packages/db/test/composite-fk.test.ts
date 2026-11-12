@@ -3,7 +3,8 @@
  * é impossível, NO BANCO, ligar o gateway de A a uma máquina de B — mesmo para quem ignora a RLS
  * (o dono do banco) e mesmo conhecendo os ids.
  */
-import { afterAll, beforeAll, describe, it } from "vitest"
+import { randomUUID } from "node:crypto"
+import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { type SeededTenant, seedTenant } from "./fixtures"
 import { asTenant, createTestDatabase, expectDbError, type TestDatabase } from "./helpers"
 
@@ -216,5 +217,68 @@ describe("FKs compostas entre tabelas de cliente", () => {
       ),
       FK_ERROR,
     )
+  })
+
+  describe("estorno de qualidade (quality_entry.reverses_id)", () => {
+    const reverseQuality =
+      "INSERT INTO quality_entry (organization_id, machine_id, at, quantity, reason, reverses_id) VALUES ($1, $2, now(), $3, 'Estorno', $4)"
+    const REVERSES_FK = /quality_entry_reverses_fk/
+
+    it("o app no cliente A não estorna lançamento do cliente B", async () => {
+      await expectDbError(
+        asTenant(t.client, a.organizationId, (tx) =>
+          tx.query(reverseQuality, [a.organizationId, a.machineId, -3, b.qualityEntryId]),
+        ),
+        REVERSES_FK,
+      )
+      // Nem o dono do banco (sem RLS), declarando A ou B.
+      await expectDbError(asOwner(reverseQuality, [a.organizationId, a.machineId, -3, b.qualityEntryId]), REVERSES_FK)
+      await expectDbError(asOwner(reverseQuality, [b.organizationId, b.machineId, -3, a.qualityEntryId]), REVERSES_FK)
+    })
+
+    it("estorno de lançamento inexistente é recusado", async () => {
+      await expectDbError(
+        asTenant(t.client, a.organizationId, (tx) =>
+          tx.query(reverseQuality, [a.organizationId, a.machineId, -3, randomUUID()]),
+        ),
+        REVERSES_FK,
+      )
+    })
+
+    it("estorno tem quantidade negativa e não aponta para si mesmo", async () => {
+      await expectDbError(
+        asTenant(t.client, a.organizationId, (tx) =>
+          tx.query(reverseQuality, [a.organizationId, a.machineId, 3, a.qualityEntryId]),
+        ),
+        /quality_entry_reversal_chk/,
+      )
+      const id = randomUUID()
+      await expectDbError(
+        asOwner(
+          "INSERT INTO quality_entry (id, organization_id, machine_id, at, quantity, reverses_id) VALUES ($1, $2, $3, now(), -1, $1)",
+          [id, a.organizationId, a.machineId],
+        ),
+        /quality_entry_reversal_chk/,
+      )
+    })
+
+    it("o estorno do próprio cliente funciona (e lançamento comum segue sem reverses_id)", async () => {
+      const rows = await asTenant(t.client, a.organizationId, async (tx) => {
+        await tx.query(reverseQuality, [a.organizationId, a.machineId, -3, a.qualityEntryId])
+        await tx.query(
+          "INSERT INTO quality_entry (organization_id, machine_id, at, quantity, reason) VALUES ($1, $2, now(), 2, 'Bolha')",
+          [a.organizationId, a.machineId],
+        )
+        const r = await tx.query<{ quantity: number; reverses_id: string | null }>(
+          "SELECT quantity, reverses_id FROM quality_entry ORDER BY created_at, quantity",
+        )
+        return r.rows
+      })
+      expect(rows).toEqual([
+        { quantity: 3, reverses_id: null },
+        { quantity: -3, reverses_id: a.qualityEntryId },
+        { quantity: 2, reverses_id: null },
+      ])
+    })
   })
 })

@@ -21,7 +21,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core"
-import { createdAt, deletedAt, oneOf, pk, tstz, updatedAt } from "./_columns"
+import { createdAt, deletedAt, faultCode, faultCodeInRange, oneOf, pk, tstz, updatedAt } from "./_columns"
 import { organizationId } from "./_tenant"
 import { line, machine, unit } from "./assets"
 import { REASON_CATEGORIES } from "./enums"
@@ -212,7 +212,7 @@ export const faultCodeMap = pgTable(
     machineId: uuid("machine_id"),
     /** Modelo de máquina (F2, `machine_template`); ainda sem FK. */
     templateId: uuid("template_id"),
-    faultCode: integer("fault_code").notNull(),
+    faultCode: faultCode().notNull(),
     reasonId: uuid("reason_id").notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -231,5 +231,6 @@ export const faultCodeMap = pgTable(
     unique("fault_code_map_machine_code_uq").on(t.machineId, t.faultCode),
     unique("fault_code_map_template_code_uq").on(t.templateId, t.faultCode),
     check("fault_code_map_target_chk", sql`(${t.machineId} IS NULL) <> (${t.templateId} IS NULL)`),
+    check("fault_code_map_fault_code_chk", faultCodeInRange(t.faultCode)),
   ],
 )

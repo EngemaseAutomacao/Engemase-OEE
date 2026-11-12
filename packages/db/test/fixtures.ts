@@ -29,6 +29,7 @@ export interface SeededTenant {
   readonly terminalId: string
   readonly alertRuleId: string
   readonly remoteSessionId: string
+  readonly qualityEntryId: string
   /** Tokens em claro (o banco só guarda o hash). */
   readonly gatewayToken: string
   readonly enrollmentCode: string
@@ -272,6 +273,7 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
     noCommS: 0,
     total: 14,
     reject: 1,
+    good: 13,
     productCode: "PRD-001",
   })
   await db.insert(s.productionRun).values({
@@ -282,15 +284,19 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
     startedAt: new Date(now - 4 * HOUR),
     source: "plc",
   })
-  await db
-    .insert(s.qualityEntry)
-    .values({ organizationId, machineId: machineRow.id, at: minute, quantity: 3, reason: "Rebarba" })
+  const quality = first(
+    await db
+      .insert(s.qualityEntry)
+      .values({ organizationId, machineId: machineRow.id, at: minute, quantity: 3, reason: "Rebarba" })
+      .returning(),
+  )
   await db.insert(s.machineLive).values({
     organizationId,
     machineId: machineRow.id,
     state: "RUNNING",
     stateSince: minute,
     counterTotal: 1_048_213,
+    speed: 598.5,
     at: new Date(now),
   })
   await db.insert(s.tagSample).values({ organizationId, tagId: tagRow.id, at: minute, value: 1 })
@@ -466,6 +472,7 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
     terminalId: term.id,
     alertRuleId: rule.id,
     remoteSessionId: session.id,
+    qualityEntryId: quality.id,
     gatewayToken,
     enrollmentCode,
     terminalToken,

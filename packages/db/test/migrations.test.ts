@@ -31,7 +31,13 @@ describe("migrações", () => {
 
     const applied = await t.client.query<{ n: number }>("SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations")
     expect(applied.rows[0]?.n).toBe(journal.entries.length)
-    expect(journal.entries.map((e) => e.tag)).toEqual(["0000_init", "0001_rls"])
+    expect(journal.entries.map((e) => e.tag)).toEqual([
+      "0000_init",
+      "0001_rls",
+      "0002_contract_columns_quality_reversal",
+      "0003_organization_rls_state_lookups",
+      "0004_organization_slug_check",
+    ])
   })
 
   it("são idempotentes: rodar o migrator de novo não muda nada", async () => {

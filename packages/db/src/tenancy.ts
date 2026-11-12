@@ -7,6 +7,10 @@
  * a RLS devolve zero linhas e bloqueia escritas ("fail-closed").
  * Exige driver com transação interativa (`pg` com pool ou driver serverless da Neon via WebSocket);
  * o driver HTTP da Neon não serve.
+ *
+ * Limite: a RLS protege contra bug do app, não contra SQL arbitrário rodando como `app_user`.
+ * `app.org_id` é um parâmetro de sessão comum (qualquer papel o troca com `set_config`), e a recusa de
+ * trocar de cliente só vale para quem chama `app.set_tenant`. Todo SQL do app vai parametrizado.
  */
 import { getTableColumns, getTableName, is, type SQL, sql } from "drizzle-orm"
 import { PgTable } from "drizzle-orm/pg-core"
@@ -18,7 +22,7 @@ export const DB_ROLES = {
   app: "app_user",
   /** Papel do Better Auth: só as tabelas de identidade (user, session, account, verification, organization, member). */
   auth: "auth_service",
-  /** Dono das funções de busca por hash de token (SECURITY DEFINER); ninguém usa diretamente. */
+  /** Dono das funções de busca `app.resolve_*` (hash de token, slug; SECURITY DEFINER); ninguém usa diretamente. */
   lookup: "app_lookup",
 } as const
 export type DbRole = (typeof DB_ROLES)[keyof typeof DB_ROLES]

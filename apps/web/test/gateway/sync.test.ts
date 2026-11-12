@@ -1,7 +1,8 @@
 /**
  * POST /api/gateway/v1/sync com as fixtures do contrato, num banco PGlite com as migrações e a RLS
  * de @engemase/db: gravação de cada tipo de dado, ack só no fim, idempotência (mesmo lote duas vezes),
- * comandos, modo interativo e turnos consolidados marcados como sujos.
+ * comandos, modo interativo e turnos consolidados marcados como sujos. Também as colunas que espelham
+ * o contrato: `fault_code` uint32 inteiro em `bigint`, `minutes[].good` e `live[].speed`.
  */
 import {
   type Command,
@@ -137,22 +138,24 @@ describe("POST /sync", () => {
       { id: "01a1cab3-2bea-7244-bb03-702b326efb32", machine_id: MCH_INJ, state: "FAULT", fault_code: 47, ended_at: null },
     ])
 
+    // Sem contador de boas no lote: `good` fica nulo (boas = total − refugo).
     const minute = await rows<Record<string, unknown>>(
       t,
-      `SELECT run_s, stop_s, fault_s, setup_s, no_comm_s, total, reject, product_code FROM production_minute
+      `SELECT run_s, stop_s, fault_s, setup_s, no_comm_s, total, reject, good, product_code FROM production_minute
        WHERE machine_id = $1 AND bucket_start = '2026-11-11T13:01:00Z'`,
       [MCH_INJ],
     )
     expect(minute).toEqual([
-      { run_s: 42, stop_s: 0, fault_s: 18, setup_s: 0, no_comm_s: 0, total: 14, reject: 1, product_code: "7" },
+      { run_s: 42, stop_s: 0, fault_s: 18, setup_s: 0, no_comm_s: 0, total: 14, reject: 1, good: null, product_code: "7" },
     ])
 
-    const live = await rows<{ state: string; fault_code: number | null; counter_total: number; product_code: string | null }>(
+    const live = await rows<{ state: string; fault_code: number | null; counter_total: number; product_code: string | null; speed: number | null }>(
       t,
-      "SELECT state, fault_code, counter_total::int AS counter_total, product_code FROM machine_live WHERE machine_id = $1",
+      "SELECT state, fault_code, counter_total::int AS counter_total, product_code, speed FROM machine_live WHERE machine_id = $1",
       [MCH_INJ],
     )
-    expect(live).toEqual([{ state: "FAULT", fault_code: 47, counter_total: 1048213, product_code: "7" }])
+    // `speed: 0` (máquina parada em falha) é gravado como 0, não como nulo.
+    expect(live).toEqual([{ state: "FAULT", fault_code: 47, counter_total: 1048213, product_code: "7", speed: 0 }])
 
     const run = await rows<{ id: string; product_code: string; source: string; ended_at: Date | null }>(
       t,
@@ -312,25 +315,41 @@ describe("POST /sync", () => {
     const changed: SyncRequest = {
       batch: { seq_from: 18300, seq_to: 18300, sent_at: "2026-11-11T13:02:06.000Z" },
       agent: batch.agent,
-      minutes: [{ ...batch.minutes![3]!, seq: 18300, total: 15, reject: 2 }],
+      minutes: [{ ...batch.minutes![3]!, seq: 18300, total: 15, reject: 2, good: 13 }],
     }
     const res = await syncOk(client, changed)
     expect(res.ack_seq).toBe(18300)
 
-    const [minute] = await rows<{ total: number; reject: number }>(
+    const [minute] = await rows<{ total: number; reject: number; good: number | null }>(
       t,
-      "SELECT total, reject FROM production_minute WHERE machine_id = $1 AND bucket_start = '2026-11-11T13:01:00Z'",
+      "SELECT total, reject, good FROM production_minute WHERE machine_id = $1 AND bucket_start = '2026-11-11T13:01:00Z'",
       [id(MCH_INJ)],
     )
-    expect(minute).toEqual({ total: 15, reject: 2 })
+    expect(minute).toEqual({ total: 15, reject: 2, good: 13 })
     const audit = await rows<{ before: Record<string, unknown>; after: Record<string, unknown> }>(
       t,
       "SELECT before, after FROM audit_log WHERE organization_id = $1 AND action = 'production_minute.rewritten'",
       [client.organizationId],
     )
     expect(audit).toHaveLength(1)
-    expect(audit[0]?.before).toMatchObject({ t: "2026-11-11T13:01:00Z", total: 14, reject: 1 })
-    expect(audit[0]?.after).toMatchObject({ t: "2026-11-11T13:01:00Z", total: 15, reject: 2 })
+    expect(audit[0]?.before).toMatchObject({ t: "2026-11-11T13:01:00Z", total: 14, reject: 1, good: null })
+    expect(audit[0]?.after).toMatchObject({ t: "2026-11-11T13:01:00Z", total: 15, reject: 2, good: 13 })
+
+    // Só o `good` mudou: também é reescrita (com auditoria); reenviar igual não muda nada.
+    const goodOnly: SyncRequest = {
+      ...changed,
+      batch: { ...changed.batch, seq_from: 18301, seq_to: 18301 },
+      minutes: [{ ...changed.minutes![0]!, seq: 18301, good: 12 }],
+    }
+    await syncOk(client, goodOnly)
+    await syncOk(client, goodOnly)
+    const [after] = await rows<{ good: number }>(
+      t,
+      "SELECT good FROM production_minute WHERE machine_id = $1 AND bucket_start = '2026-11-11T13:01:00Z'",
+      [id(MCH_INJ)],
+    )
+    expect(after?.good).toBe(12)
+    expect(await count(t, "SELECT 1 FROM audit_log WHERE organization_id = $1 AND action = 'production_minute.rewritten'", [client.organizationId])).toBe(2)
   })
 
   it("live só é gravado se for mais novo que o atual", async () => {
@@ -342,22 +361,64 @@ describe("POST /sync", () => {
     await syncOk(client, {
       batch: { sent_at: "2026-11-11T13:02:10.000Z" },
       agent: batch.agent,
-      live: [{ ...older, at: "2026-11-11T13:01:00.000Z", state: "RUNNING", state_since: "2026-11-11T13:00:00.000Z" }],
+      live: [{ ...older, at: "2026-11-11T13:01:00.000Z", state: "RUNNING", state_since: "2026-11-11T13:00:00.000Z", speed: 99 }],
     })
-    const [live] = await rows<{ state: string }>(t, "SELECT state FROM machine_live WHERE machine_id = $1", [id(MCH_INJ)])
-    expect(live?.state).toBe("FAULT")
+    const [live] = await rows<{ state: string; speed: number | null }>(t, "SELECT state, speed FROM machine_live WHERE machine_id = $1", [id(MCH_INJ)])
+    expect(live).toEqual({ state: "FAULT", speed: 0 })
 
+    await syncOk(client, {
+      batch: { sent_at: "2026-11-11T13:02:10.000Z" },
+      agent: batch.agent,
+      live: [{ machine_id: older.machine_id, at: "2026-11-11T13:02:08.000Z", state: "RUNNING", state_since: "2026-11-11T13:02:08.000Z", speed: 37.25 }],
+    })
+    const [running] = await rows<{ state: string; fault_code: number | null; speed: number | null }>(
+      t,
+      "SELECT state, fault_code, speed FROM machine_live WHERE machine_id = $1",
+      [id(MCH_INJ)],
+    )
+    expect(running).toEqual({ state: "RUNNING", fault_code: null, speed: 37.25 })
+
+    // Foto mais nova sem velocidade (tag de velocidade sem leitura): a velocidade antiga não fica.
     await syncOk(client, {
       batch: { sent_at: "2026-11-11T13:02:10.000Z" },
       agent: batch.agent,
       live: [{ machine_id: older.machine_id, at: "2026-11-11T13:02:09.000Z", state: "RUNNING", state_since: "2026-11-11T13:02:08.000Z" }],
     })
-    const [after] = await rows<{ state: string; fault_code: number | null }>(
+    const [after] = await rows<{ state: string; fault_code: number | null; speed: number | null }>(
       t,
-      "SELECT state, fault_code FROM machine_live WHERE machine_id = $1",
+      "SELECT state, fault_code, speed FROM machine_live WHERE machine_id = $1",
       [id(MCH_INJ)],
     )
-    expect(after).toEqual({ state: "RUNNING", fault_code: null })
+    expect(after).toEqual({ state: "RUNNING", fault_code: null, speed: null })
+  })
+
+  it("fault_code uint32 inteiro (acima de 2^31−1, até 4294967295) gravado em bigint no evento e no live", async () => {
+    const { client, id } = await freshClient()
+    const machine = id(MCH_INJ)
+    const other = id(MCH_SOP1)
+    const at = "2026-11-11T13:00:00.000Z"
+    await syncOk(client, {
+      batch: { seq_from: 1, seq_to: 2, sent_at: "2026-11-11T13:00:01.000Z" },
+      agent: HEALTH_ONLY.agent,
+      events: [
+        { id: "01a1cab3-0000-7000-8000-0000000000f1", seq: 1, type: "state", machine_id: machine, at, state: "FAULT", fault_code: 4_294_967_295 },
+        { id: "01a1cab3-0000-7000-8000-0000000000f2", seq: 2, type: "state", machine_id: other, at, state: "FAULT", fault_code: 2_147_483_648 },
+      ],
+      live: [
+        { machine_id: machine, at: "2026-11-11T13:00:01.000Z", state: "FAULT", state_since: at, fault_code: 4_294_967_295 },
+        { machine_id: other, at: "2026-11-11T13:00:01.000Z", state: "FAULT", state_since: at, fault_code: 2_147_483_648 },
+      ],
+    })
+    const codes = await rows<{ machine_id: string; event: string; live: string; type: string }>(
+      t,
+      `SELECT e.machine_id, e.fault_code::text AS event, l.fault_code::text AS live, pg_typeof(e.fault_code)::text AS type
+       FROM machine_state_event e JOIN machine_live l USING (machine_id) WHERE e.organization_id = $1 ORDER BY e.fault_code DESC`,
+      [client.organizationId],
+    )
+    expect(codes).toEqual([
+      { machine_id: machine, event: "4294967295", live: "4294967295", type: "bigint" },
+      { machine_id: other, event: "2147483648", live: "2147483648", type: "bigint" },
+    ])
   })
 
   it("amostras com fila própria: ack_samples_seq separado do ack_seq", async () => {
@@ -366,6 +427,10 @@ describe("POST /sync", () => {
     expect(res.ack_seq).toBe(502)
     expect(res.ack_samples_seq).toBe(9003)
     expect(await count(t, "SELECT 1 FROM tag_sample WHERE organization_id = $1", [client.organizationId])).toBe(3)
+    // O minuto do lote traz o contador de boas (`good`), gravado na coluna própria.
+    expect(await rows(t, "SELECT total, reject, good FROM production_minute WHERE organization_id = $1", [client.organizationId])).toEqual([
+      { total: 9, reject: 0, good: 9 },
+    ])
   })
 
   it("sync só de saúde: ack 0 e nada além da foto de saúde", async () => {

@@ -8,7 +8,8 @@
  * - "enums" como `text` + CHECK (evoluem com expand → migrate → contract, sem `ALTER TYPE`).
  */
 import { type SQL, sql } from "drizzle-orm"
-import { type AnyPgColumn, timestamp, uuid } from "drizzle-orm/pg-core"
+import { type AnyPgColumn, bigint, timestamp, uuid } from "drizzle-orm/pg-core"
+import { FAULT_CODE_MAX, FAULT_CODE_MIN } from "./enums"
 
 /** `timestamptz` com retorno em `Date`. */
 export function tstz(name: string) {
@@ -49,7 +50,22 @@ export function oneOf(column: AnyPgColumn | SQL, values: readonly string[]): SQL
   return sql`${column} IN (${sql.raw(values.map(quoteLiteral).join(", "))})`
 }
 
+/** `coluna ~ '<padrão>'` (expressão regular POSIX/ARE do Postgres; o padrão é fixo, do schema). */
+export function matchesPattern(column: AnyPgColumn, pattern: string): SQL {
+  return sql`${column} ~ ${sql.raw(quoteLiteral(pattern))}`
+}
+
 /** Hash SHA-256 em hexadecimal minúsculo (tokens e códigos guardados só como hash). */
 export function isSha256Hex(column: AnyPgColumn): SQL {
   return sql`${column} ~ '^[0-9a-f]{64}$'`
+}
+
+/** Código de falha do CLP (uint32 no contrato): `bigint`, lido como `number` (cabe com folga). */
+export function faultCode(name = "fault_code") {
+  return bigint(name, { mode: "number" })
+}
+
+/** `coluna BETWEEN 0 AND 4294967295` (faixa uint32 do contrato). Nulo passa (CHECK com NULL não falha). */
+export function faultCodeInRange(column: AnyPgColumn): SQL {
+  return sql`${column} BETWEEN ${sql.raw(String(FAULT_CODE_MIN))} AND ${sql.raw(String(FAULT_CODE_MAX))}`
 }

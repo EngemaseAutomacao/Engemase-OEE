@@ -176,6 +176,25 @@ describe("RLS por cliente", () => {
     ).rejects.toThrow(/outro cliente/)
   })
 
+  it("limite documentado: SQL arbitrário como app_user troca app.org_id sem passar por app.set_tenant", async () => {
+    // app.org_id é um parâmetro de sessão comum: a RLS protege contra bug do app (WHERE ou withTenant
+    // esquecidos), NÃO contra SQL injetado rodando como app_user. Se um dia isto passar a ser barrado,
+    // atualize junto o README ("Isolamento por cliente"), o docs/06 e o COMMENT de app.set_tenant (0004).
+    const visible = await asTenant(t.client, a.organizationId, async (tx) => {
+      await tx.query("SELECT set_config('app.org_id', $1, true)", [b.organizationId])
+      return (await tx.query<{ slug: string }>("SELECT slug FROM organization")).rows
+    })
+    expect(visible).toEqual([{ slug: b.slug }])
+    const comments = await t.client.query<{ fn: string; comment: string | null }>(
+      `SELECT p.oid::regprocedure::text AS fn, obj_description(p.oid, 'pg_proc') AS comment
+       FROM pg_proc p WHERE p.oid IN ('app.set_tenant(uuid)'::regprocedure, 'app.current_org_id()'::regprocedure) ORDER BY 1`,
+    )
+    expect(comments.rows).toEqual([
+      { fn: "app.current_org_id()", comment: expect.stringMatching(/SQL arbitrário/) },
+      { fn: "app.set_tenant(uuid)", comment: expect.stringMatching(/LIMITE: app\.org_id é um parâmetro de sessão comum/) },
+    ])
+  })
+
   it("app.org_id inválido derruba a consulta em vez de abrir os dados", async () => {
     await expect(
       asTenant(t.client, null, async (tx) => {
@@ -225,9 +244,50 @@ describe("RLS por cliente", () => {
     expect(await asTenant(t.client, null, (tx) => count(tx, 'SELECT 1 FROM "user"'))).toBe(0)
   })
 
+  it("organization: com app.org_id = A o app só enxerga o cliente A", async () => {
+    const visible = await asTenant(t.client, a.organizationId, async (tx) => {
+      const r = await tx.query<{ id: string; slug: string }>("SELECT id, slug FROM organization ORDER BY slug")
+      return r.rows
+    })
+    expect(visible).toEqual([{ id: a.organizationId, slug: a.slug }])
+    // Nem pedindo B pelo id ou pelo slug.
+    await asTenant(t.client, a.organizationId, async (tx) => {
+      expect(await count(tx, "SELECT 1 FROM organization WHERE id = $1", [b.organizationId])).toBe(0)
+      expect(await count(tx, "SELECT 1 FROM organization WHERE slug = $1", [b.slug])).toBe(0)
+    })
+    // O dono (sem RLS) vê os dois: a política é que esconde.
+    expect(await count(t.client, "SELECT 1 FROM organization")).toBe(2)
+  })
+
+  it("organization: sem cliente definido o app não enxerga nenhum cliente (fail-closed)", async () => {
+    expect(await asTenant(t.client, null, (tx) => count(tx, "SELECT 1 FROM organization"))).toBe(0)
+  })
+
+  it("organization: o app não grava nem no próprio cliente (só o Better Auth/plataforma)", async () => {
+    const denied = /permission denied/
+    await expect(
+      asTenant(t.client, a.organizationId, (tx) =>
+        tx.query("UPDATE organization SET name = 'X' WHERE id = $1", [a.organizationId]),
+      ),
+    ).rejects.toThrow(denied)
+    await expect(
+      asTenant(t.client, a.organizationId, (tx) => tx.query("INSERT INTO organization (name, slug) VALUES ('X', 'x')")),
+    ).rejects.toThrow(denied)
+  })
+
   it("auth_service (Better Auth) vê vínculos de todos os clientes, mas nada de produção", async () => {
     const members = await asRole(t.client, "auth_service", null, (tx) => count(tx, "SELECT 1 FROM member"))
     expect(members).toBe(2)
+    // Clientes: lista todos e cria (a política dele em organization não depende de app.org_id).
+    expect(await asRole(t.client, "auth_service", null, (tx) => count(tx, "SELECT 1 FROM organization"))).toBe(2)
+    const created = await asRole(t.client, "auth_service", null, async (tx) => {
+      const r = await tx.query<{ slug: string }>(
+        "INSERT INTO organization (name, slug) VALUES ('Cliente gama', 'gama') RETURNING slug",
+      )
+      await tx.query("UPDATE organization SET name = 'Cliente Gama' WHERE slug = 'gama'")
+      return r.rows
+    })
+    expect(created).toEqual([{ slug: "gama" }])
     await expect(asRole(t.client, "auth_service", null, (tx) => tx.query("SELECT 1 FROM machine"))).rejects.toThrow(
       /permission denied/,
     )

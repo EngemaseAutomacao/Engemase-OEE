@@ -187,6 +187,7 @@ erDiagram
 
 - Modelo **"banco compartilhado, schema compartilhado"**, com `organization_id` em **todas** as tabelas de cliente, **inclusive as séries temporais** (desnormalizado a partir da máquina).
 - **RLS já no MVP, no nível do cliente:** `FORCE ROW LEVEL SECURITY` e política restritiva por `current_setting('app.org_id')`, definido com `set_config(..., true)` no início de cada transação; papel de banco da aplicação sem `BYPASSRLS`. Exige driver com transação interativa (`pg` com pool ou driver serverless via WebSocket).
+  - **Limite:** a RLS protege contra **bug do app** (consulta sem filtro, contexto de cliente esquecido), **não contra SQL arbitrário rodando com o papel da aplicação** (injeção de SQL): `app.org_id` é um parâmetro de sessão comum, que qualquer papel troca com `set_config`. Por isso todo SQL do app é parametrizado (Drizzle). Isolamento mais forte, se for preciso: cliente amarrado a um valor que o papel da aplicação não forja (assinado pelo servidor) ou papéis por cliente. Detalhes no README de `packages/db`.
 - **Chaves estrangeiras compostas** `(id, organization_id)` entre tabelas filhas e vínculo explícito `gateway_machine`.
 - O escopo por unidade é aplicado na camada de acesso a dados (RLS por unidade avaliada depois).
 - Clientes grandes que exijam isolamento físico podem ganhar um **projeto Neon dedicado** no futuro, com o mesmo schema.

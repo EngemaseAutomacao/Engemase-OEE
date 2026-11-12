@@ -19,6 +19,12 @@ export type GatewayTx = Parameters<Parameters<GatewayDb["transaction"]>[0]>[0]
 export interface GatewayPrincipal {
   readonly gatewayId: string
   readonly organizationId: string
+  /**
+   * SHA-256 do token que autenticou a requisição. O /sync e o /config conferem de novo, dentro da
+   * transação, se ele ainda vale (`assertTokenStillValid`): uma reativação ou o fim da janela da
+   * rotação podem acontecer enquanto o corpo ainda chega.
+   */
+  readonly tokenHash: string
 }
 
 /** Dados da requisição usados na auditoria. */
