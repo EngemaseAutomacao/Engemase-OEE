@@ -619,11 +619,11 @@ Regras:
 - **Módulo SuperCAP UPS LTC3350** da Seeed: 4 supercapacitores de 7 F/2,7 V em série, com sinal de falha de energia ativo em nível baixo. Uma fonte cita o **GPIO25** com o overlay `gpio-shutdown` (**a confirmar**).
 - **Autonomia estimada:** ~10–15 s com 5 W. **Medir em bancada.** Serve para desligar com segurança, não para continuar operando.
 - **Comportamento do agente na falha de energia:**
-  1. Grava o evento `power_fail` na outbox, com fsync.
+  1. Grava o evento `power_loss` na outbox, com fsync.
   2. Para o polling.
   3. Tenta um `/sync` imediato, que só funciona se o switch IT ainda estiver ligado.
   4. Executa `systemctl poweroff`.
-- **Bônus de OEE:** a plataforma pode **sugerir "falta de energia"** como motivo das paradas que coincidem com `power_fail`.
+- **Bônus de OEE:** a plataforma pode **sugerir "falta de energia"** como motivo das paradas que coincidem com `power_loss`.
 - **Risco de "desligado sem religar":** se a energia voltar antes de o supercapacitor esgotar, o CM4 pode ficar parado depois do `poweroff`. Mitigação a validar: armar o **watchdog via RTC do R1000** (configurável de 1 a 255 s, segundo o manual) antes de desligar, para forçar o reset.
   - Isso **corrige o [03](03-gateway.md)**, que diz que o R1000 só tem o watchdog interno.
   - Testar em bancada: queda de 2 s, retorno durante o desligamento e quedas repetidas.
@@ -880,7 +880,7 @@ Cada máquina pertence a **um** gateway (vínculo `gateway_machine`).
 
 | # | Teste | Como | Critério de aprovação |
 |---|---|---|---|
-| T1 | Alimentação | Medir na entrada; cortar a energia do circuito por 10 s e religar | Volta sozinho em menos de 2 min; com supercapacitor, evento `power_fail` registrado |
+| T1 | Alimentação | Medir na entrada; cortar a energia do circuito por 10 s e religar | Volta sozinho em menos de 2 min; com supercapacitor, evento `power_loss` registrado |
 | T2 | Nuvem e relógio | Painel do gateway na web | Online; NTP sincronizado; diferença de relógio abaixo de 1 s |
 | T3 | Estados | Forçar parada, falha e retorno em cada máquina | Tela ao vivo correta em até 15 s |
 | T4 | Contagem | Comparar 10 ciclos com o contador do CLP ou da IHM | Diferença zero |
@@ -969,7 +969,7 @@ Cada máquina pertence a **um** gateway (vínculo `gateway_machine`).
 - **[04](04-protocolo-gateway-nuvem.md):**
   - comandos `net.apply`, `net.status`, `net.test` e `gw.identify`;
   - endpoint público `GET /api/gateway/v1/ping`;
-  - bloco `net` na saúde do `/sync`: IPs, link, NTP, proxy, temperatura, `power_fail` e contadores de descarte do firewall;
+  - bloco `net` na saúde do `/sync`: IPs, link, NTP, proxy, temperatura, `power_loss` e contadores de descarte do firewall;
   - host dedicado para os gateways (`gw.oee.engemase.com.br`, nome a definir).
 - **[08](08-seguranca-e-operacao.md):** trocar a linha "Firewall local" pela matriz 2.2; incluir a lista de serviços removidos (com `rpi-connect`).
 - **[12](12-acesso-remoto-vpn.md):**

@@ -56,7 +56,7 @@ Proposta inicial (32 HR a partir de um endereço base configurável, por exemplo
 | 3 | uint16 | `codigo_falha` | Código do alarme ativo (0 = nenhum) |
 | 4–5 | uint32 | `contador_total` | Ciclos/peças acumulados (nunca zerar por programa; overflow tratado pelo gateway) |
 | 6–7 | uint32 | `contador_refugo` | Peças refugadas acumuladas |
-| 8–9 | uint32 | `contador_bons` | Opcional (se 0, o gateway calcula total − refugo) |
+| 8–9 | uint32 | `contador_bons` | Informativo. O gateway **não** lê este campo no template padrão: peças boas = total − refugo. Só mapeie `count.good` se a máquina tiver um contador de boas confiável **e** sem contador de refugo |
 | 10 | uint16 | `produto` | Código do produto/receita atual |
 | 11 | uint16 | `velocidade` | Velocidade atual (unidade definida por máquina) |
 | 12 | uint16 | `ciclo_ultimo_ms` | Duração do último ciclo, em ms (opcional) |
@@ -114,7 +114,7 @@ O Modbus RTU tem **um único mestre** por barramento. Se a IHM já é mestre na 
 | Input registers | 16 bits | Leitura | FC04 | 3xxxx |
 | Holding registers | 16 bits | Leitura/escrita | FC03 | 4xxxx |
 
-- **Endereço base 0 vs. convenção 4xxxx:** "40001" é o holding register de **endereço 0** no protocolo. O deslocamento de 1 é o erro nº 1 de integração. A plataforma guarda o **endereço base 0** e mostra a convenção ao lado.
+- **Endereço base 0 vs. convenção 4xxxx:** "40001" é o holding register de **endereço 0** no protocolo. O deslocamento de 1 é o erro nº 1 de integração. A plataforma guarda o **endereço base 0** e mostra a convenção ao lado. Com 5 dígitos (40001–49999) só cabem endereços até 9998; por isso a CLI do gateway (`modbus read`) mostra a forma de **6 dígitos** (400001–465536), que cobre todo o espaço: o endereço 1000 aparece como `401001`, o mesmo que `41001` na forma de 5 dígitos.
 - **32 bits e float:** a ordem das words/bytes varia (**ABCD, CDAB, BADC, DCBA**). Sempre testar com um valor conhecido (ex.: contador = 100.000).
 - **Limites por leitura:** até **125 registradores** (FC03/FC04) ou **2.000 bits** (FC01/FC02) por transação.
 - **Exceções Modbus** comuns: 01 (função não suportada), 02 (endereço inválido), 03 (valor inválido), 04 (falha no escravo), 0B (gateway sem resposta do escravo).

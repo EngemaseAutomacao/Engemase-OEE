@@ -173,6 +173,7 @@ export type TagRole =
   | "count.reject"
   | "product.code"
   | "speed.actual"
+  | "plc.heartbeat"
   | "custom"
 
 export type ModbusArea = "coil" | "discrete_input" | "input_register" | "holding_register"

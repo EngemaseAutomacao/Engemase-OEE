@@ -202,6 +202,7 @@ export const TAG_ROLE_LABEL: Record<TagRole, string> = {
   "count.reject": "Contador de refugo",
   "product.code": "Produto",
   "speed.actual": "Velocidade",
+  "plc.heartbeat": "Heartbeat do CLP",
   custom: "Personalizado",
 }
 
@@ -216,6 +217,7 @@ export const ROLE_DEFAULTS: Record<TagRole, { area: ModbusArea; dataType: DataTy
   "count.reject": { area: "holding_register", dataType: "uint32", pollMs: 500, name: "Contador de refugo" },
   "product.code": { area: "holding_register", dataType: "uint16", pollMs: 1000, name: "Receita / produto atual" },
   "speed.actual": { area: "holding_register", dataType: "uint16", pollMs: 1000, name: "Velocidade atual" },
+  "plc.heartbeat": { area: "holding_register", dataType: "uint16", pollMs: 1000, name: "Heartbeat do CLP" },
   custom: { area: "holding_register", dataType: "uint16", pollMs: 1000, name: "" },
 }
 

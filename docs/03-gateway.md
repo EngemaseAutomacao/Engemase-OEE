@@ -325,16 +325,18 @@ Por que minuto: é compacto, cobre qualquer janela de análise (hora, turno, dia
 - Toda resposta do `/sync` traz `server_time`. O agente calcula a diferença e a reporta. Acima de 2 s, a web exibe um alerta de relógio.
 - Os intervalos internos usam relógio monotônico, para que ajustes de NTP não distorçam as durações.
 
-## Atualização remota (OTA), Fase 2
+## Atualização remota (OTA)
+
+**OTA mínimo antes do piloto (M4b, decisão D29 do [16](16-projeto-do-gateway.md#10-decisões-para-o-dono-do-produto)):** `.deb` assinado, atualizador separado (`oee-updater`), verificação pós-boot e volta automática. O fluxo completo abaixo (canais, rollout gradual, várias arquiteturas) é da **Fase 2**.
 
 1. O CI (GitHub Actions + goreleaser) gera binários para `linux/arm64`, `linux/amd64` e `linux/arm` (v7), **assinados** (chave Ed25519; a pública vai embutida no agente), e publica no Vercel Blob.
 2. Na web, o admin define o canal (`stable`/`beta`) e a versão-alvo por gateway ou grupo (rollout gradual).
 3. O agente baixa o binário, verifica hash e assinatura, troca o executável, reinicia via systemd e reporta a versão.
 4. **Rollback automático:** se o novo binário não fizer um `/sync` bem-sucedido em até 5 min, um watchdog restaura o anterior.
 
-## Página local de diagnóstico (Fase 2)
+## Página local de diagnóstico
 
-Uma página HTTP simples, **só na interface OT ou em localhost**, para o comissionamento em campo sem internet: status das conexões, últimas leituras, fila pendente e conectividade com a nuvem. Também haverá `oee-gateway diag` na linha de comando.
+**No MVP, versão reduzida** (decisão D30 do [16](16-projeto-do-gateway.md#6-comissionamento-local)): processo `oee-localui`, HTTPS na porta 443, **só na interface OT e no endereço de serviço**. A versão completa (login com a conta da plataforma, varredura do barramento, monitor de quadros) é da Fase 2. Uma página simples, para o comissionamento em campo sem internet: status das conexões, últimas leituras, fila pendente e conectividade com a nuvem. Também haverá `oee-gateway diag` na linha de comando.
 
 ## Segurança no gateway
 

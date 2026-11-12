@@ -847,7 +847,7 @@ O `acked_seq` **não** precisa de `fsync` imediato. Ele vai junto no próximo co
 | Cenário | Comportamento | Perda |
 |---|---|---|
 | **Corte seco (sem UPS)** | Transações confirmadas sobrevivem (`FULL` + ext4 com journal). O minuto aberto em RAM se perde. No boot: `PRAGMA quick_check`, evento `agent_start{clean:false, prev_alive_at, boot_id}` | Só os **segundos de estado** do intervalo sem energia (tempo sem gateway, de qualquer forma). **Nenhuma peça**, se o CLP manteve o contador |
-| **Com UPS (supercapacitor)** | O sinal de falta de energia (GPIO25) gera o evento `power_fail` e grava minuto aberto, contadores e checkpoint. O agente segue coletando durante uma tolerância de 5 s (filtra piscadas). Se a energia voltar, gera `power_restored`. Se não, executa a ação configurada (abaixo) | Nenhuma |
+| **Com UPS (supercapacitor)** | O sinal de falta de energia (GPIO25) gera o evento `power_loss` e grava minuto aberto, contadores e checkpoint. O agente segue coletando durante uma tolerância de 5 s (filtra piscadas). Se a energia voltar, gera `power_restored`. Se não, executa a ação configurada (abaixo) | Nenhuma |
 | **Desligamento normal** (`systemctl poweroff`, `agent.restart`) | SIGTERM, desligamento limpo em < 10 s | Nenhuma |
 | **Banco corrompido** (`quick_check` falha) | Renomeia para `buffer.db.corrupt-<ts>`, cria um novo, gera o evento `buffer_corrupted`. Contadores ganham nova base (o delta do intervalo é perdido e vira evento) | Itens não enviados do arquivo antigo (recuperação offline com `.recover` fica para a F2) |
 
@@ -980,7 +980,7 @@ log:
 | Nível | O que registrar |
 |---|---|
 | `error` / `critical` | Config rejeitada, porta serial indisponível, 401, banco corrompido, `data_loss`, disco crítico, rollback de OTA |
-| `warn` | Dispositivo entrou em Backoff (com o erro classificado), barramento com mais de 80% de ocupação ou overrun, bytes não solicitados (2º mestre), `counter_reset`/`counter_jump`, `clock_jump`, diferença de relógio > 2 s, fila a 80%/95%, `power_fail`, temperatura alta |
+| `warn` | Dispositivo entrou em Backoff (com o erro classificado), barramento com mais de 80% de ocupação ou overrun, bytes não solicitados (2º mestre), `counter_reset`/`counter_jump`, `clock_jump`, diferença de relógio > 2 s, fila a 80%/95%, `power_loss`, temperatura alta |
 | `info` | Início (versão, commit, perfil, `boot_id`, se o desligamento anterior foi limpo), parada (motivo), config aplicada, transições do uplink, comandos (id, tipo, duração, status: auditoria), enroll, acesso remoto |
 | `debug` | Mudanças de estado de máquina, lotes enviados, tempos de commit |
 | `trace` | Quadros Modbus em hexadecimal, **por dispositivo e com prazo** |
@@ -1297,7 +1297,7 @@ Runner arm64: runners Linux arm64 do GitHub (disponibilidade no plano: **a confi
 | 3 | [04](04-protocolo-gateway-nuvem.md) | **Duas filas** com ack próprio: `batch.seq_*` (core) + `batch.samples_seq_*`; resposta com `ack_seq` e `ack_samples_seq` | O [03](03-gateway.md) manda enviar eventos e minutos antes das amostras, o que é incompatível com um único `ack_seq` "até aqui" |
 | 4 | [04](04-protocolo-gateway-nuvem.md) | Campos opcionais em `agent`: `config_status{version,state,error}`, `buffer_oldest_s`, `samples_pending`, `quarantined`, `temp_c`, `emmc_wear_pct`, `ntp_synced`, `boot_id`, `unclean_boots_24h`, `links`; `devices[]` com `timeouts_1m`, `exceptions`, `last_ok_at`; `buses[]` novo | Hoje uma config rejeitada não tem como ser reportada |
 | 5 | [04](04-protocolo-gateway-nuvem.md), [07](07-calculo-oee.md) | Minuto com `setup_s` (o estado `SETUP` existe no bloco OEE e não tem campo no minuto) | Fecha a conta de 60 s por minuto |
-| 6 | [04](04-protocolo-gateway-nuvem.md) | Tipos de evento: `state`, `product`, `counter_reset`, `counter_jump`, `counter_rebaseline`, `agent_start`, `agent_stop`, `power_fail`, `power_restored`, `clock_jump`, `data_loss`, `buffer_corrupted`, `config_applied`, `config_rejected`, `remote_access.*` | Auditoria e lacunas visíveis na nuvem |
+| 6 | [04](04-protocolo-gateway-nuvem.md) | Tipos de evento: `state`, `product`, `counter_reset`, `counter_jump`, `counter_rebaseline`, `agent_start`, `agent_stop`, `power_loss`, `power_restored`, `clock_jump`, `data_loss`, `buffer_corrupted`, `config_applied`, `config_rejected`, `remote_access.*` | Auditoria e lacunas visíveis na nuvem |
 | 7 | [04](04-protocolo-gateway-nuvem.md) | Comandos `log.level` (com prazo) e `gateway.identify`; endpoint `POST /uploads/{command_id}` para `logs.upload` | Mesmo domínio que o firewall já libera |
 | 8 | [03](03-gateway.md) | Papel **`plc.heartbeat`** na tabela de papéis | O bloco OEE já tem `heartbeat`; sem o papel, um CLP em STOP com o servidor Modbus ativo parece "parado" e não `NO_COMM` |
 | 9 | [03](03-gateway.md) | Watchdog: `RuntimeWatchdogSec` **≤ 15 s** no CM4; registrar o watchdog de RTC (1–255 s) do R1000 | O texto atual atribui watchdog externo só ao R1100 |

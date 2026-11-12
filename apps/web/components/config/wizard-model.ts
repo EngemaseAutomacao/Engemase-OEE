@@ -186,12 +186,11 @@ export const MAX_BLOCK_BASE = 65535 - (BLOCK_REGISTERS - 1)
 /** Layout do bloco: offset, papel, nome e tipo de cada campo. */
 export const ENGEMASE_BLOCK_LAYOUT: { offset: number; field: string; name: string; role: TagRole; dataType: DataType }[] = [
   { offset: 0, field: "versao_bloco", name: "Versão do bloco", role: "custom", dataType: "uint16" },
-  { offset: 1, field: "heartbeat", name: "Heartbeat do CLP", role: "custom", dataType: "uint16" },
+  { offset: 1, field: "heartbeat", name: "Heartbeat do CLP", role: "plc.heartbeat", dataType: "uint16" },
   { offset: 2, field: "estado", name: "Estado da máquina", role: "state.code", dataType: "uint16" },
   { offset: 3, field: "codigo_falha", name: "Código do alarme", role: "fault.code", dataType: "uint16" },
   { offset: 4, field: "contador_total", name: "Contador total", role: "count.total", dataType: "uint32" },
   { offset: 6, field: "contador_refugo", name: "Contador de refugo", role: "count.reject", dataType: "uint32" },
-  { offset: 8, field: "contador_bons", name: "Contador de peças boas", role: "count.good", dataType: "uint32" },
   { offset: 10, field: "produto", name: "Produto / receita", role: "product.code", dataType: "uint16" },
   { offset: 11, field: "velocidade", name: "Velocidade atual", role: "speed.actual", dataType: "uint16" },
   { offset: 12, field: "ciclo_ultimo_ms", name: "Duração do último ciclo (ms)", role: "custom", dataType: "uint16" },

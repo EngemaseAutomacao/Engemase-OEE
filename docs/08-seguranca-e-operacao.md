@@ -36,7 +36,7 @@ flowchart LR
 | TLS | TLS 1.2+ com validação de certificado. Suporte a CA corporativa e `HTTPS_PROXY` |
 | Atualizações | Agente com binário assinado (Ed25519) e rollback. SO com `unattended-upgrades` para correções de segurança |
 | Acesso remoto de suporte | Nenhuma porta aberta. **VPN de manutenção sob demanda** (saída 443), desligada por padrão, ativada só com **aprovação do cliente**, com prazo, sem roteamento para a rede OT e auditada. Ver [12](12-acesso-remoto-vpn.md) |
-| Página local (F2) | Escuta só na interface OT ou localhost, com senha |
+| Página local (MVP reduzida, D30) | `oee-localui`, HTTPS na porta 443, só na interface OT e no endereço de serviço 169.254.x.x, com a senha local do cartão lacrado ([16](16-projeto-do-gateway.md#6-comissionamento-local)) |
 
 ### Plataforma web
 
@@ -86,7 +86,7 @@ flowchart LR
 | Logs e métricas das funções | Vercel Observability / logs (com Log Drain para retenção maior, se necessário) |
 | Erros do app | Sentry |
 | Saúde dos gateways | No próprio produto: online/offline, versão, fila pendente, latência por CLP, relógio, disco (enviados no `/sync`) |
-| Logs do gateway | journald local. Envio sob demanda com o comando `logs.upload` (F2) |
+| Logs do gateway | journald local. Envio sob demanda com `logs.upload` mínimo junto do OTA mínimo (D29); completo na F2 |
 | Banco | Métricas da Neon + `pg_stat_statements` para consultas lentas |
 | Alertas operacionais | Gateway offline, buffer acima de 80%, erro de ingestão, cron falhando (F2: e-mail e Telegram para a equipe Engemase, ver [13](13-notificacoes-e-alertas.md#canais)) |
 

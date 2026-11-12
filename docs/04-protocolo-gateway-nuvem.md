@@ -36,7 +36,7 @@ Content-Encoding: gzip
 | `POST` | `/api/gateway/v1/enroll` | Troca o código de ativação por credenciais |
 | `POST` | `/api/gateway/v1/sync` | Ciclo principal: dados, saúde, resultados de comandos → ack, comandos, versão de config |
 | `GET` | `/api/gateway/v1/config` | Config completa (com `If-None-Match` → `304`) |
-| `GET` | `/api/gateway/v1/releases/latest?channel=stable&arch=arm64` | Metadados da versão-alvo (OTA, F2) |
+| `GET` | `/api/gateway/v1/releases/latest?channel=stable&arch=arm64` | Metadados da versão-alvo (OTA mínimo do `oee-updater`, M4b/D29; ainda fora do contrato v1) |
 
 ### `POST /enroll`
 
@@ -158,7 +158,8 @@ Todo comando traz `id`, `type`, `payload`, `expires_at` e, opcionalmente, `issue
 | `modbus.scan` | Varre unit ids de um barramento RS-485 ou uma faixa de registradores, para ajudar no comissionamento | 10 min | 120 s | F2 (contrato pronto) |
 | `vpn.enable` · `vpn.disable` · `vpn.status` | Sessão de acesso remoto sob demanda, com aprovação assinada ([12](12-acesso-remoto-vpn.md)) | 5 min · 1 h · 2 min | 60 s · 30 s · 10 s | F2 (contrato pronto) |
 | `ot.forward.open` · `ot.forward.close` | Encaminhamento temporário para um CLP pela VPN (portas sugeridas 502, 102, 44818) | 5 min · 1 h | 30 s | F2 (contrato pronto) |
-| `agent.update` · `token.rotate` · `logs.upload` | OTA, rotação de credencial e envio de logs | — | — | F2 (fora do contrato v1) |
+| `logs.upload` · `log.level` | Envio das últimas linhas de log e nível de log, versões mínimas junto do OTA mínimo (D29) | — | — | M4b (fora do contrato v1, entram como campos novos) |
+| `agent.update` · `token.rotate` | Atualização comandada pela nuvem e rotação de credencial. No MVP, o OTA mínimo é por consulta do `oee-updater` a `/releases/latest` | — | — | F2 (fora do contrato v1) |
 
 **Resultados** (`command_results[]`): sempre com `id`, `type` e `status`. `ok` traz `result` tipado pelo `type`; `error`, `expired` e `rejected` trazem `error.code`. Um tipo que o agente não conhece ou ainda não implementa (os marcados F2, no agente do MVP) volta como `rejected` com `unsupported`, sem travar o `/sync`. Códigos de erro de comando: `unsupported`, `invalid_payload`, `expired`, `timeout`, `device_not_found`, `target_not_allowed`, `bus_not_found`, `bus_pause_required`, `port_unavailable`, `connection_failed`, `read_timeout`, `modbus_exception`, `decode_error`, `config_fetch_failed`, `config_invalid`, `policy_denied`, `approval_invalid`, `session_conflict`, `session_not_found`, `vpn_failed`, `internal_error`.
 

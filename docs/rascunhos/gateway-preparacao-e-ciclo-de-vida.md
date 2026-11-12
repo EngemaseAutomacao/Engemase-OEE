@@ -488,7 +488,7 @@ flowchart LR
 | B3 | Ethernet | 10 min | Link negociado; `iperf3` por 60 s em cada sentido; contadores de `ip -s link`; queda e volta de link (porta do switch desligada pela API); reboot | ETH0 em 1000/full com ≥ 900 Mb/s; ETH1 em 100/full com ≥ 90 Mb/s; 0 erros de RX/CRC; link detectado em < 5 s; **MAC da ETH1 igual depois do reboot** |
 | B4 | Operação real | **24 h** | Agente registrado no gateway lógico "Bancada-NN" (Engemase Lab). 20 máquinas no `plc-sim` TCP (OT) + 3 escravos RTU no chicote. 1 h sem internet (nftables no controlador) | **Conservação de peças 100%** contra o gabarito do `plc-sim`; estados ± 1 s; zero `data_loss`; fila drenada em < 10 min após a volta; RSS do agente < +10%; 0 reinícios do agente |
 | B5 | Energia | Nas últimas 4 h do B4 | 30 cortes secos pelo relé (5–300 s ligado, 2–30 s desligado) | 30/30 voltam sozinhos; `quick_check` OK; conservação 100%; zero duplicatas; 1º `/sync` em < 120 s |
-| B5b | SuperCAP (se houver) | +30 min | Quedas com retorno em 1 s, 10 s e 60 s, e **durante o desligamento** (T-PWR-3) | Evento `power_fail`; sempre volta sozinho; autonomia ≥ referência do lote − 20% |
+| B5b | SuperCAP (se houver) | +30 min | Quedas com retorno em 1 s, 10 s e 60 s, e **durante o desligamento** (T-PWR-3) | Evento `power_loss`; sempre volta sozinho; autonomia ≥ referência do lote − 20% |
 | B6 | Relógio e watchdogs | 15 min | RTC: acertar, desligar 10 min, religar sem rede. Watchdog do agente (`SIGSTOP`). Watchdog do SoC (`echo c > /proc/sysrq-trigger`). Watchdog do RTC (armar 30 s e não alimentar) | Deriva < 2 s; reinício em ≤ 35 s (agente), ≤ 20 s (kernel) e ≤ 40 s (RTC) |
 | B7 | Interface | 2 min | LEDs R, G, B e amarelo; buzzer; pendrive `OEE/diag` | Operador confirma no app da bancada; arquivo de diagnóstico gerado |
 | B8 | Superfície de ataque | 2 min | `ss -tulpn`; `nmap` do controlador nas duas interfaces com o perfil de produção; `systemd-analyze security` | Só as portas previstas; nota ≤ 2,0 |
@@ -722,7 +722,7 @@ Alertas internos da Engemase (Telegram/e-mail, [13](13-notificacoes-e-alertas.md
 | Disco `root` | < 500 MB livres | Aviso | Suporte |
 | Temperatura | SoC > 75 °C por 15 min / > 82 °C ou *throttling* | Aviso / crítico | Suporte (e cliente: ventilação do painel) |
 | **Desgaste do eMMC** | `life_time` ≥ 0x07 (60–70%) / ≥ 0x09 ou `pre_eol` = 0x02 / `pre_eol` = 0x03 | Aviso (planejar troca) / crítico (trocar em 30 dias) / urgente | Suporte |
-| Energia | > 3 boots não limpos em 24 h; > 5 `power_fail` por dia | Aviso | Suporte + manutenção do cliente |
+| Energia | > 3 boots não limpos em 24 h; > 5 `power_loss` por dia | Aviso | Suporte + manutenção do cliente |
 | Agente | > 3 reinícios/h; versão < mínima; fora do canal | Aviso | Suporte |
 | Relógio | Diferença > 2 s; NTP fora > 24 h | Aviso / info | Suporte |
 | SO | Segurança pendente > 14 dias; último `apt` OK > 7 dias; reinício pendente > 7 dias | Aviso / info | Suporte |

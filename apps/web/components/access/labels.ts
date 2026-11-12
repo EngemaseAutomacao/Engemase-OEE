@@ -128,6 +128,7 @@ export const TAG_ROLE_LABEL: Record<TagRole, string> = {
   "count.reject": "Contador de refugo",
   "product.code": "Produto",
   "speed.actual": "Velocidade",
+  "plc.heartbeat": "Heartbeat do CLP",
   custom: "Personalizado",
 }
 

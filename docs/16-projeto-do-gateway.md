@@ -145,7 +145,7 @@ O esqueleto já está em `gateway/` (Fase 0).
 
 **CLI de campo** (hoje existem `run`, `version`, `diag`, `enroll`, `modbus read` e `config validate`; o resto é Fase 1):
 - `oee-gateway status`, `diag`, `enroll --code`
-- `modbus read`, `modbus scan` (local), `modbus oee-block`
+- `modbus read` (com `--oee-block` para ler o bloco padrão inteiro), `modbus scan` (local)
 - `config show`, `buffer stats`, `logs`
 - `net show/set/confirm/rollback`
 - `support-bundle`
