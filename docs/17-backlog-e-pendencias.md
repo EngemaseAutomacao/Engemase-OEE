@@ -109,6 +109,7 @@ A ordem de urgência vem da Fase 0. Os padrões adotados até a decisão estão 
 | L15 | Documentação para o usuário | Guias por papel e notas de versão. Já feitos: 6 runbooks, ficha de TI, roteiro de bancada e guia por fabricante (`docs/operacao/`). Faltam 4 runbooks (contagem divergente, restauração PITR, rotação de token, troca de hardware) | Piloto |
 | L23 | Gateway em trânsito | Gateway ativado na bancada e desligado para envio gera "Gateway offline" no cliente. Falta um estado "em trânsito/não instalado" que suprime o alerta | F1 |
 | L24 | Revisão do agente no campo | Diagnóstico de RS-485 pelo técnico depende de leituras pela API local do agente (o `tecnico` não para o agente nem acessa a serial) | F1 |
+| L25 | Rollback do agente × esquema do buffer | Um agente anterior recusa um `buffer.db` com `user_version` maior e reinicia sem parar. Até aqui as mudanças no buffer são só colunas acrescentadas (o `user_version` fica em 1, e o rollback funciona). Antes da primeira migração que suba o `user_version`, o atualizador (G4b) precisa saber a versão de esquema de cada pacote (no manifesto) e recusar o rollback automático para um pacote de esquema anterior | F1 (com G4b) |
 | L16 | Modelo de dados consolidado | Tabelas dos docs 12–15 no `docs/06` (sendo implementadas em `packages/db`) | F0 |
 | L17 | Jobs agendados | Alertas, reconciliação da VPN, expiração de concessões e tokens, partições | F1 |
 | L18 | i18n | Biblioteca e catálogos de texto | F2 |

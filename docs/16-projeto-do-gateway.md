@@ -70,7 +70,7 @@ O esqueleto já está em `gateway/` (Fase 0).
 - **gravação:** nenhuma gravação no SQLite está presa há mais de 30 s, e a próxima tentativa não atrasou mais de 30 s (o backoff de uma gravação que falha é respeitado, também depois de uma troca de config);
 - **leitores:** cada leitor deu sinal de vida dentro de `max(3 × (maior poll + pior leitura), 30 s)`. Leitura que falha conta como sinal de vida (CLP desligado não reinicia o agente); o prazo é estendido durante o backoff e suspenso enquanto o leitor espera o motor consumir.
 
-Se uma falhar, o agente registra `watchdog não alimentado` (warn, `verificacao=motor|gravacao|leitor`) e o systemd o reinicia.
+Se uma falhar, o agente registra `watchdog não alimentado` (warn, `verificacao=motor|gravacao|leitor`) e pula aquele ping; o systemd reinicia o agente depois de 30 s sem nenhum ping.
 
 **Um leitor por linha física:** cada barramento RS-485 do gateway e cada conversor RTU sobre TCP (mesmo `host:porta`) tem um único leitor, que faz uma requisição por vez. Vários escravos atrás de um conversor transparente nunca são lidos em paralelo. Dispositivos Modbus TCP nativos têm um leitor cada.
 

@@ -141,7 +141,7 @@ RestartSec=5s
 # Trixie (systemd ≥ 254): RestartSteps=5 e RestartMaxDelaySec=60s
 WatchdogSec=30s
 TimeoutStartSec=60s
-TimeoutStopSec=20s
+TimeoutStopSec=80s   # leitores voltam em até 6 × timeout_ms (RTU sobre TCP) + gravação final; valor canônico na unit de deploy/gateway
 OOMScoreAdjust=-500
 Nice=-5
 StateDirectory=oee-gateway
@@ -739,11 +739,15 @@ CREATE TABLE counter_state (
   machine_id  TEXT    NOT NULL,
   role        TEXT    NOT NULL,   -- count.total | count.good | count.reject
   bits        INTEGER NOT NULL,   -- 16 | 32
-  addr_hash   TEXT    NOT NULL,   -- hash(área, offset, tipo, word_order): mudou → nova base
-  last_raw    INTEGER NOT NULL,   -- último valor bruto CONTABILIZADO (fim do último minuto gravado)
+  addr_key    TEXT    NOT NULL,   -- área, offset, tipo, word_order: mudou → nova base
+  last_raw    INTEGER NOT NULL,   -- último valor bruto CONTABILIZADO (fim do último minuto gravado ou checkpoint de evento)
   last_raw_ms INTEGER NOT NULL,
-  updated_ms  INTEGER NOT NULL
+  updated_ms  INTEGER NOT NULL,
+  -- Colunas acrescentadas no Open, sem subir o user_version (um agente anterior continua abrindo o arquivo):
+  carry       INTEGER NOT NULL DEFAULT 0,  -- peças já contadas em minutos abertos, somadas ao 1º delta depois do restore
+  carry_ms    INTEGER NOT NULL DEFAULT 0   -- updated_ms da gravação que escreveu carry; diferente → carry vale 0
 ) STRICT;
+-- O código (gateway/internal/buffer/store.go) é a referência do esquema.
 
 CREATE TABLE machine_state (
   machine_id    TEXT PRIMARY KEY,

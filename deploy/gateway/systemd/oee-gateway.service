@@ -11,7 +11,8 @@
 #    SQLite sem ficar presa mais de 30 s nem deixar de ser tentada; e cada
 #    leitor (poller) vivo dentro de max(3 × (maior poll + pior leitura), 30 s),
 #    prazo estendido durante backoff e enquanto espera o motor consumir.
-#    Falha em uma delas: log warn "watchdog não alimentado" e o systemd reinicia;
+#    Falha em uma delas: log warn "watchdog não alimentado" e aquele ping não
+#    vai; o systemd só reinicia depois de WatchdogSec (30 s) sem nenhum ping;
 #  - NÃO usa ativação por socket (agent.sock/ui.sock são da Fase 1).
 [Unit]
 Description=Engemase OEE - agente de coleta do gateway
