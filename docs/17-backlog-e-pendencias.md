@@ -11,7 +11,7 @@
 | **Implementação real** | **Fase 0 de código pronta.** Contrato, cálculo de OEE, banco com RLS, API real `/enroll` `/sync` `/config` com testes, agente Go revisado, simulador, pacote `.deb`, receita da imagem e CI. Teste de ponta a ponta (simulador → agente → API → banco) verde. Faltam contas na nuvem e hardware |
 | Ambientes (Vercel, Neon, domínio) | **Não criados.** Dependem de contas da Engemase |
 | Hardware de bancada | **Não comprado.** É o maior risco de prazo (importação) |
-| Decisões do dono do produto | **37 pendentes** (seção 3). Sete delas bloqueiam o início da Fase 0 |
+| Decisões | **Todas tomadas** em 12/11/2026 (seção 3): 10 pelo dono do produto e o restante pela equipe técnica, como escolhas provisórias. Nenhuma bloqueia a Fase 0 |
 
 ## 2. Backlog até o piloto
 
@@ -53,40 +53,61 @@ Premissas: 2 desenvolvedores (**Web** e **Gateway**), semana 1 = 16/11/2026, sem
 
 **Já adiantado:** a parte de código de W1, X1, W2a, W3, W4 e G0, e boa parte de W2b (RLS completa e FKs compostas) e de G4 (`.deb`, units, firewall, imagem). Ficam pendentes as partes que dependem de contas (deploy, Neon, PoC com 100 gateways) e de hardware (bancada, pacote de suporte ao R1000).
 
-## 3. Decisões pendentes do dono do produto
+## 3. Decisões
 
-A ordem de urgência vem da Fase 0. Os padrões adotados até a decisão estão nos relatórios da auditoria.
+Em 12/11/2026 o dono do produto decidiu D1, D5, D6, D7, D11, D12, D13, D26, D28 e D38 e pediu que a equipe técnica escolhesse o restante pelo que for melhor para o sistema e para a Engemase. **Todas podem ser revistas:** para mudar, registre aqui a nova escolha, com a data, e avise quem cuida do que ela afeta.
 
-**Bloqueiam a Fase 0 (decidir na semana de 16/11):**
+**Decididas pelo dono do produto (12/11/2026):**
 
-| # | Decisão | Padrão adotado hoje |
+| # | Decisão | Escolha |
 |---|---|---|
-| D2 | Hardware: venda, comodato ou locação; rota de compra | R1000 R10xx-00, courier no piloto |
-| D7 | Região e residência dos dados no Brasil | Proposta: São Paulo (Vercel `gru1`; Neon em região de São Paulo, se disponível — confirmar) |
-| D26 | Marcas de CLP prioritárias e bloco OEE v1 | 32 registradores a partir do HR 1000, words em CDAB |
-| D28 | Domínios (produto e host dos gateways) | `oee.engemase.com.br` e `gw.oee.engemase.com.br` |
-| D29 | OTA mínimo antes do piloto | Sim (+1 a 1,5 semana) |
-| D36 | Aceitar a nova estimativa (piloto nas semanas 14–16) e os cortes | — |
-| D37 | Aceitar formalmente as ADRs ainda como "Proposta" | Tratadas como decididas |
-| D38 | Isolamento no banco: aceitar a RLS por variável de sessão (`app.org_id`) ou endurecer | Aceita: a variável pode ser trocada por qualquer SQL rodando como a aplicação; o risco depende de não haver SQL arbitrário (injeção). Endurecer = valor assinado pelo servidor ou um papel por cliente (`packages/db/README.md`) |
+| D1 | Modelo comercial | A Engemase vende o software como **assinatura cobrada por máquina**, com planos (Starter, Pro, Enterprise). Valores em L9 |
+| D5 | Acesso da Engemase aos dados de produção | **Sempre liberado**, com registro na auditoria visível ao cliente e faixa na tela. O cliente não aprova esse acesso (a aprovação de sessão de acesso remoto ao gateway, D20, continua) |
+| D6 | Retenção | Dados por minuto: **2 anos**. Auditoria: **5 anos** |
+| D7 | Região | **São Paulo:** Vercel `gru1`, Neon na AWS `sa-east-1` |
+| D11 | Escopo de acesso das pessoas | Todo o cliente, unidades **ou máquinas**. Fail-closed: nada listado = nenhum acesso |
+| D12 | Quem gerencia usuários | O **admin do cliente** gerencia os usuários do cliente. O resto da configuração (unidades, linhas, máquinas, gateways, tags, terminais, turnos, produtos, motivos, aparência) é feito pela **Engemase** |
+| D13 | Quem configura gateways | **Só a Engemase.** Todo cliente é "gerenciado pela Engemase"; o papel de cliente "engenheiro" vira leitura técnica |
+| D26 | Marcas de CLP prioritárias | **Siemens, Schneider, Rockwell e ABB.** Bloco OEE v1 mantido (32 registradores a partir do HR 1000, words em CDAB) |
+| D28 | Domínio | **Só o da Vercel por enquanto** (`engemase-oee.vercel.app`, para produto e gateways) |
+| D38 | Isolamento entre clientes no banco | **RLS por variável de sessão aceita**, com o limite documentado em `packages/db/README.md` |
 
-**Antes do contrato do piloto:**
+**Escolhidas pela equipe técnica (12/11/2026, provisórias):**
 
-| # | Decisão | Padrão adotado hoje |
-|---|---|---|
-| D1 | Modelo comercial (por máquina, planta ou gateway; planos) | Limites editados pelo super admin |
-| D4 | Encerramento: prazos, formato, recolhimento dos gateways | 30 + 30 dias; CSV |
-| D5 | Acesso da Engemase aos dados de produção | Liberado com registro; o cliente pode exigir aprovação |
-| D6 | Retenção do histórico | 2 anos por minuto; auditoria 5 anos |
-| D14 | 2FA para usuários do cliente | Opcional (conflita com a aprovação de VPN "com MFA") |
-| D18 | Tablet na máquina e identificação do operador | Android; operador escolhido numa lista |
+| # | Decisão | Escolha | Por quê |
+|---|---|---|---|
+| D2 | Hardware | **Comodato:** o gateway é da Engemase e fica com o cliente enquanto a assinatura valer. Contrato mínimo de 12 meses; a taxa de implantação cobre parte do hardware. Venda só sob pedido (Enterprise). Compra: courier no piloto, importação formal para a frota | Frota padronizada e sob controle da Engemase (D13, OTA, troca rápida), menor barreira de entrada e recolhimento simples no encerramento |
+| D3 | Inadimplência | Aviso com 5 dias de atraso. Com 30 dias, cliente **Suspenso**: login bloqueado com aviso; os gateways continuam enviando e os dados ficam guardados; volta ao pagar | Não perde dados nem exige novo comissionamento; evita um estado "só leitura" em todas as ações |
+| D4 | Encerramento | 30 dias para exportar (CSV) + 30 para excluir. O cliente devolve os gateways em até 30 dias (coleta agendada pela Engemase, frete do cliente); gateway não devolvido é cobrado pelo valor de reposição | Prazos simples, já previstos no runbook e no contrato; CSV basta |
+| D8 | Versão on-premises | **Não** | Mantém Vercel e Neon; o Postgres padrão deixa a porta aberta |
+| D9 | Integração com ERP/MES | **F3.** Exportação CSV na F2; API pública depois. Antecipar só com um cliente-âncora que pague por isso | Não atrasa o MVP |
+| D10 | Gravação de sessão remota | **Fase A:** trilha de auditoria + log de I/O do `sudo`. Bastion (Teleport/Warpgate) só se virar requisito de venda | Custo e complexidade baixos no piloto |
+| D14 | 2FA | **Obrigatório para a equipe Engemase e para o admin do cliente**; opcional para os demais | O admin gerencia usuários e aprova sessões de acesso remoto (D20): resolve o conflito com a aprovação "com MFA" |
+| D15 | Área obrigatória | **Sim no banco.** Cada unidade nasce com a área "Geral", que a interface esconde quando é a única | Consultas mais simples sem obrigar o cliente a pensar em áreas |
+| D16 | Grupo com vários CNPJs | Um cliente = um contrato (CNPJ de cobrança). Cada unidade pode ter o **próprio CNPJ** (opcional) | Atende grupos industriais sem dividir o cliente |
+| D17 | Super admins iniciais | **2 pessoas** da direção técnica (nomes no seed de produção). Equipe inicial da Engemase de até 5 pessoas, todas com 2FA | Mínimo para não depender de uma pessoa só |
+| D18 | Tablet e operador | Android com tela sempre acesa; **operador escolhido numa lista**; PIN e crachá na F2. Sem tablet, o supervisor classifica no desktop | Simples no chão e com dado pessoal mínimo (LGPD) |
+| D19 | Escrita no CLP | **Não no v1** (ADR-008) | Segurança da planta |
+| D20 | Política de acesso remoto | **Cada sessão aprovada pelo admin do cliente** (com 2FA). Janela de manutenção pré-aprovada e acesso de emergência só se o contrato previr | É o que a TI e a segurança do cliente esperam para acesso à rede OT |
+| D21 | Como contar `NO_COMM` | **Parada não planejada** com motivo "Sem comunicação" e selo "dados incompletos" | Excluir do tempo planejado inflaria o OEE |
+| D22 | Como contar setup | **Perda de disponibilidade.** A Engemase pode marcá-lo como planejado num cliente, se o contrato pedir | OEEs comparáveis entre clientes |
+| D23 | Micro-parada | **60 s**, perda de performance, sem pedir motivo; ajustável por máquina pela Engemase | Menos apontamentos no chão |
+| D24 | Performance > 100% | **Guarda o valor real** e alerta acima de 105% (ciclo ideal errado). Produção durante parada planejada volta a ser tempo planejado | Limitar a 100% esconderia cadastro errado |
+| D25 | Faixas e metas de OEE | **Faixas fixas para todos:** verde ≥ 85%, amarelo de 60% a 85%, vermelho < 60%. Meta opcional por máquina, definida pela Engemase com o cliente na implantação | Cores de estado e faixas travadas (docs/14); comparável entre clientes |
+| D27 | Kit padrão | **Caixa pré-montada pela Engemase** (opção B) com R1000 e fonte; **SuperCAP em todas** as unidades depois do teste T-PWR-3; switch OT só quando a planta não tiver, cobrado à parte | Com comodato (D2), padronizar reduz instalação, erro e suporte |
+| D29 | OTA mínimo antes do piloto | **Sim**, com `logs.upload` e `log.level` mínimos | Com a Engemase operando a frota (D2, D13), atualizar sem visita é obrigatório |
+| D30 | Página local no MVP | **Sim, reduzida** | Comissionar sem internet |
+| D31 | Mudança de rede pela nuvem | **F2**; no MVP, só local | Risco de perder um gateway remoto |
+| D32 | VPN | **Tailscale Standard** depois da PoC; NetBird self-hosted como plano B | Menor esforço; plano B se a residência de dados exigir |
+| D33 | WhatsApp e SMS | **WhatsApp na F2b**; SMS não | Canal que o chão de fábrica usa; SMS caro e pouco lido |
+| D34 | Subdomínio por cliente e white label | **F3** | Depende de domínio próprio (D28) |
+| D35 | Escala do primeiro ano | Contas para **100 máquinas**; meta de **500** | Define os planos da Neon e da Vercel |
+| D36 | Prazo | **Aceita:** reforço parcial + corte de MVP; piloto nas semanas 14 a 16 (meados de fevereiro a início de março de 2027) | — |
+| D37 | ADRs "Proposta" | **Aceitas formalmente** ([docs/10](10-decisoes-arquiteturais.md)), com as notas das decisões acima | Já eram seguidas pelo código |
 
-**Uso e regras de cálculo (podem esperar até a Fase 1):**
-- **Acesso:** D11 escopo por linha/máquina · D12 quem adiciona usuários · D13 quem configura gateways · D15 área obrigatória · D16 vários CNPJs · D17 super admins iniciais.
-- **Cálculo:** D21 `NO_COMM` · D22 setup · D23 micro-parada de 60 s · D24 performance > 100% · D25 faixas e metas de OEE.
-- **Gateway e campo:** D27 kit padrão (supercapacitor, caixa pronta, switch) · D30 página local no MVP · D31 mudança de rede pela nuvem.
-- **Canais e fornecedores:** D32 Tailscale × NetBird · D33 WhatsApp/SMS · D34 subdomínio e white label · D35 escala do 1º ano.
-- **Outros:** D3 inadimplência · D8 versão on-premises · D9 ERP/MES · D10 gravação de sessão · D19 escrita no CLP · D20 política de acesso remoto.
+**Recomendação sobre o domínio (D28):** registrar o domínio próprio **antes de o primeiro gateway ir para um cliente**. A TI do cliente libera a saída pelo nome do host, e trocar o host depois exige atualizar o `cloud.url` de cada gateway instalado.
+
+**Ainda dependem de dados (não de decisão):** nomes dos super admins (D17), valores dos planos (L9), cotação do hardware (D2).
 
 ## 4. Lacunas de especificação
 
@@ -117,6 +138,25 @@ A ordem de urgência vem da Fase 0. Os padrões adotados até a decisão estão 
 | L20 | Autenticação | Política de senha, duração de sessão, bloqueio, recuperação do 2FA, SSO | F1 |
 | L21 | Limites da API | Números do rate limit por gateway | F1 |
 | L22 | Ciclo de vida do gateway | Consolidado no [`docs/16`](16-projeto-do-gateway.md) (MVP simplificado; completo na F2) | — |
+
+**Escolhas provisórias para as lacunas (equipe técnica, 12/11/2026).** Servem de padrão para a Fase 1; cada uma vira especificação no documento indicado quando for implementada.
+
+| # | Escolha |
+|---|---|
+| L2 | O turno pertence ao dia em que **começa** (o turno da noite de segunda é de segunda). Feriados por unidade, cadastrados pela Engemase: sem turno = tempo não planejado. Turnos não se sobrepõem na mesma unidade. Produção fora do turno conta as peças e o tempo produzido vira planejado (como D24). Mudança de turno vale dali para a frente, sem recalcular o passado |
+| L3 | Refugo manual **soma** ao refugo do CLP, nunca o substitui. Motivos de refugo cadastrados pela Engemase. Lançamento atrasado até o fim do turno seguinte; depois disso, só o supervisor. Estorno sempre com registro na auditoria. Retrabalho fica fora do MVP |
+| L4 | Resolvida por D25 |
+| L5 | MTBF = tempo produzindo ÷ número de falhas; MTTR = tempo total em falha ÷ número de falhas; TEEP = OEE × (tempo planejado ÷ tempo de calendário). F2 |
+| L6 | CSV UTF-8 com BOM, separador `;` e vírgula decimal (abre direto no Excel em português). Datas no fuso da unidade, em ISO 8601 com o deslocamento. Colunas iguais às da tela. Acima de 100 mil linhas, vira tarefa assíncrona com link por e-mail |
+| L12 | OEE da plataforma igual ao da planilha de referência com diferença de até 0,5 ponto percentual por turno. Peças iguais ao contador do CLP no turno, salvo período `NO_COMM` registrado. Navegadores: Chrome e Edge atuais, Safari do iOS atual; TV com Chrome ou Android TV. Carga: 100 gateways simulados (W3) |
+| L13 | Sentry para erros e logs da Vercel. Meta: 99% dos `/sync` respondidos em menos de 1 s. Alerta para a Engemase quando um gateway passa 15 min sem `/sync` ou o atraso do buffer passa de 10 min |
+| L14 | PITR do Neon na janela do plano contratado; RPO e RTO os do SLA ([`docs/negocio/sla-e-suporte.md`](negocio/sla-e-suporte.md)). Teste de restauração a cada 3 meses (runbook 08). Chaves (OTA, VAPID, CA SSH) num cofre de senhas da empresa, com 2 pessoas com acesso |
+| L17 | Vercel Cron: alertas (1 min); expiração de concessões, tokens e códigos (5 min); reconciliação da VPN (15 min); partições e limpeza (diário); resumo diário por e-mail (diário) |
+| L18 | Só português do Brasil até a F2. Quando entrar o segundo idioma (provavelmente espanhol), usar `next-intl` |
+| L19 | Várias TVs por linha, sim. Lista de operadores por unidade, cadastrada pela Engemase (nome e matrícula opcional). Fila offline no tablet por até 24 h. Se o tablet e o desktop reclassificarem a mesma parada, vale a última, e as duas ficam na auditoria |
+| L20 | Senha de 12 caracteres ou mais, sem regra de composição, recusada se aparecer em vazamentos conhecidos (consulta por k-anonimato). Depois de 5 erros, espera de 15 min e aviso por e-mail. Sessão de 12 h renovada com o uso; "manter conectado" até 30 dias (a equipe Engemase fica sempre em 12 h). 2FA por aplicativo autenticador (TOTP), com 10 códigos de recuperação. O admin do cliente reinicia o 2FA dos usuários; a Engemase reinicia o do admin, com conferência de identidade. SSO (Microsoft e Google) na F3 |
+| L21 | `/sync`: 60 por minuto por gateway (rajada de 10). `/enroll`: 10 por hora por IP e 5 tentativas por código. `/config`: 30 por minuto por gateway. Acima disso, `429` com `retry_after_s` |
+| L23 | Novo estado **"Em trânsito"**: o gateway ativado na bancada não gera alerta de offline até o primeiro `/sync` no cliente ou até a Engemase marcá-lo como instalado. Prazo máximo de 30 dias |
 
 ## 5. Pendências do protótipo
 

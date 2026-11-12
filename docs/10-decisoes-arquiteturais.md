@@ -4,22 +4,22 @@ Registro curto das decisões. Para mudar uma decisão, adicione uma nova ADR que
 
 | ADR | Decisão | Status |
 |---|---|---|
-| 001 | Monorepo com pnpm + Turborepo e módulo Go | Proposta |
-| 002 | Agente de borda próprio em Go | Proposta |
-| 003 | Uplink HTTPS somente de saída (MQTT depois) | Proposta |
-| 004 | Neon como banco (Postgres padrão, sem TimescaleDB) | Proposta |
-| 005 | Drizzle como ORM | Proposta |
-| 006 | Borda calcula estados e agregados; nuvem calcula OEE | Proposta |
+| 001 | Monorepo com pnpm + Turborepo e módulo Go | **Aceita** (12/11/2026; o Turborepo ainda não foi necessário: só pnpm workspaces) |
+| 002 | Agente de borda próprio em Go | **Aceita** (12/11/2026) |
+| 003 | Uplink HTTPS somente de saída (MQTT depois) | **Aceita** (12/11/2026) |
+| 004 | Neon como banco (Postgres padrão, sem TimescaleDB) | **Aceita** (12/11/2026; região São Paulo, D7) |
+| 005 | Drizzle como ORM | **Aceita** (12/11/2026) |
+| 006 | Borda calcula estados e agregados; nuvem calcula OEE | **Aceita** (12/11/2026) |
 | 007 | Multi-tenant com schema compartilhado | Substituída pela 016 |
-| 008 | Somente leitura nos CLPs no v1 | Proposta |
-| 009 | Tempo real por polling no MVP | Proposta |
-| 010 | Better Auth para autenticação e organizações | Proposta |
+| 008 | Somente leitura nos CLPs no v1 | **Aceita** (12/11/2026; D19) |
+| 009 | Tempo real por polling no MVP | **Aceita** (12/11/2026) |
+| 010 | Better Auth para autenticação e organizações | **Aceita** (12/11/2026; 2FA conforme D14) |
 | 011 | Modbus TCP e RTU como únicos protocolos do MVP | **Aceita** (decisão do dono do produto) |
-| 012 | Hardware padrão do gateway: Seeed reComputer R1000 sem rádio | Proposta (validar em bancada) |
-| 013 | VPN de manutenção sob demanda (Tailscale com helper separado) | Proposta (validar na PoC) |
-| 014 | Alertas: central no app + Web Push próprio | Proposta |
-| 015 | Cores por cliente calculadas no servidor, com cores de estado travadas | Proposta |
-| 016 | Multi-cliente com isolamento em camadas e acesso Engemase por concessão | Proposta |
+| 012 | Hardware padrão do gateway: Seeed reComputer R1000 sem rádio | **Aceita** (12/11/2026; em comodato, D2; validar em bancada) |
+| 013 | VPN de manutenção sob demanda (Tailscale com helper separado) | **Aceita** (12/11/2026; validar na PoC, D32) |
+| 014 | Alertas: central no app + Web Push próprio | **Aceita** (12/11/2026) |
+| 015 | Cores por cliente calculadas no servidor, com cores de estado travadas | **Aceita** (12/11/2026; faixas de OEE fixas, D25) |
+| 016 | Multi-cliente com isolamento em camadas e acesso Engemase por concessão | **Aceita** (12/11/2026). Com D5, a concessão de suporte é interna (a pessoa da Engemase registra motivo e chamado), sem aprovação do cliente |
 
 ---
 
