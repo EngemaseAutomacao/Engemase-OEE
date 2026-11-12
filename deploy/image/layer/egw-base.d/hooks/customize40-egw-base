@@ -1,8 +1,9 @@
 #!/bin/bash
 # Engemase - camada egw-base, fase customize (roda no host, alvo em $1).
 #
-# - usuário "tecnico": remove o sudo "ALL" criado pelo rpi-image-gen e deixa
-#   só a regra restrita do overlay (sudoers.d/50-egw-tecnico);
+# - usuário "tecnico": remove o sudo "ALL" criado pelo rpi-image-gen. O sudo
+#   restrito vem do pacote oee-gateway (/etc/sudoers.d/oee-tecnico, conffile
+#   atualizado pelo OTA), instalado pela camada egw-agent: um lado só;
 # - usuários dos serviços (sysusers) já na imagem;
 # - units: SSH mascarado, sem login pela serial, nftables, fstrim, repart;
 # - remove o que não pertence ao gateway (rádio, cloud-init, netplan...);
@@ -54,8 +55,6 @@ fi
 # Sem senha até o factory init (a senha é a senha local da unidade).
 in_root usermod --lock "$user1"
 in_root usermod --shell /bin/bash "$user1"
-chmod 0440 "$root/etc/sudoers.d/50-egw-tecnico"
-in_root visudo -c -q -f /etc/sudoers.d/50-egw-tecnico
 in_root passwd -l root >/dev/null
 
 # --- Remoções (rascunho de rede §2.4; série -00 sem rádio) ------------------

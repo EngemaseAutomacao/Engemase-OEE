@@ -149,8 +149,14 @@ data_src=$(findmnt -nvo SOURCE /data 2>/dev/null || true)
 data_fs=$(findmnt -nvo FSTYPE /data 2>/dev/null || true)
 data_ok() { [[ $data_src == "${disk}"p* && $data_fs == ext4 ]] && touch /data/.egw-selftest && rm -f /data/.egw-selftest; }
 pf B0.17 "/data no eMMC de boot, ext4, gravável" "${data_src:-não montada} $data_fs" data_ok
-binds_ok() { mountpoint -q /var/lib/oee-gateway && mountpoint -q /var/log/journal; }
-pf B0.18 "/var/lib/oee-gateway e /var/log/journal montados de /data" "" binds_ok
+# O bind do estado do agente é do pacote oee-gateway; numa imagem de bancada
+# sem o agente (Fase 0, require_agent=n) só o journal é conferido.
+if [[ -f '/usr/lib/systemd/system/var-lib-oee\x2dgateway.mount' ]]; then
+	binds_ok() { mountpoint -q /var/lib/oee-gateway && mountpoint -q /var/log/journal; }
+	pf B0.18 "/var/lib/oee-gateway e /var/log/journal montados de /data" "" binds_ok
+else
+	pf B0.18 "/var/log/journal montado de /data (imagem sem o agente)" "" mountpoint -q /var/log/journal
+fi
 root_src=$(findmnt -nvo SOURCE / 2>/dev/null || true)
 root_opts=$(findmnt -nvo OPTIONS / 2>/dev/null || true)
 root_free=$(df -Pm / 2>/dev/null | awk 'NR == 2 { print $4 }')
@@ -205,7 +211,7 @@ pf B0.25 "SSH mascarado" "ssh.service=$(unit_state ssh.service) ssh.socket=$(uni
 listen=$(ss -Htlnu 2>/dev/null | awk '{ print $1 " " $5 }' \
 	| grep -vE ' (127\.0\.0\.1|\[::1\]):|:443$|^udp .*:68$' | sort -u | tr '\n' ' ')
 pw B0.26 "nenhuma porta aberta além da página local (443)" "${listen:-nenhuma}" test -z "$listen"
-fw_ok() { nft list tables 2>/dev/null | grep -qE '^table inet (egw|oee)$' && [[ $(cat /proc/sys/net/ipv4/ip_forward) == 0 ]]; }
+fw_ok() { nft list tables 2>/dev/null | grep -qx 'table inet oee_gateway' && [[ $(cat /proc/sys/net/ipv4/ip_forward) == 0 ]]; }
 pf B0.27 "firewall nftables carregado e ip_forward=0" "" fw_ok
 pw B0.28 "chrony habilitado" "$(unit_state chrony.service)" test "$(unit_state chrony.service)" = enabled
 if hwclock -r >/dev/null 2>&1; then rec B0.29 PASS "RTC legível (hwclock)" "$(hwclock -r 2>/dev/null)"

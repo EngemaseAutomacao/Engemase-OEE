@@ -72,7 +72,7 @@ manifest=/usr/share/engemase/image-files.sha256
 	# Só arquivos que nada muda em operação (o nftables.conf, por exemplo, é
 	# regenerado pelo oee-helper e por isso fica de fora).
 	find usr/lib/engemase usr/share/engemase etc/systemd/system/egw-factory-init.service \
-		etc/engemase-release etc/sudoers.d/50-egw-tecnico \
+		etc/engemase-release \
 		-type f ! -path "${manifest#/}" -print0 \
 		| sort -z | xargs -0 sha256sum | sed 's|  |  /|'
 ) > "$root$manifest"
@@ -96,6 +96,7 @@ check "definição da partição data" test -f "$root/etc/repart.d/50-egw-data.c
 check "factory init habilitado" is_enabled egw-factory-init.service
 check "/etc/engemase-release" test -s "$root/etc/engemase-release"
 check "sudo do tecnico restrito (sem ALL)" bash -c "! grep -rqsE '^[^#]*ALL *= *\\(ALL' '$root/etc/sudoers.d'"
+check "sudoers válido (visudo -c)" in_root visudo -c -q
 # shellcheck source=/dev/null
 . "$root/usr/share/engemase/platform.env"
 check "kernel ${EGW_KERNEL_ABI:-?} em hold" bash -c "chroot '$root' apt-mark showhold | grep -qx 'linux-image-${EGW_KERNEL_ABI:-x}'"

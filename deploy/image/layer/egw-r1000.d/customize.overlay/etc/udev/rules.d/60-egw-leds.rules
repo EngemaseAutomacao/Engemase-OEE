@@ -1,7 +1,0 @@
-# Engemase: LEDs do R1000 (PCA9535, rótulos do overlay reComputer-R100x)
-# graváveis pelo grupo "oee" (agente), sem root (docs/16 §6).
-# O piscar é feito pelo agente (escrevendo em brightness); trigger fica
-# liberado para o modo "timer" se preferido.
-SUBSYSTEM=="leds", KERNEL=="led-red|led-green|led-blue", ACTION=="add", \
-  RUN+="/bin/chgrp oee /sys%p/brightness /sys%p/trigger", \
-  RUN+="/bin/chmod g+w /sys%p/brightness /sys%p/trigger"

@@ -4,7 +4,7 @@
 # Executado uma única vez pela unidade egw-factory-init.service (condição:
 # /data/identity/hw.json ainda não existe). Etapas:
 #   1. garante a partição /data (systemd-repart ou plano B) e as montagens;
-#   2. lê a semente gravada pela estação (flash-emmc.sh) na partição de boot:
+#   2. lê a semente gravada pela estação (flash/flash-emmc.sh) na partição de boot:
 #      número de série EGW-NNNNN, versão da imagem, operador;
 #   3. coleta os fatos da unidade: MACs da ETH0 (OT) e ETH1 (IT), CID e
 #      tamanho do eMMC, serial do CM4, RAM, bootloader, versão da imagem;
@@ -59,7 +59,11 @@ ensure_data() {
 		mount /data
 	fi
 	systemd-tmpfiles --create /etc/tmpfiles.d/engemase-data.conf
-	mountpoint -q /var/lib/oee-gateway || mount /var/lib/oee-gateway
+	# Bind /data/oee -> /var/lib/oee-gateway: unit do pacote oee-gateway (não
+	# está no fstab). Imagem de bancada sem o agente: não há o que montar.
+	if ! mountpoint -q /var/lib/oee-gateway && [[ -f '/usr/lib/systemd/system/var-lib-oee\x2dgateway.mount' ]]; then
+		systemctl start 'var-lib-oee\x2dgateway.mount' || egw_warn "bind de /data/oee em /var/lib/oee-gateway falhou"
+	fi
 	if ! mountpoint -q /var/log/journal; then
 		mount /var/log/journal
 		journalctl --flush 2>/dev/null || true
@@ -228,7 +232,7 @@ write_network() {
 		  "network_version": 0,
 		  "origin": "factory",
 		  "hostname": $(egw_json_str "$HOSTNAME_NEW"),
-		  "it": { "mac": $(egw_json_str "$EGW_ETH1_MAC"), "mode": "dhcp", "ipv6": "disabled", "allow_ping": true },
+		  "it": { "mac": $(egw_json_str "$EGW_ETH1_MAC"), "mode": "dhcp", "ipv6": "disabled", "allow_ping": false },
 		  "ot": { "mac": $(egw_json_str "$EGW_ETH0_MAC"), "mode": "static", "addresses": [], "routes": [],
 		          "service_address": $(egw_json_str "$F_SERVICE_ADDR/16"), "local_ui": true },
 		  "proxy": null,
