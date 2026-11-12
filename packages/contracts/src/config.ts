@@ -382,6 +382,8 @@ export const GatewayConfigSchema = z
     const busIds = new Set(buses.map((b) => b.id))
     const unitsByBus = new Set<string>()
     const tcpEndpoints = new Set<string>()
+    // Um endpoint (host:porta) é um servidor Modbus TCP OU um conversor RTU sobre TCP, nunca os dois.
+    const endpointProtocol = new Map<string, string>()
     devices.forEach((device, d) => {
       if (device.protocol === "modbus-rtu") {
         if (!busIds.has(device.params.bus)) addRuleIssue(ctx, "bus.ref", ["devices", d, "params", "bus"])
@@ -389,7 +391,11 @@ export const GatewayConfigSchema = z
         if (unitsByBus.has(key)) addRuleIssue(ctx, "bus.unit_unique", ["devices", d, "params", "unit_id"])
         unitsByBus.add(key)
       } else {
-        const key = `${device.params.host.toLowerCase()}:${device.params.port}#${device.params.unit_id}`
+        const endpoint = `${device.params.host.toLowerCase()}:${device.params.port}`
+        const seen = endpointProtocol.get(endpoint)
+        if (seen === undefined) endpointProtocol.set(endpoint, device.protocol)
+        else if (seen !== device.protocol) addRuleIssue(ctx, "tcp.endpoint_protocol", ["devices", d, "protocol"])
+        const key = `${endpoint}#${device.params.unit_id}`
         if (tcpEndpoints.has(key)) addRuleIssue(ctx, "tcp.endpoint_unique", ["devices", d, "params"])
         tcpEndpoints.add(key)
       }

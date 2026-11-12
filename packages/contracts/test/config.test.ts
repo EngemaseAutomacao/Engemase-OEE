@@ -195,6 +195,21 @@ describe("GatewayConfigSchema: regras", () => {
     expect(rulesOf(GatewayConfigSchema, c)).toEqual(["tcp.endpoint_unique"])
   })
 
+  it("mesmo host:porta com protocolos diferentes (TCP e RTU sobre TCP)", () => {
+    const c = variant((cfg) => {
+      const copy = clone(device(cfg, 0))
+      if (copy.protocol !== "modbus-tcp") throw new Error("fixture base mudou: device 0 devia ser modbus-tcp")
+      cfg.devices.push({
+        ...copy,
+        protocol: "modbus-rtu-over-tcp",
+        params: { ...copy.params, host: copy.params.host.toUpperCase(), unit_id: 2 },
+        id: uuidv7At("2026-11-01T00:00:00Z", "mixed"),
+        tags: [],
+      })
+    })
+    expect(issueKeys(GatewayConfigSchema, c)).toEqual([`devices.${c.devices.length - 1}.protocol[tcp.endpoint_protocol]`])
+  })
+
   it("mesmo host:porta com unit ids diferentes é permitido (conversor)", () => {
     const c = variant((cfg) => {
       const copy = clone(device(cfg, 0))

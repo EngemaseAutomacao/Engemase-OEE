@@ -147,6 +147,18 @@ export const INVALID_CASES: Readonly<Record<string, InvalidCase>> = {
     path: "devices.2.params.unit_id",
     description: "Dois escravos com unit id 1 no mesmo barramento.",
   },
+  "gateway-config.invalid.endpoint-mixed-protocol": {
+    schema: "gateway-config",
+    base: CONFIG,
+    patch: [
+      set("devices.1.protocol", "modbus-rtu-over-tcp"),
+      set("devices.1.params", { host: "192.168.10.23", port: 502, unit_id: 2, timeout_ms: 300 }),
+    ],
+    layer: "semantic",
+    rule: "tcp.endpoint_protocol",
+    path: "devices.1.protocol",
+    description: "Mesmo host:porta declarado como Modbus TCP e como conversor RTU sobre TCP.",
+  },
   "gateway-config.invalid.bus-ref-missing": {
     schema: "gateway-config",
     base: CONFIG,

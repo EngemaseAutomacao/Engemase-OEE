@@ -341,6 +341,35 @@
       ]
     },
     {
+      "file": "gateway-config.invalid.endpoint-mixed-protocol.json",
+      "schema": "gateway-config",
+      "valid": false,
+      "description": "Mesmo host:porta declarado como Modbus TCP e como conversor RTU sobre TCP.",
+      "layer": "semantic",
+      "expect": {
+        "path": "devices.1.protocol",
+        "rule": "tcp.endpoint_protocol"
+      },
+      "derived_from": "gateway-config.valid.tcp-and-rtu-bus.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "devices.1.protocol",
+          "value": "modbus-rtu-over-tcp"
+        },
+        {
+          "op": "set",
+          "path": "devices.1.params",
+          "value": {
+            "host": "192.168.10.23",
+            "port": 502,
+            "unit_id": 2,
+            "timeout_ms": 300
+          }
+        }
+      ]
+    },
+    {
       "file": "gateway-config.invalid.bus-ref-missing.json",
       "schema": "gateway-config",
       "valid": false,

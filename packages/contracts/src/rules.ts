@@ -35,6 +35,7 @@ export const RULES = {
   "bus.port_unique": "Cada porta serial só pode estar em um barramento.",
   "bus.unit_unique": "unit_id repetido no mesmo barramento.",
   "tcp.endpoint_unique": "Dois dispositivos com o mesmo host, porta e unit_id.",
+  "tcp.endpoint_protocol": "Dispositivos no mesmo host e porta precisam usar o mesmo protocolo (modbus-tcp ou modbus-rtu-over-tcp).",
   "limits.tags": "Máximo de 2000 tags por gateway.",
   // Máquinas
   "machine.mode_roles": "Papel obrigatório ausente: signals exige state.running; state_code exige state.code; count_derived exige count.total.",
