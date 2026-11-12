@@ -1,0 +1,57 @@
+#!/bin/sh
+# postrm do pacote oee-gateway. Idempotente; respeita DPKG_ROOT.
+#
+# O purge NÃO apaga /var/lib/oee-gateway (buffer ainda não enviado e
+# credencial: "nenhuma peça se perde", docs/16 §1) nem os usuários de sistema.
+# Descarte e LGPD usam "oee-gateway factory-reset" (docs/16 §7), não o dpkg.
+# Também ficam os arquivos gerados pelo oee-helper em /etc/oee-gateway
+# (network.json, proxy.env, nftables.nft): a rede da unidade continua de pé.
+set -e
+set -f
+
+ROOT="${DPKG_ROOT:-}"
+UNITS='oee-gateway.socket oee-gateway-ui.socket oee-helper.socket oee-localui.socket oee-gateway.service var-lib-oee\x2dgateway.mount'
+
+systemd_running() {
+	[ -z "$ROOT" ] && [ -d /run/systemd/system ]
+}
+
+case "$1" in
+	remove)
+		if systemd_running; then
+			systemctl daemon-reload || true
+		fi
+		;;
+	purge)
+		# Links de habilitação e estado do deb-systemd-helper.
+		if [ -z "$ROOT" ] && command -v deb-systemd-helper >/dev/null 2>&1; then
+			for u in $UNITS; do
+				deb-systemd-helper purge "$u" >/dev/null || true
+			done
+		else
+			# Raiz alternativa ou sem deb-systemd-helper: remove os links à mão
+			# (glob só no "*.wants"; o nome da unit entra entre aspas, literal).
+			for u in $UNITS; do
+				set +f
+				for link in "$ROOT"/etc/systemd/system/*.wants/"$u"; do
+					if [ -L "$link" ]; then rm -f "$link"; fi
+				done
+				set -f
+			done
+		fi
+		# Drop-in gerado pelo oee-helper (interface OT da página local).
+		rm -f "$ROOT/etc/systemd/system/oee-localui.socket.d/10-iface.conf"
+		rmdir "$ROOT/etc/systemd/system/oee-localui.socket.d" 2>/dev/null || true
+		if systemd_running; then
+			systemctl daemon-reload || true
+		fi
+		;;
+	upgrade | failed-upgrade | abort-install | abort-upgrade | disappear)
+		;;
+	*)
+		echo "postrm chamado com argumento desconhecido: '$1'" >&2
+		exit 1
+		;;
+esac
+
+exit 0

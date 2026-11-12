@@ -1,0 +1,8 @@
+# Engemase: nomes estáveis das partições do eMMC de boot (image-egw-gpt).
+# RPI_ONBOOTDEV=1 vem da regra 99-rpi-00-bootdev (rpi-storage-binder) e só
+# marca partições do dispositivo de boot: um pendrive com rótulo "data" ou
+# "ROOT" nunca é montado no lugar delas. O nome deste arquivo precisa ordenar
+# DEPOIS de 99-rpi-00-bootdev.rules.
+SUBSYSTEM=="block", ENV{RPI_ONBOOTDEV}=="1", ENV{ID_FS_LABEL}=="BOOT", SYMLINK+="disk/by-slot/boot"
+SUBSYSTEM=="block", ENV{RPI_ONBOOTDEV}=="1", ENV{ID_FS_LABEL}=="ROOT", SYMLINK+="disk/by-slot/system"
+SUBSYSTEM=="block", ENV{RPI_ONBOOTDEV}=="1", ENV{ID_PART_ENTRY_NAME}=="data", SYMLINK+="disk/by-slot/data"

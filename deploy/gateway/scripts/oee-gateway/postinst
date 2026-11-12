@@ -1,0 +1,213 @@
+#!/bin/sh
+# postinst do pacote oee-gateway (docs/16 §3–§5).
+#
+# Idempotente: pode rodar de novo sem efeito colateral (configure repetido,
+# "dpkg --configure -a" depois de uma queda de energia no meio do OTA).
+# Funciona em três situações:
+#   - sistema em execução (bancada, OTA): aplica tudo e (re)inicia os serviços;
+#   - chroot de build da imagem (systemd não roda): cria usuários, diretórios e
+#     links de habilitação, sem iniciar nada;
+#   - DPKG_ROOT (instalação numa raiz alternativa): só mexe dentro dela.
+#
+# Tudo que inicia ou reinicia unit usa "systemctl --no-block": este script pode
+# rodar dentro do oee-gateway-update-check.service, que é ordenado ANTES do
+# agente; esperar o agente aqui travaria o boot.
+set -e
+set -f
+
+ROOT="${DPKG_ROOT:-}"
+STATE_DIR=/var/lib/oee-gateway
+MOUNT_UNIT='var-lib-oee\x2dgateway.mount'
+SOCKETS="oee-gateway.socket oee-gateway-ui.socket oee-helper.socket oee-localui.socket"
+ENABLE_UNITS="$SOCKETS oee-gateway.service $MOUNT_UNIT"
+
+log() { echo "oee-gateway: $*"; }
+warn() { echo "oee-gateway: AVISO: $*" >&2; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# systemd rodando de verdade (não é chroot de build nem DPKG_ROOT).
+systemd_running() {
+	[ -z "$ROOT" ] && [ -d /run/systemd/system ]
+}
+
+create_users() {
+	if [ -n "$ROOT" ]; then
+		systemd-sysusers --root="$ROOT" oee-gateway.conf
+	else
+		systemd-sysusers oee-gateway.conf
+	fi
+}
+
+create_dirs() {
+	if [ -n "$ROOT" ]; then
+		systemd-tmpfiles --root="$ROOT" --create oee-gateway.conf
+	else
+		systemd-tmpfiles --create oee-gateway.conf
+	fi
+}
+
+# Um sudoers inválido desliga o sudo inteiro. Falhar aqui faz o OTA voltar à
+# versão anterior (que restaura o arquivo bom).
+check_sudoers() {
+	f="$ROOT/etc/sudoers.d/oee-tecnico"
+	[ -f "$f" ] || return 0
+	have visudo || return 0
+	if ! visudo -cqf "$f" >/dev/null 2>&1; then
+		echo "oee-gateway: ERRO: $f não é aceito por este sudo (visudo -cf $f)." >&2
+		exit 1
+	fi
+}
+
+# Estado ainda na raiz com /data montada (bancada convertida, versão antiga sem
+# o bind): copia para /data/oee ANTES de montar por cima, para não esconder o
+# buffer. Só copia para um /data/oee vazio e nunca apaga a origem.
+migrate_state_to_data() {
+	have mountpoint || return 0
+	mountpoint -q /data || return 0
+	if mountpoint -q "$STATE_DIR"; then return 0; fi
+	[ -d "$STATE_DIR" ] || return 0
+	[ -n "$(ls -A "$STATE_DIR" 2>/dev/null)" ] || return 0
+	mkdir -p -m 0750 /data/oee
+	if [ -n "$(ls -A /data/oee 2>/dev/null)" ]; then
+		warn "$STATE_DIR (na raiz) e /data/oee têm dados; nada foi copiado. O bind vai esconder $STATE_DIR: confira e migre à mão (README)."
+		return 0
+	fi
+	log "copiando o estado do agente de $STATE_DIR (raiz) para /data/oee"
+	systemctl stop oee-gateway.service >/dev/null 2>&1 || true
+	systemctl stop oee-helper.service >/dev/null 2>&1 || true
+	cp -a "$STATE_DIR/." /data/oee/
+	sync
+}
+
+mount_state_dir() {
+	# Sem /data montada, as condições das units falham e nada acontece.
+	systemctl start oee-gateway-datadir.service "$MOUNT_UNIT" ||
+		warn "não foi possível montar /data/oee em $STATE_DIR (o agente não sobe sem isso)."
+}
+
+reload_udev() {
+	have udevadm || return 0
+	[ -S /run/udev/control ] || return 0
+	udevadm control --reload || true
+	udevadm trigger --action=change --subsystem-match=leds \
+		--subsystem-match=input --subsystem-match=gpio || true
+}
+
+apply_sysctl() {
+	# Reaplica todos os sysctl.d respeitando a precedência (/etc > /usr/lib).
+	systemctl restart systemd-sysctl.service ||
+		warn "não foi possível aplicar o sysctl agora; vale no próximo boot."
+}
+
+# Habilitação no estilo do debhelper: na 1ª instalação (e para units novas
+# numa atualização) habilita; se o administrador ou o oee-helper desabilitaram
+# depois (ex.: página local desligada na OT por política), respeita.
+enable_units() {
+	if [ -n "$ROOT" ]; then
+		if [ -z "$PREV_VERSION" ]; then
+			# shellcheck disable=SC2086 # lista de units, separação intencional
+			systemctl --root="$ROOT" enable $ENABLE_UNITS >/dev/null 2>&1 ||
+				warn "não foi possível habilitar as units em $ROOT."
+		fi
+		return 0
+	fi
+	if have deb-systemd-helper; then
+		for u in $ENABLE_UNITS; do
+			if deb-systemd-helper --quiet was-enabled "$u"; then
+				deb-systemd-helper enable "$u" >/dev/null || true
+			else
+				deb-systemd-helper update-state "$u" >/dev/null || true
+			fi
+		done
+	elif [ -z "$PREV_VERSION" ]; then
+		# shellcheck disable=SC2086 # lista de units, separação intencional
+		systemctl enable $ENABLE_UNITS >/dev/null || true
+	fi
+}
+
+start_enabled_units() {
+	for u in $SOCKETS oee-gateway.service; do
+		if systemctl is-enabled --quiet "$u" 2>/dev/null; then
+			systemctl --no-block start "$u" || warn "falha ao iniciar $u."
+		fi
+	done
+}
+
+# Atualização: para a página local e o ajudante (voltam pelo socket), reabre os
+# sockets ativos (a unit pode ter mudado; inativos ficam como estão) e religa o
+# agente só se ele estava rodando.
+# AGENT_WAS_ACTIVE é lido antes de qualquer parada (a migração para /data também
+# para o agente).
+restart_after_upgrade() {
+	for u in oee-localui.service oee-helper.service; do
+		systemctl stop "$u" >/dev/null 2>&1 || true
+	done
+	if [ "$AGENT_WAS_ACTIVE" = yes ]; then
+		systemctl stop oee-gateway.service || true
+	fi
+	for u in $SOCKETS; do
+		systemctl --no-block try-restart "$u" >/dev/null 2>&1 || true
+	done
+	if [ "$AGENT_WAS_ACTIVE" = yes ]; then
+		systemctl --no-block start oee-gateway.service || warn "falha ao religar o agente."
+	fi
+}
+
+configure() {
+	create_users
+	check_sudoers
+	if systemd_running; then
+		systemctl daemon-reload
+		migrate_state_to_data
+		mount_state_dir
+	fi
+	# Depois do bind, para acertar dono e modo em /data/oee.
+	create_dirs
+	enable_units
+	if systemd_running; then
+		reload_udev
+		apply_sysctl
+	fi
+}
+
+PREV_VERSION=""
+AGENT_WAS_ACTIVE=no
+if systemd_running && systemctl is-active --quiet oee-gateway.service; then
+	AGENT_WAS_ACTIVE=yes
+fi
+
+case "$1" in
+	configure)
+		PREV_VERSION="${2:-}"
+		configure
+		if systemd_running; then
+			if [ -z "$PREV_VERSION" ]; then
+				start_enabled_units
+			else
+				restart_after_upgrade
+			fi
+		fi
+		;;
+	abort-upgrade)
+		# A versão antiga volta; o prerm (upgrade) não parou nada.
+		PREV_VERSION="${2:-}"
+		configure
+		;;
+	abort-remove | abort-deconfigure)
+		# O prerm (remove) parou os serviços: religa o que estiver habilitado.
+		PREV_VERSION="${2:-}"
+		configure
+		if systemd_running; then
+			start_enabled_units
+		fi
+		;;
+	*)
+		echo "postinst chamado com argumento desconhecido: '$1'" >&2
+		exit 1
+		;;
+esac
+
+if systemd_running; then
+	log "instalado. Estado: systemctl status oee-gateway; ativação: sudo oee-gateway enroll --code XXXX-XXXX"
+fi
+exit 0

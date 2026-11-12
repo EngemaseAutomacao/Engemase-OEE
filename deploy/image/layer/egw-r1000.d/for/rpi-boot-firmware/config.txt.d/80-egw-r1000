@@ -1,0 +1,24 @@
+
+# Engemase OEE gateway - Seeed reComputer R1000 (docs/16 §7)
+arm_64bit=1
+# UART primária (GPIO14/15) como na Seeed; o console serial fica desligado no cmdline.
+enable_uart=1
+dtparam=i2c_arm=on
+dtparam=spi=on
+dtparam=watchdog=on
+dtparam=audio=off
+camera_auto_detect=0
+display_auto_detect=0
+
+# Sem arm_boost: 1,5 GHz padrão, menos calor no painel.
+# SEM dtoverlay=gpio-shutdown: falta de energia = reboot (docs/16 §5, D27).
+#
+# Rádio: a série R10xx-00 não tem Wi-Fi/BT. Os overlays disable-wifi e
+# disable-bt NÃO são usados de propósito: assim o autoteste B0 detecta um
+# CM4 com rádio (lote errado) em vez de escondê-lo.
+#
+# Overlay da placa (engemase-r1000-support): RTC PCF8563W com watchdog
+# (não armado no MVP), TPM SLB9670, expansor PCA9535 (LEDs, buzzer,
+# RS485_POWER_EN) e as 3 RS-485 (UART2/3/4 -> ttyAMA2/3/5, A CONFIRMAR).
+dtoverlay=reComputer-R100x
+dtoverlay=

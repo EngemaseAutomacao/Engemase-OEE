@@ -1,0 +1,16 @@
+#!/bin/bash
+# Engemase (image-egw-gpt): identificadores dos sistemas de arquivos da imagem,
+# usados pelo preimage para montar o genimage.cfg.
+set -euo pipefail
+
+out=${IGconf_image_outputdir:?}
+mkdir -p "$out"
+
+# ID de volume da FAT (8 hex) e UUID da ext4 da raiz.
+boot_label=$(uuidgen | cut -c1-8 | tr 'a-f' 'A-F')
+root_uuid=$(uuidgen)
+
+{
+	printf 'BOOT_LABEL=%s\n' "$boot_label"
+	printf 'ROOT_UUID=%s\n' "$root_uuid"
+} > "$out/img_uuids"

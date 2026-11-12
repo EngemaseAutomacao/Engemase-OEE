@@ -1,0 +1,20 @@
+# Socket entre a página local (oee-localui, usuário oee-ui) e o agente.
+# Nele o agente expõe só as rotas da página e valida a sessão em toda chamada
+# (exceto o login): uma página comprometida não executa nada sem sessão.
+# A página não tem acesso ao buffer nem à credencial (docs/16 §3 e §6).
+[Unit]
+Description=Engemase OEE - API local do agente (página local)
+Documentation=file:/usr/share/doc/oee-gateway/README.md
+
+[Socket]
+ListenStream=/run/oee-gateway/ui.sock
+SocketUser=oee
+SocketGroup=oee-ui
+SocketMode=0660
+DirectoryMode=0755
+RemoveOnStop=yes
+FileDescriptorName=ui
+Service=oee-gateway.service
+
+[Install]
+WantedBy=sockets.target

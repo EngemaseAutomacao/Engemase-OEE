@@ -1,0 +1,62 @@
+#!/bin/sh
+# postinst do pacote oee-gateway-updater (OTA mínimo). Idempotente; respeita
+# DPKG_ROOT. NUNCA reinicia o oee-gateway-updater.service: ele pode ser
+# justamente quem está rodando o dpkg agora. Tudo com --no-block.
+set -e
+set -f
+
+ROOT="${DPKG_ROOT:-}"
+ENABLE_UNITS="oee-gateway-updater.path oee-gateway-update-check.service"
+
+warn() { echo "oee-gateway-updater: AVISO: $*" >&2; }
+
+systemd_running() {
+	[ -z "$ROOT" ] && [ -d /run/systemd/system ]
+}
+
+enable_units() {
+	if [ -n "$ROOT" ]; then
+		if [ -z "$PREV_VERSION" ]; then
+			# shellcheck disable=SC2086 # lista de units, separação intencional
+			systemctl --root="$ROOT" enable $ENABLE_UNITS >/dev/null 2>&1 ||
+				warn "não foi possível habilitar as units em $ROOT."
+		fi
+		return 0
+	fi
+	if command -v deb-systemd-helper >/dev/null 2>&1; then
+		for u in $ENABLE_UNITS; do
+			if deb-systemd-helper --quiet was-enabled "$u"; then
+				deb-systemd-helper enable "$u" >/dev/null || true
+			else
+				deb-systemd-helper update-state "$u" >/dev/null || true
+			fi
+		done
+	elif [ -z "$PREV_VERSION" ]; then
+		# shellcheck disable=SC2086 # lista de units, separação intencional
+		systemctl enable $ENABLE_UNITS >/dev/null || true
+	fi
+}
+
+PREV_VERSION=""
+case "$1" in
+	configure | abort-upgrade | abort-remove | abort-deconfigure)
+		PREV_VERSION="${2:-}"
+		if systemd_running; then
+			systemctl daemon-reload
+		fi
+		enable_units
+		if systemd_running; then
+			# Só a unit .path: reabre a vigilância do request.json. A verificação
+			# pós-boot (oneshot) roda no próximo boot; não iniciar agora.
+			if systemctl is-enabled --quiet oee-gateway-updater.path 2>/dev/null; then
+				systemctl --no-block restart oee-gateway-updater.path || warn "falha ao iniciar oee-gateway-updater.path."
+			fi
+		fi
+		;;
+	*)
+		echo "postinst chamado com argumento desconhecido: '$1'" >&2
+		exit 1
+		;;
+esac
+
+exit 0

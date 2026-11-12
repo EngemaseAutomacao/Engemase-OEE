@@ -17,14 +17,14 @@ export function ReasonsTable({ rows }: { rows: ReasonRow[] }) {
     <Table className="min-w-[860px]">
       <TableHeader>
         <TableRow className="bg-muted/40 hover:bg-muted/40">
-          <TableHead className={cn(head, "w-10 pl-6 text-right")}>#</TableHead>
+          <TableHead className={cn(head, "w-10 pl-5 text-right")}>#</TableHead>
           <TableHead className={head}>Motivo</TableHead>
           <TableHead className={head}>Categoria</TableHead>
           <TableHead className={cn(head, "text-right")}>Minutos</TableHead>
           <TableHead className={cn(head, "text-right")}>Ocorrências</TableHead>
           <TableHead className={cn(head, "text-right")}>Duração média</TableHead>
           <TableHead className={cn(head, "w-44")}>% do total</TableHead>
-          <TableHead className={cn(head, "pr-6 text-right")}>% acumulado</TableHead>
+          <TableHead className={cn(head, "pr-5 text-right")}>% acumulado</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -34,7 +34,7 @@ export function ReasonsTable({ rows }: { rows: ReasonRow[] }) {
           const color = none ? UNCLASSIFIED_HEX : meta.hex
           return (
             <TableRow key={r.reasonId} className={cn(none && "bg-state-stopped/5")}>
-              <TableCell className="pl-6 text-right text-xs text-muted-foreground tabular-nums">{i + 1}</TableCell>
+              <TableCell className="pl-5 text-right text-xs text-muted-foreground tabular-nums">{i + 1}</TableCell>
               <TableCell className="font-medium">
                 {none ? (
                   <span className="inline-flex items-center gap-1.5">
@@ -62,7 +62,7 @@ export function ReasonsTable({ rows }: { rows: ReasonRow[] }) {
                   <span className="w-12 text-right text-xs tabular-nums">{pct(r.share)}</span>
                 </div>
               </TableCell>
-              <TableCell className={cn("pr-6 text-right tabular-nums", vital < 0 || i <= vital ? "font-medium" : "text-muted-foreground")}>
+              <TableCell className={cn("pr-5 text-right tabular-nums", vital < 0 || i <= vital ? "font-medium" : "text-muted-foreground")}>
                 {pct(r.cumulative)}
               </TableCell>
             </TableRow>
@@ -71,7 +71,7 @@ export function ReasonsTable({ rows }: { rows: ReasonRow[] }) {
       </TableBody>
       <TableFooter>
         <TableRow className="hover:bg-transparent">
-          <TableCell className="pl-6" />
+          <TableCell className="pl-5" />
           <TableCell className="font-semibold" colSpan={2}>
             Total · {rows.length} {rows.length === 1 ? "motivo" : "motivos"}
           </TableCell>
@@ -79,7 +79,7 @@ export function ReasonsTable({ rows }: { rows: ReasonRow[] }) {
           <TableCell className="text-right font-semibold tabular-nums">{num(totalOcc)}</TableCell>
           <TableCell className="text-right font-semibold tabular-nums">{totalOcc > 0 ? duration((totalMin * 60) / totalOcc) : "—"}</TableCell>
           <TableCell className="text-xs text-muted-foreground">{hours(totalMin)} parados</TableCell>
-          <TableCell className="pr-6 text-right font-semibold tabular-nums">{pct(totalMin > 0 ? 1 : null)}</TableCell>
+          <TableCell className="pr-5 text-right font-semibold tabular-nums">{pct(totalMin > 0 ? 1 : null)}</TableCell>
         </TableRow>
       </TableFooter>
     </Table>

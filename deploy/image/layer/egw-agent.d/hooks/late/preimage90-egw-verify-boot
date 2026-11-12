@@ -1,0 +1,30 @@
+#!/bin/bash
+# Engemase - confere o config.txt e o cmdline.txt montados pelas camadas do
+# rpi-image-gen (hooks "late" de rpi-boot-firmware e rpi-linux-base, que vêm
+# antes desta camada no plano). Só lê; falha o build se algo fugir do docs/16.
+set -euo pipefail
+
+root=${1:?uso: $0 <rootfs> <outputdir>}
+cfg=$root/boot/firmware/config.txt
+cmd=$root/boot/firmware/cmdline.txt
+
+log() { printf 'egw-boot: %s\n' "$*"; }
+fail=0
+need() { if grep -qE "$2" "$1"; then log "ok: $3"; else log "FALHA: $3" >&2; fail=1; fi; }
+deny() { if grep -qE "$2" "$1"; then log "FALHA: $3" >&2; fail=1; else log "ok: $3"; fi; }
+
+[[ -f $cfg ]] || { log "FALHA: $cfg ausente" >&2; exit 1; }
+[[ -f $cmd ]] || { log "FALHA: $cmd ausente" >&2; exit 1; }
+
+need "$cfg" '^dtoverlay=reComputer-R100x$'   "overlay do R1000 no config.txt"
+need "$cfg" '^dtparam=watchdog=on$'          "watchdog do SoC ligado"
+deny "$cfg" '^[[:space:]]*dtoverlay=gpio-shutdown' "sem gpio-shutdown (falta de energia = reboot)"
+deny "$cfg" '^[[:space:]]*arm_boost=1'       "sem arm_boost"
+deny "$cfg" '^[[:space:]]*dtoverlay=vc4-kms' "sem driver KMS"
+need "$cmd" 'root=/dev/disk/by-slot/system'  "raiz pelo by-slot (layout image-egw-gpt)"
+need "$cmd" '(^| )panic=10( |$)'             "panic=10"
+need "$cmd" '(^| )net\.ifnames=0( |$)'       "nomes eth0/eth1 do kernel"
+deny "$cmd" 'console=serial0'                "sem console na serial"
+log "config.txt: $(grep -cv '^[[:space:]]*\(#\|$\)' "$cfg") linhas ativas; cmdline: $(cat "$cmd")"
+
+exit "$fail"

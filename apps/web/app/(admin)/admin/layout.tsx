@@ -1,5 +1,5 @@
 import { getAuditLog, getClients, getCurrentUser, getGateways } from "@/lib/mock"
-import { initials } from "@/lib/format"
+import { ago, initials } from "@/lib/format"
 import { PLATFORM_ROLE_LABEL } from "@/lib/roles"
 import {
   Sidebar,
@@ -29,7 +29,7 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
   ]
   const bell = getAuditLog()
     .slice(0, 5)
-    .map((a) => ({ id: a.id, severity: "info" as const, title: a.entityName, body: a.details ?? a.action, href: "/admin/auditoria", ago: "", read: true }))
+    .map((a) => ({ id: a.id, severity: "info" as const, title: a.entityName, body: a.details ?? a.action, href: "/admin/auditoria", ago: ago(a.at), read: true }))
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon">

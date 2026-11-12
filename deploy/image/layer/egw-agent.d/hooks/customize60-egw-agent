@@ -1,0 +1,98 @@
+#!/bin/bash
+# Engemase - camada egw-agent, fase customize (roda no host, alvo em $1).
+#
+# 1. instala os .deb do gateway (oee-gateway e companheiros) de <debdir>;
+# 2. instala o factory init (deploy/image/factory) e habilita a unidade de
+#    execução única;
+# 3. copia o certificado PÚBLICO da bancada (exportação da senha local);
+# 4. grava /etc/engemase-release.
+set -euo pipefail
+
+root=${1:?uso: $0 <rootfs>}
+debdir=${IGconf_egw_debdir:-}
+[[ -n $debdir ]] || debdir="${SRCROOT:-.}/debs"
+require_agent=${IGconf_egw_require_agent:-y}
+
+log() { printf 'egw-agent: %s\n' "$*"; }
+die() { printf 'egw-agent: ERRO: %s\n' "$*" >&2; exit 1; }
+in_root() { chroot "$root" "$@"; }
+is_yes() { case ${1,,} in y|yes|1|true) return 0 ;; *) return 1 ;; esac; }
+
+# Fonte do factory init: <srcroot>/factory (este hook roda em <srcroot>/layer/egw-agent.d/hooks).
+factory_src=""
+for d in "${SRCROOT:-}/factory" "${LAYER_DIR:-}/../factory"; do
+	if [[ -f $d/egw-factory-init ]]; then factory_src=$d; break; fi
+done
+[[ -n $factory_src ]] || die "diretório factory/ não encontrado (SRCROOT=${SRCROOT:-}, LAYER_DIR=${LAYER_DIR:-})"
+
+# --- 1. Agente -------------------------------------------------------------------
+shopt -s nullglob
+agent_debs=("$debdir"/oee-gateway_*_arm64.deb)
+extra_debs=("$debdir"/oee-gateway-*_arm64.deb "$debdir"/oee-gateway-*_all.deb)
+shopt -u nullglob
+if (( ${#agent_debs[@]} > 1 )); then
+	die "mais de um oee-gateway_*_arm64.deb em $debdir"
+elif (( ${#agent_debs[@]} == 1 )); then
+	tmp=$(mktemp -d "$root/tmp/egw-agent.XXXXXX")
+	inside=()
+	for f in "${agent_debs[@]}" "${extra_debs[@]}"; do
+		cp "$f" "$tmp/"
+		inside+=("/tmp/${tmp##*/}/${f##*/}")
+	done
+	log "instalando: ${inside[*]##*/}"
+	in_root apt-get install -y --no-install-recommends "${inside[@]}"
+	rm -rf "$tmp"
+elif is_yes "$require_agent"; then
+	die "oee-gateway_*_arm64.deb não encontrado em $debdir"
+else
+	log "AVISO: imagem SEM o agente oee-gateway (só bancada da Fase 0)"
+fi
+agent_ver=$(in_root dpkg-query -W -f='${Version}' oee-gateway 2>/dev/null || true)
+
+# --- 2. Factory init --------------------------------------------------------------
+dst=/usr/lib/engemase/factory
+install -d -m 0755 "$root$dst"
+install -m 0755 "$factory_src/egw-factory-init"   "$root$dst/egw-factory-init"
+install -m 0755 "$factory_src/egw-selftest"       "$root$dst/egw-selftest"
+install -m 0755 "$factory_src/egw-data-fallback"  "$root$dst/egw-data-fallback"
+install -m 0644 "$factory_src/egw-common.sh"      "$root$dst/egw-common.sh"
+install -m 0644 "$factory_src/egw-factory-init.service" "$root/etc/systemd/system/egw-factory-init.service"
+ln -sf "$dst/egw-factory-init" "$root/usr/sbin/egw-factory-init"
+ln -sf "$dst/egw-selftest" "$root/usr/sbin/egw-selftest"
+in_root systemctl enable egw-factory-init.service
+
+# --- 3. Certificado da bancada ----------------------------------------------------
+cert=${IGconf_egw_bench_cert:-}
+install -d -m 0755 "$root/usr/share/engemase/keys"
+if [[ -n $cert && -f $cert ]]; then
+	if grep -q 'PRIVATE KEY' "$cert"; then
+		die "$cert contém chave PRIVADA; a imagem só leva o certificado público"
+	fi
+	install -m 0644 "$cert" "$root/usr/share/engemase/keys/bench-export.pem"
+	log "certificado da bancada: ${cert##*/}"
+else
+	log "AVISO: sem certificado da bancada (${cert:-não definido}); o factory init não gera senha local"
+fi
+
+# --- 4. /etc/engemase-release ------------------------------------------------------
+# shellcheck source=/dev/null
+. "$root/usr/share/engemase/platform.env"
+built_at=$(date -u -d "@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y-%m-%dT%H:%M:%SZ)
+{
+	echo "# Engemase OEE gateway - identificação da imagem (gerado no build)"
+	printf 'EGW_IMAGE_VERSION=%s\n' "${IGconf_egw_image_version:?}"
+	printf 'EGW_IMAGE_COMMIT=%s\n' "${IGconf_egw_image_commit:-unknown}"
+	printf 'EGW_DEBIAN=%s\n' "${IGconf_egw_debian_codename:-unknown}"
+	printf 'EGW_DEBIAN_SNAPSHOT=%s\n' "${IGconf_egw_debian_snapshot:-unknown}"
+	printf 'EGW_RPI_IMAGE_GEN=%s\n' "${IGconf_egw_rpi_image_gen_commit:-unknown}"
+	printf 'EGW_SEEED_OVERLAYS=%s\n' "${IGconf_egw_seeed_overlays_commit:-unknown}"
+	printf 'EGW_PLATFORM=%s\n' "${EGW_PLATFORM:-unknown}"
+	printf 'EGW_KERNEL_ABI=%s\n' "${EGW_KERNEL_ABI:-unknown}"
+	printf 'EGW_KERNEL_PINNED=%s\n' "${EGW_KERNEL_PINNED:-no}"
+	printf 'EGW_AGENT_AT_BUILD=%s\n' "${agent_ver:-none}"
+	printf 'EGW_EXPECT_RAM_GB=%s\n' "${IGconf_egw_expect_ram_gb:-2}"
+	printf 'EGW_EXPECT_EMMC_GB=%s\n' "${IGconf_egw_expect_emmc_gb:-16}"
+	printf 'EGW_BUILT_AT=%s\n' "$built_at"
+} > "$root/etc/engemase-release"
+chmod 0644 "$root/etc/engemase-release"
+log "release ${IGconf_egw_image_version} (kernel ${EGW_KERNEL_ABI:-?}, agente ${agent_ver:-nenhum})"

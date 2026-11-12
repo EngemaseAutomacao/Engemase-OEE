@@ -1,0 +1,27 @@
+#!/bin/bash
+# Engemase (image-egw-gpt): gera o genimage.cfg a partir do modelo da camada.
+# Argumentos do rpi-image-gen na fase preimage: <rootfs> <outputdir>.
+set -euo pipefail
+
+genimg_in=${2:?uso: $0 <rootfs> <outputdir>}
+
+# shellcheck source=/dev/null
+. "${IGconf_image_outputdir:?}/img_uuids"
+
+mke2fs_args="-U ${ROOT_UUID:?} ${IGconf_fs_ext4_mkfs_args:-}"
+vfat_args="-S ${IGconf_device_sector_size:-512} -i ${BOOT_LABEL:?} ${IGconf_fs_vfat_mkfs_args:-}"
+
+sed \
+	-e "s|<IMAGE_NAME>|${IGconf_image_name:?}|g" \
+	-e "s|<IMAGE_SUFFIX>|${IGconf_image_suffix:?}|g" \
+	-e "s|<BOOT_SIZE>|${IGconf_image_boot_part_size:?}|g" \
+	-e "s|<ROOT_SIZE>|${IGconf_image_root_part_size:?}|g" \
+	-e "s|<MKE2FS_CONF>|'$(readlink -ef "$LAYER_DIR/mke2fs.conf")'|g" \
+	-e "s|<MKE2FS_EXTRAARGS>|${mke2fs_args}|g" \
+	-e "s|<VFAT_EXTRAARGS>|${vfat_args}|g" \
+	"$LAYER_DIR/genimage.cfg.in" > "$genimg_in/genimage.cfg"
+
+if grep -q '<[A-Z_]*>' "$genimg_in/genimage.cfg"; then
+	echo "image-egw-gpt: marcador não substituído em genimage.cfg" >&2
+	exit 1
+fi

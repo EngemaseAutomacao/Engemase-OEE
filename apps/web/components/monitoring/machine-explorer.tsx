@@ -10,9 +10,9 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { MachineCard } from "@/components/oee/machine-card"
 import { StateDot } from "@/components/oee/state-badge"
 import { MachineTable, type MachineRow } from "@/components/monitoring/machine-table"
+import { MachineTile } from "@/components/refresh/machine-tile"
 
 type View = "grid" | "table"
 
@@ -85,119 +85,129 @@ export function MachineExplorer({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <InputGroup className="lg:max-w-xs">
-          <InputGroupAddon>
-            <SearchIcon />
-          </InputGroupAddon>
-          <InputGroupInput
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por nome, código ou produto"
-            aria-label="Buscar máquina"
-          />
-          {query && (
-            <InputGroupAddon align="inline-end">
-              <InputGroupButton size="icon-xs" aria-label="Limpar busca" onClick={() => setQuery("")}>
-                <XIcon />
-              </InputGroupButton>
+      {/* Barra compacta de filtros */}
+      <section
+        aria-label="Filtros de máquinas"
+        className="flex flex-col gap-3 rounded-2xl border bg-card p-3 shadow-[0_1px_2px_rgba(16,24,40,0.04)] sm:px-4"
+      >
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <InputGroup className="lg:max-w-xs">
+            <InputGroupAddon>
+              <SearchIcon />
             </InputGroupAddon>
-          )}
-        </InputGroup>
+            <InputGroupInput
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por nome, código ou produto"
+              aria-label="Buscar máquina"
+            />
+            {query && (
+              <InputGroupAddon align="inline-end">
+                <InputGroupButton size="icon-xs" aria-label="Limpar busca" onClick={() => setQuery("")}>
+                  <XIcon />
+                </InputGroupButton>
+              </InputGroupAddon>
+            )}
+          </InputGroup>
 
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
-          {units.length > 1 && (
-            <Select
-              value={unitId}
-              onValueChange={(v) => {
-                setUnitId(v)
-                setLineId("all")
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-48" aria-label="Unidade">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+            {units.length > 1 && (
+              <Select
+                value={unitId}
+                onValueChange={(v) => {
+                  setUnitId(v)
+                  setLineId("all")
+                }}
+              >
+                <SelectTrigger className="w-full sm:w-48" aria-label="Unidade">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as unidades</SelectItem>
+                  {units.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Select value={lineId} onValueChange={setLineId}>
+              <SelectTrigger className="w-full sm:w-48" aria-label="Linha">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas as unidades</SelectItem>
-                {units.map((u) => (
-                  <SelectItem key={u.id} value={u.id}>
-                    {u.name}
+                <SelectItem value="all">Todas as linhas</SelectItem>
+                {visibleLines.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          )}
-          <Select value={lineId} onValueChange={setLineId}>
-            <SelectTrigger className="w-full sm:w-48" aria-label="Linha">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as linhas</SelectItem>
-              {visibleLines.map((l) => (
-                <SelectItem key={l.id} value={l.id}>
-                  {l.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          </div>
+
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            value={view}
+            onValueChange={(v) => v && setView(v as View)}
+            className="lg:ml-auto"
+            aria-label="Modo de exibição"
+          >
+            <ToggleGroupItem value="grid" aria-label="Grade">
+              <LayoutGridIcon />
+              Grade
+            </ToggleGroupItem>
+            <ToggleGroupItem value="table" aria-label="Tabela">
+              <ListIcon />
+              Tabela
+            </ToggleGroupItem>
+          </ToggleGroup>
         </div>
 
-        <ToggleGroup
-          type="single"
-          variant="outline"
-          value={view}
-          onValueChange={(v) => v && setView(v as View)}
-          className="lg:ml-auto"
-          aria-label="Modo de exibição"
-        >
-          <ToggleGroupItem value="grid" aria-label="Grade">
-            <LayoutGridIcon />
-            Grade
-          </ToggleGroupItem>
-          <ToggleGroupItem value="table" aria-label="Tabela">
-            <ListIcon />
-            Tabela
-          </ToggleGroupItem>
-        </ToggleGroup>
-      </div>
-
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <ToggleGroup
-          type="multiple"
-          variant="outline"
-          size="sm"
-          spacing={1}
-          value={states}
-          onValueChange={(v) => setStates(v as MachineState[])}
-          className="flex-wrap"
-          aria-label="Filtrar por estado"
-        >
-          {STATE_ORDER.map((s) => {
-            const n = stateCount(s)
-            return (
-              <ToggleGroupItem key={s} value={s} className="gap-1.5 px-2.5 text-xs" disabled={n === 0 && !states.includes(s)}>
-                <StateDot state={s} />
-                {STATE_META[s].short}
-                <span className="text-muted-foreground tabular-nums">{n}</span>
-              </ToggleGroupItem>
-            )
-          })}
-        </ToggleGroup>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="tabular-nums">
-            {filtered.length} de {machines.length} {machines.length === 1 ? "máquina" : "máquinas"}
-          </span>
-          {hasFilters && (
-            <Button variant="ghost" size="xs" onClick={clearFilters}>
-              <XIcon />
-              Limpar filtros
-            </Button>
-          )}
+        <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <ToggleGroup
+            type="multiple"
+            size="sm"
+            spacing={1}
+            value={states}
+            onValueChange={(v) => setStates(v as MachineState[])}
+            className="flex-wrap"
+            aria-label="Filtrar por estado"
+          >
+            {STATE_ORDER.map((s) => {
+              const n = stateCount(s)
+              return (
+                <ToggleGroupItem
+                  key={s}
+                  value={s}
+                  className="gap-1.5 rounded-full bg-muted/60 px-3 text-xs data-[state=on]:bg-primary/10 data-[state=on]:font-semibold data-[state=on]:text-primary"
+                  disabled={n === 0 && !states.includes(s)}
+                >
+                  <StateDot state={s} />
+                  {STATE_META[s].short}
+                  <span className="text-muted-foreground tabular-nums">{n}</span>
+                </ToggleGroupItem>
+              )
+            })}
+          </ToggleGroup>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="tabular-nums">
+              {filtered.length} de {machines.length} {machines.length === 1 ? "máquina" : "máquinas"}
+            </span>
+            {hasFilters && (
+              <Button variant="ghost" size="xs" onClick={clearFilters}>
+                <XIcon />
+                Limpar filtros
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
+      </section>
 
       {filtered.length === 0 ? (
-        <Empty className="border border-dashed">
+        <Empty className="rounded-2xl border border-dashed bg-card">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <SearchXIcon />
@@ -212,14 +222,9 @@ export function MachineExplorer({
           </EmptyContent>
         </Empty>
       ) : view === "grid" ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           {rows.map((m) => (
-            <div key={m.id} className="flex flex-col gap-1">
-              <MachineCard machine={m} clientSlug={clientSlug} />
-              <span className="truncate px-1 text-[11px] text-muted-foreground">
-                {m.lineName} · {m.unitName}
-              </span>
-            </div>
+            <MachineTile key={m.id} machine={m} href={`/${clientSlug}/maquinas/${m.id}`} lineName={m.lineName} unitName={m.unitName} />
           ))}
         </div>
       ) : (

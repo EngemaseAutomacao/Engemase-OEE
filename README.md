@@ -2,7 +2,7 @@
 
 Plataforma de monitoramento de **OEE (Overall Equipment Effectiveness)** para máquinas industriais, **independente da marca do CLP**.
 
-> **Status:** planejamento em revisão final (ADRs aguardando aceite formal, ver [D37 em `docs/17`](docs/17-backlog-e-pendencias.md#3-decisões-pendentes-do-dono-do-produto)) e **protótipo da interface** em andamento em [`apps/web`](apps/web/) (dados simulados, roda localmente). Arquitetura e plano em [`docs/`](docs/).
+> **Status:** planejamento em revisão final (ADRs aguardando aceite formal, ver [D37 em `docs/17`](docs/17-backlog-e-pendencias.md#3-decisões-pendentes-do-dono-do-produto)), **protótipo da interface** em andamento em [`apps/web`](apps/web/) (dados simulados, roda localmente) e **Fase 0 do sistema real** com código e testes: contrato gateway↔nuvem, cálculo de OEE, banco com RLS, simulador de CLP e esqueleto do agente do gateway (ver [`docs/00-status.md`](docs/00-status.md)). Arquitetura e plano em [`docs/`](docs/).
 
 ## Em uma frase
 
@@ -41,7 +41,7 @@ flowchart LR
 | Autenticação | Better Auth (organizações multi-tenant e papéis) |
 | UI | Tailwind CSS + shadcn/ui + Apache ECharts |
 | Jobs | Vercel Cron |
-| Monorepo | pnpm + Turborepo (TypeScript) e módulo Go em `gateway/` |
+| Monorepo | pnpm workspaces (TypeScript; Turborepo planejado) e módulos Go em `gateway/` e `tools/plc-sim/` |
 
 ## Documentação
 
@@ -66,23 +66,53 @@ flowchart LR
 | 16 | [Projeto do gateway](docs/16-projeto-do-gateway.md) | Funções, software, rede e instalação, comissionamento local, preparação e ciclo de vida (definições canônicas) |
 | 17 | [Backlog e pendências](docs/17-backlog-e-pendencias.md) | O que falta, épicos até o piloto, decisões pendentes, próximos passos |
 
-## Estrutura planejada do repositório
+## Estrutura do repositório
 
 ```
 engemase-oee/
 ├── apps/
-│   └── web/                  # Next.js (dashboards, cadastros, API dos gateways, cron)
+│   └── web/                  # Next.js: protótipo da interface (dados simulados); depois API dos gateways e cron
 ├── packages/
-│   ├── db/                   # Schema Drizzle, migrações SQL, seeds
-│   ├── contracts/            # Contrato gateway↔nuvem (Zod → JSON Schema)
-│   ├── oee-core/             # Cálculo de OEE puro (TS), 100% testado
-│   └── ui/                   # Componentes compartilhados (opcional)
-├── gateway/                  # Agente de borda em Go (módulo próprio)
+│   ├── contracts/            # @engemase/contracts: contrato gateway↔nuvem v1 (Zod 4 → JSON Schema + fixtures)
+│   ├── oee-core/             # @engemase/oee-core: cálculo de OEE puro (turnos, A, P, Q, agregação)
+│   └── db/                   # @engemase/db: schema Drizzle (Postgres 18), migrações SQL e RLS por cliente
+├── gateway/                  # Agente de borda oee-gateway em Go (módulo próprio)
 │   ├── cmd/oee-gateway/
-│   └── internal/{config,drivers,engine,buffer,uplink,commands,updater}
+│   ├── internal/{app,cli,config,modbus,poller,engine,buffer,uplink,commands,contracts,ids}
+│   └── test/integration/     # integração com o tools/plc-sim
 ├── tools/
-│   └── plc-sim/              # Simulador de máquinas/CLPs (Modbus)
-├── deploy/
-│   └── gateway/              # systemd, pacote .deb, script de instalação, Dockerfile
+│   └── plc-sim/              # Simulador de CLP Modbus TCP com o bloco OEE padrão (módulo Go próprio)
+├── deploy/                   # Em andamento: gateway/ (systemd, nftables, pacote .deb) e image/ (imagem do sistema)
+├── .github/workflows/ci.yml  # CI: jobs web, packages e go em paralelo
 └── docs/                     # Esta documentação
 ```
+
+Cada pacote tem um `README.md` com o que é, decisões e como testar: [contracts](packages/contracts/README.md), [oee-core](packages/oee-core/README.md), [db](packages/db/README.md), [gateway](gateway/README.md), [plc-sim](tools/plc-sim/README.md).
+
+## Como rodar
+
+Requisitos: **Node 22**, **pnpm 10** (a versão exata está em `packageManager`) e **Go 1.24**.
+
+```bash
+pnpm install
+pnpm dev                   # protótipo em http://localhost:3000
+```
+
+Testes e verificações (os mesmos que o CI roda):
+
+```bash
+pnpm test                  # testes de todos os pacotes TS (packages/*), com Vitest
+pnpm typecheck:packages    # tsc --noEmit nos pacotes
+pnpm typecheck             # pacotes + apps/web
+pnpm lint                  # ESLint do apps/web
+pnpm test:go               # go test ./... no gateway/ e no tools/plc-sim/ (GOTOOLCHAIN=local)
+pnpm test:go:integration   # gateway lendo o plc-sim de verdade (compila e sobe o simulador)
+pnpm vet:go                # go vet nos dois módulos Go
+```
+
+Um pacote só: `pnpm --filter @engemase/oee-core test` (ou `@engemase/contracts`, `@engemase/db`). Os testes do `packages/db` usam **PGlite** (Postgres em WASM) e não precisam de servidor. Os testes do gateway leem as fixtures e o JSON Schema de `packages/contracts`, por isso rodam dentro do monorepo.
+
+O CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) roda em todo push e pull request, em três jobs paralelos:
+- **web:** typecheck, lint e build do `apps/web`;
+- **packages:** typecheck e testes dos pacotes;
+- **go:** gofmt, `go vet`, `go test -race`, integração com o simulador e compilação do agente para arm64.

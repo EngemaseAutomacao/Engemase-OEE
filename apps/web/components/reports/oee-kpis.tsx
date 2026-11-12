@@ -2,7 +2,8 @@ import { BoxesIcon, CheckCircle2Icon, GaugeIcon, TimerIcon, TimerOffIcon, ZapIco
 
 import { num, pct } from "@/lib/format"
 import { TONE_HEX, TONE_TEXT, oeeTone } from "@/lib/states"
-import { KpiCard } from "@/components/oee/kpi-card"
+import { Ring } from "@/components/dashboard/ring"
+import { StatCard } from "@/components/dashboard/stat-card"
 import { Delta } from "./delta"
 import type { OeeAgg } from "./oee-calc"
 import { hours } from "./report-utils"
@@ -17,13 +18,13 @@ const TONE_LABEL = {
 const pp = (abs: number) => `${(abs * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} p.p.`
 const diff = (a: number | null, b: number | null) => (a === null || b === null ? null : a - b)
 
-function Bar({ value }: { value: number | null }) {
-  if (value === null) return null
-  return (
-    <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
-      <div className="h-full rounded-full" style={{ width: `${Math.min(100, value * 100)}%`, background: TONE_HEX[oeeTone(value)] }} />
-    </div>
-  )
+/** Dica de duas linhas dentro do StatCard (o cartão trunca uma linha só). */
+function Hint({ children }: { children: React.ReactNode }) {
+  return <span className="flex flex-col gap-0.5 whitespace-normal">{children}</span>
+}
+
+function ToneRing({ value }: { value: number | null }) {
+  return <Ring value={value ?? 0} size={48} stroke={5} color={TONE_HEX[oeeTone(value)]} />
 }
 
 /** KPIs do período filtrado, com variação em relação ao período anterior de mesmo tamanho. */
@@ -40,78 +41,70 @@ export function OeeKpis({ current, previous, periodDays }: { current: OeeAgg; pr
   )
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-      <KpiCard
-        label="OEE do período"
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <StatCard
         icon={GaugeIcon}
-        value={pct(current.oee)}
-        valueClassName={TONE_TEXT[tone]}
+        tone="blue"
+        label="OEE do período"
+        value={<span className={TONE_TEXT[tone]}>{pct(current.oee)}</span>}
         className="ring-1 ring-primary/10"
         hint={
-          <span className="flex flex-col gap-0.5">
+          <Hint>
             <span>{TONE_LABEL[tone]}</span>
             <Delta value={diff(current.oee, prev?.oee ?? null)} better="up" format={pp} label={vs} epsilon={0.0005} />
-          </span>
+          </Hint>
         }
-      >
-        <Bar value={current.oee} />
-      </KpiCard>
-      <KpiCard
-        label="Disponibilidade"
+        aside={<ToneRing value={current.oee} />}
+      />
+      <StatCard
         icon={TimerIcon}
-        value={pct(current.availability)}
-        valueClassName={TONE_TEXT[oeeTone(current.availability)]}
+        tone="teal"
+        label="Disponibilidade"
+        value={<span className={TONE_TEXT[oeeTone(current.availability)]}>{pct(current.availability)}</span>}
         hint={metric("availability")}
-      >
-        <Bar value={current.availability} />
-      </KpiCard>
-      <KpiCard
-        label="Performance"
+      />
+      <StatCard
         icon={ZapIcon}
-        value={pct(current.performance)}
-        valueClassName={TONE_TEXT[oeeTone(current.performance)]}
+        tone="navy"
+        label="Performance"
+        value={<span className={TONE_TEXT[oeeTone(current.performance)]}>{pct(current.performance)}</span>}
         hint={metric("performance")}
-      >
-        <Bar value={current.performance} />
-      </KpiCard>
-      <KpiCard
-        label="Qualidade"
+      />
+      <StatCard
         icon={CheckCircle2Icon}
-        value={pct(current.quality)}
-        valueClassName={TONE_TEXT[oeeTone(current.quality)]}
+        tone="orange"
+        label="Qualidade"
+        value={<span className={TONE_TEXT[oeeTone(current.quality)]}>{pct(current.quality)}</span>}
         hint={metric("quality")}
-      >
-        <Bar value={current.quality} />
-      </KpiCard>
-      <KpiCard
-        label="Peças boas"
+      />
+      <StatCard
         icon={BoxesIcon}
+        tone="green"
+        label="Peças boas"
         value={num(current.good)}
         hint={
           rejectRate === null ? (
             "Nenhuma peça no período"
           ) : (
-            <>
-              de {num(current.total)} · refugo <span className="font-medium text-state-fault tabular-nums">{num(current.reject)}</span> ({pct(rejectRate)})
-            </>
+            <Hint>
+              <span>de {num(current.total)} produzidas</span>
+              <span>
+                refugo <span className="font-medium text-state-fault tabular-nums">{num(current.reject)}</span> ({pct(rejectRate)})
+              </span>
+            </Hint>
           )
         }
       />
-      <KpiCard
-        label="Tempo parado"
+      <StatCard
         icon={TimerOffIcon}
+        tone="red"
+        label="Tempo parado"
         value={hours(stopMin)}
         hint={
-          <span className="flex flex-col gap-0.5">
+          <Hint>
             <span>{current.plannedMin > 0 ? `${pct(stopMin / current.plannedMin)} do tempo planejado` : "Sem tempo planejado"}</span>
-            <Delta
-              value={prevStopMin === null ? null : stopMin - prevStopMin}
-              better="down"
-              format={(abs) => hours(abs)}
-              label={vs}
-              epsilon={0.5}
-            />
-          </span>
+            <Delta value={prevStopMin === null ? null : stopMin - prevStopMin} better="down" format={(abs) => hours(abs)} label={vs} epsilon={0.5} />
+          </Hint>
         }
       />
     </div>

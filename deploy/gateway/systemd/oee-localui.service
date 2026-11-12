@@ -1,0 +1,67 @@
+# Página local reduzida (docs/16 §6): processo separado do agente, usuário
+# oee-ui, ativado pelo oee-localui.socket. Fala com o agente só por
+# /run/oee-gateway/ui.sock. Não lê o buffer, a credencial nem a config.
+[Unit]
+Description=Engemase OEE - página local de comissionamento
+Documentation=file:/usr/share/doc/oee-gateway/README.md
+Requires=oee-localui.socket
+After=oee-localui.socket oee-gateway-ui.socket
+Wants=oee-gateway-ui.socket
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/oee-gateway localui serve
+Sockets=oee-localui.socket
+User=oee-ui
+Group=oee-ui
+# Chave TLS estável (ECDSA P-256) e certificado autoassinado.
+StateDirectory=oee-localui
+StateDirectoryMode=0700
+UMask=0077
+Environment=GOMEMLIMIT=40MiB
+# Sai com erro → religa; sai limpo (ex.: ocioso) → volta pela ativação do socket.
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=10s
+
+MemoryHigh=48M
+MemoryMax=64M
+CPUQuota=50%
+TasksMax=64
+LimitNOFILE=256
+
+# Hardening: é o único serviço exposto na rede OT.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+# Rede própria vazia: o fd da porta 443 vem do systemd (rede do host) e o
+# ui.sock é um socket Unix com caminho, então nada disso depende da rede do
+# processo. Assim a página não consegue abrir conexão nenhuma (nem para a OT).
+PrivateNetwork=yes
+# Só cria sockets Unix; aceitar conexões no fd herdado não passa por socket(2).
+RestrictAddressFamilies=AF_UNIX
+PrivateUsers=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateIPC=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+KeyringMode=private
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM

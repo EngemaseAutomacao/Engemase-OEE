@@ -4,10 +4,12 @@ import { useMemo, useState } from "react"
 import Link from "next/link"
 import {
   ActivityIcon,
+  CableIcon,
   CopyIcon,
   FactoryIcon,
-  MoreHorizontalIcon,
+  NetworkIcon,
   PencilIcon,
+  PlugZapIcon,
   PlusIcon,
   PowerIcon,
   PowerOffIcon,
@@ -32,20 +34,15 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Ring } from "@/components/dashboard/ring"
+import { SectionCard } from "@/components/dashboard/section-card"
+import { StatCard } from "@/components/dashboard/stat-card"
 import { MachineEditSheet } from "@/components/config/machine-edit-sheet"
-import { UsageMeter } from "@/components/config/plan-usage"
+import { SoftIconButton, SoftIconLink } from "@/components/refresh/soft-action"
 import {
   GATEWAY_STATUS_DOT,
   PROTOCOL_LABEL,
@@ -224,10 +221,43 @@ export function MachineRegistry({
     setToggling(null)
   }
 
+  const usage = machineLimit > 0 ? activeCount / machineLimit : 0
+  const usageColor = usage >= 1 ? "#dc2626" : usage >= 0.8 ? "#f59e0b" : "#257bb4"
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+    <>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          icon={FactoryIcon}
+          tone="blue"
+          label="Máquinas ativas no plano"
+          value={
+            <>
+              {activeCount}
+              <span className="text-base font-semibold text-muted-foreground"> / {machineLimit}</span>
+            </>
+          }
+          hint={usage >= 1 ? "Limite atingido" : usage >= 0.8 ? "Perto do limite do plano" : `${counts.inactive} ${counts.inactive === 1 ? "inativa" : "inativas"}`}
+          aside={<Ring value={usage} size={52} stroke={6} color={usageColor} />}
+        />
+        <StatCard icon={NetworkIcon} tone="teal" label="Modbus TCP" value={counts.tcp} hint="CLPs na rede Ethernet" />
+        <StatCard icon={CableIcon} tone="navy" label="Modbus RTU" value={counts.rtu} hint="CLPs no barramento RS-485" />
+        <StatCard
+          icon={PlugZapIcon}
+          tone="orange"
+          label="Sem conexão"
+          value={counts.none}
+          hint={counts.none > 0 ? "Configure o CLP para medir o OEE" : "Todas com CLP configurado"}
+        />
+      </div>
+
+      <SectionCard
+        title="Máquinas cadastradas"
+        description="Clique no nome para editar. Alterações geram uma nova versão de configuração para o gateway."
+        className="overflow-hidden"
+        bodyClassName="px-0 pb-0"
+      >
+        <div className="flex flex-col gap-2 px-5 pb-4 lg:flex-row lg:items-center">
           <InputGroup className="lg:w-72">
             <InputGroupAddon>
               <SearchIcon />
@@ -291,169 +321,155 @@ export function MachineRegistry({
             )}
           </div>
         </div>
-        <UsageMeter item={{ label: "Máquinas ativas no plano", used: activeCount, limit: machineLimit, icon: FactoryIcon }} className="xl:w-64" />
-      </div>
 
-      {rows.length === 0 ? (
-        <Empty className="border border-dashed">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <FactoryIcon />
-            </EmptyMedia>
-            <EmptyTitle>Nenhuma máquina cadastrada</EmptyTitle>
-            <EmptyDescription>Use o assistente para cadastrar a primeira máquina, conectar o CLP via Modbus e mapear os sinais.</EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button asChild>
-              <Link href={`/${clientSlug}/config/maquinas/nova`}>
-                <PlusIcon />
-                Nova máquina
-              </Link>
-            </Button>
-          </EmptyContent>
-        </Empty>
-      ) : filtered.length === 0 ? (
-        <Empty className="border border-dashed">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <SearchXIcon />
-            </EmptyMedia>
-            <EmptyTitle>Nenhuma máquina encontrada</EmptyTitle>
-            <EmptyDescription>Nenhuma máquina corresponde aos filtros aplicados.</EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button variant="outline" onClick={clearFilters}>
-              Limpar filtros
-            </Button>
-          </EmptyContent>
-        </Empty>
-      ) : (
-        <Card className="gap-0 overflow-hidden py-0">
-          <Table className="min-w-[1080px]">
-            <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead className="pl-4">Máquina</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Unidade / linha</TableHead>
-                <TableHead>Gateway</TableHead>
-                <TableHead>Conexão</TableHead>
-                <TableHead>Modo de estado</TableHead>
-                <TableHead className="text-right">Ciclo ideal</TableHead>
-                <TableHead>Situação</TableHead>
-                <TableHead className="w-12 pr-4">
-                  <span className="sr-only">Ações</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((m) => {
-                const line = lineById.get(m.lineId)
-                const gw = m.gatewayId ? gatewayById.get(m.gatewayId) : undefined
-                return (
-                  <TableRow key={m.id} className={cn(!m.active && "text-muted-foreground")}>
-                    <TableCell className="pl-4">
-                      <button type="button" onClick={() => openEdit(m)} className="text-left font-medium text-foreground hover:underline">
-                        {m.name}
-                      </button>
-                      <div className="font-mono text-xs text-muted-foreground">{m.code}</div>
-                    </TableCell>
-                    <TableCell>{m.type}</TableCell>
-                    <TableCell>
-                      <div>{line?.name ?? "—"}</div>
-                      <div className="text-xs text-muted-foreground">{unitName.get(m.unitId) ?? "—"}</div>
-                    </TableCell>
-                    <TableCell>
-                      {gw ? (
-                        <Link
-                          href={`/${clientSlug}/config/gateways/${gw.id}`}
-                          className="inline-flex items-center gap-1.5 hover:underline"
-                          title={GATEWAY_STATUS_LABEL[gw.status]}
-                        >
-                          <span className={cn("size-2 shrink-0 rounded-full", GATEWAY_STATUS_DOT[gw.status])} />
-                          {gw.name}
-                        </Link>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <ConnCell conn={m.conn} />
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">{STATE_MODE_LABEL[m.stateMode]}</span>
-                      <div className="text-xs text-muted-foreground">{plural(m.tagCount, "sinal", "sinais")}</div>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      <div>{seconds(m.idealCycleS)}</div>
-                      <div className="text-xs text-muted-foreground">{piecesPerHour(m.idealCycleS)}</div>
-                    </TableCell>
-                    <TableCell>
-                      {m.active ? (
-                        <Badge variant="outline" className="gap-1.5 border-state-running/40 text-state-running">
-                          <span className="size-1.5 rounded-full bg-state-running" />
-                          Ativa
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="gap-1.5 text-muted-foreground">
-                          <span className="size-1.5 rounded-full bg-state-nocomm" />
-                          Inativa
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="pr-4">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon-sm" aria-label={`Ações de ${m.name}`}>
-                            <MoreHorizontalIcon />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onSelect={() => openEdit(m)}>
+        {rows.length === 0 ? (
+          <Empty className="mx-5 mb-5 rounded-xl border border-dashed">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <FactoryIcon />
+              </EmptyMedia>
+              <EmptyTitle>Nenhuma máquina cadastrada</EmptyTitle>
+              <EmptyDescription>Use o assistente para cadastrar a primeira máquina, conectar o CLP via Modbus e mapear os sinais.</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button asChild>
+                <Link href={`/${clientSlug}/config/maquinas/nova`}>
+                  <PlusIcon />
+                  Nova máquina
+                </Link>
+              </Button>
+            </EmptyContent>
+          </Empty>
+        ) : filtered.length === 0 ? (
+          <Empty className="mx-5 mb-5 rounded-xl border border-dashed">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <SearchXIcon />
+              </EmptyMedia>
+              <EmptyTitle>Nenhuma máquina encontrada</EmptyTitle>
+              <EmptyDescription>Nenhuma máquina corresponde aos filtros aplicados.</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button variant="outline" onClick={clearFilters}>
+                Limpar filtros
+              </Button>
+            </EmptyContent>
+          </Empty>
+        ) : (
+          <>
+            <Table className="min-w-[1120px]">
+              <TableHeader>
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableHead className="pl-5">Máquina</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Unidade / linha</TableHead>
+                  <TableHead>Gateway</TableHead>
+                  <TableHead>Conexão</TableHead>
+                  <TableHead>Modo de estado</TableHead>
+                  <TableHead className="text-right">Ciclo ideal</TableHead>
+                  <TableHead>Situação</TableHead>
+                  <TableHead className="pr-5 text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((m) => {
+                  const line = lineById.get(m.lineId)
+                  const gw = m.gatewayId ? gatewayById.get(m.gatewayId) : undefined
+                  return (
+                    <TableRow key={m.id} className={cn(!m.active && "text-muted-foreground")}>
+                      <TableCell className="pl-5">
+                        <button type="button" onClick={() => openEdit(m)} className="text-left font-medium text-foreground hover:text-primary hover:underline">
+                          {m.name}
+                        </button>
+                        <div className="font-mono text-xs text-muted-foreground">{m.code}</div>
+                      </TableCell>
+                      <TableCell>{m.type}</TableCell>
+                      <TableCell>
+                        <div>{line?.name ?? "—"}</div>
+                        <div className="text-xs text-muted-foreground">{unitName.get(m.unitId) ?? "—"}</div>
+                      </TableCell>
+                      <TableCell>
+                        {gw ? (
+                          <Link
+                            href={`/${clientSlug}/config/gateways/${gw.id}`}
+                            className="inline-flex items-center gap-1.5 hover:underline"
+                            title={GATEWAY_STATUS_LABEL[gw.status]}
+                          >
+                            <span className={cn("size-2 shrink-0 rounded-full", GATEWAY_STATUS_DOT[gw.status])} />
+                            {gw.name}
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <ConnCell conn={m.conn} />
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm">{STATE_MODE_LABEL[m.stateMode]}</span>
+                        <div className="text-xs text-muted-foreground">{plural(m.tagCount, "sinal", "sinais")}</div>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        <div>{seconds(m.idealCycleS)}</div>
+                        <div className="text-xs text-muted-foreground">{piecesPerHour(m.idealCycleS)}</div>
+                      </TableCell>
+                      <TableCell>
+                        {m.active ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-state-running/12 px-2 py-0.5 text-xs font-semibold text-state-running">
+                            <span className="size-1.5 rounded-full bg-state-running" />
+                            Ativa
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+                            <span className="size-1.5 rounded-full bg-state-nocomm" />
+                            Inativa
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="pr-5">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <SoftIconButton label={`Editar ${m.name}`} onClick={() => openEdit(m)}>
                             <PencilIcon />
-                            Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => duplicate(m)}>
+                          </SoftIconButton>
+                          <SoftIconButton label={`Duplicar ${m.name}`} tone="slate" onClick={() => duplicate(m)}>
                             <CopyIcon />
-                            Duplicar
-                          </DropdownMenuItem>
-                          {!m.id.startsWith("mch_copy_") && (
-                            <DropdownMenuItem asChild>
-                              <Link href={`/${clientSlug}/maquinas/${m.id}`}>
-                                <ActivityIcon />
-                                Ver ao vivo
-                              </Link>
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuSeparator />
-                          {m.active ? (
-                            <DropdownMenuItem variant="destructive" onSelect={() => setToggling(m)}>
-                              <PowerOffIcon />
-                              Desativar
-                            </DropdownMenuItem>
+                          </SoftIconButton>
+                          {m.id.startsWith("mch_copy_") ? (
+                            <SoftIconButton label="Ver ao vivo (disponível após salvar e ativar)" tone="teal" disabled>
+                              <ActivityIcon />
+                            </SoftIconButton>
                           ) : (
-                            <DropdownMenuItem onSelect={() => setToggling(m)}>
-                              <PowerIcon />
-                              Reativar
-                            </DropdownMenuItem>
+                            <SoftIconLink href={`/${clientSlug}/maquinas/${m.id}`} label={`Ver ${m.name} ao vivo`} tone="teal">
+                              <ActivityIcon />
+                            </SoftIconLink>
                           )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-          <div className="border-t px-4 py-2.5 text-xs text-muted-foreground">
-            {filtered.length === rows.length
-              ? plural(rows.length, "máquina", "máquinas")
-              : `${filtered.length} de ${plural(rows.length, "máquina", "máquinas")}`}
-            {" · "}
-            {counts.tcp} Modbus TCP · {counts.rtu} Modbus RTU
-            {counts.none > 0 && ` · ${counts.none} sem conexão configurada`}
-          </div>
-        </Card>
-      )}
+                          {m.active ? (
+                            <SoftIconButton label={`Desativar ${m.name}`} tone="red" onClick={() => setToggling(m)}>
+                              <PowerOffIcon />
+                            </SoftIconButton>
+                          ) : (
+                            <SoftIconButton label={`Reativar ${m.name}`} tone="teal" onClick={() => setToggling(m)}>
+                              <PowerIcon />
+                            </SoftIconButton>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+            <div className="border-t px-5 py-2.5 text-xs text-muted-foreground">
+              {filtered.length === rows.length
+                ? plural(rows.length, "máquina", "máquinas")
+                : `${filtered.length} de ${plural(rows.length, "máquina", "máquinas")}`}
+              {" · "}
+              {counts.tcp} Modbus TCP · {counts.rtu} Modbus RTU
+              {counts.none > 0 && ` · ${counts.none} sem conexão configurada`}
+            </div>
+          </>
+        )}
+      </SectionCard>
 
       <MachineEditSheet
         clientSlug={clientSlug}
@@ -485,7 +501,7 @@ export function MachineRegistry({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   )
 }
 
@@ -497,7 +513,10 @@ function ConnCell({ conn }: { conn: ConnInfo | null }) {
       <Badge
         variant="outline"
         title={PROTOCOL_LABEL[conn.protocol]}
-        className={cn("mt-0.5 font-mono text-[10px]", tcp ? "border-sky-500/40 text-sky-700 dark:text-sky-400" : "border-violet-500/40 text-violet-700 dark:text-violet-400")}
+        className={cn(
+          "mt-0.5 border-transparent font-mono text-[10px]",
+          tcp ? "bg-[#0e9384]/10 text-[#0e9384]" : "bg-[#2c4e73]/10 text-[#2c4e73] dark:bg-white/10 dark:text-[#9cc3e6]",
+        )}
       >
         {PROTOCOL_SHORT[conn.protocol]}
       </Badge>

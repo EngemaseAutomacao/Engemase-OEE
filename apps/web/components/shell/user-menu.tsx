@@ -37,9 +37,11 @@ export function UserMenu({ name, email, roleLabel, initials, isPlatform }: { nam
               <div className="truncate text-xs text-muted-foreground">{email}</div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <UserIcon />
-              Meu perfil
+            <DropdownMenuItem asChild>
+              <Link href="/conta">
+                <UserIcon />
+                Meu perfil
+              </Link>
             </DropdownMenuItem>
             {isPlatform && (
               <DropdownMenuItem asChild>

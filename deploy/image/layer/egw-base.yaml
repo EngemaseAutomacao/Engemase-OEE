@@ -1,0 +1,99 @@
+# METABEGIN
+# X-Env-Layer-Name: egw-base
+# X-Env-Layer-Category: engemase
+# X-Env-Layer-Desc: Base Engemase do gateway OEE (docs/16 §7): pacotes,
+#  remoções (sem netplan, sem cloud-init, sem rádio), hardening, SSH
+#  mascarado, chrony, nftables de fábrica, unattended-upgrades só de
+#  segurança fora da janela do OTA, journald com limite, fstrim semanal,
+#  watchdog do SoC e criação da partição /data no 1º boot (systemd-repart).
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: device-base,
+#  systemd-min,
+#  network-manager,
+#  chrony,
+#  ca-certificates,
+#  locale-base
+#
+# X-Env-VarPrefix: egw
+#
+# X-Env-Var-image_version:
+# X-Env-Var-image_version-Desc: Versão da imagem: <debian>.<ano>.<mês>.<n>,
+#  ex.: 13.2026.11.1. Passada pelo build.sh.
+# X-Env-Var-image_version-Required: y
+# X-Env-Var-image_version-Valid: regex:^[0-9]{2}\.[0-9]{4}\.[0-9]{1,2}\.[0-9]+$
+# X-Env-Var-image_version-Set: y
+#
+# X-Env-Var-image_commit: unknown
+# X-Env-Var-image_commit-Desc: Commit do repositório engemase-oee usado no build.
+# X-Env-Var-image_commit-Required: n
+# X-Env-Var-image_commit-Valid: string
+# X-Env-Var-image_commit-Set: y
+#
+# X-Env-Var-debian_codename: trixie
+# X-Env-Var-debian_codename-Desc: Codinome do Debian da imagem (trixie ou,
+#  no plano B, bookworm). Conferido contra /etc/os-release no build.
+# X-Env-Var-debian_codename-Required: n
+# X-Env-Var-debian_codename-Valid: keywords:trixie,bookworm
+# X-Env-Var-debian_codename-Set: y
+#
+# X-Env-Var-debian_snapshot: unknown
+# X-Env-Var-debian_snapshot-Desc: Instante do snapshot.debian.org usado no build.
+# X-Env-Var-debian_snapshot-Required: n
+# X-Env-Var-debian_snapshot-Valid: string
+# X-Env-Var-debian_snapshot-Set: y
+#
+# X-Env-Var-rpi_image_gen_commit: unknown
+# X-Env-Var-rpi_image_gen_commit-Desc: Commit do rpi-image-gen usado no build.
+# X-Env-Var-rpi_image_gen_commit-Required: n
+# X-Env-Var-rpi_image_gen_commit-Valid: string
+# X-Env-Var-rpi_image_gen_commit-Set: y
+#
+# X-Env-Var-seeed_overlays_commit: unknown
+# X-Env-Var-seeed_overlays_commit-Desc: Commit do seeed-linux-dtoverlays usado
+#  para gerar o engemase-r1000-support.
+# X-Env-Var-seeed_overlays_commit-Required: n
+# X-Env-Var-seeed_overlays_commit-Valid: string
+# X-Env-Var-seeed_overlays_commit-Set: y
+# METAEND
+---
+mmdebstrap:
+  aptopts:
+    - APT::Install-Suggests "false"
+    - APT::Install-Recommends "false"
+  dpkgopts:
+    - path-exclude=/usr/share/man/*
+    - path-exclude=/usr/share/info/*
+    - path-exclude=/usr/share/doc/*
+    - path-include=/usr/share/doc/*/copyright
+    - path-exclude=/usr/share/locale/*
+    - path-include=/usr/share/locale/locale.alias
+    - path-exclude=/usr/share/lintian/*
+  packages:
+    # Rede e firewall (NetworkManager e chrony vêm das camadas exigidas)
+    - nftables
+    - iproute2
+    - iputils-ping
+    - curl
+    # Atualizações automáticas só de segurança (configuradas no overlay)
+    - unattended-upgrades
+    - needrestart
+    # Acesso local e remoto (SSH fica mascarado no MVP)
+    - sudo
+    - openssh-server
+    # Disco: ext4, FAT do boot, sfdisk (plano B da /data), fstrim (util-linux)
+    - e2fsprogs
+    - dosfstools
+    - fdisk
+    # RTC (hwclock e regra udev hwclock-set)
+    - util-linux-extra
+    # Factory init: chaves, certificado e hash argon2id da senha local
+    - openssl
+    - argon2
+    # Diagnóstico do hardware Raspberry Pi (vcgencmd, dtoverlay -l)
+    - raspi-utils-core
+    - raspi-utils-dt
+    # Utilitários mínimos
+    - kmod
+    - less
+    - logrotate
+    - zstd

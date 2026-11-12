@@ -4,8 +4,8 @@ import { useMemo, useState } from "react"
 import { SearchXIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { SectionCard } from "@/components/dashboard/section-card"
 import { CategoryDonut } from "./category-donut"
 import { ExportMenu } from "./export-menu"
 import { FilterBar, FilterSelect, SegmentedFilter } from "./filter-bar"
@@ -154,7 +154,7 @@ export function StopsReport({ clientSlug, records, machines, units, lines, endDa
       </FilterBar>
 
       {!data.hasData ? (
-        <Empty className="border border-dashed">
+        <Empty className="rounded-2xl border border-dashed bg-card">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <SearchXIcon />
@@ -179,63 +179,60 @@ export function StopsReport({ clientSlug, records, machines, units, lines, endDa
           />
 
           <div className="grid gap-4 xl:grid-cols-3">
-            <Card className="gap-4 xl:col-span-2">
-              <CardHeader>
-                <CardTitle>Pareto de motivos</CardTitle>
-                <CardDescription>
-                  {top
-                    ? `${vitalCount} de ${data.pareto.length} motivos somam 80% do tempo parado${categoryLabel ? ` (${categoryLabel.toLowerCase()})` : ""}. O maior é “${top.reasonName}”.`
-                    : "Participação de cada motivo no tempo parado."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3 px-3 sm:px-6">
-                {data.pareto.length > 0 ? (
-                  <>
-                    <ParetoChart data={data.pareto} />
-                    <ParetoLegend showUnclassified={data.pareto.some((r) => r.reasonId === UNCLASSIFIED_ID)} />
-                  </>
-                ) : (
-                  <Empty className="border border-dashed">
-                    <EmptyHeader>
-                      <EmptyTitle>Sem paradas nesta categoria</EmptyTitle>
-                      <EmptyDescription>Nenhuma parada {categoryLabel?.toLowerCase()} no período e nas máquinas filtradas.</EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
-                )}
-              </CardContent>
-            </Card>
-            <Card className="gap-4">
-              <CardHeader>
-                <CardTitle>Tempo parado por categoria</CardTitle>
-                <CardDescription>Clique em uma categoria para filtrar o relatório.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <CategoryDonut data={data.categories} selected={category} onSelect={setCategory} />
-              </CardContent>
-            </Card>
+            <SectionCard
+              title="Pareto de motivos"
+              description={
+                top
+                  ? `${vitalCount} de ${data.pareto.length} motivos somam 80% do tempo parado${categoryLabel ? ` (${categoryLabel.toLowerCase()})` : ""}. O maior é “${top.reasonName}”.`
+                  : "Participação de cada motivo no tempo parado."
+              }
+              className="xl:col-span-2"
+              bodyClassName="flex flex-col gap-3 px-3 sm:px-5"
+            >
+              {data.pareto.length > 0 ? (
+                <>
+                  <ParetoChart data={data.pareto} />
+                  <ParetoLegend showUnclassified={data.pareto.some((r) => r.reasonId === UNCLASSIFIED_ID)} />
+                </>
+              ) : (
+                <Empty className="border border-dashed">
+                  <EmptyHeader>
+                    <EmptyTitle>Sem paradas nesta categoria</EmptyTitle>
+                    <EmptyDescription>Nenhuma parada {categoryLabel?.toLowerCase()} no período e nas máquinas filtradas.</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              )}
+            </SectionCard>
+            <SectionCard
+              title="Tempo parado por categoria"
+              description="Clique em uma categoria para filtrar o relatório."
+              href={`/${clientSlug}/relatorios/oee`}
+              linkLabel="Ver OEE"
+            >
+              <CategoryDonut data={data.categories} selected={category} onSelect={setCategory} />
+            </SectionCard>
           </div>
 
-          <Card className="gap-3 pb-0">
-            <CardHeader>
-              <CardTitle>Motivos de parada</CardTitle>
-              <CardDescription>
-                Ordenados pelo tempo parado. Paradas sem motivo devem ser classificadas pelo operador na tela da máquina.
-              </CardDescription>
-              <CardAction>
-                <ExportMenu
-                  baseName={`paradas_${clientSlug}_${start}_a_${endDate}`}
-                  rowCount={data.pareto.length}
-                  scopeLabel={scopeLabel}
-                  disabled={data.pareto.length === 0}
-                />
-              </CardAction>
-            </CardHeader>
+          <SectionCard
+            title="Motivos de parada"
+            description="Ordenados pelo tempo parado. Paradas sem motivo devem ser classificadas pelo operador na tela da máquina."
+            action={
+              <ExportMenu
+                baseName={`paradas_${clientSlug}_${start}_a_${endDate}`}
+                rowCount={data.pareto.length}
+                scopeLabel={scopeLabel}
+                disabled={data.pareto.length === 0}
+              />
+            }
+            className="overflow-hidden"
+            bodyClassName="px-0 pb-0"
+          >
             {data.pareto.length > 0 ? (
               <ReasonsTable rows={data.pareto} />
             ) : (
-              <p className="px-6 pb-6 text-sm text-muted-foreground">Nenhum motivo para exibir com os filtros atuais.</p>
+              <p className="px-5 pb-5 text-sm text-muted-foreground">Nenhum motivo para exibir com os filtros atuais.</p>
             )}
-          </Card>
+          </SectionCard>
         </>
       )}
     </>

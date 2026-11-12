@@ -1,0 +1,40 @@
+# METABEGIN
+# X-Env-Layer-Name: egw-agent
+# X-Env-Layer-Category: engemase
+# X-Env-Layer-Desc: Agente oee-gateway (.deb local), factory init do 1º boot
+#  (identidade em /data/identity/hw.json, senha local, autotestes B0),
+#  /etc/engemase-release e a verificação final da imagem (sem cloud-init,
+#  sem netplan, SSH mascarado, kernel em hold, fontes apt de produção).
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: egw-r1000
+#
+# X-Env-VarPrefix: egw
+#
+# X-Env-Var-require_agent: y
+# X-Env-Var-require_agent-Desc: y = falha o build sem oee-gateway_*.deb.
+#  n = imagem de bancada da Fase 0, sem o agente.
+# X-Env-Var-require_agent-Required: n
+# X-Env-Var-require_agent-Valid: bool
+# X-Env-Var-require_agent-Set: y
+#
+# X-Env-Var-bench_cert:
+# X-Env-Var-bench_cert-Desc: Certificado X.509 PÚBLICO (PEM) da bancada. O
+#  factory init cifra para ele a exportação da senha local (cartão lacrado e
+#  cofre). Sem ele, a unidade não recebe senha local (B0 reprova).
+# X-Env-Var-bench_cert-Required: n
+# X-Env-Var-bench_cert-Valid: string-or-empty
+# X-Env-Var-bench_cert-Set: y
+#
+# X-Env-Var-expect_ram_gb: 2
+# X-Env-Var-expect_ram_gb-Desc: RAM esperada do lote em GB (autoteste B0).
+# X-Env-Var-expect_ram_gb-Required: n
+# X-Env-Var-expect_ram_gb-Valid: int:1-16
+# X-Env-Var-expect_ram_gb-Set: y
+#
+# X-Env-Var-expect_emmc_gb: 16
+# X-Env-Var-expect_emmc_gb-Desc: eMMC esperado do lote em GB (autoteste B0).
+# X-Env-Var-expect_emmc_gb-Required: n
+# X-Env-Var-expect_emmc_gb-Valid: int:8-64
+# X-Env-Var-expect_emmc_gb-Set: y
+# METAEND
+---

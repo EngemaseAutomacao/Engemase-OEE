@@ -1,0 +1,71 @@
+# Ajudante privilegiado (docs/16 §3): UM processo root, ativado por socket, com
+# operações FECHADAS — aplicar rede com checkpoint do NetworkManager, ajustar o
+# relógio, reset de fábrica e ler o pendrive de diagnóstico (OEE/net-reset).
+# Gera, a partir de /etc/oee-gateway/network.json (a única fonte), os perfis do
+# NetworkManager, o nftables, o proxy.env e o pacote de CAs do agente.
+#
+# Root, mas confinado: só as capabilities e os caminhos de escrita listados.
+# Se uma operação nova precisar de mais, use um drop-in revisado (README).
+[Unit]
+Description=Engemase OEE - ajudante privilegiado (operações fechadas)
+Documentation=file:/usr/share/doc/oee-gateway/README.md
+Requires=oee-helper.socket
+After=oee-helper.socket
+RequiresMountsFor=/var/lib/oee-gateway
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/oee-gateway helper serve
+User=root
+Group=root
+# Estado próprio (checkpoint pendente, última rede boa), só root.
+StateDirectory=oee-helper
+StateDirectoryMode=0700
+RuntimeDirectory=oee-helper
+RuntimeDirectoryMode=0700
+UMask=0027
+# Sai sozinho quando ocioso; volta pela ativação do socket.
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=30s
+
+MemoryMax=96M
+CPUQuota=50%
+TasksMax=64
+
+NoNewPrivileges=yes
+# NET_ADMIN: nftables (netlink). SYS_TIME: ajustar o relógio.
+# CHOWN/FOWNER/DAC_*: arquivos gerados com dono/grupo certos e limpeza do estado
+# do agente (oee:oee 0750) no reset de fábrica. Sem SYS_ADMIN: o pendrive é lido
+# sem montar (ou montado por outro serviço); ver README.
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_TIME CAP_CHOWN CAP_FOWNER CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH
+ProtectSystem=strict
+# Arquivos que o ajudante gera ou altera (o resto do sistema fica só leitura).
+ReadWritePaths=/etc/oee-gateway /var/lib/oee-gateway /etc/systemd/system/oee-localui.socket.d
+ReadWritePaths=-/etc/NetworkManager/system-connections -/etc/chrony/sources.d -/var/lib/oee-localui
+ProtectHome=yes
+PrivateTmp=yes
+PrivateIPC=yes
+DevicePolicy=closed
+# Pendrive de serviço (leitura do dispositivo de bloco USB).
+DeviceAllow=block-sd r
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+# ProtectClock=no de propósito: ajustar o relógio é uma das operações.
+ProtectHostname=yes
+ProtectProc=invisible
+# Netlink (nftables, endereços) e Unix (D-Bus do NetworkManager, logind, systemd).
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+KeyringMode=private
+SystemCallArchitectures=native
+SystemCallFilter=@system-service @clock
+SystemCallFilter=~@mount @module @raw-io @reboot @swap @debug @cpu-emulation @obsolete
+SystemCallErrorNumber=EPERM

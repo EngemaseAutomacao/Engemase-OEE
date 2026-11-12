@@ -1,0 +1,24 @@
+# Engemase OEE gateway - factory init do 1º boot (docs/16 §7).
+# Execução única: depois que /data/identity/hw.json existe, não roda mais.
+# Grava identidade, senha local (exportada cifrada) e roda os autotestes B0.
+[Unit]
+Description=Engemase OEE - inicialização de fábrica (identidade, senha local, B0)
+Documentation=file:///usr/lib/engemase/factory/egw-factory-init
+ConditionPathExists=!/data/identity/hw.json
+After=local-fs.target systemd-repart.service systemd-sysusers.service systemd-tmpfiles-setup.service systemd-udev-trigger.service
+# A rede, o agente e a página local só sobem com a identidade pronta.
+Before=NetworkManager.service oee-gateway.service oee-gateway.socket oee-localui.socket oee-localui.service oee-helper.socket
+Before=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/engemase/factory/egw-factory-init run
+# dpkg --verify do B0 leva alguns minutos no eMMC.
+TimeoutStartSec=20min
+StandardOutput=journal+console
+StandardError=journal+console
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

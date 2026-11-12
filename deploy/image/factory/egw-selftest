@@ -1,0 +1,253 @@
+#!/bin/bash
+# Engemase OEE gateway - autotestes B0 (inspeção e identidade, docs/16 §7).
+#
+# Roda no 1º boot dentro do factory init e pode ser repetido (como root) a
+# qualquer momento. Só lê o sistema (além do relatório e de um arquivo de
+# teste de escrita em /data, apagado em seguida).
+# Cada item sai como PASS, WARN ou FAIL; WARN = "a confirmar na bancada" ou
+# algo que não reprova a unidade sozinho.
+#
+# Uso: egw-selftest [--report ARQ.json] [--fast] [--seed-image-version V]
+#                   [--expect-ram-gb N] [--expect-emmc-gb N]
+#   --fast  pula o dpkg --verify (lento: minutos)
+# Saída: 0 = sem FAIL; 1 = algum FAIL; 2 = uso incorreto.
+set -uo pipefail
+
+EGW_LIB_DIR=${EGW_LIB_DIR:-/usr/lib/engemase/factory}
+# shellcheck source=egw-common.sh
+. "$EGW_LIB_DIR/egw-common.sh"
+
+report="" fast=0 seed_version="" exp_ram="" exp_emmc=""
+while (( $# )); do
+	case $1 in
+		--report) report=${2:?}; shift 2 ;;
+		--fast) fast=1; shift ;;
+		--seed-image-version) seed_version=${2:?}; shift 2 ;;
+		--expect-ram-gb) exp_ram=${2:?}; shift 2 ;;
+		--expect-emmc-gb) exp_emmc=${2:?}; shift 2 ;;
+		-h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+		*) egw_err "opção desconhecida: $1"; exit 2 ;;
+	esac
+done
+
+declare -A REL=() PLAT=()
+egw_read_kv "$EGW_RELEASE_FILE" REL 2>/dev/null || true
+egw_read_kv "$EGW_PLATFORM_FILE" PLAT 2>/dev/null || true
+exp_ram=${exp_ram:-${REL[EGW_EXPECT_RAM_GB]:-2}}
+exp_emmc=${exp_emmc:-${REL[EGW_EXPECT_EMMC_GB]:-16}}
+[[ $exp_ram =~ ^[0-9]+$ && $exp_emmc =~ ^[0-9]+$ ]] || { egw_err "RAM/eMMC esperados inválidos"; exit 2; }
+
+n_pass=0 n_warn=0 n_fail=0
+json_items=()
+
+# rec <id> <PASS|WARN|FAIL> <descrição> [valor]
+rec() {
+	local id=$1 st=$2 desc=$3 val=${4:-}
+	case $st in PASS) ((n_pass++)) ;; WARN) ((n_warn++)) ;; FAIL) ((n_fail++)) ;; esac
+	printf '[%s] %s %s%s\n' "$st" "$id" "$desc" "${val:+ ($val)}"
+	json_items+=("{\"id\":$(egw_json_str "$id"),\"status\":$(egw_json_str "$st"),\"desc\":$(egw_json_str "$desc"),\"value\":$(egw_json_str "$val")}")
+}
+# pf <id> <descrição> <valor> <comando...>: PASS se o comando der certo, senão FAIL
+pf() { local id=$1 d=$2 v=$3; shift 3; if "$@"; then rec "$id" PASS "$d" "$v"; else rec "$id" FAIL "$d" "$v"; fi; }
+# pw <id> <descrição> <valor> <comando...>: PASS ou WARN
+pw() { local id=$1 d=$2 v=$3; shift 3; if "$@"; then rec "$id" PASS "$d" "$v"; else rec "$id" WARN "$d" "$v"; fi; }
+
+dir_empty() { local d; d=$(egw_sys "$1"); [[ ! -d $d ]] || [[ -z $(ls -A "$d" 2>/dev/null) ]]; }
+i2c_driver() { # endereço (ex.: 0021) -> nome do driver ligado, se houver
+	local d
+	for d in "$(egw_sys /sys/bus/i2c/devices)"/*-"$1"; do
+		[[ -e $d/driver ]] && { basename "$(readlink -f "$d/driver")"; return 0; }
+	done
+	return 1
+}
+unit_state() { systemctl is-enabled "$1" 2>/dev/null || true; }
+
+disk=$(egw_boot_disk)
+dname=${disk#/dev/}
+
+# --- Placa e módulo ----------------------------------------------------------------------
+model=$(egw_read_sys /proc/device-tree/model || true)
+pf B0.01 "Raspberry Pi CM4" "$model" grep -q 'Compute Module 4' <<< "$model"
+board=$(egw_read_sys /proc/device-tree/hardware || true)
+pf B0.02 "overlay do R1000 aplicado (reComputer-R100x)" "$board" grep -q 'reComputer-R100x' <<< "$board"
+
+ram_kb=$(awk '/^MemTotal:/ { print $2 }' "$(egw_sys /proc/meminfo)" 2>/dev/null || echo 0)
+ram_mb=$(( ram_kb / 1024 ))
+# 2 GB nominais aparecem como ~1,8 GiB (memória da GPU): aceita 80-100%.
+pf B0.03 "RAM de ${exp_ram} GB" "${ram_mb} MiB" \
+	test "$ram_mb" -ge $(( exp_ram * 1024 * 80 / 100 )) -a "$ram_mb" -le $(( exp_ram * 1024 ))
+
+sectors=$(cat "$(egw_sys "/sys/block/$dname/size")" 2>/dev/null || echo 0)
+emmc_bytes=$(( sectors * 512 ))
+pf B0.04 "eMMC de ${exp_emmc} GB" "$((emmc_bytes / 1000000)) MB" \
+	test "$emmc_bytes" -ge $(( exp_emmc * 900000000 )) -a "$emmc_bytes" -le $(( exp_emmc * 1000000000 ))
+
+pre_eol=$(egw_read_sys "/sys/block/$dname/device/pre_eol_info" || true)
+life=$(egw_read_sys "/sys/block/$dname/device/life_time" || true)
+if [[ -z $pre_eol || -z $life ]]; then
+	rec B0.05 WARN "saúde do eMMC (pre_eol_info/life_time indisponível)" "$dname"
+else
+	pf B0.05 "eMMC novo (pre_eol 0x01, life_time 0x01 0x01)" "pre_eol=$pre_eol life=$life" \
+		test "$pre_eol" = 0x01 -a "$life" = "0x01 0x01"
+fi
+
+# Série -00: sem Wi-Fi e sem Bluetooth. O Wi-Fi do CM4 fica no barramento SDIO.
+radio_ok() { dir_empty /sys/bus/sdio/devices && dir_empty /sys/class/bluetooth && dir_empty /sys/class/ieee80211; }
+pf B0.06 "sem rádio (série R10xx-00)" "sdio=$(ls -A "$(egw_sys /sys/bus/sdio/devices)" 2>/dev/null | tr '\n' ' ')" radio_ok
+
+tpm=$(egw_read_sys /sys/class/tpm/tpm0/tpm_version_major || true)
+pf B0.07 "TPM 2.0 (SLB9670) responde" "versão ${tpm:-ausente}" test "$tpm" = 2
+
+drv21=$(i2c_driver 0021 || true)
+pf B0.08 "expansor PCA9535 em 0x21" "${drv21:-sem driver}" test -n "$drv21"
+drv51=$(i2c_driver 0051 || true)
+pf B0.09 "RTC PCF8563W em 0x51 (rtc-pcf8563w)" "${drv51:-sem driver}" \
+	bash -c '[[ $1 == *pcf8563* ]] && [[ -e $2 ]]' _ "$drv51" "$(egw_sys /dev/rtc0)"
+if dmesg 2>/dev/null | grep -q 'low voltage detected'; then
+	rec B0.10 WARN "bateria do RTC (CR2032) fraca: hora não confiável" "dmesg"
+else
+	rec B0.10 PASS "bateria do RTC sem aviso de tensão baixa" ""
+fi
+
+leds_ok() { local c; for c in red green blue; do [[ -d $(egw_sys "/sys/class/leds/led-$c") ]] || return 1; done; }
+pw B0.11 "LEDs led-red/green/blue presentes (B7 confere a cor)" "" leds_ok
+uarts_ok() { local t; for t in ttyAMA2 ttyAMA3 ttyAMA5; do [[ -e $(egw_sys "/dev/$t") ]] || return 1; done; }
+pw B0.12 "RS-485: ttyAMA2, ttyAMA3 e ttyAMA5 (ordem dos bornes A CONFIRMAR)" "" uarts_ok
+rs485_pwr() {
+	local r
+	for r in "$(egw_sys /sys/class/regulator)"/regulator.*; do
+		[[ $(cat "$r/name" 2>/dev/null) == rs485-pwr ]] || continue
+		[[ $(cat "$r/state" 2>/dev/null) == enabled ]] && return 0
+	done
+	return 1
+}
+pw B0.13 "alimentação das RS-485 ligada (RS485_POWER_EN)" "" rs485_pwr
+
+wd0_id=$(egw_read_sys /sys/class/watchdog/watchdog0/identity || true)
+wd0_st=$(egw_read_sys /sys/class/watchdog/watchdog0/state || true)
+pf B0.14 "watchdog do SoC armado pelo systemd" "$wd0_id: $wd0_st" \
+	bash -c '[[ $1 == *BCM2835* && $2 == active ]]' _ "$wd0_id" "$wd0_st"
+rtc_wd=""
+for w in "$(egw_sys /sys/class/watchdog)"/watchdog*; do
+	[[ $(cat "$w/identity" 2>/dev/null) == *PCF8563* ]] && rtc_wd=$w
+done
+if [[ -z $rtc_wd ]]; then
+	rec B0.15 WARN "watchdog do RTC não encontrado (A CONFIRMAR)" ""
+else
+	pw B0.15 "watchdog do RTC NÃO armado no MVP" "${rtc_wd##*/}: $(cat "$rtc_wd/state" 2>/dev/null)" \
+		test "$(cat "$rtc_wd/state" 2>/dev/null)" = inactive
+fi
+
+if egw_detect_ports; then
+	rec B0.16 PASS "ETH0 (OT, bcmgenet) e ETH1 (IT, USB)" "$EGW_ETH0_IF $EGW_ETH0_MAC; $EGW_ETH1_IF $EGW_ETH1_MAC"
+else
+	rec B0.16 FAIL "ETH0 (OT, bcmgenet) e ETH1 (IT, USB)" "$(egw_list_ethernet | tr '\n' ';')"
+fi
+
+# --- Armazenamento -----------------------------------------------------------------------------
+data_src=$(findmnt -nvo SOURCE /data 2>/dev/null || true)
+data_fs=$(findmnt -nvo FSTYPE /data 2>/dev/null || true)
+data_ok() { [[ $data_src == "${disk}"p* && $data_fs == ext4 ]] && touch /data/.egw-selftest && rm -f /data/.egw-selftest; }
+pf B0.17 "/data no eMMC de boot, ext4, gravável" "${data_src:-não montada} $data_fs" data_ok
+binds_ok() { mountpoint -q /var/lib/oee-gateway && mountpoint -q /var/log/journal; }
+pf B0.18 "/var/lib/oee-gateway e /var/log/journal montados de /data" "" binds_ok
+root_src=$(findmnt -nvo SOURCE / 2>/dev/null || true)
+root_opts=$(findmnt -nvo OPTIONS / 2>/dev/null || true)
+root_free=$(df -Pm / 2>/dev/null | awk 'NR == 2 { print $4 }')
+pf B0.19 "raiz ext4 gravável no eMMC, >= 1 GB livre" "$root_src ${root_free:-?} MB livres" \
+	bash -c '[[ $1 == "$2"p* && ,$3, == *,rw,* && ${4:-0} -ge 1024 ]]' _ "$root_src" "$disk" "$root_opts" "$root_free"
+
+# --- Imagem ---------------------------------------------------------------------------------------
+img=${REL[EGW_IMAGE_VERSION]:-}
+if [[ -z $img ]]; then
+	rec B0.20 FAIL "/etc/engemase-release presente" "ausente"
+elif [[ -n $seed_version && $seed_version != "$img" ]]; then
+	rec B0.20 FAIL "versão da imagem igual à gravada pela estação" "imagem $img, estação $seed_version"
+else
+	rec B0.20 PASS "versão da imagem" "$img${seed_version:+ = estação}"
+fi
+
+kabi=$(uname -r)
+held=$(apt-mark showhold 2>/dev/null | tr '\n' ' ')
+pf B0.21 "kernel fixado em hold" "$kabi" \
+	bash -c '[[ $1 == "$2" && " $3 " == *" linux-image-$1 "* ]]' _ "$kabi" "${PLAT[EGW_KERNEL_ABI]:-?}" "$held"
+if [[ ${PLAT[EGW_KERNEL_PINNED]:-no} != yes ]]; then
+	rec B0.21b WARN "kernel NÃO fixado em pins.env (imagem de Fase 0)" "$kabi"
+fi
+
+manifest=/usr/share/engemase/image-files.sha256
+if [[ -f $manifest ]]; then
+	bad=$(sha256sum --quiet -c "$manifest" 2>&1 | head -n 5 | tr '\n' ';')
+	pf B0.22 "arquivos próprios da imagem íntegros" "${bad:-ok}" test -z "$bad"
+else
+	rec B0.22 FAIL "manifesto de integridade da imagem" "ausente"
+fi
+
+if (( fast )); then
+	rec B0.23 WARN "dpkg --verify pulado (--fast)" ""
+else
+	# Ignora conffiles alterados de propósito e arquivos excluídos pelo
+	# path-exclude da imagem (doc, man, locale, info, lintian).
+	bad=$(dpkg --verify 2>/dev/null | awk '
+		$2 == "c" { next }
+		$1 == "missing" && $NF ~ /^\/usr\/share\/(doc|man|locale|info|lintian)\// { next }
+		{ print }' | head -n 10 | tr '\n' ';')
+	pf B0.23 "dpkg --verify sem arquivos alterados" "${bad:-ok}" test -z "$bad"
+fi
+
+# --- Segurança e serviços -----------------------------------------------------------------------
+pkg_absent() { ! dpkg-query -W -f='${db:Status-Status}' "$1" 2>/dev/null | grep -qx installed; }
+no_cloud() { pkg_absent cloud-init && pkg_absent netplan.io && [[ ! -e /etc/netplan ]]; }
+pf B0.24 "sem cloud-init e sem netplan" "" no_cloud
+pf B0.25 "SSH mascarado" "ssh.service=$(unit_state ssh.service) ssh.socket=$(unit_state ssh.socket)" \
+	test "$(unit_state ssh.service)" = masked -a "$(unit_state ssh.socket)" = masked
+# Esperados: página local (443), cliente DHCP (68) e loopback.
+listen=$(ss -Htlnu 2>/dev/null | awk '{ print $1 " " $5 }' \
+	| grep -vE ' (127\.0\.0\.1|\[::1\]):|:443$|^udp .*:68$' | sort -u | tr '\n' ' ')
+pw B0.26 "nenhuma porta aberta além da página local (443)" "${listen:-nenhuma}" test -z "$listen"
+fw_ok() { nft list tables 2>/dev/null | grep -qE '^table inet (egw|oee)$' && [[ $(cat /proc/sys/net/ipv4/ip_forward) == 0 ]]; }
+pf B0.27 "firewall nftables carregado e ip_forward=0" "" fw_ok
+pw B0.28 "chrony habilitado" "$(unit_state chrony.service)" test "$(unit_state chrony.service)" = enabled
+if hwclock -r >/dev/null 2>&1; then rec B0.29 PASS "RTC legível (hwclock)" "$(hwclock -r 2>/dev/null)"
+else rec B0.29 WARN "RTC legível (hwclock) A CONFIRMAR" ""; fi
+timers_ok() { [[ $(unit_state fstrim.timer) == enabled && $(unit_state apt-daily-upgrade.timer) == enabled ]]; }
+pw B0.30 "fstrim semanal e atualização de segurança agendados" "" timers_ok
+
+temp=$(( $(cat "$(egw_sys /sys/class/thermal/thermal_zone0/temp)" 2>/dev/null || echo 0) / 1000 ))
+thr=$(vcgencmd get_throttled 2>/dev/null | sed 's/^throttled=//' || true)
+pw B0.31 "SoC < 80 °C e sem subtensão/throttling" "${temp} °C, throttled=${thr:-?}" \
+	test "$temp" -lt 80 -a "${thr:-x}" = 0x0
+
+# --- Identidade e senha local ----------------------------------------------------------------------
+hw=$EGW_IDENTITY_DIR/hw.json
+serial=$(sed -n 's/.*"serial": *"\(EGW-[0-9]\{5\}\)".*/\1/p' "$hw" 2>/dev/null | head -n1)
+hn=$(hostname 2>/dev/null || true)
+pf B0.32 "identidade gravada (hw.json) e hostname" "${serial:-sem série} / $hn" \
+	bash -c '[[ -n $1 && $2 == "egw-${1#EGW-}" ]]' _ "$serial" "$hn"
+pw_state=$(passwd -S "$EGW_TECH_USER" 2>/dev/null | awk '{ print $2 }')
+pwd_ok() { [[ $pw_state == P && -s $EGW_LOCALUI_DIR/password.argon2id ]]; }
+pf B0.33 "senha local definida (console e página local)" "tecnico=${pw_state:-?}" pwd_ok
+
+# --- Relatório ------------------------------------------------------------------------------------
+status=PASS
+(( n_warn )) && status=WARN
+(( n_fail )) && status=FAIL
+printf '\nB0: %s (%d PASS, %d WARN, %d FAIL)\n' "$status" "$n_pass" "$n_warn" "$n_fail"
+
+if [[ -n $report ]]; then
+	{
+		printf '{\n  "schema": "egw-b0/1",\n'
+		printf '  "serial": %s,\n' "$(egw_json_val "$serial")"
+		printf '  "image_version": %s,\n' "$(egw_json_val "$img")"
+		printf '  "kernel": %s,\n' "$(egw_json_str "$kabi")"
+		printf '  "run_at": %s,\n' "$(egw_json_str "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+		printf '  "result": %s,\n' "$(egw_json_str "$status")"
+		printf '  "counts": {"pass": %d, "warn": %d, "fail": %d},\n' "$n_pass" "$n_warn" "$n_fail"
+		printf '  "items": [\n'
+		sep=""
+		for it in "${json_items[@]}"; do printf '%s    %s' "$sep" "$it"; sep=$',\n'; done
+		printf '\n  ]\n}\n'
+	} | egw_atomic_write "$report" 0644
+fi
+
+(( n_fail == 0 ))

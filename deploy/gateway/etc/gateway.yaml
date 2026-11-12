@@ -1,0 +1,40 @@
+# /etc/oee-gateway/gateway.yaml — config LOCAL mínima do gateway OEE (docs/16 §4).
+#
+# Conffile do pacote oee-gateway: o dpkg preserva as suas mudanças nas
+# atualizações. Campos desconhecidos são recusados pelo agente (pega erro de
+# digitação); valide com "oee-gateway config validate /etc/oee-gateway/gateway.yaml".
+#
+# O que NÃO fica aqui:
+#   - barramentos, dispositivos, tags e máquinas: vêm da nuvem (config remota);
+#   - rede, proxy e CA corporativa: a única fonte é /etc/oee-gateway/network.json
+#     (o oee-helper gera dele o proxy.env e o pacote de CAs);
+#   - credencial: /var/lib/oee-gateway/credentials.json (0600).
+schema: 1
+
+cloud:
+  # URL base da plataforma; o caminho /api/gateway/v1 é fixo no agente.
+  # Domínio próprio dos gateways (gw.oee.engemase.com.br) depende da decisão D28.
+  url: https://oee.engemase.com.br
+  timeout_s: 30
+  # PEM com CAs corporativas somadas às do sistema. Vazio = só as do sistema.
+  # Quando houver CA corporativa no network.json, o oee-helper gera
+  # /etc/oee-gateway/ca-bundle.pem e este campo passa a apontar para ele.
+  extra_ca_file: ""
+
+# Caminhos canônicos (docs/16 §4). Só mude em bancada/desenvolvimento.
+# paths:
+#   state_dir: /var/lib/oee-gateway
+#   credentials: /var/lib/oee-gateway/credentials.json
+#   buffer: /var/lib/oee-gateway/buffer.db
+#   identity: /data/identity/hw.json
+
+hardware:
+  # auto | recomputer-r1000 | generic
+  profile: auto
+  # Só no perfil "generic" (bancada x86 com adaptador USB-RS485):
+  # serial_ports:
+  #   rs485-1: /dev/ttyUSB0
+
+log:
+  # debug | info | warn | error. A nuvem pode elevar temporariamente, com prazo.
+  level: info

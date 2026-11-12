@@ -1,0 +1,35 @@
+# Verificação pós-boot do OTA (docs/16 §3) — pacote oee-gateway-updater.
+# Roda em TODO boot, ANTES do agente: se uma atualização foi interrompida (ex.:
+# queda de energia), roda "dpkg --configure -a" e retoma a verificação ou o
+# rollback a partir de update/state.json. Sem atualização pendente, sai em < 1 s.
+#
+# Atenção (contrato com o oee-updater): como esta unit vem antes do agente, ela
+# NÃO pode esperar pela saúde do agente novo. Se precisar retomar a espera de
+# 5 min, deve só enfileirar o oee-gateway-updater.service (systemctl --no-block)
+# e sair. Os scripts do pacote oee-gateway usam --no-block pelo mesmo motivo.
+[Unit]
+Description=Engemase OEE - verificação pós-boot da atualização do agente
+Documentation=file:/usr/share/doc/oee-gateway-updater/README.md
+RequiresMountsFor=/var/lib/oee-gateway
+Before=oee-gateway.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/oee-gateway/oee-updater boot-check
+StateDirectory=oee-gateway-updater
+StateDirectoryMode=0700
+UMask=0022
+Environment=DEBIAN_FRONTEND=noninteractive
+TimeoutStartSec=10min
+OOMScoreAdjust=-900
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

@@ -2,7 +2,7 @@
  * Formatação pt-BR. Sempre no fuso da planta (padrão America/Sao_Paulo).
  * Funções puras: seguras em componentes de servidor (não usam o relógio do sistema).
  */
-import { DEFAULT_TZ, MOCK_NOW } from "@/lib/mock"
+import { DEFAULT_TZ, MOCK_NOW } from "@/lib/mock/clock"
 
 const nf0 = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 })
 const nf1 = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
@@ -60,15 +60,21 @@ export function date(iso: string, tz = DEFAULT_TZ): string {
   return new Date(iso).toLocaleDateString("pt-BR", { timeZone: tz })
 }
 
-/** "11/11 10:42" */
+/**
+ * "11/11 10:42". Montado a partir das partes para não depender da pontuação do ICU
+ * (o Node e alguns navegadores inserem vírgula: "11/11, 10:42"), evitando diferença de hidratação.
+ */
 export function dateTime(iso: string, tz = DEFAULT_TZ): string {
-  return new Date(iso).toLocaleString("pt-BR", {
+  const parts = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    hourCycle: "h23",
     timeZone: tz,
-  })
+  }).formatToParts(new Date(iso))
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ""
+  return `${get("day")}/${get("month")} ${get("hour")}:${get("minute")}`
 }
 
 /** "2026-11-10" → "10/11" */

@@ -1,0 +1,141 @@
+# Pacote oee-gateway (agente + CLI + página local + ajudante) — docs/16 §3–§5.
+#
+# Gerar (a partir da RAIZ do repositório: os caminhos "src" são relativos ao
+# diretório corrente):
+#
+#   deploy/gateway/build-deb.sh --arch arm64 --version 0.1.0
+#
+# ou direto com o nfpm (v2.43.1, a última que compila com Go 1.24):
+#
+#   OEE_VERSION=0.1.0 OEE_ARCH=arm64 OEE_DIST=gateway/dist \
+#     nfpm pkg --config deploy/gateway/nfpm.yaml --packager deb --target gateway/dist/
+#
+# Variáveis obrigatórias:
+#   OEE_VERSION  versão semver (tag gateway-v*); vira o Version do .deb
+#   OEE_ARCH     arm64 (R1000) | amd64 (bancada x86)
+#   OEE_DIST     diretório dos binários; o binário é $OEE_DIST/$OEE_ARCH/oee-gateway
+#                (padrão do build: gateway/dist, ainda inexistente; ver README)
+# Opcional: SOURCE_DATE_EPOCH (data dos arquivos; o build-deb.sh usa a do commit).
+
+name: oee-gateway
+arch: ${OEE_ARCH}
+platform: linux
+version: ${OEE_VERSION}
+version_schema: semver
+section: admin
+priority: optional
+# A DEFINIR: e-mail de contato do mantenedor do pacote.
+maintainer: "Engemase Automação <a-definir@engemase.invalid>"
+vendor: Engemase Automação
+homepage: https://oee.engemase.com.br
+license: Proprietary
+description: |-
+  Agente de coleta do gateway OEE da Engemase
+  Coleta Modbus TCP/RTU somente leitura, buffer local SQLite e envio à
+  plataforma OEE. Inclui a CLI de campo, a página local de comissionamento
+  (porta 443 só na interface OT) e o ajudante privilegiado de operações
+  fechadas (rede com checkpoint, relógio, reset de fábrica, pendrive).
+
+# Dependências mínimas. O resto da pilha (NetworkManager, nftables, chrony,
+# sudo) é recomendado: o agente coleta sem eles, mas o ajudante e o tecnico não
+# têm o que fazer sem eles.
+depends:
+  - systemd (>= 252)
+  - ca-certificates
+recommends:
+  - nftables
+  - network-manager
+  - chrony
+  - sudo
+
+deb:
+  # O sudoers usa expressões regulares nos argumentos (sudo >= 1.9.10).
+  # Com sudo antigo, o arquivo quebraria o sudo inteiro.
+  breaks:
+    - sudo (<< 1.9.10)
+  compression: xz
+
+contents:
+  # --- Binário (multi-comando: run, localui serve, helper serve, CLI) ---------
+  - src: ${OEE_DIST}/${OEE_ARCH}/oee-gateway
+    dst: /usr/bin/oee-gateway
+    expand: true
+    file_info:
+      mode: 0755
+
+  # --- Scripts auxiliares (LED) ----------------------------------------------
+  - src: deploy/gateway/libexec/oee-led-fault
+    dst: /usr/lib/oee-gateway/oee-led-fault
+    file_info:
+      mode: 0755
+  - src: deploy/gateway/libexec/oee-led-perms
+    dst: /usr/lib/oee-gateway/oee-led-perms
+    file_info:
+      mode: 0755
+
+  # --- Units systemd -----------------------------------------------------------
+  - src: deploy/gateway/systemd/oee-gateway.service
+    dst: /usr/lib/systemd/system/oee-gateway.service
+  - src: deploy/gateway/systemd/oee-gateway.socket
+    dst: /usr/lib/systemd/system/oee-gateway.socket
+  - src: deploy/gateway/systemd/oee-gateway-ui.socket
+    dst: /usr/lib/systemd/system/oee-gateway-ui.socket
+  - src: deploy/gateway/systemd/oee-localui.socket
+    dst: /usr/lib/systemd/system/oee-localui.socket
+  - src: deploy/gateway/systemd/oee-localui.service
+    dst: /usr/lib/systemd/system/oee-localui.service
+  - src: deploy/gateway/systemd/oee-helper.socket
+    dst: /usr/lib/systemd/system/oee-helper.socket
+  - src: deploy/gateway/systemd/oee-helper.service
+    dst: /usr/lib/systemd/system/oee-helper.service
+  - src: deploy/gateway/systemd/oee-gateway-datadir.service
+    dst: /usr/lib/systemd/system/oee-gateway-datadir.service
+  # Nome escapado do caminho /var/lib/oee-gateway (no repositório o arquivo tem
+  # outro nome porque "\" não é válido em nomes de arquivo no Windows).
+  - src: deploy/gateway/systemd/oee-gateway-state.mount
+    dst: '/usr/lib/systemd/system/var-lib-oee\x2dgateway.mount'
+
+  # --- Config do systemd, usuários, diretórios, kernel e udev (em /usr/lib:
+  #     sobrescrever com arquivo de mesmo nome em /etc, sem conffile) ----------
+  - src: deploy/gateway/system.conf.d/50-oee-watchdog.conf
+    dst: /usr/lib/systemd/system.conf.d/50-oee-watchdog.conf
+  - src: deploy/gateway/journald.conf.d/50-oee-gateway.conf
+    dst: /usr/lib/systemd/journald.conf.d/50-oee-gateway.conf
+  - src: deploy/gateway/sysusers.d/oee-gateway.conf
+    dst: /usr/lib/sysusers.d/oee-gateway.conf
+  - src: deploy/gateway/tmpfiles.d/oee-gateway.conf
+    dst: /usr/lib/tmpfiles.d/oee-gateway.conf
+  - src: deploy/gateway/sysctl.d/90-oee-gateway.conf
+    dst: /usr/lib/sysctl.d/90-oee-gateway.conf
+  - src: deploy/gateway/udev/70-oee-gateway.rules
+    dst: /usr/lib/udev/rules.d/70-oee-gateway.rules
+
+  # --- Modelo do firewall (renderizado pelo oee-helper) -----------------------
+  - src: deploy/gateway/nftables/oee-gateway.nft
+    dst: /usr/share/oee-gateway/nftables/oee-gateway.nft
+
+  # --- Conffiles (/etc): o dpkg preserva mudanças locais ----------------------
+  - src: deploy/gateway/etc/gateway.yaml
+    dst: /etc/oee-gateway/gateway.yaml
+    type: config|noreplace
+    file_info:
+      # O grupo oee é acertado pelo tmpfiles no postinst (o usuário ainda não
+      # existe quando o dpkg desempacota).
+      mode: 0640
+  - src: deploy/gateway/sudoers.d/oee-tecnico
+    dst: /etc/sudoers.d/oee-tecnico
+    type: config|noreplace
+    file_info:
+      mode: 0440
+
+  # --- Documentação -------------------------------------------------------------
+  - src: deploy/gateway/README.md
+    dst: /usr/share/doc/oee-gateway/README.md
+    file_info:
+      mode: 0644
+
+scripts:
+  preinstall: deploy/gateway/scripts/oee-gateway/preinst
+  postinstall: deploy/gateway/scripts/oee-gateway/postinst
+  preremove: deploy/gateway/scripts/oee-gateway/prerm
+  postremove: deploy/gateway/scripts/oee-gateway/postrm

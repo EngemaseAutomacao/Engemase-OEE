@@ -1,0 +1,7 @@
+// Engemase: atualizações automáticas SÓ de segurança (docs/16 §7).
+// As origens e a lista de bloqueio estão em 52egw-unattended-upgrades.
+// O horário é definido pelos timers apt-daily*.timer.d/50-egw-window.conf.
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::Download-Upgradeable-Packages "0";
+APT::Periodic::AutocleanInterval "7";

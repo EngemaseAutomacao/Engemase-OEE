@@ -1,0 +1,18 @@
+# Garante /data/oee antes do bind em /var/lib/oee-gateway (ver
+# var-lib-oee\x2dgateway.mount). Cria só se faltar (ex.: /data recém-criada pelo
+# systemd-repart no 1º boot) e nunca muda dono ou modo de um diretório existente:
+# quem acerta o dono (oee:oee) é o tmpfiles e o StateDirectory= do agente.
+[Unit]
+Description=Engemase OEE - prepara /data/oee (estado do agente)
+Documentation=file:/usr/share/doc/oee-gateway/README.md
+DefaultDependencies=no
+ConditionPathIsMountPoint=/data
+RequiresMountsFor=/data
+Before=var-lib-oee\x2dgateway.mount
+Conflicts=shutdown.target
+Before=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/mkdir -p -m 0750 /data/oee

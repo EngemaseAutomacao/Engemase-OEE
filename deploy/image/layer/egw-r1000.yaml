@@ -1,0 +1,43 @@
+# METABEGIN
+# X-Env-Layer-Name: egw-r1000
+# X-Env-Layer-Category: engemase
+# X-Env-Layer-Desc: Plataforma Seeed reComputer R1000 (CM4) para o gateway
+#  Engemase: config.txt e cmdline.txt (sem gpio-shutdown: falta de energia =
+#  reboot), kernel FIXADO (pacote versionado + apt-mark hold) e o pacote
+#  engemase-r1000-support (overlay reComputer-R100x + módulo rtc-pcf8563w
+#  compilados para o kernel fixado). O script da Seeed nunca roda na unidade.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: egw-base,rpi-cm4
+#
+# X-Env-VarPrefix: egw
+#
+# X-Env-Var-kernel_abi:
+# X-Env-Var-kernel_abi-Desc: ABI do kernel fixado (linux-image-<ABI>), ex.:
+#  6.12.47+rpt-rpi-v8 (formato A CONFIRMAR). Vazio = Fase 0: mantém o
+#  kernel do repositório, registra a ABI e só avisa.
+# X-Env-Var-kernel_abi-Required: n
+# X-Env-Var-kernel_abi-Valid: string-or-empty
+# X-Env-Var-kernel_abi-Set: y
+#
+# X-Env-Var-platform_version: unknown
+# X-Env-Var-platform_version-Desc: Versão do pacote de plataforma (kernel,
+#  firmware e engemase-r1000-support), ex.: 6.12.x-egw1.
+# X-Env-Var-platform_version-Required: n
+# X-Env-Var-platform_version-Valid: string
+# X-Env-Var-platform_version-Set: y
+#
+# X-Env-Var-debdir:
+# X-Env-Var-debdir-Desc: Diretório no host com os .deb locais. Vazio =
+#  ${SRCROOT}/debs. Plataforma em <debdir>/platform/.
+# X-Env-Var-debdir-Required: n
+# X-Env-Var-debdir-Valid: string-or-empty
+# X-Env-Var-debdir-Set: y
+#
+# X-Env-Var-require_platform: y
+# X-Env-Var-require_platform-Desc: y = falha o build sem o
+#  engemase-r1000-support. n = só para imagem de bancada da Fase 0.
+# X-Env-Var-require_platform-Required: n
+# X-Env-Var-require_platform-Valid: bool
+# X-Env-Var-require_platform-Set: y
+# METAEND
+---

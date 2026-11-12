@@ -5,7 +5,6 @@
  */
 import {
   CURRENT_USER_ID,
-  MOCK_NOW,
   areas,
   auditLog,
   clients,
@@ -24,7 +23,8 @@ import { dailyOeeFor, hourlyFor, liveFor, paretoFor, shiftHistoryFor, timelineFo
 import type { Client, Machine, MachineLive, OeeValues, User } from "./types"
 
 export * from "./types"
-export { MOCK_NOW, DEFAULT_TZ } from "./data"
+export { MOCK_NOW, DEFAULT_TZ } from "./clock"
+export { faultTexts } from "./data"
 export { SHIFT_START, SHIFT_END, seededRandom } from "./generated"
 export type { ShiftOeeRow } from "./generated"
 
@@ -139,7 +139,8 @@ export function getClientSummary(clientId: string) {
     units: getUnits(clientId).length,
     machines: ms.length,
     gateways: gws.length,
-    gatewaysOnline: gws.filter((g) => g.status === "online").length,
+    /** Conectados (inclui "com alertas", que responde mas tem pendência; ela aparece em `gatewaysProblem`). */
+    gatewaysOnline: gws.filter((g) => g.status === "online" || g.status === "degraded").length,
     gatewaysProblem: gws.filter((g) => g.status === "offline" || g.status === "degraded").length,
     users: getClientUsers(clientId).length,
     oee: aggregateOee(ms),
@@ -166,8 +167,8 @@ export const gatewayParams = (clienteSlug: string) => {
 /** Para rotas de console: /admin/clientes/[clienteId] */
 export const adminClientParams = () => clients.map((c) => ({ clienteId: c.id }))
 
-/** Instante "agora" do protótipo em ms (para cálculos de duração em componentes de servidor). */
-export const nowMs = () => Date.parse(MOCK_NOW)
+/** Instante "agora" do protótipo em ms (definido em `./clock`, módulo leve seguro para o navegador). */
+export { nowMs } from "./clock"
 
 // ---------------------------------------------------------------------------
 // 2ª rodada: notificações, acesso remoto, terminais, ajuda e identidade visual

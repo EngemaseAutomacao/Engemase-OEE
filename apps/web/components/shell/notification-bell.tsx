@@ -29,6 +29,34 @@ const SEVERITY_DOT = {
 } as const
 
 /**
+ * Notificação de teste. No Chrome do Android `new Notification()` lança "Illegal constructor"
+ * (exige service worker), então tenta primeiro pelo service worker registrado.
+ */
+async function showTestNotification(): Promise<boolean> {
+  const title = "Engemase OEE"
+  const options: NotificationOptions = {
+    body: "Notificações ativadas neste dispositivo. Você receberá os alertas das suas máquinas.",
+    icon: "/brand/engemase-icone.png",
+    tag: "engemase-teste",
+  }
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration()
+    if (reg) {
+      await reg.showNotification(title, options)
+      return true
+    }
+  } catch {
+    // segue para o construtor
+  }
+  try {
+    new Notification(title, options)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Sino de notificações (central no app). O push é só um canal de entrega: a central é a fonte da verdade.
  * "Ativar notificações neste dispositivo" pede a permissão do navegador e mostra uma notificação de teste.
  */
@@ -41,16 +69,19 @@ export function NotificationBell({ items, allHref }: { items: BellItem[]; allHre
       toast.info("Este navegador não suporta notificações. No iPhone/iPad, instale o app na Tela de Início (Compartilhar › Adicionar à Tela de Início).")
       return
     }
-    const permission = await Notification.requestPermission()
+    let permission: NotificationPermission
+    try {
+      permission = await Notification.requestPermission()
+    } catch {
+      toast.error("Não foi possível pedir a permissão de notificações neste navegador.")
+      return
+    }
     if (permission !== "granted") {
       toast.warning("Permissão negada. Você pode liberar nas configurações do navegador.")
       return
     }
-    new Notification("Engemase OEE", {
-      body: "Notificações ativadas neste dispositivo. Você receberá os alertas das suas máquinas.",
-      icon: "/brand/engemase-icone.png",
-    })
-    toast.success("Notificações ativadas neste dispositivo")
+    const shown = await showTestNotification()
+    toast.success(shown ? "Notificações ativadas neste dispositivo" : "Permissão concedida. A notificação de teste não pôde ser exibida neste navegador.")
   }
 
   return (

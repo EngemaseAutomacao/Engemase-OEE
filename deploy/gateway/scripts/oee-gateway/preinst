@@ -1,0 +1,44 @@
+#!/bin/sh
+# preinst do pacote oee-gateway. Roda ANTES de o dpkg desempacotar os arquivos,
+# então só faz verificações que evitam deixar o sistema pela metade.
+# Idempotente; respeita DPKG_ROOT (instalação fora do sistema em execução).
+set -e
+set -f
+
+ROOT="${DPKG_ROOT:-}"
+
+# Espaço mínimo livre em /usr para desempacotar (binário ~20 MB; o dpkg guarda
+# a versão antiga até o fim). A raiz do R1000 tem só 4 GiB: encher a raiz no
+# meio de um OTA deixaria o gateway instável.
+MIN_FREE_KB=65536
+
+check_free_space() {
+	dir="$ROOT/usr"
+	[ -d "$dir" ] || return 0
+	command -v df >/dev/null 2>&1 || return 0
+	free_kb=$(df -Pk "$dir" 2>/dev/null | awk 'NR == 2 { print $4 }')
+	case "$free_kb" in
+		'' | *[!0-9]*) return 0 ;;
+	esac
+	if [ "$free_kb" -lt "$MIN_FREE_KB" ]; then
+		echo "oee-gateway: só ${free_kb} KiB livres em $dir (mínimo ${MIN_FREE_KB} KiB); instalação abortada." >&2
+		exit 1
+	fi
+}
+
+case "$1" in
+	install | upgrade)
+		check_free_space
+		# Migrações de conffile (renomear/remover em versões futuras) entram aqui
+		# com dpkg-maintscript-helper, repetidas no postinst e no postrm. Ex.:
+		#   dpkg-maintscript-helper rm_conffile /etc/oee-gateway/antigo.conf 0.2.0~ -- "$@"
+		;;
+	abort-upgrade)
+		;;
+	*)
+		echo "preinst chamado com argumento desconhecido: '$1'" >&2
+		exit 1
+		;;
+esac
+
+exit 0

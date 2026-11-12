@@ -1,0 +1,124 @@
+#!/bin/bash
+# Engemase - camada egw-r1000, fase customize (roda no host, alvo em $1).
+#
+# Kernel FIXADO e pacote de plataforma (docs/16 §7):
+# 1. deixa instalado só o kernel linux-image-<ABI> (de debs/platform/ se
+#    houver; senão do repositório) e remove o metapacote, para o apt nunca
+#    puxar outro kernel;
+# 2. instala o engemase-r1000-support (overlay reComputer-R100x + módulo
+#    rtc-pcf8563w compilados para essa ABI; receita em platform/);
+# 3. apt-mark hold no kernel, no firmware e no pacote de suporte;
+# 4. grava a ABI em /usr/share/engemase/platform.env para as próximas etapas.
+set -euo pipefail
+
+root=${1:?uso: $0 <rootfs>}
+debdir=${IGconf_egw_debdir:-}
+[[ -n $debdir ]] || debdir="${SRCROOT:-.}/debs"
+abi=${IGconf_egw_kernel_abi:-}
+require_platform=${IGconf_egw_require_platform:-y}
+
+log() { printf 'egw-r1000: %s\n' "$*"; }
+die() { printf 'egw-r1000: ERRO: %s\n' "$*" >&2; exit 1; }
+in_root() { chroot "$root" "$@"; }
+is_yes() { case ${1,,} in y|yes|1|true) return 0 ;; *) return 1 ;; esac; }
+
+installed_kernels() {
+	in_root dpkg-query -W -f='${db:Status-Status} ${binary:Package}\n' 'linux-image-*' 2>/dev/null \
+		| awk '$1 == "installed" && $2 ~ /^linux-image-[0-9]/ { sub(/^linux-image-/, "", $2); print $2 }'
+}
+
+# Instala .deb locais copiando-os para dentro do alvo.
+install_local_debs() {
+	local tmp f
+	local -a inside=()
+	tmp=$(mktemp -d "$root/tmp/egw-debs.XXXXXX")
+	for f in "$@"; do
+		cp "$f" "$tmp/"
+		inside+=("/tmp/${tmp##*/}/${f##*/}")
+	done
+	in_root apt-get install -y --no-install-recommends --allow-downgrades "${inside[@]}"
+	rm -rf "$tmp"
+}
+
+# --- 1. Kernel fixado ----------------------------------------------------------
+if [[ -n $abi ]]; then
+	shopt -s nullglob
+	kdebs=("$debdir"/platform/linux-image-"${abi}"_*.deb)
+	shopt -u nullglob
+	if (( ${#kdebs[@]} == 1 )); then
+		log "kernel $abi a partir de ${kdebs[0]##*/}"
+		install_local_debs "${kdebs[0]}"
+	elif (( ${#kdebs[@]} > 1 )); then
+		die "mais de um linux-image-${abi}_*.deb em $debdir/platform"
+	else
+		log "kernel $abi a partir do repositório (sem .deb em $debdir/platform)"
+		in_root apt-get install -y --no-install-recommends "linux-image-${abi}"
+	fi
+else
+	mapfile -t ks < <(installed_kernels)
+	(( ${#ks[@]} == 1 )) || die "EGW_KERNEL_ABI vazio e ${#ks[@]} kernels instalados (${ks[*]:-nenhum}); fixe a ABI"
+	abi=${ks[0]}
+	log "AVISO: kernel NÃO fixado em pins.env; usando o do repositório: $abi (só para Fase 0)"
+fi
+[[ -d $root/lib/modules/$abi || -d $root/usr/lib/modules/$abi ]] || die "módulos do kernel $abi ausentes"
+
+# Só o kernel fixado: remove metapacotes e outros kernels.
+in_root apt-mark manual "linux-image-${abi}" >/dev/null
+remove=()
+for p in linux-image-rpi-v8 linux-image-rpi-2712 linux-image-rpi-v7 linux-image-rpi-v7l; do
+	if in_root dpkg-query -W -f='${db:Status-Status}' "$p" 2>/dev/null | grep -qx installed; then
+		remove+=("$p")
+	fi
+done
+while read -r k; do
+	[[ $k == "$abi" ]] || remove+=("linux-image-$k")
+done < <(installed_kernels)
+if (( ${#remove[@]} )); then
+	log "removendo: ${remove[*]}"
+	in_root apt-get purge -y "${remove[@]}"
+fi
+
+# --- 2. engemase-r1000-support ---------------------------------------------------
+shopt -s nullglob
+sdebs=("$debdir"/engemase-r1000-support_*_arm64.deb "$debdir"/platform/engemase-r1000-support_*_arm64.deb)
+shopt -u nullglob
+if (( ${#sdebs[@]} > 1 )); then
+	die "mais de um engemase-r1000-support_*.deb em $debdir"
+elif (( ${#sdebs[@]} == 1 )); then
+	log "instalando ${sdebs[0]##*/}"
+	install_local_debs "${sdebs[0]}"
+	# O pacote guarda uma cópia do overlay; a partição de boot pode ter sido
+	# reescrita pelos hooks do kernel depois da instalação.
+	dtbo=$root/boot/firmware/overlays/reComputer-R100x.dtbo
+	if [[ ! -f $dtbo && -f $root/usr/lib/engemase-r1000-support/overlays/reComputer-R100x.dtbo ]]; then
+		install -D -m 0644 "$root/usr/lib/engemase-r1000-support/overlays/reComputer-R100x.dtbo" "$dtbo"
+	fi
+	[[ -f $dtbo ]] || die "overlay reComputer-R100x.dtbo ausente após instalar o pacote"
+	ko=$(find "$root/lib/modules/$abi" "$root/usr/lib/modules/$abi" -name 'rtc-pcf8563w.ko*' 2>/dev/null | head -n1 || true)
+	[[ -n $ko ]] || die "rtc-pcf8563w.ko ausente para o kernel $abi (pacote compilado para outra ABI?)"
+	in_root depmod -a "$abi"
+elif is_yes "$require_platform"; then
+	die "engemase-r1000-support_*_arm64.deb não encontrado em $debdir (ver platform/engemase-r1000-support/README.md)"
+else
+	log "AVISO: imagem SEM engemase-r1000-support (sem RTC, LEDs, RS-485): só bancada da Fase 0"
+fi
+
+# --- 3. Hold -------------------------------------------------------------------
+hold=("linux-image-${abi}")
+for p in raspi-firmware rpi-eeprom engemase-r1000-support; do
+	if in_root dpkg-query -W -f='${db:Status-Status}' "$p" 2>/dev/null | grep -qx installed; then
+		hold+=("$p")
+	fi
+done
+in_root apt-mark hold "${hold[@]}"
+log "hold: ${hold[*]}"
+
+# --- 4. Registro -------------------------------------------------------------------
+install -d -m 0755 "$root/usr/share/engemase"
+{
+	printf 'EGW_KERNEL_ABI=%s\n' "$abi"
+	printf 'EGW_PLATFORM=%s\n' "${IGconf_egw_platform_version:-unknown}"
+	printf 'EGW_KERNEL_PINNED=%s\n' "$([[ -n ${IGconf_egw_kernel_abi:-} ]] && echo yes || echo no)"
+	printf 'EGW_SUPPORT_PKG=%s\n' "$( (( ${#sdebs[@]} )) && echo yes || echo no)"
+} > "$root/usr/share/engemase/platform.env"
+log "ok (kernel $abi)"

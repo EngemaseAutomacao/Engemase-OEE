@@ -1,0 +1,7 @@
+
+[cm4]
+# Engemase/R1000: a USB 2.0 do CM4 alimenta o hub interno (ETH1, portas USB).
+# A Seeed usa o controlador DWC2 em modo host (em vez de otg_mode=1).
+# A CONFIRMAR na Fase 0: ETH1 e USB com dwc2,dr_mode=host.
+dtoverlay=dwc2,dr_mode=host
+dtoverlay=

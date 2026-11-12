@@ -1,0 +1,53 @@
+# Imagem própria do gateway Engemase OEE (docs/16 §7).
+# Alvo: Seeed reComputer R1000 (Raspberry Pi CM4, eMMC), Debian 13 "Trixie" arm64,
+# no estilo Raspberry Pi OS Lite (repositório Raspberry Pi + Debian).
+#
+# Não chame o rpi-image-gen direto: use ../build.sh, que passa a versão, os
+# commits fixados (pins.env) e o snapshot do Debian como overrides e depois
+# gera .bmap, SHA256SUMS e o manifesto.
+#
+# As variáveis egw.* obrigatórias (image_version etc.) chegam pelo build.sh.
+
+device:
+  layer: rpi-cm4
+  # R10xx-00: CM4 sem rádio, 2 GB de RAM, 16 GB de eMMC. A imagem funciona em
+  # outros tamanhos de eMMC: a partição /data ocupa o que sobrar no 1º boot.
+  variant: 16G
+  storage_type: emmc
+  # Nome provisório. O factory init troca para egw-NNNNN no 1º boot.
+  hostname: egw-factory
+  # Usuário de console local (sem SSH). Nasce bloqueado; a senha é a senha
+  # local da unidade, definida pelo factory init. "passwd" só existe para o
+  # rpi-image-gen manter o pacote sudo; o hook do egw-base apaga a regra
+  # "ALL" criada por ele e deixa só os subcomandos permitidos (docs/16 §4).
+  user1: tecnico
+  user1sudo: passwd
+  user1groups: users
+
+image:
+  layer: image-egw-gpt
+  boot_part_size: 512M
+  root_part_size: 4096M
+
+locale:
+  default: C.UTF-8
+  # Sistema em UTC. As janelas de atualização usam America/Sao_Paulo no próprio timer.
+  timezone: Etc/UTC
+  # Teclado ABNT2 para o console HDMI da bancada e do campo.
+  keyboard_keymap: br
+  keyboard_layout: Portuguese (Brazil)
+
+# Mapeamento (não lista) de propósito: o plano B (Bookworm) sobrescreve
+# "distro" e "rpi" por chave ao incluir este arquivo.
+layer:
+  distro: debian-trixie-arm64-minbase-snapshot
+  rpi: rpi-debian-trixie
+  engemase: egw-agent
+
+egw:
+  debian_codename: trixie
+  # .deb locais: oee-gateway*.deb, engemase-r1000-support*.deb e,
+  # em debs/platform/, o kernel fixado (linux-image-<ABI>*.deb).
+  debdir: ${@SRCROOT}/debs
+  # Certificado PÚBLICO da bancada para cifrar a exportação da senha local.
+  bench_cert: ${@SRCROOT}/keys/bench-export.pem

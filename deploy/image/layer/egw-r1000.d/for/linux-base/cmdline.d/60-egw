@@ -1,0 +1,1 @@
+-console=serial0* net.ifnames=0 panic=10 quiet

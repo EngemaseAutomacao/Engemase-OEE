@@ -1,0 +1,4 @@
+# Engemase: pendrive de bancada (FAT, rótulo EGWBANCADA) -> exportação de fábrica.
+# Só lê nomes fixos (ACK-<id>) e só grava em EGW/<série>/; nada é executado.
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ENV{ID_FS_TYPE}=="vfat", ENV{ID_FS_LABEL}=="EGWBANCADA", \
+  TAG+="systemd", ENV{SYSTEMD_WANTS}+="egw-factory-export@%k.service"

@@ -1,0 +1,9 @@
+# Engemase OEE gateway - /etc/fstab (layout image-egw-gpt, docs/16 §4)
+# <dispositivo>            <ponto>               <tipo> <opções>                                                                                         <dump> <fsck>
+/dev/disk/by-slot/system   /                     ext4   defaults,noatime,errors=remount-ro                                                                0      1
+/dev/disk/by-slot/boot     /boot/firmware        vfat   defaults,noatime,errors=remount-ro                                                                0      2
+# /data: criada no 1º boot (systemd-repart; plano B no factory init). "nofail":
+# sem ela o sistema sobe para diagnóstico, mas o agente não (RequiresMountsFor).
+/dev/disk/by-slot/data     /data                 ext4   defaults,noatime,nodev,nosuid,noexec,nofail,x-systemd.device-timeout=90s,x-systemd.after=systemd-repart.service 0 2
+/data/oee                  /var/lib/oee-gateway  none   bind,nodev,nosuid,noexec,nofail,x-systemd.requires-mounts-for=/data                              0      0
+/data/journal              /var/log/journal      none   bind,nodev,nosuid,noexec,nofail,x-systemd.requires-mounts-for=/data                              0      0

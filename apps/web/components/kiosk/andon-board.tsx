@@ -22,6 +22,7 @@ import { STATE_META, STATE_ORDER, TONE_TEXT, oeeTone } from "@/lib/states"
 import { cn } from "@/lib/utils"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Brand } from "@/components/shell/brand"
 import { AndonClock, FullscreenButton } from "@/components/kiosk/andon-live"
 import { AndonTile, type AndonTileData } from "@/components/kiosk/andon-tile"
 import { currentShift, expectedByNow } from "@/components/kiosk/shift-info"
@@ -271,7 +272,8 @@ export async function AndonBoard({ params }: { params: Promise<{ cliente: string
             ))}
           </ul>
           <div className="flex flex-wrap items-center gap-3 text-[clamp(0.75rem,0.85vw,1.125rem)] text-muted-foreground lg:shrink-0">
-            <span className="hidden 2xl:inline">Marcador na barra = ritmo esperado para a meta · Engemase OEE</span>
+            <span className="hidden 2xl:inline">Marcador na barra = ritmo esperado para a meta</span>
+            <Brand className="hidden text-foreground md:flex" />
             <FullscreenButton />
             <Link
               href={`/${client.slug}`}

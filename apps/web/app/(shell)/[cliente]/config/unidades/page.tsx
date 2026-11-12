@@ -3,8 +3,8 @@ import { FactoryIcon, RouterIcon, UsersIcon } from "lucide-react"
 
 import { getAreas, getClientBySlug, getClientUsers, getGateways, getLines, getMachines, getUnits } from "@/lib/mock"
 import { PLAN_LABEL } from "@/lib/roles"
-import { PageBody } from "@/components/shell/page-header"
-import { PlanUsage } from "@/components/config/plan-usage"
+import { SectionCard } from "@/components/dashboard/section-card"
+import { UsageMeter, type UsageItem } from "@/components/config/plan-usage"
 import { UnitsManager, type AreaNode, type LineNode, type UnitNode } from "@/components/config/units-manager"
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/unidades">) {
@@ -34,31 +34,37 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/unid
     machineCount: machines.filter((m) => m.lineId === l.id).length,
   }))
 
+  const usage: UsageItem[] = [
+    { label: "Máquinas", used: machines.length, limit: client.limits.machines, icon: FactoryIcon },
+    { label: "Gateways", used: gateways.length, limit: client.limits.gateways, icon: RouterIcon },
+    { label: "Usuários", used: getClientUsers(client.id).length, limit: client.limits.users, icon: UsersIcon },
+  ]
+
   return (
-    <PageBody>
+    <div className="flex flex-col gap-5 p-4 md:p-6">
       <UnitsManager
         clientSlug={client.slug}
         title="Unidades e linhas"
         description={`Estrutura de ${client.name}: unidade → área → linha → máquinas.`}
+        machineLimit={client.limits.machines}
         initialUnits={unitNodes}
         initialAreas={areaNodes}
         initialLines={lineNodes}
         summary={
-          <PlanUsage
-            planLabel={PLAN_LABEL[client.plan]}
-            items={[
-              { label: "Máquinas", used: machines.length, limit: client.limits.machines, icon: FactoryIcon },
-              { label: "Gateways", used: gateways.length, limit: client.limits.gateways, icon: RouterIcon },
-              { label: "Usuários", used: getClientUsers(client.id).length, limit: client.limits.users, icon: UsersIcon },
-            ]}
-            footnote={
-              <>
-                Retenção de dados: {client.limits.retentionMonths} meses. Para ampliar os limites, fale com a Engemase.
-              </>
-            }
-          />
+          <SectionCard
+            title={`Plano ${PLAN_LABEL[client.plan]}`}
+            description={`Uso dos limites contratados · retenção de dados de ${client.limits.retentionMonths} meses. Para ampliar, fale com a Engemase.`}
+            href={`/${client.slug}/ajuda`}
+            linkLabel="Falar com a Engemase"
+          >
+            <div className="grid gap-4 sm:grid-cols-3">
+              {usage.map((it) => (
+                <UsageMeter key={it.label} item={it} />
+              ))}
+            </div>
+          </SectionCard>
         }
       />
-    </PageBody>
+    </div>
   )
 }

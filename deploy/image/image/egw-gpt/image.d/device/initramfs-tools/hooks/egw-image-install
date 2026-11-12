@@ -1,0 +1,10 @@
+#!/bin/sh
+# Engemase: leva a regra das partições (by-slot) para o initramfs, onde a
+# raiz é montada por /dev/disk/by-slot/system.
+case $1 in
+	prereqs) echo ""; exit 0 ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+copy_file config /etc/udev/rules.d/99-rpi-05-egw-image.rules

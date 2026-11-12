@@ -1,0 +1,19 @@
+# Socket do ajudante privilegiado (docs/16 §3). Só o agente (grupo oee) e o
+# root (CLI via sudo restrito do tecnico) conectam. O oee-helper ainda confere
+# o chamador por SO_PEERCRED e valida cada pedido por schema.
+[Unit]
+Description=Engemase OEE - socket do ajudante privilegiado
+Documentation=file:/usr/share/doc/oee-gateway/README.md
+
+[Socket]
+ListenStream=/run/oee-gateway/helper.sock
+SocketUser=root
+SocketGroup=oee
+SocketMode=0660
+DirectoryMode=0755
+RemoveOnStop=yes
+FileDescriptorName=helper
+Service=oee-helper.service
+
+[Install]
+WantedBy=sockets.target

@@ -136,31 +136,35 @@ export function ThisDeviceCard({ className }: { className?: string }) {
 
   return (
     <SectionCard title="Este dispositivo" description="O navegador que você está usando agora" className={className}>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <IconCircle icon={granted ? BellRingIcon : BellOffIcon} tone={granted ? "teal" : "slate"} size="lg" />
-        <div className="min-w-0 flex-1">
-          <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold", TONE_CLASS[meta.tone])}>{meta.label}</span>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            {meta.hint ||
-              "Receba os alertas das suas máquinas mesmo com a plataforma fechada. A central (o sino) continua sendo a fonte da verdade: tudo fica registrado lá."}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2 sm:flex-col sm:items-stretch">
-          {granted ? (
-            <Button variant="outline" onClick={test}>
-              <SendIcon />
-              Enviar teste
+      <div className="@container">
+        <div className="flex flex-col gap-4 @xl:flex-row @xl:items-center">
+          <div className="flex min-w-0 flex-1 items-start gap-4">
+            <IconCircle icon={granted ? BellRingIcon : BellOffIcon} tone={granted ? "teal" : "slate"} size="lg" />
+            <div className="min-w-0 flex-1">
+              <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold", TONE_CLASS[meta.tone])}>{meta.label}</span>
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                {meta.hint ||
+                  "Receba os alertas das suas máquinas mesmo com a plataforma fechada. A central (o sino) continua sendo a fonte da verdade: tudo fica registrado lá."}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 @xl:flex-col @xl:items-stretch">
+            {granted ? (
+              <Button variant="outline" onClick={test}>
+                <SendIcon />
+                Enviar teste
+              </Button>
+            ) : (
+              <Button onClick={enable} disabled={busy || permission === "denied"}>
+                {busy ? <Spinner /> : <BellRingIcon />}
+                Ativar notificações neste dispositivo
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" className="text-xs" onClick={() => setIosOpen(true)}>
+              <SmartphoneIcon />
+              Usa iPhone ou iPad?
             </Button>
-          ) : (
-            <Button onClick={enable} disabled={busy || permission === "denied"}>
-              {busy ? <Spinner /> : <BellRingIcon />}
-              Ativar notificações neste dispositivo
-            </Button>
-          )}
-          <Button variant="ghost" size="sm" className="text-xs" onClick={() => setIosOpen(true)}>
-            <SmartphoneIcon />
-            Usa iPhone ou iPad?
-          </Button>
+          </div>
         </div>
       </div>
       <IosInstallDialog open={iosOpen} onOpenChange={setIosOpen} />

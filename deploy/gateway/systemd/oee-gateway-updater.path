@@ -1,0 +1,17 @@
+# OTA mínimo (docs/16 §2 e §3, M4b) — pacote oee-gateway-updater.
+# O agente (usuário oee) baixa o .deb, confere hash e assinatura e grava o
+# pedido em update/request.json. Esta unit dispara o atualizador root, que
+# confere TUDO de novo (nunca confia no processo sem privilégio).
+[Unit]
+Description=Engemase OEE - aguarda pedido de atualização do agente (OTA)
+Documentation=file:/usr/share/doc/oee-gateway-updater/README.md
+# Vigiar o diretório só depois do bind de /data/oee; antes disso o inotify
+# ficaria preso ao diretório escondido embaixo do ponto de montagem.
+RequiresMountsFor=/var/lib/oee-gateway
+
+[Path]
+PathChanged=/var/lib/oee-gateway/update/request.json
+Unit=oee-gateway-updater.service
+
+[Install]
+WantedBy=multi-user.target

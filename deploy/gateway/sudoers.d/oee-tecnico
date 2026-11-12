@@ -1,0 +1,37 @@
+# sudo restrito do usuário tecnico (docs/16 §4). Instalado em
+# /etc/sudoers.d/oee-tecnico (conffile, modo 0440).
+#
+# Só os subcomandos explícitos: status, diag, net show/set/confirm/rollback e
+# enroll --code. SEM reset de fábrica, URL personalizada ou acesso remoto.
+#
+# Os argumentos são conferidos por expressão regular (^...$, sudo >= 1.9.10;
+# o pacote declara Breaks: sudo (<< 1.9.10)). O sudo junta os argumentos com
+# espaço e compara a linha inteira: qualquer opção fora da lista (ex.: --url,
+# --config, --socket) é recusada. Ao mudar a CLI (gateway/), atualizar AQUI e
+# no teste de expressões do validate.sh.
+#
+# Validar: visudo -cf deploy/gateway/sudoers.d/oee-tecnico
+#
+# Os comandos de leitura que não mudam o sistema (modbus read, config show,
+# buffer stats, logs, support-bundle) não passam pelo sudo: o tecnico é do
+# grupo oee-admin e a CLI fala direto com o agente (agent.sock).
+
+Defaults:tecnico use_pty
+Defaults:tecnico log_output
+Defaults:tecnico timestamp_timeout=5
+Defaults:tecnico env_reset
+
+# Leitura com privilégio (credencial, rede, firewall).
+Cmnd_Alias OEE_TEC_LEITURA = /usr/bin/oee-gateway ^status( --json)?$, \
+                             /usr/bin/oee-gateway ^diag( --json)?$, \
+                             /usr/bin/oee-gateway ^net show( --json)?$
+
+# Rede: preparar (com checkpoint e volta automática em 120 s), confirmar ou
+# desfazer. Cada argumento é uma opção da lista ou um valor que não começa com "-".
+Cmnd_Alias OEE_TEC_REDE = /usr/bin/oee-gateway ^net set (it|ot|proxy|ntp)( (--(static|dhcp|gw|dns|dns-search|address|add-address|del-address|route|del-route|vlan|no-vlan|mtu|no-proxy)|[^ -][^ ]*))*$, \
+                          /usr/bin/oee-gateway ^net (confirm|rollback)$
+
+# Ativação com código (mesmo formato do contrato: ABCD-1234). Sem --url.
+Cmnd_Alias OEE_TEC_ATIVACAO = /usr/bin/oee-gateway ^enroll --code [A-Za-z0-9]{4}-?[A-Za-z0-9]{4}$
+
+tecnico ALL = (root) OEE_TEC_LEITURA, OEE_TEC_REDE, OEE_TEC_ATIVACAO

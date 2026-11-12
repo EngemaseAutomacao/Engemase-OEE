@@ -1,0 +1,13 @@
+# Engemase: ao espetar o pendrive de bancada (FAT, rótulo EGWBANCADA), copia
+# para EGW/<série>/ o cartão cifrado da senha local, o hw.json e o relatório
+# B0. Se a bancada deixou ACK-<export_id> no pendrive, apaga a cópia local
+# do cartão. Disparado pela regra udev 90-egw-bench-usb.rules.
+[Unit]
+Description=Engemase - exportação de fábrica para o pendrive de bancada (%I)
+ConditionPathExists=/data/identity/hw.json
+After=egw-factory-init.service local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/engemase/factory/egw-factory-init export-usb /dev/%I
+TimeoutStartSec=2min

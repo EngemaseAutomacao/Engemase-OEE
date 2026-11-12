@@ -19,7 +19,7 @@ export const CLIENT_ROLE_DESCRIPTION: Record<ClientRole, string> = {
   engineer: "Configura gateways, CLPs e tags; vê tudo das unidades permitidas",
   supervisor: "Dashboards, relatórios, turnos, produtos e motivos de parada",
   operator: "Tela do operador: classifica paradas, lança refugo e troca de produto",
-  viewer: "Somente leitura (ideal para TV / Andon)",
+  viewer: "Somente leitura: dashboards e relatórios das unidades permitidas",
 }
 
 export const CLIENT_STATUS_LABEL: Record<ClientStatus, string> = {

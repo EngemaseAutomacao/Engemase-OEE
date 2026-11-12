@@ -3,7 +3,6 @@ import { notFound } from "next/navigation"
 import { PlusIcon } from "lucide-react"
 
 import { getClientBySlug, getDevice, getGateways, getLines, getMachines, getTags, getUnits } from "@/lib/mock"
-import { PageBody, PageHeader } from "@/components/shell/page-header"
 import { Button } from "@/components/ui/button"
 import {
   MachineRegistry,
@@ -14,6 +13,7 @@ import {
   type RegistryUnit,
 } from "@/components/config/machine-registry"
 import { serialPortsFor } from "@/components/config/labels"
+import { PageTitle } from "@/components/refresh/page-title"
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/maquinas">) {
   const { cliente } = await params
@@ -54,8 +54,8 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/maqu
   })
 
   return (
-    <PageBody>
-      <PageHeader
+    <div className="flex flex-col gap-5 p-4 md:p-6">
+      <PageTitle
         title="Cadastro de máquinas"
         description="Identificação, conexão Modbus com o CLP, modo de estado e ciclo ideal de cada máquina."
         actions={
@@ -75,6 +75,6 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/maqu
         gateways={gateways}
         machineLimit={client.limits.machines}
       />
-    </PageBody>
+    </div>
   )
 }

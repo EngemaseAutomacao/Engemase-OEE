@@ -1,0 +1,41 @@
+# Atualizador do agente (OTA mínimo, docs/16 §3): root, só durante uma
+# atualização. Fica num pacote separado (oee-gateway-updater) para sobreviver a
+# um agente novo que não sobe.
+#
+# Contrato com o binário oee-updater (gateway/cmd/oee-updater, a implementar):
+#  1. Confere de novo a assinatura Ed25519 do manifesto, o SHA-256 do .deb, o
+#     Package (oee-gateway), a arquitetura e a versão mínima (sem downgrade fora
+#     de allowed_rollback_to).
+#  2. Guarda o .deb instalado em $STATE_DIRECTORY (root, fora do alcance do oee).
+#  3. dpkg -i --force-confdef --force-confold (sem perguntas sobre conffiles).
+#  4. Espera até 5 min pelo update/health.json do agente novo; sem ele, reinstala
+#     o anterior e grava update/result.json = rolled_back.
+#  5. Remove ou renomeia request.json ao terminar.
+[Unit]
+Description=Engemase OEE - aplica a atualização do agente (OTA)
+Documentation=file:/usr/share/doc/oee-gateway-updater/README.md
+RequiresMountsFor=/var/lib/oee-gateway
+After=oee-gateway-update-check.service
+ConditionPathExists=/var/lib/oee-gateway/update/request.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/oee-gateway/oee-updater apply --request /var/lib/oee-gateway/update/request.json
+StateDirectory=oee-gateway-updater
+StateDirectoryMode=0700
+UMask=0022
+Environment=DEBIAN_FRONTEND=noninteractive
+# Inclui a espera de até 5 min pela saúde do agente novo.
+TimeoutStartSec=15min
+# Não matar o dpkg no meio por pressão de memória do resto do sistema.
+OOMScoreAdjust=-900
+# Confinamento possível para quem roda dpkg: o dpkg precisa escrever em /usr,
+# /etc e /var e os scripts do pacote chamam systemctl, sysusers, tmpfiles,
+# udevadm e systemd-sysctl (por isso sem ProtectSystem nem ProtectKernelTunables).
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native

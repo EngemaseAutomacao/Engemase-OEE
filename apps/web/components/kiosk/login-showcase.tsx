@@ -16,7 +16,7 @@ const SAMPLE: { name: string; state: MachineState; detail: string; oee: number |
 /** Prévia estilizada de um painel ao vivo, para o painel de marca do login. */
 export function LoginShowcase({ className }: { className?: string }) {
   return (
-    <div className={cn("rounded-xl border bg-card/80 p-4 shadow-lg backdrop-blur", className)} aria-hidden>
+    <div className={cn("rounded-2xl border bg-card/80 p-5 shadow-lg backdrop-blur", className)} aria-hidden>
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span className="font-medium text-foreground">Linha de injeção · turno atual</span>
         <span className="inline-flex items-center gap-1.5">

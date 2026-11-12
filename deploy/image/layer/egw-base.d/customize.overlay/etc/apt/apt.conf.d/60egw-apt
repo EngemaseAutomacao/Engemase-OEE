@@ -1,0 +1,8 @@
+// Engemase: apt econômico (links 4G e eMMC).
+APT::Install-Recommends "false";
+APT::Install-Suggests "false";
+// Limite de banda em KB/s para não saturar o link IT do cliente.
+Acquire::http::Dl-Limit "256";
+Acquire::https::Dl-Limit "256";
+Acquire::Retries "3";
+Acquire::Languages "none";

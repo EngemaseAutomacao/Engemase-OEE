@@ -2,10 +2,18 @@
   "name": "engemase-oee",
   "private": true,
   "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "pnpm --filter web dev",
     "build": "pnpm --filter web build",
     "lint": "pnpm --filter web lint",
-    "typecheck": "pnpm --filter web typecheck"
+    "test": "pnpm -r --filter \"./packages/*\" test",
+    "typecheck": "pnpm -r --filter \"./packages/*\" --filter web typecheck",
+    "typecheck:packages": "pnpm -r --filter \"./packages/*\" typecheck",
+    "test:go": "cd gateway && GOTOOLCHAIN=local go test ./... && cd ../tools/plc-sim && GOTOOLCHAIN=local go test ./...",
+    "test:go:integration": "cd gateway && GOTOOLCHAIN=local go test -tags integration ./test/integration/",
+    "vet:go": "cd gateway && GOTOOLCHAIN=local go vet ./... && cd ../tools/plc-sim && GOTOOLCHAIN=local go vet ./..."
   }
 }

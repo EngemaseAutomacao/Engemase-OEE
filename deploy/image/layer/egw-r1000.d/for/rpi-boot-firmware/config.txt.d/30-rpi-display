@@ -1,0 +1,6 @@
+
+# Engemase: sem tela. Console de texto no HDMI só para bancada e campo,
+# sem o driver KMS (vc4-kms-v3d) para não reservar memória CMA.
+# A CONFIRMAR na Fase 0: console HDMI pelo framebuffer do firmware.
+display_auto_detect=0
+disable_overscan=1

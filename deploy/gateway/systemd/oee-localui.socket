@@ -1,0 +1,40 @@
+# Página local de comissionamento (docs/16 §6): HTTPS na porta 443, SÓ na
+# interface OT (ETH0) — o que inclui os IPs da OT e o endereço de serviço
+# 169.254.a.b, que ficam nessa interface. Nunca na IT.
+#
+# O systemd abre a porta 443 (privilegiada) e entrega o fd ao oee-localui, que
+# roda como oee-ui sem nenhuma capability.
+#
+# Interface OT: o padrão é eth0. O oee-helper grava o nome real, resolvido pelo
+# MAC da ETH0, no drop-in /etc/systemd/system/oee-localui.socket.d/10-iface.conf:
+#     [Socket]
+#     BindToDevice=<interface OT>
+# Política "página local desligada na OT": o oee-helper desabilita este socket.
+[Unit]
+Description=Engemase OEE - página local (HTTPS 443 só na interface OT)
+Documentation=file:/usr/share/doc/oee-gateway/README.md
+# Sem as dependências padrão para NÃO atrasar o boot (sockets.target) se a
+# interface OT demorar ou faltar: BindToDevice= faz o socket esperar o .device.
+DefaultDependencies=no
+Requires=sysinit.target
+After=sysinit.target
+Conflicts=shutdown.target
+Before=shutdown.target
+
+[Socket]
+# Só IPv4 (IPv6 desligado no MVP). O nftables ainda restringe a origem às
+# sub-redes OT e a 169.254.0.0/16, e o oee-localui recusa endereço local que não
+# seja da OT ou de serviço e cabeçalho Host fora da lista.
+ListenStream=0.0.0.0:443
+BindToDevice=eth0
+# Permite um ListenStream= com IP específico (drop-in) antes de o endereço
+# existir na interface (ex.: NetworkManager ainda subindo).
+FreeBind=yes
+Backlog=32
+NoDelay=yes
+KeepAlive=yes
+FileDescriptorName=https
+Service=oee-localui.service
+
+[Install]
+WantedBy=sockets.target

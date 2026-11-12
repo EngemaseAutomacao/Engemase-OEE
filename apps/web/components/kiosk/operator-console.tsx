@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { toast } from "sonner"
 import type { LucideIcon } from "lucide-react"
@@ -187,6 +188,14 @@ export function OperatorConsole({ data, panelHref }: { data: OperatorData; panel
     <div className="flex min-h-dvh flex-col bg-background">
       <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="mx-auto flex w-full max-w-7xl items-center gap-2 px-4 py-2.5 sm:gap-3 md:px-6">
+          <Image
+            src="/brand/engemase-icone.png"
+            alt="Engemase OEE"
+            width={40}
+            height={40}
+            className="hidden size-10 shrink-0 md:block"
+            priority
+          />
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs text-muted-foreground sm:text-sm">
               {machine.lineName} · {machine.unitName}
@@ -263,7 +272,7 @@ export function OperatorConsole({ data, panelHref }: { data: OperatorData; panel
               <button
                 type="button"
                 onClick={() => setPickStop(ongoingPending)}
-                className="inline-flex h-12 w-full touch-manipulation items-center justify-center gap-2 rounded-xl bg-zinc-950 px-5 text-base font-semibold text-white shadow-md transition-transform active:scale-[0.98] sm:w-auto"
+                className="inline-flex h-12 w-full touch-manipulation items-center justify-center gap-2 rounded-xl bg-[#13253a] px-5 text-base font-semibold text-white shadow-md transition-transform active:scale-[0.98] sm:w-auto"
               >
                 Classificar esta parada
                 <ChevronRightIcon className="size-5" />
@@ -363,7 +372,7 @@ export function OperatorConsole({ data, panelHref }: { data: OperatorData; panel
           </div>
 
           {/* Paradas para classificar */}
-          <section className="flex flex-col rounded-xl border bg-card lg:col-start-1 lg:row-span-2 lg:row-start-1" aria-labelledby="pendentes-titulo">
+          <section className="flex flex-col rounded-2xl border bg-card lg:col-start-1 lg:row-span-2 lg:row-start-1" aria-labelledby="pendentes-titulo">
             <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
               <div className="min-w-0">
                 <h2 id="pendentes-titulo" className="flex items-center gap-2 text-lg font-semibold">
@@ -416,7 +425,7 @@ export function OperatorConsole({ data, panelHref }: { data: OperatorData; panel
           </section>
 
           {/* Lançamentos feitos neste tablet */}
-          <section className="flex flex-col rounded-xl border bg-card lg:col-start-2 lg:row-start-2" aria-labelledby="lancamentos-titulo">
+          <section className="flex flex-col overflow-hidden rounded-2xl border bg-card lg:col-start-2 lg:row-start-2" aria-labelledby="lancamentos-titulo">
             <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
               <h2 id="lancamentos-titulo" className="font-semibold">
                 Lançamentos do turno
@@ -487,7 +496,7 @@ export function OperatorConsole({ data, panelHref }: { data: OperatorData; panel
 
 function Kpi({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-4">
+    <div className="flex min-w-0 flex-col gap-2 rounded-2xl border bg-card p-4">
       <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</span>
       {children}
     </div>

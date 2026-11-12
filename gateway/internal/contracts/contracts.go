@@ -7,7 +7,9 @@
 package contracts
 
 import (
+	"bytes"
 	"encoding/json"
+	"strconv"
 	"time"
 )
 
@@ -331,4 +333,21 @@ type ErrorResponse struct {
 		Issues      []ErrorIssue `json:"issues,omitempty"`
 		RequestID   string       `json:"request_id,omitempty"`
 	} `json:"error"`
+}
+
+// WithSeq devolve o objeto JSON payload com "seq" como primeiro campo. Os payloads
+// da outbox são gravados sem seq (o seq é a chave da linha no SQLite).
+func WithSeq(payload []byte, seq int64) json.RawMessage {
+	p := bytes.TrimSpace(payload)
+	if len(p) < 2 || p[0] != '{' {
+		return json.RawMessage(payload) // não é objeto: devolve como está (o schema vai acusar)
+	}
+	head := strconv.AppendInt([]byte(`{"seq":`), seq, 10)
+	rest := bytes.TrimSpace(p[1:])
+	if len(rest) > 0 && rest[0] == '}' {
+		return json.RawMessage(append(head, '}'))
+	}
+	out := make([]byte, 0, len(head)+1+len(rest))
+	out = append(append(head, ','), rest...)
+	return json.RawMessage(out)
 }

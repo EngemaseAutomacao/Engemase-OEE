@@ -18,13 +18,8 @@ import type {
   User,
 } from "./types"
 
-/**
- * "Agora" fixo do protótipo: 11/11/2026 10:42 (horário de Brasília), no meio do 1º turno.
- * Componentes de servidor NÃO devem usar Date.now()/new Date() (Cache Components);
- * usem esta constante.
- */
-export const MOCK_NOW = "2026-11-11T13:42:00.000Z"
-export const DEFAULT_TZ = "America/Sao_Paulo"
+/** "Agora" fixo e fuso do protótipo: definidos em `./clock` (módulo leve, seguro para o navegador). */
+export { MOCK_NOW, DEFAULT_TZ } from "./clock"
 
 /** Usuário "logado" no protótipo: super admin da Engemase (vê tudo, inclusive o console). */
 export const CURRENT_USER_ID = "usr_ana"
@@ -174,31 +169,31 @@ export const machines: Machine[] = [
 export const gateways: Gateway[] = [
   {
     id: "gw_jlle01", clientId: "cli_plastiform", unitId: "uni_jlle", name: "GW Joinville Injeção", hostname: "gw-jlle-inj",
-    hardware: "Gateway industrial ARM64 · 4 GB · 2× Ethernet · 2× RS-485",
+    hardware: "Gateway industrial ARM64 · 4 GB · 2× Ethernet · 3× RS-485",
     status: "online", lastSeen: "2026-11-11T13:41:55.000Z", agentVersion: "1.2.0", configVersion: 42, configApplied: 42,
     bufferPending: 3, cpuPct: 7.5, memMb: 38, diskFreePct: 81, clockOffsetMs: 12, ipIt: "10.20.1.15", ipOt: "192.168.10.2", uptimeS: 1_296_000,
   },
   {
     id: "gw_jlle02", clientId: "cli_plastiform", unitId: "uni_jlle", name: "GW Joinville Sopro", hostname: "gw-jlle-sop",
-    hardware: "Gateway industrial ARM64 · 4 GB · 2× Ethernet · 2× RS-485",
+    hardware: "Gateway industrial ARM64 · 4 GB · 2× Ethernet · 3× RS-485",
     status: "online", lastSeen: "2026-11-11T13:41:58.000Z", agentVersion: "1.2.0", configVersion: 17, configApplied: 17,
     bufferPending: 0, cpuPct: 4.1, memMb: 31, diskFreePct: 88, clockOffsetMs: 8, ipIt: "10.20.1.16", ipOt: "192.168.20.2", uptimeS: 864_000,
   },
   {
     id: "gw_ctba01", clientId: "cli_plastiform", unitId: "uni_ctba", name: "GW Curitiba", hostname: "gw-ctba-01",
-    hardware: "Gateway industrial ARM64 · 4 GB · 2× Ethernet · 2× RS-485",
+    hardware: "Gateway industrial ARM64 · 4 GB · 2× Ethernet · 3× RS-485",
     status: "offline", lastSeen: "2026-11-11T12:58:10.000Z", agentVersion: "1.1.3", configVersion: 9, configApplied: 9,
     bufferPending: 2_184, cpuPct: null, memMb: null, diskFreePct: 74, clockOffsetMs: null, ipIt: "10.30.0.21", ipOt: "192.168.30.2", uptimeS: null,
   },
   {
     id: "gw_cx01", clientId: "cli_serra", unitId: "uni_caxias", name: "GW Caxias", hostname: "gw-caxias-01",
-    hardware: "Gateway industrial ARM64 · 4 GB · 2× Ethernet · 2× RS-485",
+    hardware: "Gateway industrial ARM64 · 4 GB · 2× Ethernet · 3× RS-485",
     status: "degraded", lastSeen: "2026-11-11T13:41:50.000Z", agentVersion: "1.2.0", configVersion: 23, configApplied: 22,
     bufferPending: 41, cpuPct: 12.3, memMb: 44, diskFreePct: 63, clockOffsetMs: 2_480, ipIt: "172.16.4.10", ipOt: "192.168.1.250", uptimeS: 432_000,
   },
   {
     id: "gw_ch01", clientId: "cli_bomsabor", unitId: "uni_chapeco", name: "GW Chapecó Envase", hostname: "—",
-    hardware: "Gateway industrial ARM64 · 4 GB · 2× Ethernet · 2× RS-485",
+    hardware: "Gateway industrial ARM64 · 4 GB · 2× Ethernet · 3× RS-485",
     status: "pending", lastSeen: null, agentVersion: null, configVersion: 1, configApplied: null,
     bufferPending: 0, cpuPct: null, memMb: null, diskFreePct: null, clockOffsetMs: null, ipIt: null, ipOt: null, uptimeS: null,
     enrollmentCode: "KX7P-42QD",
@@ -227,16 +222,16 @@ export const devices: Device[] = [
   tcp("dev_inj02", "gw_jlle01", "CLP Injetora 02", "192.168.10.22"),
   tcp("dev_inj03", "gw_jlle01", "CLP Injetora 03", "192.168.10.23", "connected", 19),
   tcp("dev_inj04", "gw_jlle01", "CLP Injetora 04", "192.168.10.24", "error", null, "Timeout após 1000 ms (sem resposta do escravo)"),
-  rtu("dev_sop01", "gw_jlle02", "CLP Sopradora 01", "/dev/ttyRS485-1", 1),
-  rtu("dev_sop02", "gw_jlle02", "Módulo I/O Sopradora 02", "/dev/ttyRS485-1", 2, "connected", 41),
+  rtu("dev_sop01", "gw_jlle02", "CLP Sopradora 01", "/dev/ttyAMA2", 1),
+  rtu("dev_sop02", "gw_jlle02", "Módulo I/O Sopradora 02", "/dev/ttyAMA2", 2, "connected", 41),
   tcp("dev_inj05", "gw_ctba01", "CLP Injetora 05", "192.168.30.21"),
   tcp("dev_inj06", "gw_ctba01", "CLP Injetora 06", "192.168.30.22"),
-  rtu("dev_pre01", "gw_cx01", "CLP Prensas 01", "/dev/ttyRS485-1", 1),
-  rtu("dev_pre02", "gw_cx01", "CLP Prensas 02", "/dev/ttyRS485-1", 2),
-  rtu("dev_pre03", "gw_cx01", "CLP Prensa 03", "/dev/ttyRS485-1", 3, "error", null, "CRC inválido na resposta (verificar terminação e paridade)"),
+  rtu("dev_pre01", "gw_cx01", "CLP Prensas 01", "/dev/ttyAMA2", 1),
+  rtu("dev_pre02", "gw_cx01", "CLP Prensas 02", "/dev/ttyAMA2", 2),
+  rtu("dev_pre03", "gw_cx01", "CLP Prensa 03", "/dev/ttyAMA2", 3, "error", null, "CRC inválido na resposta (verificar terminação e paridade)"),
   tcp("dev_cnc01", "gw_cx01", "CNC 01 (Modbus TCP)", "192.168.1.31"),
   tcp("dev_cnc02", "gw_cx01", "CNC 02 (Modbus TCP)", "192.168.1.32", "connected", 22),
-  rtu("dev_tea01", "gw_br01", "CLP Teares", "/dev/ttyRS485-1", 1, "disabled", null),
+  rtu("dev_tea01", "gw_br01", "CLP Teares", "/dev/ttyAMA2", 1, "disabled", null),
 ]
 
 function standardTags(machineId: string, deviceId: string, prefix: string, counter = 1_048_213): Tag[] {

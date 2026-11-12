@@ -1,0 +1,116 @@
+# Agente de coleta do gateway OEE (docs/16 §3): usuário oee, sem root.
+# Instalado em /usr/lib/systemd/system/. Ajustes locais: drop-in em
+# /etc/systemd/system/oee-gateway.service.d/*.conf (nunca editar este arquivo).
+[Unit]
+Description=Engemase OEE - agente de coleta do gateway
+Documentation=file:/usr/share/doc/oee-gateway/README.md
+# A coleta não espera internet nem NTP (docs/16 §1). network.target só ordena a
+# parada: no desligamento, o agente para antes da rede (último /sync possível).
+After=network.target
+# Estado em /var/lib/oee-gateway (bind de /data/oee no R1000). Se a partição de
+# dados falhar, o agente NÃO sobe gravando na raiz.
+RequiresMountsFor=/var/lib/oee-gateway
+# Ajudante privilegiado: o socket precisa existir antes do agente usá-lo.
+Wants=oee-helper.socket
+After=oee-helper.socket
+# Nunca desistir de religar (equipamento sem operador).
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+NotifyAccess=main
+ExecStart=/usr/bin/oee-gateway run --config /etc/oee-gateway/gateway.yaml
+# Erro crítico visível sem processo: o LED vermelho fica piscando pelo gatilho
+# "timer" do kernel até o agente subir de novo (docs/16 §6, tabela de LEDs).
+ExecStopPost=-/usr/lib/oee-gateway/oee-led-fault
+# API local: agent.sock (CLI, FileDescriptorName=cli) e ui.sock (página local,
+# FileDescriptorName=ui). O agente identifica os fds por $LISTEN_FDNAMES.
+Sockets=oee-gateway.socket oee-gateway-ui.socket
+# Proxy corporativo: gerado pelo oee-helper a partir do network.json (docs/16 §4).
+EnvironmentFile=-/etc/oee-gateway/proxy.env
+Environment=GOMEMLIMIT=120MiB
+# Pilhas de todas as goroutines no journal quando o watchdog mata o processo
+# (SIGABRT) ou em pânico: diagnóstico de travamento.
+Environment=GOTRACEBACK=all
+User=oee
+Group=oee
+# dialout: RS-485 (/dev/ttyAMA*, /dev/ttyUSB*); gpio: sinal de falta de energia
+# e buzzer por GPIO; systemd-journal: logs.upload e "oee-gateway logs".
+# LEDs e buzzer por evento de entrada usam o grupo oee (regra udev do pacote).
+SupplementaryGroups=dialout gpio systemd-journal
+StateDirectory=oee-gateway
+StateDirectoryMode=0750
+RuntimeDirectory=oee-gateway/agent
+RuntimeDirectoryMode=0755
+UMask=0027
+
+Restart=always
+RestartSec=5s
+# systemd >= 254 (Trixie): espera crescente entre reinícios, até 60 s.
+# No Bookworm (252) estas chaves são ignoradas com aviso.
+RestartSteps=5
+RestartMaxDelaySec=60s
+# O agente envia WATCHDOG=1 a cada ~10 s SÓ se o motor, os pollers e o gravador
+# SQLite estiverem vivos (verificação real de saúde, docs/16 §3).
+WatchdogSec=30s
+TimeoutStartSec=60s
+TimeoutStopSec=20s
+
+# Prioridade e recursos (R1000: 4 núcleos, 2 GB).
+OOMScoreAdjust=-500
+Nice=-5
+CPUQuota=100%
+MemoryHigh=150M
+MemoryMax=256M
+TasksMax=256
+LimitNOFILE=4096
+
+# Hardening (meta: "systemd-analyze security oee-gateway" <= 2,0).
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ReadWritePaths=/var/lib/oee-gateway
+ProtectHome=yes
+PrivateTmp=yes
+PrivateIPC=yes
+DevicePolicy=closed
+# Seriais: R1000 (ttyAMA2/3/5) e bancada (adaptador USB-RS485). Os nomes vêm de
+# /proc/devices; o driver precisa estar carregado quando o serviço sobe.
+DeviceAllow=char-ttyAMA rw
+DeviceAllow=char-ttyUSB rw
+DeviceAllow=char-ttyACM rw
+# GPIO (falta de energia; buzzer, se for GPIO direto) e buzzer gpio-beeper
+# (dispositivo de entrada EV_SND). Acesso real limitado pelo dono/grupo do nó.
+DeviceAllow=char-gpiochip rw
+DeviceAllow=char-input rw
+ProtectKernelTunables=yes
+# LEDs USER do R1000 (led-red/green/blue). O systemd segue o link simbólico de
+# /sys/class/leds até o dispositivo. A confirmar na bancada; plano B:
+# drop-in com ProtectKernelTunables=no.
+ReadWritePaths=-/sys/class/leds/led-red -/sys/class/leds/led-green -/sys/class/leds/led-blue
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+# Bloqueia adjtimex: o estado do NTP é lido pelo D-Bus (timedate1).
+ProtectClock=yes
+ProtectHostname=yes
+# Não usar ProcSubset=pid: a saúde lê /proc/stat, /proc/meminfo e /proc/loadavg.
+ProtectProc=invisible
+# AF_INET6 fica liberado só para o Go não falhar ao sondar IPv6 (o IPv6 está
+# desligado por sysctl e pelo nftables).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+KeyringMode=private
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,150 @@
+# CI do monorepo: três jobs em paralelo.
+#   web      — apps/web: typecheck, lint e build do Next.js
+#   packages — packages/*: typecheck e testes (Vitest; o db usa PGlite, sem servidor)
+#   go       — gateway/ e tools/plc-sim: gofmt, go vet, go test -race e integração com o simulador
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Um push novo no mesmo branch/PR cancela a execução anterior ainda em andamento.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  GO_VERSION: "1.24.x"
+
+jobs:
+  web:
+    name: web (typecheck, lint, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar pnpm (versão do campo packageManager)
+        uses: pnpm/action-setup@v4
+
+      - name: Instalar Node.js com cache do pnpm
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Cache do build do Next.js
+        uses: actions/cache@v4
+        with:
+          path: apps/web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/**/*.ts', 'apps/web/**/*.tsx', 'apps/web/**/*.css', '!apps/web/node_modules/**', '!apps/web/.next/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      # next-env.d.ts e .next/types não vão para o git; o typecheck precisa deles.
+      - name: Gerar tipos do Next.js
+        run: pnpm --filter web exec next typegen
+
+      - name: Typecheck
+        run: pnpm --filter web typecheck
+
+      - name: Lint
+        run: pnpm --filter web lint
+
+      - name: Build
+        run: pnpm --filter web build
+
+  packages:
+    name: packages (typecheck, testes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar pnpm (versão do campo packageManager)
+        uses: pnpm/action-setup@v4
+
+      - name: Instalar Node.js com cache do pnpm
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck dos pacotes
+        run: pnpm typecheck:packages
+
+      # Os testes também falham se o JSON Schema/fixtures do contracts ou as migrações
+      # do db estiverem desatualizados em relação ao código.
+      - name: Testes dos pacotes
+        run: pnpm test
+
+  go:
+    name: go (gateway, plc-sim)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Usa exatamente o Go instalado pelo setup-go; nunca baixa outro toolchain.
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar Go com cache de módulos e de build
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            gateway/go.sum
+            tools/plc-sim/go.sum
+
+      - name: gofmt
+        run: |
+          out="$(gofmt -l gateway tools/plc-sim)"
+          if [ -n "$out" ]; then
+            echo "Arquivos fora do padrão do gofmt:"
+            echo "$out"
+            exit 1
+          fi
+
+      - name: go vet (gateway)
+        working-directory: gateway
+        run: |
+          go vet ./...
+          go vet -tags integration ./test/integration/
+
+      - name: go vet (plc-sim)
+        working-directory: tools/plc-sim
+        run: go vet ./...
+
+      # Os testes do gateway validam config e saídas contra packages/contracts (fixtures e JSON Schema).
+      - name: go test (gateway)
+        working-directory: gateway
+        run: go test -race -count=1 ./...
+
+      - name: go test (plc-sim)
+        working-directory: tools/plc-sim
+        run: go test -race -count=1 ./...
+
+      - name: Integração gateway × plc-sim
+        working-directory: gateway
+        run: go test -count=1 -tags integration ./test/integration/
+
+      - name: Compilar o agente para arm64 (reComputer R1000)
+        working-directory: gateway
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: arm64
+        run: go build -trimpath -o /dev/null ./cmd/oee-gateway

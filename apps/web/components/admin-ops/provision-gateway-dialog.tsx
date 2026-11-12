@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useFleet } from "./fleet-context"
 
 const HARDWARE = [
-  "Gateway industrial ARM64 · 4 GB · 2× Ethernet · 2× RS-485",
+  "Gateway industrial ARM64 · 4 GB · 2× Ethernet · 3× RS-485",
   "Gateway industrial ARM64 · 2 GB · 2× Ethernet · 1× RS-485",
   "Mini PC x86-64 · 8 GB · 2× Ethernet · conversor USB/RS-485",
 ]

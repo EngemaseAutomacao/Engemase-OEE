@@ -1,0 +1,21 @@
+# METABEGIN
+# X-Env-Layer-Name: egw-debian-bookworm-arm64-snapshot
+# X-Env-Layer-Category: distribution
+# X-Env-Layer-Desc: PLANO B. Debian 12 Bookworm minbase arm64 a partir de
+#  snapshot.debian.org (o instante vem de SOURCE_DATE_EPOCH, definido pelo
+#  build.sh a partir de EGW_DEBIAN_SNAPSHOT). Equivale à camada embutida
+#  debian-trixie-arm64-minbase-snapshot, que só existe para o Trixie.
+#  A CONFIRMAR: expansão de ${SRCROOT} no argumento do gerador.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Type: dynamic
+# X-Env-Layer-Generator: snapgen ${SRCROOT}/templates/bookworm-snapshot.sources
+# METAEND
+---
+mmdebstrap:
+  architectures:
+    - arm64
+  mode: auto
+  variant: minbase
+  suite: bookworm
+  mirrors:
+    - ${DYNROOT}/templates/debian/apt/bookworm-snapshot.sources

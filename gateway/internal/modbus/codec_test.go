@@ -195,3 +195,24 @@ func TestParseNames(t *testing.T) {
 		t.Fatalf("convenção: %s %s", HoldingRegister.Convention(0), Coil.Convention(9))
 	}
 }
+
+func TestDecodeOEEBlock(t *testing.T) {
+	regs := make([]uint16, 14)
+	regs[0], regs[1], regs[2], regs[3] = 1, 77, 2, 520
+	for i, v := range []uint32{100000, 12, 99988} {
+		r, _ := Split32(v, CDAB)
+		regs[4+2*i], regs[5+2*i] = r[0], r[1]
+	}
+	regs[10], regs[11], regs[12], regs[13] = 1001, 600, 5865, 0b101
+	b, err := DecodeOEEBlock(regs, CDAB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := OEEBlock{Version: 1, Heartbeat: 77, State: 2, FaultCode: 520, Total: 100000, Reject: 12, Good: 99988, Product: 1001, Speed: 600, LastCycleMS: 5865, StatusBits: 5}
+	if b != want || b.StateName() != "falha" {
+		t.Fatalf("bloco = %+v (%s)", b, b.StateName())
+	}
+	if _, err := DecodeOEEBlock(regs[:13], CDAB); err == nil {
+		t.Fatal("bloco curto deveria falhar")
+	}
+}

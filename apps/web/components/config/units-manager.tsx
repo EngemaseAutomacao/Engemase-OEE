@@ -14,15 +14,14 @@ import {
   PencilIcon,
   PlusIcon,
   RouterIcon,
+  WorkflowIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
 import type { GatewayStatus } from "@/lib/mock/types"
 import { GATEWAY_STATUS_LABEL } from "@/lib/roles"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
@@ -36,7 +35,10 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PageHeader } from "@/components/shell/page-header"
+import { IconCircle } from "@/components/dashboard/icon-circle"
+import { StatCard } from "@/components/dashboard/stat-card"
+import { PageTitle } from "@/components/refresh/page-title"
+import { SOFT_TONES, SoftIconButton } from "@/components/refresh/soft-action"
 import { GATEWAY_STATUS_DOT, TIMEZONES, UFS, norm, plural, timezoneShort } from "@/components/config/labels"
 
 export interface UnitNode {
@@ -74,6 +76,7 @@ export function UnitsManager({
   title,
   description,
   summary,
+  machineLimit,
   initialUnits,
   initialAreas,
   initialLines,
@@ -82,6 +85,8 @@ export function UnitsManager({
   title: string
   description: string
   summary: React.ReactNode
+  /** Limite de máquinas do plano (para o indicador). */
+  machineLimit: number
   initialUnits: UnitNode[]
   initialAreas: AreaNode[]
   initialLines: LineNode[]
@@ -132,10 +137,12 @@ export function UnitsManager({
   }
 
   const totalMachines = lines.reduce((s, l) => s + l.machineCount, 0)
+  const gatewayCount = units.reduce((s, u) => s + u.gateways.length, 0)
+  const emptyLines = lines.filter((l) => l.machineCount === 0).length
 
   return (
     <>
-      <PageHeader
+      <PageTitle
         title={title}
         description={description}
         actions={
@@ -146,17 +153,40 @@ export function UnitsManager({
         }
       />
 
-      {summary}
-
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-        <span>{plural(units.length, "unidade", "unidades")}</span>
-        <span>{plural(areas.length, "área", "áreas")}</span>
-        <span>{plural(lines.length, "linha", "linhas")}</span>
-        <span>{plural(totalMachines, "máquina", "máquinas")}</span>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          icon={Building2Icon}
+          tone="blue"
+          label="Unidades"
+          value={units.length}
+          hint={gatewayCount > 0 ? plural(gatewayCount, "gateway instalado", "gateways instalados") : "Nenhum gateway instalado"}
+        />
+        <StatCard icon={LayersIcon} tone="teal" label="Áreas" value={areas.length} hint="Setores que agrupam as linhas" />
+        <StatCard
+          icon={WorkflowIcon}
+          tone="navy"
+          label="Linhas"
+          value={lines.length}
+          hint={emptyLines > 0 ? `${plural(emptyLines, "linha", "linhas")} sem máquina` : "Todas com máquinas"}
+        />
+        <StatCard
+          icon={FactoryIcon}
+          tone="orange"
+          label="Máquinas"
+          value={
+            <>
+              {totalMachines}
+              <span className="text-base font-semibold text-muted-foreground"> / {machineLimit}</span>
+            </>
+          }
+          hint="Cadastradas · limite do plano"
+        />
       </div>
 
+      {summary}
+
       {units.length === 0 ? (
-        <Empty className="border border-dashed">
+        <Empty className="rounded-2xl border border-dashed bg-card">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <Building2Icon />
@@ -252,22 +282,18 @@ function UnitCard({
 
   return (
     <Collapsible open={expanded} onOpenChange={setExpanded} asChild>
-      <Card className="gap-0 overflow-hidden py-0">
-        <div className="flex items-start gap-3 p-4">
+      <section className="flex flex-col overflow-hidden rounded-2xl border bg-card text-card-foreground shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+        <div className="flex items-start gap-3 px-4 py-4 sm:px-5">
           <CollapsibleTrigger asChild>
             <Button variant="ghost" size="icon-sm" className="-ml-1 shrink-0" aria-label={expanded ? "Recolher unidade" : "Expandir unidade"}>
               <ChevronDownIcon className={cn("transition-transform", !expanded && "-rotate-90")} />
             </Button>
           </CollapsibleTrigger>
-          <div className="hidden size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary sm:flex">
-            <Building2Icon className="size-5" />
-          </div>
+          <IconCircle icon={Building2Icon} tone="blue" className="hidden sm:inline-flex" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <h2 className="truncate text-base font-semibold">{unit.name}</h2>
-              <Badge variant="outline" className="font-normal text-muted-foreground">
-                Unidade
-              </Badge>
+              <h2 className="truncate text-[15px] font-semibold">{unit.name}</h2>
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">Unidade</span>
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">
@@ -298,7 +324,7 @@ function UnitCard({
                     key={g.id}
                     href={`/${clientSlug}/config/gateways/${g.id}`}
                     title={GATEWAY_STATUS_LABEL[g.status]}
-                    className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs transition-colors hover:bg-muted"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs transition-colors hover:bg-muted/70 hover:text-foreground"
                   >
                     <span className={cn("size-1.5 rounded-full", GATEWAY_STATUS_DOT[g.status])} />
                     {g.name}
@@ -309,15 +335,33 @@ function UnitCard({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <Button variant="outline" size="sm" className="hidden md:inline-flex" onClick={() => onAddLine()} disabled={areas.length === 0}>
-              <PlusIcon />
+            <button
+              type="button"
+              className={cn(
+                "hidden h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40 md:inline-flex",
+                SOFT_TONES.blue,
+              )}
+              onClick={() => onAddLine()}
+              disabled={areas.length === 0}
+            >
+              <PlusIcon className="size-4" />
               Nova linha
-            </Button>
+            </button>
+            <SoftIconButton label={`Editar ${unit.name}`} tone="slate" onClick={onEditUnit}>
+              <PencilIcon />
+            </SoftIconButton>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label={`Ações da ${unit.name}`}>
-                  <MoreHorizontalIcon />
-                </Button>
+                <button
+                  type="button"
+                  aria-label={`Ações da ${unit.name}`}
+                  className={cn(
+                    "flex size-8 shrink-0 items-center justify-center rounded-lg transition outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                    SOFT_TONES.slate,
+                  )}
+                >
+                  <MoreHorizontalIcon className="size-4" />
+                </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem onSelect={onEditUnit}>
@@ -339,9 +383,9 @@ function UnitCard({
         </div>
 
         <CollapsibleContent>
-          <div className="flex flex-col gap-3 border-t bg-muted/20 p-3 sm:p-4">
+          <div className="flex flex-col gap-3 border-t bg-muted/40 p-3 sm:p-4">
             {areas.length === 0 ? (
-              <Empty className="border border-dashed bg-background py-6 md:py-8">
+              <Empty className="rounded-xl border border-dashed bg-card py-6 md:py-8">
                 <EmptyHeader>
                   <EmptyTitle className="text-sm">Nenhuma área nesta unidade</EmptyTitle>
                   <EmptyDescription>Áreas agrupam as linhas por setor (ex.: Injeção, Sopro, Envase).</EmptyDescription>
@@ -373,7 +417,7 @@ function UnitCard({
             )}
           </div>
         </CollapsibleContent>
-      </Card>
+      </section>
     </Collapsible>
   )
 }
@@ -393,25 +437,24 @@ function AreaBlock({
 }) {
   const machines = lines.reduce((s, l) => s + l.machineCount, 0)
   return (
-    <div className="overflow-hidden rounded-lg border bg-background">
-      <div className="flex items-center gap-2 px-3 py-2">
-        <LayersIcon className="size-4 shrink-0 text-muted-foreground" />
+    <div className="overflow-hidden rounded-xl border bg-card">
+      <div className="flex items-center gap-2.5 px-3 py-2.5">
+        <IconCircle icon={LayersIcon} tone="teal" soft size="sm" />
         <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
-          <span className="truncate text-sm font-medium">{area.name}</span>
+          <span className="truncate text-sm font-semibold">{area.name}</span>
           <span className="text-xs text-muted-foreground">
             Área · {plural(lines.length, "linha", "linhas")} · {plural(machines, "máquina", "máquinas")}
           </span>
         </div>
-        <Button variant="ghost" size="icon-sm" onClick={onEdit} aria-label={`Editar área ${area.name}`}>
+        <SoftIconButton label={`Editar área ${area.name}`} tone="slate" onClick={onEdit}>
           <PencilIcon />
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onAddLine} className="hidden sm:inline-flex">
+        </SoftIconButton>
+        <SoftIconButton label={`Nova linha em ${area.name}`} onClick={onAddLine}>
           <PlusIcon />
-          Linha
-        </Button>
+        </SoftIconButton>
       </div>
       {lines.length === 0 ? (
-        <div className="flex items-center justify-between gap-2 border-t px-3 py-2.5 pl-9 text-xs text-muted-foreground">
+        <div className="flex items-center justify-between gap-2 border-t px-3 py-2.5 pl-12 text-xs text-muted-foreground">
           <span>Nenhuma linha nesta área.</span>
           <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={onAddLine}>
             Cadastrar linha
@@ -421,12 +464,10 @@ function AreaBlock({
         <ul>
           {lines.map((line) => (
             <li key={line.id} className="flex items-center gap-2 border-t px-3 py-2 sm:gap-3">
-              <CornerDownRightIcon className="ml-1 size-4 shrink-0 text-muted-foreground/60" />
+              <CornerDownRightIcon className="ml-2.5 size-4 shrink-0 text-muted-foreground/60" />
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span className="truncate text-sm">{line.name}</span>
-                <Badge variant="outline" className="font-mono text-[11px]">
-                  {line.code}
-                </Badge>
+                <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-muted-foreground">{line.code}</span>
               </div>
               <span
                 className={cn(
@@ -438,9 +479,9 @@ function AreaBlock({
                 {line.machineCount}
                 <span className="hidden text-muted-foreground sm:inline">{line.machineCount === 1 ? "máquina" : "máquinas"}</span>
               </span>
-              <Button variant="ghost" size="icon-sm" onClick={() => onEditLine(line)} aria-label={`Editar ${line.name}`}>
+              <SoftIconButton label={`Editar ${line.name}`} tone="slate" onClick={() => onEditLine(line)}>
                 <PencilIcon />
-              </Button>
+              </SoftIconButton>
             </li>
           ))}
         </ul>

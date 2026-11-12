@@ -63,7 +63,7 @@ export function AccountNav() {
   }, [])
 
   return (
-    <nav aria-label="Seções da conta" className="sticky top-14 z-10 -mx-4 bg-background/95 px-4 py-2 backdrop-blur lg:top-20 lg:mx-0 lg:self-start lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+    <nav aria-label="Seções da conta" className="sticky top-14 z-10 -mx-4 bg-background/95 px-4 py-2 backdrop-blur md:-mx-6 md:px-6 lg:top-20 lg:mx-0 lg:self-start lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
       <ul className="flex gap-1.5 overflow-x-auto lg:flex-col lg:gap-1 lg:overflow-visible">
         {ACCOUNT_SECTIONS.map((s) => {
           const on = active === s.id

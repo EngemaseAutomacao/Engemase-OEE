@@ -1,0 +1,23 @@
+# PLANO B (docs/16 §7, D-g1): Debian 12 "Bookworm" arm64, para o caso de o
+# overlay ou o módulo do RTC da Seeed não funcionarem no kernel 6.12 do Trixie.
+#
+# Diferenças em relação ao egw-r1000.yaml:
+# - base Debian Bookworm por snapshot (camada própria egw-debian-bookworm-arm64-snapshot);
+# - repositório Raspberry Pi Bookworm;
+# - a versão da imagem começa com "12." (o build.sh confere);
+# - EGW_KERNEL_ABI deve apontar para um kernel da série do Bookworm em que o
+#   driver da Seeed foi validado (A CONFIRMAR na Fase 0);
+# - o systemd 252 não tem MakeDirectories= no systemd-repart: o factory init
+#   cria os diretórios da /data (já faz isso em qualquer caso).
+#
+# Bookworm está em LTS até 30/06/2028: usar só enquanto o Trixie não for validado.
+
+include:
+  file: egw-r1000.yaml
+
+layer:
+  distro: egw-debian-bookworm-arm64-snapshot
+  rpi: rpi-debian-bookworm
+
+egw:
+  debian_codename: bookworm

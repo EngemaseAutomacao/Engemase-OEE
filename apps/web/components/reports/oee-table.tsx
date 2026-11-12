@@ -115,7 +115,7 @@ export function OeeTable({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center justify-between gap-2 px-6">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-5">
         <p className="text-xs text-muted-foreground">
           {groups.length} {groups.length === 1 ? "grupo" : "grupos"} por {GROUP_LABEL[by]} · {num(total.length)} registros de turno × máquina. Clique em um grupo para ver o detalhe.
         </p>
@@ -140,7 +140,7 @@ export function OeeTable({
             <TableHead className="text-right text-xs text-muted-foreground">D</TableHead>
             <TableHead className="text-right text-xs text-muted-foreground">P</TableHead>
             <TableHead className="text-right text-xs text-muted-foreground">Q</TableHead>
-            <TableHead className="pr-6 text-right text-xs text-muted-foreground">OEE</TableHead>
+            <TableHead className="pr-5 text-right text-xs text-muted-foreground">OEE</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

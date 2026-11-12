@@ -1,0 +1,45 @@
+# Engemase: layout GPT do eMMC do CM4 (docs/16 §4 e §7).
+#   p1 boot  FAT32  <BOOT_SIZE>  /boot/firmware
+#   p2 root  ext4   <ROOT_SIZE>  /              (tipo root-arm64)
+#   p3 data  ext4   resto        /data          (criada no 1º boot pelo systemd-repart)
+# A imagem fica pequena (~4,6 GB brutos, ~1,5 GB reais) e o bmaptool grava só
+# os blocos usados. A raiz usa o tipo GPT "root-arm64" para não casar com a
+# definição linux-generic da partição data no repart.d.
+
+image <IMAGE_NAME>.<IMAGE_SUFFIX> {
+	hdimage {
+		align = 8M
+		partition-table-type = "gpt"
+	}
+
+	partition boot {
+		image = boot.vfat
+		partition-type-uuid = F
+		bootable = true
+	}
+
+	partition root {
+		image = root.ext4
+		partition-type-uuid = b921b045-1df0-41c3-af44-4c6f280d3fae
+	}
+}
+
+image boot.vfat {
+	vfat {
+		label = "BOOT"
+		extraargs = "<VFAT_EXTRAARGS>"
+	}
+	size = <BOOT_SIZE>
+	mountpoint = "/boot/firmware"
+}
+
+image root.ext4 {
+	ext4 {
+		label = "ROOT"
+		use-mke2fs = true
+		mke2fs-conf = <MKE2FS_CONF>
+		extraargs = "<MKE2FS_EXTRAARGS>"
+	}
+	size = <ROOT_SIZE>
+	mountpoint = "/"
+}

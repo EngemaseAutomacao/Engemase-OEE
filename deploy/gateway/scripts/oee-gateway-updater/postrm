@@ -1,0 +1,47 @@
+#!/bin/sh
+# postrm do pacote oee-gateway-updater. Idempotente; respeita DPKG_ROOT.
+# O purge mantém /var/lib/oee-gateway-updater (pacote anterior guardado para
+# rollback) e o estado do OTA em /var/lib/oee-gateway/update.
+set -e
+set -f
+
+ROOT="${DPKG_ROOT:-}"
+UNITS="oee-gateway-updater.path oee-gateway-update-check.service"
+
+systemd_running() {
+	[ -z "$ROOT" ] && [ -d /run/systemd/system ]
+}
+
+case "$1" in
+	remove)
+		if systemd_running; then
+			systemctl daemon-reload || true
+		fi
+		;;
+	purge)
+		if [ -z "$ROOT" ] && command -v deb-systemd-helper >/dev/null 2>&1; then
+			for u in $UNITS; do
+				deb-systemd-helper purge "$u" >/dev/null || true
+			done
+		else
+			for u in $UNITS; do
+				set +f
+				for link in "$ROOT"/etc/systemd/system/*.wants/"$u"; do
+					if [ -L "$link" ]; then rm -f "$link"; fi
+				done
+				set -f
+			done
+		fi
+		if systemd_running; then
+			systemctl daemon-reload || true
+		fi
+		;;
+	upgrade | failed-upgrade | abort-install | abort-upgrade | disappear)
+		;;
+	*)
+		echo "postrm chamado com argumento desconhecido: '$1'" >&2
+		exit 1
+		;;
+esac
+
+exit 0

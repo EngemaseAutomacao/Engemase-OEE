@@ -1,0 +1,139 @@
+#!/usr/sbin/nft -f
+# =============================================================================
+# Firewall do gateway OEE — MODELO (docs/16 §5). Instalado em
+# /usr/share/oee-gateway/nftables/oee-gateway.nft; NÃO é carregado direto.
+#
+# O oee-helper renderiza este modelo em /etc/oee-gateway/nftables.nft a partir
+# de /etc/oee-gateway/network.json (a única fonte da rede) e da config de
+# dispositivos. A imagem carrega o arquivo renderizado no boot pelo
+# nftables.service (/etc/nftables.conf: include "/etc/oee-gateway/nftables.nft").
+#
+# Placeholders (todos nas linhas "define" abaixo):
+#   @IF_OT@          interface OT (ETH0), resolvida pelo MAC. Ex.: eth0
+#   @IF_IT@          interface IT (ETH1), resolvida pelo MAC. Ex.: eth1
+#   @UID_OEE@        UID numérico do usuário oee (agente)
+#   @UIDS_IT_HTTPS@  UIDs com saída TCP 443 na IT, separados por vírgula:
+#                    oee e _apt (atualizações de segurança); oee-ra na F2
+#
+# Conjuntos: nascem vazios (exceto 169.254.0.0/16 em ot_nets) e o oee-helper os
+# preenche com "add element" no fim do arquivo renderizado ou a quente:
+#   ot_nets     sub-redes OT (endereços e rotas da OT)
+#   ot_targets  IP . porta dos dispositivos cadastrados; device.test entra com
+#               "timeout 5m" (IP da sub-rede OT ainda não cadastrado, D-g3)
+#   it_dns      servidores DNS da IT (regenerado quando o DHCP muda)
+#   it_ntp      servidores NTP da IT (regenerado quando o DHCP muda)
+#   it_proxy    IP . porta do proxy corporativo, se houver
+#
+# Princípios: política drop nos três sentidos; o gateway nunca roteia
+# (ip_forward=0 no sysctl e chain forward em drop); IPv6 desligado no MVP.
+# Não há filtro por domínio (os IPs da plataforma são dinâmicos): a lista de
+# domínios fica no firewall do cliente; aqui a restrição é por porta e processo.
+# =============================================================================
+
+define IF_OT = "@IF_OT@"
+define IF_IT = "@IF_IT@"
+define UID_OEE = @UID_OEE@
+define UIDS_IT_HTTPS = { @UIDS_IT_HTTPS@ }
+
+# Recria só a tabela do gateway (idempotente; não mexe em outras tabelas).
+table inet oee_gateway
+delete table inet oee_gateway
+
+table inet oee_gateway {
+	# Contadores de descarte: vão no bloco de saúde do /sync.
+	counter drop_in {
+	}
+	counter drop_out {
+	}
+	counter drop_fwd {
+	}
+
+	set ot_nets {
+		type ipv4_addr
+		flags interval
+		# Endereço de serviço (link-local), sempre ativo na OT (docs/16 §5).
+		elements = { 169.254.0.0/16 }
+	}
+
+	set ot_targets {
+		type ipv4_addr . inet_service
+		flags timeout
+	}
+
+	set it_dns {
+		type ipv4_addr
+	}
+
+	set it_ntp {
+		type ipv4_addr
+	}
+
+	set it_proxy {
+		type ipv4_addr . inet_service
+	}
+
+	chain input {
+		type filter hook input priority filter; policy drop;
+
+		iif "lo" accept
+		ct state invalid drop
+		ct state established,related accept
+		meta nfproto ipv6 drop
+
+		# DHCP na IT (resposta do servidor ao cliente do NetworkManager).
+		iifname $IF_IT udp sport 67 udp dport 68 accept
+
+		# Entrada: SÓ a página local, na OT, vinda das sub-redes OT ou do
+		# endereço de serviço (169.254.0.0/16).
+		iifname $IF_OT ip saddr @ot_nets tcp dport 443 accept
+
+		# Ping de entrada não é liberado (docs/16 §5). Se a ficha de TI pedir
+		# monitoração por ICMP, acrescentar com limite, por exemplo:
+		#   iifname $IF_IT icmp type echo-request limit rate 5/second accept
+
+		limit rate 6/minute burst 10 packets log prefix "oee-drop-in: " level info
+		counter name "drop_in"
+	}
+
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+
+		limit rate 6/minute burst 10 packets log prefix "oee-drop-fwd: " level warn
+		counter name "drop_fwd"
+	}
+
+	chain output {
+		type filter hook output priority filter; policy drop;
+
+		oif "lo" accept
+		ct state invalid drop
+		ct state established,related accept
+		meta nfproto ipv6 drop
+
+		# --- IT: só DHCP, DNS, NTP e HTTPS 443 (direto ou pelo proxy) ---
+		oifname $IF_IT udp sport 68 udp dport 67 accept
+		oifname $IF_IT ip daddr @it_dns udp dport 53 accept
+		oifname $IF_IT ip daddr @it_dns tcp dport 53 accept
+		oifname $IF_IT ip daddr @it_ntp udp dport 123 accept
+		oifname $IF_IT meta skuid $UIDS_IT_HTTPS tcp dport 443 accept
+		oifname $IF_IT meta skuid $UIDS_IT_HTTPS ip daddr . tcp dport @it_proxy accept
+
+		# --- OT: só para os IP:porta cadastrados, e só pelo agente ---
+		oifname $IF_OT meta skuid $UID_OEE ip daddr . tcp dport @ot_targets accept
+		# Diagnóstico (ping do diag/página local) só para as sub-redes OT.
+		oifname $IF_OT ip daddr @ot_nets icmp type echo-request accept
+
+		limit rate 6/minute burst 10 packets log prefix "oee-drop-out: " level info
+		counter name "drop_out"
+	}
+}
+
+# --- Elementos dos conjuntos (preenchidos pelo oee-helper) ---------------------
+# Exemplo do que o oee-helper acrescenta ao renderizar:
+#   add element inet oee_gateway ot_nets { 192.168.10.0/24 }
+#   add element inet oee_gateway ot_targets { 192.168.10.21 . 502, 192.168.10.23 . 502 }
+#   add element inet oee_gateway it_dns { 10.20.0.10, 10.20.0.11 }
+#   add element inet oee_gateway it_ntp { 10.20.0.5 }
+#   add element inet oee_gateway it_proxy { 10.20.0.5 . 3128 }
+# A quente (device.test de um IP ainda não cadastrado, 5 min):
+#   nft add element inet oee_gateway ot_targets { 192.168.10.99 . 502 timeout 5m }

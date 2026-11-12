@@ -98,14 +98,14 @@ export const PARITY_LABEL: Record<"N" | "E" | "O", string> = { N: "Nenhuma", E: 
  */
 export const RS485_TTY = ["/dev/ttyAMA2", "/dev/ttyAMA3", "/dev/ttyAMA5"] as const
 
-/** Dispositivos `/dev/ttyAMA*` disponíveis no gateway conforme a descrição do hardware ("2× RS-485"). */
+/** Dispositivos `/dev/ttyAMA*` disponíveis no gateway conforme a descrição do hardware ("3× RS-485"). */
 export function ttyPortsFor(hardware: string): string[] {
   const m = hardware.match(/(\d+)\s*×\s*RS-485/)
   const n = Math.min(RS485_TTY.length, m ? Number(m[1]) : 0)
   return RS485_TTY.slice(0, n)
 }
 
-/** Converte o nome lógico "/dev/ttyRS485-1" (cadastro antigo) no dispositivo do Linux ("/dev/ttyAMA2"). */
+/** Converte o nome lógico antigo "/dev/ttyRS485-1" no dispositivo do Linux ("/dev/ttyAMA2"); "/dev/ttyAMA*" passa direto. */
 export function ttyFromSerial(serialPort: string | undefined): string | undefined {
   const m = serialPort?.match(/ttyRS485-(\d+)$/)
   if (!m) return serialPort
@@ -118,11 +118,9 @@ export function rs485Label(tty: string): string {
   return i >= 0 ? `RS485-${i + 1}` : tty
 }
 
-/** Portas seriais RS-485 do gateway a partir da descrição do hardware ("2× RS-485"). */
+/** Portas seriais RS-485 do gateway a partir da descrição do hardware ("3× RS-485"): mesmos dispositivos de `ttyPortsFor`. */
 export function serialPortsFor(hardware: string): string[] {
-  const m = hardware.match(/(\d+)\s*×\s*RS-485/)
-  const n = m ? Number(m[1]) : 0
-  return Array.from({ length: n }, (_, i) => `/dev/ttyRS485-${i + 1}`)
+  return ttyPortsFor(hardware)
 }
 
 /** "19200 bps · 8E1" */

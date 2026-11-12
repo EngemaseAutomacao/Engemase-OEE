@@ -1,0 +1,10 @@
+# Entradas e saídas locais do build da imagem (nunca versionar).
+/debs/*
+!/debs/README.md
+/keys/*
+!/keys/README.md
+/work/
+/out/
+*.img
+*.img.zst
+*.bmap

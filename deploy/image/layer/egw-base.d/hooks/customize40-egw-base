@@ -1,0 +1,124 @@
+#!/bin/bash
+# Engemase - camada egw-base, fase customize (roda no host, alvo em $1).
+#
+# - usuário "tecnico": remove o sudo "ALL" criado pelo rpi-image-gen e deixa
+#   só a regra restrita do overlay (sudoers.d/50-egw-tecnico);
+# - usuários dos serviços (sysusers) já na imagem;
+# - units: SSH mascarado, sem login pela serial, nftables, fstrim, repart;
+# - remove o que não pertence ao gateway (rádio, cloud-init, netplan...);
+# - pastas de montagem da /data.
+set -euo pipefail
+
+root=${1:?uso: $0 <rootfs>}
+[[ -d $root/etc ]] || { echo "egw-base: rootfs inválido: $root" >&2; exit 1; }
+
+log() { printf 'egw-base: %s\n' "$*"; }
+in_root() { chroot "$root" "$@"; }
+
+is_installed() {
+	in_root dpkg-query -W -f='${db:Status-Status}' "$1" 2>/dev/null | grep -qx installed
+}
+
+# --- Debian esperado -------------------------------------------------------
+# shellcheck source=/dev/null
+codename=$(. "$root/etc/os-release" && printf '%s' "${VERSION_CODENAME:-}")
+if [[ -n ${IGconf_egw_debian_codename:-} && $codename != "$IGconf_egw_debian_codename" ]]; then
+	echo "egw-base: Debian '$codename' na imagem, esperado '$IGconf_egw_debian_codename'" >&2
+	exit 1
+fi
+log "Debian $codename"
+
+# --- systemd-repart (pacote próprio no Trixie; no Bookworm, a confirmar) ---
+if [[ ! -x $root/usr/bin/systemd-repart ]]; then
+	if in_root apt-cache show systemd-repart >/dev/null 2>&1; then
+		in_root apt-get install -y --no-install-recommends systemd-repart
+	else
+		log "AVISO: systemd-repart indisponível; a /data será criada pelo plano B do factory init (sfdisk)"
+	fi
+fi
+if [[ -x $root/usr/bin/systemd-repart && -f $root/usr/lib/systemd/system/systemd-repart.service ]]; then
+	# Garante que o serviço rode no boot (em geral já é "static" no sysinit.target).
+	mkdir -p "$root/etc/systemd/system/sysinit.target.wants"
+	ln -sf /usr/lib/systemd/system/systemd-repart.service \
+		"$root/etc/systemd/system/sysinit.target.wants/systemd-repart.service"
+fi
+
+# --- Usuários ----------------------------------------------------------------
+in_root systemd-sysusers /etc/sysusers.d/engemase-image.conf
+
+user1=${IGconf_device_user1:-tecnico}
+rm -f "$root"/etc/sudoers.d/010_rpi-passwd "$root"/etc/sudoers.d/010_rpi-nopasswd
+if in_root id -nG "$user1" | tr ' ' '\n' | grep -qx sudo; then
+	in_root gpasswd -d "$user1" sudo >/dev/null
+fi
+# Sem senha até o factory init (a senha é a senha local da unidade).
+in_root usermod --lock "$user1"
+in_root usermod --shell /bin/bash "$user1"
+chmod 0440 "$root/etc/sudoers.d/50-egw-tecnico"
+in_root visudo -c -q -f /etc/sudoers.d/50-egw-tecnico
+in_root passwd -l root >/dev/null
+
+# --- Remoções (rascunho de rede §2.4; série -00 sem rádio) ------------------
+purge=(
+	cloud-init cloud-guest-utils netplan.io
+	avahi-daemon cups cups-daemon rpcbind triggerhappy
+	modemmanager wpasupplicant iwd bluez bluez-firmware firmware-brcm80211
+	rpi-connect rpi-connect-lite raspi-config
+	systemd-timesyncd systemd-resolved rsyslog
+	dkms build-essential gcc make
+)
+to_purge=()
+for p in "${purge[@]}"; do
+	if is_installed "$p"; then to_purge+=("$p"); fi
+done
+if (( ${#to_purge[@]} )); then
+	log "removendo: ${to_purge[*]}"
+	in_root apt-get purge -y --auto-remove "${to_purge[@]}"
+fi
+# Nada de compilador nem headers na unidade (o módulo da Seeed vem pronto).
+mapfile -t headers < <(in_root dpkg-query -W -f='${db:Status-Status} ${binary:Package}\n' 'linux-headers-*' 2>/dev/null \
+	| awk '$1 == "installed" { print $2 }' || true)
+if (( ${#headers[@]} )); then
+	in_root apt-get purge -y --auto-remove "${headers[@]}"
+fi
+
+# --- Rede: só NetworkManager ------------------------------------------------
+# O rpi-device-base cria arquivos do systemd-networkd; o gateway não usa.
+rm -f "$root"/etc/systemd/network/01-eth0.network "$root"/etc/systemd/network/02-wlan0.network
+mkdir -p "$root/etc/systemd/network"
+# Nome por MAC de interface USB (Debian) desligado: ETH1 fica eth1 (com net.ifnames=0).
+ln -sf /dev/null "$root/etc/systemd/network/73-usb-net-by-mac.link"
+
+# --- Units -----------------------------------------------------------------
+enable_units=(nftables.service fstrim.timer chrony.service NetworkManager.service
+	apt-daily.timer apt-daily-upgrade.timer)
+for u in "${enable_units[@]}"; do
+	in_root systemctl enable "$u"
+done
+# Boot sem esperar DHCP: a coleta não depende da IT.
+in_root systemctl disable NetworkManager-wait-online.service 2>/dev/null || true
+mask_units=(
+	ssh.service ssh.socket sshd.service
+	serial-getty@ttyAMA0.service serial-getty@ttyS0.service
+	systemd-networkd.service systemd-networkd.socket systemd-networkd-wait-online.service
+	rpi-eeprom-update.service
+	ModemManager.service wpa_supplicant.service bluetooth.service hciuart.service
+	avahi-daemon.service avahi-daemon.socket triggerhappy.service triggerhappy.socket
+)
+for u in "${mask_units[@]}"; do
+	in_root systemctl mask "$u"
+done
+
+# --- SSH: sem chaves de host na imagem (o factory init gera) ------------------
+rm -f "$root"/etc/ssh/ssh_host_*
+
+# --- Pontos de montagem da /data (fstab do layout image-egw-gpt) -------------
+install -d -m 0755 "$root/data"
+install -d -m 0750 "$root/var/lib/oee-gateway"
+install -d -m 2755 "$root/var/log/journal"
+
+# --- Hostname provisório (o factory init troca para egw-NNNNN) ---------------
+hn=${IGconf_device_hostname:-egw-factory}
+printf '%s\n' "$hn" > "$root/etc/hostname"
+
+log "ok"

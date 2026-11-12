@@ -5,8 +5,8 @@ import { SearchXIcon } from "lucide-react"
 
 import type { ShiftOeeRow } from "@/lib/mock"
 import { Button } from "@/components/ui/button"
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { SectionCard } from "@/components/dashboard/section-card"
 import { ExportMenu } from "./export-menu"
 import { FilterBar, FilterSelect, SegmentedFilter } from "./filter-bar"
 import { LossCascadeChart } from "./loss-cascade-chart"
@@ -165,6 +165,7 @@ export function OeeReport({ clientSlug, rows, machines, units, lines }: OeeRepor
         />
         <SegmentedFilter<GroupBy>
           label="Agrupar por"
+          showLabel
           value={by}
           onChange={setBy}
           className="col-span-2 sm:col-span-1"
@@ -177,7 +178,7 @@ export function OeeReport({ clientSlug, rows, machines, units, lines }: OeeRepor
       </FilterBar>
 
       {!hasData ? (
-        <Empty className="border border-dashed">
+        <Empty className="rounded-2xl border border-dashed bg-card">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <SearchXIcon />
@@ -196,52 +197,47 @@ export function OeeReport({ clientSlug, rows, machines, units, lines }: OeeRepor
           <OeeKpis current={data.currentAgg} previous={data.previousAgg} periodDays={period} />
 
           <div className="grid gap-4 xl:grid-cols-5">
-            <Card className="gap-4 xl:col-span-3">
-              <CardHeader>
-                <CardTitle>Tendência do OEE</CardTitle>
-                <CardDescription>OEE diário e seus componentes (D × P × Q). A faixa verde marca a meta de classe mundial.</CardDescription>
-              </CardHeader>
-              <CardContent className="px-3 sm:px-6">
-                <OeeTrendChart data={data.trend} />
-              </CardContent>
-            </Card>
-            <Card className="gap-4 xl:col-span-2">
-              <CardHeader>
-                <CardTitle>Cascata de perdas</CardTitle>
-                <CardDescription>Para onde foi o tempo planejado, em horas-máquina.</CardDescription>
-              </CardHeader>
-              <CardContent className="px-3 sm:px-6">
-                <LossCascadeChart agg={data.currentAgg} />
-              </CardContent>
-            </Card>
+            <SectionCard
+              title="Tendência do OEE"
+              description="OEE diário e seus componentes (D × P × Q). A faixa verde marca a meta de classe mundial."
+              className="xl:col-span-3"
+              bodyClassName="px-3 sm:px-5"
+            >
+              <OeeTrendChart data={data.trend} />
+            </SectionCard>
+            <SectionCard
+              title="Cascata de perdas"
+              description="Para onde foi o tempo planejado, em horas-máquina."
+              href={`/${clientSlug}/relatorios/paradas`}
+              linkLabel="Ver paradas"
+              className="xl:col-span-2"
+              bodyClassName="px-3 sm:px-5"
+            >
+              <LossCascadeChart agg={data.currentAgg} />
+            </SectionCard>
           </div>
 
-          <Card className="gap-4">
-            <CardHeader>
-              <CardTitle>Ranking de máquinas por OEE</CardTitle>
-              <CardDescription>
-                {selected ? `${selected.name} em destaque entre as máquinas do filtro.` : "Da melhor para a pior no período."} Cores pela faixa: verde ≥ 85%, âmbar 60–85%, vermelho &lt; 60%.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="px-3 sm:px-6">
-              <MachineRankingChart data={data.ranking} highlightId={selected?.id} />
-            </CardContent>
-          </Card>
+          <SectionCard
+            title="Ranking de máquinas por OEE"
+            description={`${selected ? `${selected.name} em destaque entre as máquinas do filtro.` : "Da melhor para a pior no período."} Cores pela faixa: verde ≥ 85%, âmbar 60–85%, vermelho < 60%.`}
+            href={`/${clientSlug}/maquinas`}
+            linkLabel="Ver máquinas"
+            bodyClassName="px-3 sm:px-5"
+          >
+            <MachineRankingChart data={data.ranking} highlightId={selected?.id} />
+          </SectionCard>
 
-          <Card className="gap-3 pb-0">
-            <CardHeader>
-              <CardTitle>Detalhamento {GROUP_TITLE[by]}</CardTitle>
-              <CardDescription>Tempos em horas-máquina. Cores de D, P, Q e OEE pela faixa de desempenho.</CardDescription>
-              <CardAction>
-                <ExportMenu
-                  baseName={`oee_${clientSlug}_${start ?? ""}_a_${end ?? ""}`}
-                  rowCount={data.current.length}
-                  scopeLabel={scopeLabel}
-                />
-              </CardAction>
-            </CardHeader>
+          <SectionCard
+            title={`Detalhamento ${GROUP_TITLE[by]}`}
+            description="Tempos em horas-máquina. Cores de D, P, Q e OEE pela faixa de desempenho."
+            action={
+              <ExportMenu baseName={`oee_${clientSlug}_${start ?? ""}_a_${end ?? ""}`} rowCount={data.current.length} scopeLabel={scopeLabel} />
+            }
+            className="overflow-hidden"
+            bodyClassName="px-0 pb-0"
+          >
             <OeeTable groups={data.groups} by={by} machines={machines} total={data.current} />
-          </Card>
+          </SectionCard>
         </>
       )}
     </>

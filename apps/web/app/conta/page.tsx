@@ -102,7 +102,7 @@ export default function Page() {
           </dl>
         </section>
 
-        <div className="grid gap-5 lg:grid-cols-[200px_minmax(0,1fr)]">
+        <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[200px_minmax(0,1fr)]">
           <AccountNav />
 
           <div className="flex min-w-0 flex-col gap-4">

@@ -1,0 +1,60 @@
+# Pacote oee-gateway-updater (OTA mínimo, M4b) — docs/16 §3.
+#
+# Separado do oee-gateway DE PROPÓSITO: o atualizador precisa sobreviver a um
+# agente novo que não sobe, então nunca é trocado na mesma transação do agente.
+#
+#   deploy/gateway/build-deb.sh --package oee-gateway-updater --arch arm64 --version 0.1.0
+#
+# ou: OEE_VERSION=0.1.0 OEE_ARCH=arm64 OEE_DIST=gateway/dist \
+#       nfpm pkg --config deploy/gateway/nfpm-updater.yaml --packager deb --target gateway/dist/
+#
+# Binário: $OEE_DIST/$OEE_ARCH/oee-updater (gateway/cmd/oee-updater, a implementar).
+
+name: oee-gateway-updater
+arch: ${OEE_ARCH}
+platform: linux
+version: ${OEE_VERSION}
+version_schema: semver
+section: admin
+priority: optional
+# A DEFINIR: e-mail de contato do mantenedor do pacote.
+maintainer: "Engemase Automação <a-definir@engemase.invalid>"
+vendor: Engemase Automação
+homepage: https://oee.engemase.com.br
+license: Proprietary
+description: |-
+  Atualizador (OTA) do agente do gateway OEE da Engemase
+  Aplica o .deb do agente baixado e verificado pelo oee-gateway, conferindo de
+  novo a assinatura Ed25519 do manifesto, e volta à versão anterior se o agente
+  novo não ficar saudável em 5 minutos. Inclui a verificação pós-boot que
+  retoma uma atualização interrompida por queda de energia.
+
+depends:
+  - systemd (>= 252)
+recommends:
+  - oee-gateway
+
+deb:
+  compression: xz
+
+contents:
+  - src: ${OEE_DIST}/${OEE_ARCH}/oee-updater
+    dst: /usr/lib/oee-gateway/oee-updater
+    expand: true
+    file_info:
+      mode: 0755
+  - src: deploy/gateway/systemd/oee-gateway-updater.path
+    dst: /usr/lib/systemd/system/oee-gateway-updater.path
+  - src: deploy/gateway/systemd/oee-gateway-updater.service
+    dst: /usr/lib/systemd/system/oee-gateway-updater.service
+  - src: deploy/gateway/systemd/oee-gateway-update-check.service
+    dst: /usr/lib/systemd/system/oee-gateway-update-check.service
+  - src: deploy/gateway/README.md
+    dst: /usr/share/doc/oee-gateway-updater/README.md
+    file_info:
+      mode: 0644
+
+scripts:
+  postinstall: deploy/gateway/scripts/oee-gateway-updater/postinst
+  preremove: deploy/gateway/scripts/oee-gateway-updater/prerm
+  postremove: deploy/gateway/scripts/oee-gateway-updater/postrm

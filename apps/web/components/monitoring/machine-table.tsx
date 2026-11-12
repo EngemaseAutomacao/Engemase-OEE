@@ -88,10 +88,10 @@ export function MachineTable({ rows, clientSlug }: { rows: MachineRow[]; clientS
   })
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+    <div className="overflow-hidden rounded-2xl border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
       <Table className="min-w-[1080px]">
         <TableHeader>
-          <TableRow className="hover:bg-transparent">
+          <TableRow className="bg-muted/40 hover:bg-muted/40">
             <SortHead label="Máquina" k="name" sort={sort} onSort={onSort} className="pl-4" />
             <TableHead>Linha</TableHead>
             <SortHead label="Estado" k="state" sort={sort} onSort={onSort} />

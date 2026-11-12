@@ -1,0 +1,468 @@
+#!/bin/bash
+# Engemase OEE gateway - "factory init" do 1º boot na bancada (docs/16 §7).
+#
+# Executado uma única vez pela unidade egw-factory-init.service (condição:
+# /data/identity/hw.json ainda não existe). Etapas:
+#   1. garante a partição /data (systemd-repart ou plano B) e as montagens;
+#   2. lê a semente gravada pela estação (flash-emmc.sh) na partição de boot:
+#      número de série EGW-NNNNN, versão da imagem, operador;
+#   3. coleta os fatos da unidade: MACs da ETH0 (OT) e ETH1 (IT), CID e
+#      tamanho do eMMC, serial do CM4, RAM, bootloader, versão da imagem;
+#   4. hostname egw-NNNNN, chaves de host SSH, chave Ed25519 da unidade e
+#      certificado da página local;
+#   5. gera a SENHA LOCAL: hash yescrypt no usuário "tecnico" (console),
+#      hash argon2id para a página local e exportação CIFRADA para o
+#      certificado da bancada (cartão lacrado + cofre). Nunca grava a senha em
+#      claro, nunca a escreve no log;
+#   6. rede de fábrica (network.json e perfis do NetworkManager pelo MAC);
+#   7. grava /data/identity/hw.json (identidade, somente leitura para o agente);
+#   8. roda os autotestes B0 e sinaliza nos LEDs: âmbar piscando = rodando,
+#      verde fixo = aprovado, vermelho piscando = reprovado;
+#   9. copia o pacote de exportação para o pendrive de bancada (EGWBANCADA),
+#      se estiver espetado.
+#
+# Uso:
+#   egw-factory-init run              (a unidade systemd chama este)
+#   egw-factory-init selftest [...]   (repete o B0; opções do egw-selftest)
+#   egw-factory-init export-usb [DEV] (copia a exportação para o pendrive)
+#   egw-factory-init rotate-password  (nova senha local + nova exportação)
+#   egw-factory-init status
+# Saída: 0 = ok; 1 = B0 reprovado; 2 = uso; 3 = pré-condição (ex.: sem série).
+set -Eeuo pipefail
+umask 077
+
+EGW_LIB_DIR=${EGW_LIB_DIR:-/usr/lib/engemase/factory}
+# shellcheck source=egw-common.sh
+. "$EGW_LIB_DIR/egw-common.sh"
+
+VERSION=1
+HW_JSON=$EGW_IDENTITY_DIR/hw.json
+EXPORT_DIR=$EGW_IDENTITY_DIR/export
+NETWORK_JSON=/etc/oee-gateway/network.json
+NM_DIR=/etc/NetworkManager/system-connections
+USB_LABEL=EGWBANCADA
+
+declare -A SEED=() REL=() PLAT=()
+
+need_root() { [[ $(id -u) -eq 0 ]] || { egw_err "precisa de root"; exit 2; }; }
+now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+banner() { printf '\n==== Engemase factory init: %s ====\n' "$*"; }
+
+# --- 1. /data ---------------------------------------------------------------------------
+ensure_data() {
+	if ! mountpoint -q /data; then
+		if [[ ! -e /dev/disk/by-slot/data ]]; then
+			egw_warn "partição data ausente (systemd-repart não rodou ou falhou): plano B"
+			"$EGW_LIB_DIR/egw-data-fallback"
+		fi
+		udevadm settle --timeout=30 || true
+		mount /data
+	fi
+	systemd-tmpfiles --create /etc/tmpfiles.d/engemase-data.conf
+	mountpoint -q /var/lib/oee-gateway || mount /var/lib/oee-gateway
+	if ! mountpoint -q /var/log/journal; then
+		mount /var/log/journal
+		journalctl --flush 2>/dev/null || true
+		journalctl --rotate 2>/dev/null || true
+	fi
+	install -d -m 0755 "$EGW_IDENTITY_DIR"
+	install -d -m 0700 "$EXPORT_DIR"
+}
+
+# --- 2. Semente da estação de gravação ---------------------------------------------------
+read_seed() {
+	if ! egw_read_kv "$EGW_SEED_FILE" SEED; then
+		egw_err "semente ausente: $EGW_SEED_FILE (grave com flash/flash-emmc.sh --serial EGW-NNNNN)"
+		return 1
+	fi
+	if ! egw_valid_serial "${SEED[EGW_SERIAL]:-}"; then
+		egw_err "número de série inválido na semente: '${SEED[EGW_SERIAL]:-}' (esperado EGW-NNNNN)"
+		return 1
+	fi
+}
+
+# --- 3. Fatos --------------------------------------------------------------------------------
+wait_ports() {
+	local i
+	for i in $(seq 1 60); do
+		if egw_detect_ports; then return 0; fi
+		(( i == 1 )) && egw_log "aguardando ETH0 (bcmgenet) e ETH1 (USB)..."
+		sleep 1
+	done
+	egw_err "ETH0/ETH1 não encontradas: $(egw_list_ethernet | tr '\n' ';')"
+	return 1
+}
+
+collect_facts() {
+	local dname
+	DISK=$(egw_boot_disk)
+	dname=${DISK#/dev/}
+	F_MODEL=$(egw_read_sys /proc/device-tree/model || true)
+	F_BOARD=$(egw_read_sys /proc/device-tree/hardware || true)
+	F_CM4_SERIAL=$(egw_read_sys /sys/firmware/devicetree/base/serial-number || true)
+	F_EMMC_CID=$(egw_read_sys "/sys/block/$dname/device/cid" || true)
+	F_EMMC_NAME=$(egw_read_sys "/sys/block/$dname/device/name" || true)
+	F_EMMC_BYTES=$(( $(cat "/sys/block/$dname/size" 2>/dev/null || echo 0) * 512 ))
+	F_RAM_MB=$(( $(awk '/^MemTotal:/ { print $2 }' /proc/meminfo) / 1024 ))
+	F_BOOTLOADER=$(vcgencmd bootloader_version 2>/dev/null | head -n1 || true)
+	F_KERNEL=$(uname -r)
+	egw_read_kv "$EGW_RELEASE_FILE" REL || egw_warn "$EGW_RELEASE_FILE ausente"
+	egw_read_kv "$EGW_PLATFORM_FILE" PLAT || true
+	wait_ports || return 1
+	F_SERVICE_ADDR=$(egw_service_address "$EGW_ETH0_MAC") || return 1
+}
+
+# --- 4. Hostname e chaves ---------------------------------------------------------------------
+set_hostname() {
+	printf '%s\n' "$HOSTNAME_NEW" | egw_atomic_write /etc/hostname 0644
+	if grep -q '^127\.0\.1\.1' /etc/hosts; then
+		sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t$HOSTNAME_NEW/" /etc/hosts
+	else
+		printf '127.0.1.1\t%s\n' "$HOSTNAME_NEW" >> /etc/hosts
+	fi
+	hostname "$HOSTNAME_NEW"
+}
+
+make_keys() {
+	local key=$EGW_IDENTITY_DIR/device.key
+	# SSH (mascarado no MVP; F2 usa as chaves e certifica pela CA de host)
+	rm -f /etc/ssh/ssh_host_*
+	ssh-keygen -A >/dev/null
+	F_SSH_FP=$(ssh-keygen -l -E sha256 -f /etc/ssh/ssh_host_ed25519_key.pub | awk '{ print $2 }')
+
+	# Chave Ed25519 da unidade (enroll por identidade e assinaturas, F2: TPM)
+	openssl genpkey -algorithm ed25519 -out "$key.tmp"
+	chown root:oee "$key.tmp" 2>/dev/null || true
+	chmod 0440 "$key.tmp"
+	mv -f "$key.tmp" "$key"
+	openssl pkey -in "$key" -pubout -out "$EGW_IDENTITY_DIR/device.pub"
+	chmod 0644 "$EGW_IDENTITY_DIR/device.pub"
+	F_DEVICE_PUB=$(openssl pkey -in "$key" -pubout -outform DER | tail -c 32 | base64 -w0)
+
+	# Certificado da página local: ECDSA P-256, 10 anos, SAN = hostname + endereço de serviço
+	install -d -m 0700 "$EGW_LOCALUI_DIR"
+	openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 3650 \
+		-subj "/O=Engemase/CN=$HOSTNAME_NEW" \
+		-addext "subjectAltName=DNS:$HOSTNAME_NEW,IP:$F_SERVICE_ADDR" \
+		-addext "keyUsage=critical,digitalSignature" \
+		-addext "extendedKeyUsage=serverAuth" \
+		-keyout "$EGW_LOCALUI_DIR/tls.key" -out "$EGW_LOCALUI_DIR/tls.crt" 2>/dev/null
+	chmod 0600 "$EGW_LOCALUI_DIR/tls.key"
+	chmod 0644 "$EGW_LOCALUI_DIR/tls.crt"
+	chown -R oee-ui:oee-ui "$EGW_LOCALUI_DIR" 2>/dev/null || true
+	F_CERT_SHA256=$(openssl x509 -in "$EGW_LOCALUI_DIR/tls.crt" -noout -fingerprint -sha256 | sed 's/^.*=//')
+	F_SPKI_SHA256=$(openssl x509 -in "$EGW_LOCALUI_DIR/tls.crt" -noout -pubkey \
+		| openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | base64 -w0)
+}
+
+# --- 5. Senha local ---------------------------------------------------------------------------------
+# Hash da página local. Preferência: a própria CLI do agente (dona do formato);
+# senão argon2id pelo utilitário argon2 (formato PHC). A CONFIRMAR com o oee-localui.
+set_localui_hash() {
+	local norm=$1 salt hash
+	if command -v oee-gateway >/dev/null 2>&1 && oee-gateway localui passwd --help >/dev/null 2>&1; then
+		if printf '%s\n' "$norm" | oee-gateway localui passwd --stdin >/dev/null; then
+			return 0
+		fi
+		egw_warn "oee-gateway localui passwd falhou; usando argon2"
+	fi
+	salt=$(openssl rand -base64 16 | tr -d '=\n')
+	hash=$(printf '%s' "$norm" | argon2 "$salt" -id -t 3 -m 16 -p 2 -l 32 -e)
+	[[ $hash == '$argon2id$'* ]] || { egw_err "argon2 não gerou hash"; return 1; }
+	printf '%s\n' "$hash" | egw_atomic_write "$EGW_LOCALUI_DIR/password.argon2id" 0600 oee-ui:oee-ui
+}
+
+# Exporta o cartão cifrado (CMS, AES-256-GCM) para o certificado da bancada.
+# O texto claro só existe em memória e no pipe para o openssl.
+export_card() {
+	local pw=$1 out=$EXPORT_DIR/$SERIAL.card.p7m keyopts=()
+	if openssl x509 -in "$EGW_BENCH_CERT" -noout -text 2>/dev/null | grep -q 'rsaEncryption'; then
+		keyopts=(-keyopt rsa_padding_mode:oaep -keyopt rsa_oaep_md:sha256)
+	fi
+	EXPORT_ID=$(cat /proc/sys/kernel/random/uuid)
+	{
+		printf 'EGW_CARD_VERSION=1\n'
+		printf 'EGW_SERIAL=%s\n' "$SERIAL"
+		printf 'EGW_HOSTNAME=%s\n' "$HOSTNAME_NEW"
+		printf 'EGW_EXPORT_ID=%s\n' "$EXPORT_ID"
+		printf 'EGW_GENERATED_AT=%s\n' "$(now)"
+		printf 'EGW_LOCAL_PASSWORD=%s\n' "$pw"
+		printf 'EGW_SERVICE_ADDRESS=%s\n' "$F_SERVICE_ADDR"
+		printf 'EGW_LOCALUI_CERT_SHA256=%s\n' "$F_CERT_SHA256"
+		printf 'EGW_LOCALUI_SPKI_SHA256=%s\n' "$F_SPKI_SHA256"
+		printf 'EGW_MAC_ETH0=%s\n' "$EGW_ETH0_MAC"
+		printf 'EGW_MAC_ETH1=%s\n' "$EGW_ETH1_MAC"
+	} | openssl cms -encrypt -binary -aes-256-gcm -recip "$EGW_BENCH_CERT" "${keyopts[@]}" \
+		-outform PEM -out "$out.tmp"
+	sync "$out.tmp"
+	mv -f "$out.tmp" "$out"
+	rm -f "$EXPORT_DIR"/ACK-* 2>/dev/null || true
+	F_EXPORT_STATE=pending
+}
+
+make_password() {
+	local pw
+	F_EXPORT_STATE=none
+	EXPORT_ID=""
+	if [[ ! -s $EGW_BENCH_CERT ]]; then
+		egw_err "sem certificado da bancada ($EGW_BENCH_CERT): senha local NÃO gerada (o B0 reprova)"
+		return 0
+	fi
+	pw=$(egw_gen_password)
+	# A exportação vem primeiro: se falhar, nenhuma senha "perdida" fica ativa.
+	export_card "$pw"
+	printf '%s:%s\n' "$EGW_TECH_USER" "$pw" | chpasswd
+	set_localui_hash "$(egw_normalize_password "$pw")"
+	pw=""
+	egw_log "senha local gerada e exportada cifrada (export_id $EXPORT_ID)"
+}
+
+# --- 6. Rede de fábrica ------------------------------------------------------------------------------
+# /etc/oee-gateway/network.json é a fonte única da rede (docs/16 §4). Os perfis
+# do NetworkManager abaixo são o ponto de partida; o oee-helper os regenera.
+write_network() {
+	install -d -m 0755 /etc/oee-gateway
+	if [[ ! -s $NETWORK_JSON ]]; then
+		cat <<-EOF | egw_atomic_write "$NETWORK_JSON" 0640 root:oee
+		{
+		  "network_version": 0,
+		  "origin": "factory",
+		  "hostname": $(egw_json_str "$HOSTNAME_NEW"),
+		  "it": { "mac": $(egw_json_str "$EGW_ETH1_MAC"), "mode": "dhcp", "ipv6": "disabled", "allow_ping": true },
+		  "ot": { "mac": $(egw_json_str "$EGW_ETH0_MAC"), "mode": "static", "addresses": [], "routes": [],
+		          "service_address": $(egw_json_str "$F_SERVICE_ADDR/16"), "local_ui": true },
+		  "proxy": null,
+		  "ca_bundle_pem": null,
+		  "ntp": { "servers": [], "use_dhcp": true, "public_fallback": true }
+		}
+		EOF
+	fi
+	install -d -m 0700 "$NM_DIR"
+	cat <<-EOF | egw_atomic_write "$NM_DIR/oee-it.nmconnection" 0600
+	# Gerado pelo factory init (rede de fábrica). O oee-helper regenera.
+	[connection]
+	id=oee-it
+	uuid=$(cat /proc/sys/kernel/random/uuid)
+	type=ethernet
+	autoconnect=true
+
+	[ethernet]
+	mac-address=$EGW_ETH1_MAC
+
+	[ipv4]
+	method=auto
+	dhcp-hostname=$HOSTNAME_NEW
+	dhcp-send-hostname=true
+	route-metric=100
+
+	[ipv6]
+	method=disabled
+	EOF
+	cat <<-EOF | egw_atomic_write "$NM_DIR/oee-ot.nmconnection" 0600
+	# Gerado pelo factory init (rede de fábrica). O oee-helper regenera.
+	# OT sem IP principal até a ficha de TI; endereço de serviço sempre ativo.
+	[connection]
+	id=oee-ot
+	uuid=$(cat /proc/sys/kernel/random/uuid)
+	type=ethernet
+	autoconnect=true
+
+	[ethernet]
+	mac-address=$EGW_ETH0_MAC
+
+	[ipv4]
+	method=manual
+	address1=$F_SERVICE_ADDR/16
+	never-default=true
+	ignore-auto-dns=true
+	dad-timeout=3000
+
+	[ipv6]
+	method=disabled
+	EOF
+}
+
+# --- 7. hw.json --------------------------------------------------------------------------------------
+write_hw_json() {
+	{
+		printf '{\n'
+		printf '  "schema": "egw-hw/1",\n'
+		printf '  "serial": %s,\n' "$(egw_json_str "$SERIAL")"
+		printf '  "hostname": %s,\n' "$(egw_json_str "$HOSTNAME_NEW")"
+		printf '  "model": %s,\n' "$(egw_json_val "$F_MODEL")"
+		printf '  "board": %s,\n' "$(egw_json_val "$F_BOARD")"
+		printf '  "cm4_serial": %s,\n' "$(egw_json_val "$F_CM4_SERIAL")"
+		printf '  "mac_eth0": %s,\n' "$(egw_json_str "$EGW_ETH0_MAC")"
+		printf '  "mac_eth1": %s,\n' "$(egw_json_str "$EGW_ETH1_MAC")"
+		printf '  "ifname_eth0": %s,\n' "$(egw_json_str "$EGW_ETH0_IF")"
+		printf '  "ifname_eth1": %s,\n' "$(egw_json_str "$EGW_ETH1_IF")"
+		printf '  "service_address": %s,\n' "$(egw_json_str "$F_SERVICE_ADDR/16")"
+		printf '  "emmc_cid": %s,\n' "$(egw_json_val "$F_EMMC_CID")"
+		printf '  "emmc_name": %s,\n' "$(egw_json_val "$F_EMMC_NAME")"
+		printf '  "emmc_bytes": %s,\n' "$(egw_json_val "$F_EMMC_BYTES")"
+		printf '  "ram_mb": %s,\n' "$(egw_json_val "$F_RAM_MB")"
+		printf '  "bootloader": %s,\n' "$(egw_json_val "$F_BOOTLOADER")"
+		printf '  "image_version": %s,\n' "$(egw_json_val "${REL[EGW_IMAGE_VERSION]:-}")"
+		printf '  "image_commit": %s,\n' "$(egw_json_val "${REL[EGW_IMAGE_COMMIT]:-}")"
+		printf '  "platform": %s,\n' "$(egw_json_val "${REL[EGW_PLATFORM]:-}")"
+		printf '  "kernel": %s,\n' "$(egw_json_str "$F_KERNEL")"
+		printf '  "device_pubkey_ed25519": %s,\n' "$(egw_json_str "$F_DEVICE_PUB")"
+		printf '  "ssh_host_ed25519_sha256": %s,\n' "$(egw_json_str "$F_SSH_FP")"
+		printf '  "localui_cert_sha256": %s,\n' "$(egw_json_str "$F_CERT_SHA256")"
+		printf '  "localui_spki_sha256": %s,\n' "$(egw_json_str "$F_SPKI_SHA256")"
+		printf '  "local_password_export": { "state": %s, "export_id": %s },\n' \
+			"$(egw_json_str "$F_EXPORT_STATE")" "$(egw_json_val "$EXPORT_ID")"
+		printf '  "flash": { "station": %s, "operator": %s, "flashed_at": %s, "image_sha256": %s, "image_version": %s },\n' \
+			"$(egw_json_val "${SEED[EGW_STATION]:-}")" "$(egw_json_val "${SEED[EGW_OPERATOR]:-}")" \
+			"$(egw_json_val "${SEED[EGW_FLASHED_AT]:-}")" "$(egw_json_val "${SEED[EGW_IMAGE_SHA256]:-}")" \
+			"$(egw_json_val "${SEED[EGW_IMAGE_VERSION]:-}")"
+		printf '  "created_at": %s,\n' "$(egw_json_str "$(now)")"
+		printf '  "factory_init_version": %s\n' "$VERSION"
+		printf '}\n'
+	} | egw_atomic_write "$HW_JSON" 0644 root:root
+}
+
+# --- 9. Pendrive de bancada ------------------------------------------------------------------------------
+# Copia para EGW/<série>/ no pendrive FAT com rótulo EGWBANCADA: cartão
+# cifrado, hw.json e relatório B0. Se a bancada já deixou ACK-<export_id>
+# (cartão impresso e cofre atualizado), apaga a exportação local.
+cmd_export_usb() {
+	need_root
+	local dev=${1:-} mnt dst ack serial export_id
+	[[ -s $HW_JSON ]] || { egw_err "unidade ainda sem identidade"; return 3; }
+	if [[ -z $dev ]]; then
+		dev=$(blkid -t LABEL="$USB_LABEL" -o device 2>/dev/null | head -n1 || true)
+	fi
+	if [[ -z $dev ]]; then
+		egw_log "pendrive $USB_LABEL não encontrado"
+		return 0
+	fi
+	[[ $(lsblk -ndo TRAN "/dev/$(lsblk -ndo PKNAME "$dev")" 2>/dev/null) == usb ]] \
+		|| { egw_err "$dev não é USB"; return 2; }
+	serial=$(sed -n 's/.*"serial": *"\(EGW-[0-9]\{5\}\)".*/\1/p' "$HW_JSON" | head -n1)
+	export_id=$(sed -n 's/.*"export_id": *"\([0-9a-f-]*\)".*/\1/p' "$HW_JSON" | head -n1)
+	mnt=$(mktemp -d /run/egw-usb.XXXXXX)
+	mount -t vfat -o nodev,nosuid,noexec,uid=0,gid=0,umask=077 "$dev" "$mnt"
+	local rc=0
+	export_to_dir "$mnt/EGW/$serial" "$serial" "$export_id" || rc=$?
+	sync
+	umount "$mnt" || rc=1
+	rmdir "$mnt" 2>/dev/null || true
+	if (( rc == 0 )); then
+		egw_log "exportado para $dev:EGW/$serial/"
+		egw_leds blink blue
+		sleep 2
+	fi
+	return "$rc"
+}
+
+export_to_dir() {
+	local dst=$1 serial=$2 export_id=$3
+	mkdir -p "$dst" || return 1
+	if [[ -n $export_id && -e $dst/ACK-$export_id ]]; then
+		rm -f "$EXPORT_DIR/$serial.card.p7m"
+		sed -i 's/"state": "pending"/"state": "acknowledged"/' "$HW_JSON"
+		egw_log "bancada confirmou a exportação $export_id: cópia local apagada"
+	fi
+	if [[ -f $EXPORT_DIR/$serial.card.p7m ]]; then
+		cp "$EXPORT_DIR/$serial.card.p7m" "$dst/" || return 1
+	fi
+	cp "$HW_JSON" "$dst/hw.json" || return 1
+	if [[ -f $EGW_IDENTITY_DIR/b0-report.json ]]; then
+		cp "$EGW_IDENTITY_DIR/b0-report.json" "$dst/" || return 1
+	fi
+}
+
+# --- Fluxo principal ---------------------------------------------------------------------------------------
+cmd_run() {
+	need_root
+	banner "início"
+	egw_leds blink amber
+	# Qualquer erro inesperado: vermelho piscando (a unidade roda de novo no
+	# próximo boot, porque o hw.json só é gravado no fim).
+	trap 'egw_leds blink red' ERR
+	ensure_data
+	if [[ -s $HW_JSON ]]; then
+		egw_log "unidade já inicializada ($HW_JSON); nada a fazer"
+		egw_leds off
+		return 0
+	fi
+	if ! read_seed; then
+		egw_leds blink red
+		return 3
+	fi
+	SERIAL=${SEED[EGW_SERIAL]}
+	HOSTNAME_NEW=$(egw_hostname_from_serial "$SERIAL")
+	egw_log "série $SERIAL, hostname $HOSTNAME_NEW"
+
+	collect_facts || { egw_leds blink red; return 3; }
+	set_hostname
+	make_keys
+	make_password
+	write_network
+	write_hw_json
+	# Semente consumida: sai da partição de boot e fica no prontuário.
+	mv -f "$EGW_SEED_FILE" "$EGW_IDENTITY_DIR/flash-seed.conf" 2>/dev/null || true
+	sync
+
+	banner "autotestes B0"
+	local rc=0
+	local -a st_args=(--report "$EGW_IDENTITY_DIR/b0-report.json")
+	[[ -n ${SEED[EGW_IMAGE_VERSION]:-} ]] && st_args+=(--seed-image-version "${SEED[EGW_IMAGE_VERSION]}")
+	[[ -n ${SEED[EGW_EXPECT_RAM_GB]:-} ]] && st_args+=(--expect-ram-gb "${SEED[EGW_EXPECT_RAM_GB]}")
+	[[ -n ${SEED[EGW_EXPECT_EMMC_GB]:-} ]] && st_args+=(--expect-emmc-gb "${SEED[EGW_EXPECT_EMMC_GB]}")
+	"$EGW_LIB_DIR/egw-selftest" "${st_args[@]}" || rc=$?
+
+	cmd_export_usb || true
+
+	banner "resumo"
+	printf 'Série        %s\nHostname     %s\nETH0 (OT)    %s  serviço %s\nETH1 (IT)    %s\n' \
+		"$SERIAL" "$HOSTNAME_NEW" "$EGW_ETH0_MAC" "$F_SERVICE_ADDR" "$EGW_ETH1_MAC"
+	printf 'Imagem       %s  kernel %s\nCID do eMMC  %s\nSenha local  %s\n' \
+		"${REL[EGW_IMAGE_VERSION]:-?}" "$F_KERNEL" "${F_EMMC_CID:-?}" \
+		"$([[ $F_EXPORT_STATE == pending ]] && echo "exportada cifrada (pendrive $USB_LABEL)" || echo 'NÃO gerada')"
+	if (( rc == 0 )); then
+		printf 'B0           APROVADO\n'
+		egw_leds on green
+	else
+		printf 'B0           REPROVADO (ver %s)\n' "$EGW_IDENTITY_DIR/b0-report.json"
+		egw_leds blink red
+	fi
+	return "$rc"
+}
+
+cmd_rotate_password() {
+	need_root
+	[[ -s $HW_JSON ]] || { egw_err "unidade ainda sem identidade"; return 3; }
+	SERIAL=$(sed -n 's/.*"serial": *"\(EGW-[0-9]\{5\}\)".*/\1/p' "$HW_JSON" | head -n1)
+	HOSTNAME_NEW=$(egw_hostname_from_serial "$SERIAL")
+	egw_detect_ports || { egw_err "ETH0/ETH1 não encontradas"; return 3; }
+	F_SERVICE_ADDR=$(egw_service_address "$EGW_ETH0_MAC")
+	F_CERT_SHA256=$(openssl x509 -in "$EGW_LOCALUI_DIR/tls.crt" -noout -fingerprint -sha256 | sed 's/^.*=//')
+	F_SPKI_SHA256=$(openssl x509 -in "$EGW_LOCALUI_DIR/tls.crt" -noout -pubkey \
+		| openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | base64 -w0)
+	make_password
+	[[ $F_EXPORT_STATE == pending ]] || return 1
+	sed -i -E "s/(\"local_password_export\": \{ \"state\": )\"[a-z]+\", \"export_id\": [^ ]+ \}/\1\"pending\", \"export_id\": \"$EXPORT_ID\" }/" "$HW_JSON"
+	cmd_export_usb || true
+}
+
+cmd_status() {
+	if [[ -s $HW_JSON ]]; then
+		cat "$HW_JSON"
+		[[ -f $EGW_IDENTITY_DIR/b0-report.json ]] && \
+			sed -n 's/.*"result": *"\([A-Z]*\)".*/B0: \1/p' "$EGW_IDENTITY_DIR/b0-report.json"
+	else
+		echo "unidade sem identidade (factory init pendente)"
+	fi
+}
+
+case ${1:-run} in
+	run) cmd_run ;;
+	selftest) shift; need_root; exec "$EGW_LIB_DIR/egw-selftest" "$@" ;;
+	export-usb) shift; cmd_export_usb "$@" ;;
+	rotate-password) cmd_rotate_password ;;
+	status) cmd_status ;;
+	-h|--help|help) sed -n '2,32p' "$0" ;;
+	*) egw_err "comando desconhecido: $1"; exit 2 ;;
+esac

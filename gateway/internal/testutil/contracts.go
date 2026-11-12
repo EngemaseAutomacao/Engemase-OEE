@@ -124,3 +124,9 @@ func ValidateJSON(t testing.TB, s *jsonschema.Schema, doc []byte) string {
 	}
 	return ""
 }
+
+// RepoRoot devolve a raiz do monorepo (onde fica packages/contracts).
+func RepoRoot(t testing.TB) string {
+	t.Helper()
+	return filepath.Dir(filepath.Dir(ContractsDir(t)))
+}

@@ -1,11 +1,12 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ListOrderedIcon, RouterIcon } from "lucide-react"
+import { ChartNoAxesCombinedIcon, ListOrderedIcon, RouterIcon } from "lucide-react"
 
 import { MOCK_NOW, getClientBySlug, getLines, getMachines, getUnits } from "@/lib/mock"
-import { PageBody, PageHeader } from "@/components/shell/page-header"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { PageTitle } from "@/components/refresh/page-title"
+import { SoftLink } from "@/components/refresh/soft-action"
 import { addDays } from "@/components/reports/report-utils"
 import { buildStopRecords } from "@/components/reports/stops-data"
 import { StopsReport } from "@/components/reports/stops-report"
@@ -33,13 +34,19 @@ export default async function Page({ params }: PageProps<"/[cliente]/relatorios/
   const endDate = addDays(MOCK_NOW.slice(0, 10), -1)
 
   return (
-    <PageBody>
-      <PageHeader
+    <div className="flex flex-col gap-5 p-4 md:p-6">
+      <PageTitle
         title="Paradas (Pareto)"
         description={`${client.name} · onde a produção está parando: motivos, categorias, MTBF e MTTR.`}
+        actions={
+          <SoftLink href={`/${client.slug}/relatorios/oee`} tone="blue">
+            <ChartNoAxesCombinedIcon />
+            Relatório de OEE
+          </SoftLink>
+        }
       />
       {records.length === 0 ? (
-        <Empty className="border border-dashed">
+        <Empty className="rounded-2xl border border-dashed bg-card">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <ListOrderedIcon />
@@ -63,6 +70,6 @@ export default async function Page({ params }: PageProps<"/[cliente]/relatorios/
       ) : (
         <StopsReport clientSlug={client.slug} records={records} machines={machines} units={units} lines={lines} endDate={endDate} />
       )}
-    </PageBody>
+    </div>
   )
 }

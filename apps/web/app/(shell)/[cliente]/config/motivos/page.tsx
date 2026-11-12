@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation"
 
-import { getClientBySlug, getDowntimeReasons, getMachines, getPareto } from "@/lib/mock"
-import { faultTexts } from "@/lib/mock/data"
+import { faultTexts, getClientBySlug, getDowntimeReasons, getMachines, getPareto } from "@/lib/mock"
 import { REASON_PALETTE } from "@/components/config/labels"
 import type { FaultMapRow } from "@/components/config/fault-map"
 import type { ReasonNode } from "@/components/config/reason-dialogs"

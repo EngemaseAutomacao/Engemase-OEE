@@ -4,6 +4,7 @@ import { PlayIcon, RefreshCwIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
+import { SoftIconButton } from "@/components/refresh/soft-action"
 
 type Quality = "good" | "bad" | "stale"
 
@@ -33,9 +34,9 @@ function notifyRead(tagName: string, value: string, quality: Quality, ctx: ReadC
 /** Botão "testar leitura" de uma tag (simulado: só mostra um toast). */
 export function TagReadButton({ tagName, value, quality, ...ctx }: { tagName: string; value: string; quality: Quality } & ReadContext) {
   return (
-    <Button variant="ghost" size="icon-sm" aria-label={`Testar leitura de ${tagName}`} onClick={() => notifyRead(tagName, value, quality, ctx)}>
+    <SoftIconButton label={`Testar leitura de ${tagName}`} tone="teal" onClick={() => notifyRead(tagName, value, quality, ctx)}>
       <PlayIcon />
-    </Button>
+    </SoftIconButton>
   )
 }
 

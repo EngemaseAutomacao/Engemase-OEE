@@ -1,0 +1,26 @@
+# INSTALADO COMO /usr/lib/systemd/system/var-lib-oee\x2dgateway.mount
+# (o nome de uma unit .mount precisa ser o caminho escapado; no repositório o
+# arquivo tem outro nome porque "\" não é válido em nomes de arquivo no Windows).
+#
+# Estado do agente em /var/lib/oee-gateway, montado de /data/oee (docs/16 §4):
+# SQLite (buffer), config atual e anterior, credentials.json (0600).
+# A partição /data é separada da raiz (desgaste do eMMC, reflash sem perder o
+# buffer). Sem /data montada (bancada x86, VM), a condição falha e o diretório
+# fica na raiz, sem erro.
+[Unit]
+Description=Engemase OEE - estado do agente na partição de dados (/data/oee)
+Documentation=file:/usr/share/doc/oee-gateway/README.md
+ConditionPathIsMountPoint=/data
+RequiresMountsFor=/data
+Requires=oee-gateway-datadir.service
+After=oee-gateway-datadir.service
+
+[Mount]
+What=/data/oee
+Where=/var/lib/oee-gateway
+Type=none
+Options=bind,nodev,nosuid,noexec
+DirectoryMode=0750
+
+[Install]
+WantedBy=local-fs.target

@@ -1,0 +1,21 @@
+# /etc/oee-gateway/gateway.yaml — config LOCAL mínima (o resto vem da nuvem).
+# Arquivo ausente ou vazio = estes padrões.
+schema: 1
+
+cloud:
+  url: https://oee.engemase.com.br   # só a URL base; o caminho /api/gateway/v1 é fixo no agente
+  timeout_s: 30
+  extra_ca_file: ""                  # PEM com CAs corporativas (gerado do network.json); vazio = só as do sistema
+
+paths:
+  state_dir: /var/lib/oee-gateway    # montado de /data/oee
+  # credentials: /var/lib/oee-gateway/credentials.json   (padrão: <state_dir>/credentials.json, 0600)
+  # buffer: /var/lib/oee-gateway/buffer.db                (padrão: <state_dir>/buffer.db)
+  identity: /data/identity/hw.json
+
+hardware:
+  profile: auto                      # auto | recomputer-r1000 | generic
+  serial_ports: {}                   # no generic: { rs485-1: /dev/ttyUSB0 }
+
+log:
+  level: info                        # debug | info | warn | error

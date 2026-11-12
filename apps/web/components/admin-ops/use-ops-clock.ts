@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 
-import { MOCK_NOW } from "@/lib/mock"
+import { MOCK_NOW } from "@/lib/mock/clock"
 
 const BASE_MS = Date.parse(MOCK_NOW)
 

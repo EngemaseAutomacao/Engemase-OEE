@@ -1,0 +1,21 @@
+#!/bin/sh
+# Ajusta a permissão dos atributos de um LED para o grupo oee (agente sem root).
+# Chamado pela regra udev 70-oee-gateway.rules com o caminho sysfs do LED.
+# Instalado em /usr/lib/oee-gateway/oee-led-perms.
+set -u
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+dir=${1:-}
+case "$dir" in
+	/sys/*) ;;
+	*) exit 0 ;;
+esac
+[ -d "$dir" ] || exit 0
+
+for attr in brightness trigger delay_on delay_off; do
+	f="$dir/$attr"
+	[ -e "$f" ] || continue
+	chgrp oee "$f" 2>/dev/null || exit 0
+	chmod g+w "$f" 2>/dev/null || true
+done
+exit 0

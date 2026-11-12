@@ -1,0 +1,30 @@
+// Engemase: unattended-upgrades só com a origem de segurança do Debian.
+// Kernel, firmware, bootloader e o driver da Seeed NUNCA mudam por aqui:
+// chegam no "pacote de plataforma" validado na bancada (docs/16 §7).
+// Conferir na imagem com: unattended-upgrade -d --dry-run
+#clear Unattended-Upgrade::Origins-Pattern;
+Unattended-Upgrade::Origins-Pattern {
+  "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+};
+Unattended-Upgrade::Package-Blacklist {
+  "linux-image-";
+  "linux-headers-";
+  "linux-kbuild-";
+  "raspi-firmware";
+  "rpi-eeprom";
+  "raspberrypi-";
+  "engemase-";
+  "oee-";
+};
+Unattended-Upgrade::Automatic-Reboot "false";
+Unattended-Upgrade::InstallOnShutdown "false";
+Unattended-Upgrade::MinimalSteps "true";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "false";
+Unattended-Upgrade::Remove-New-Unused-Dependencies "false";
+Unattended-Upgrade::Remove-Unused-Dependencies "false";
+Unattended-Upgrade::SyslogEnable "false";
+// Mantém os arquivos de configuração da imagem (ex.: chrony.conf de fábrica).
+Dpkg::Options {
+  "--force-confdef";
+  "--force-confold";
+};

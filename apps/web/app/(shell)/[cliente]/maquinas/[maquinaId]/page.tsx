@@ -24,7 +24,6 @@ import {
   type Tag,
 } from "@/lib/mock"
 import { ago, dateTime, num, pct, shortDate, since, time } from "@/lib/format"
-import { PageBody, PageHeader } from "@/components/shell/page-header"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   Breadcrumb,
@@ -34,10 +33,9 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { SectionCard } from "@/components/dashboard/section-card"
 import { StateBadge } from "@/components/oee/state-badge"
 import { StateLegend } from "@/components/oee/state-timeline"
 import type { StopRow } from "@/components/monitoring/classify-stop-dialog"
@@ -48,6 +46,13 @@ import { MachineTimeline } from "@/components/monitoring/machine-timeline"
 import { HourlyProductionChart, OeeTrendChart, type DailyPoint, type HourlyPoint } from "@/components/monitoring/production-charts"
 import { currentShift, stateDurations, unclassifiedStops } from "@/components/monitoring/queries"
 import { StopsTable } from "@/components/monitoring/stops-table"
+import { PageTitle } from "@/components/refresh/page-title"
+import { SoftLink } from "@/components/refresh/soft-action"
+
+/** Container de página no padrão novo. */
+function Shell({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-col gap-5 p-4 md:p-6">{children}</div>
+}
 
 export async function generateStaticParams({ params }: { params: { cliente: string } }) {
   return machineParams(params.cliente)
@@ -99,72 +104,65 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
   // Cabeçalho
   // ---------------------------------------------------------------------------
   const header = (
-    <>
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link href={`/${slug}/maquinas`}>Máquinas</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem className="hidden sm:inline-flex">{unit?.name}</BreadcrumbItem>
-          <BreadcrumbSeparator className="hidden sm:block" />
-          <BreadcrumbItem>{line?.name}</BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>{machine.name}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-      <PageHeader
-        className="-mt-3"
-        title={
-          <span className="flex flex-wrap items-center gap-2">
-            {machine.name}
-            <Badge variant="outline" className="font-mono text-xs font-normal">
-              {machine.code}
-            </Badge>
+    <PageTitle
+      eyebrow={
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Link href={`/${slug}/maquinas`}>Máquinas</Link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem className="hidden sm:inline-flex">{unit?.name}</BreadcrumbItem>
+            <BreadcrumbSeparator className="hidden sm:block" />
+            <BreadcrumbItem>{line?.name}</BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{machine.name}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      }
+      title={
+        <span className="flex flex-wrap items-center gap-2">
+          {machine.name}
+          <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-xs font-medium text-muted-foreground">{machine.code}</span>
+        </span>
+      }
+      description={[machine.type, line?.name, areaName, unit ? `${unit.name} (${unit.city}/${unit.state})` : undefined].filter(Boolean).join(" · ")}
+      actions={
+        <>
+          <SoftLink href={`/${slug}/operador/${machine.id}`}>
+            <TabletSmartphoneIcon />
+            Tela do operador
+          </SoftLink>
+          {line && (
+            <SoftLink href={`/${slug}/andon/${line.id}`} tone="teal">
+              <MonitorIcon />
+              Andon da linha
+            </SoftLink>
+          )}
+        </>
+      }
+    >
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <StateBadge state={state} pulse={state === "FAULT"} className="px-2.5 py-1 text-sm" />
+        {hasData && live ? (
+          <span className="text-sm text-muted-foreground tabular-nums">
+            há {since(live.stateSince)} · desde {time(live.stateSince)}
           </span>
-        }
-        description={[machine.type, line?.name, areaName, unit ? `${unit.name} (${unit.city}/${unit.state})` : undefined].filter(Boolean).join(" · ")}
-        actions={
-          <>
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/${slug}/operador/${machine.id}`}>
-                <TabletSmartphoneIcon />
-                Tela do operador
-              </Link>
-            </Button>
-            {line && (
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/${slug}/andon/${line.id}`}>
-                  <MonitorIcon />
-                  Andon da linha
-                </Link>
-              </Button>
-            )}
-          </>
-        }
-      >
-        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <StateBadge state={state} pulse={state === "FAULT"} className="px-2.5 py-1 text-sm" />
-          {hasData && live ? (
-            <span className="text-sm text-muted-foreground tabular-nums">
-              há {since(live.stateSince)} · desde {time(live.stateSince)}
-            </span>
-          ) : (
-            <span className="text-sm text-muted-foreground">Nenhum dado recebido neste turno</span>
-          )}
-          {live?.faultCode !== undefined && (
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-state-fault/10 px-2 py-1 text-xs font-medium text-state-fault">
-              <OctagonAlertIcon className="size-3.5" />
-              Alarme {live.faultCode} · {live.faultText ?? "sem descrição"}
-            </span>
-          )}
-        </div>
-      </PageHeader>
-    </>
+        ) : (
+          <span className="text-sm text-muted-foreground">Nenhum dado recebido neste turno</span>
+        )}
+        {live?.faultCode !== undefined && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-state-fault/10 px-2.5 py-1 text-xs font-medium text-state-fault">
+            <OctagonAlertIcon className="size-3.5" />
+            Alarme {live.faultCode} · {live.faultText ?? "sem descrição"}
+          </span>
+        )}
+      </div>
+    </PageTitle>
   )
 
   // ---------------------------------------------------------------------------
@@ -184,9 +182,9 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
     if (causes.length === 0) causes.push("A máquina ainda não enviou contagens neste turno.")
 
     return (
-      <PageBody>
+      <Shell>
         {header}
-        <Empty className="border border-dashed">
+        <Empty className="rounded-2xl border border-dashed bg-card">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <WifiOffIcon />
@@ -206,7 +204,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
           )}
         </Empty>
         {connection}
-      </PageBody>
+      </Shell>
     )
   }
 
@@ -265,11 +263,11 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
   const bestDay = daily.reduce<DailyPoint | undefined>((b, d) => (!b || d.oee > b.oee ? d : b), undefined)
 
   return (
-    <PageBody>
+    <Shell>
       {header}
 
       {live.stale && (
-        <Alert className="border-state-stopped/40 bg-state-stopped/5">
+        <Alert className="rounded-2xl border-state-stopped/40 bg-state-stopped/5">
           <WifiOffIcon className="text-amber-700 dark:text-state-stopped" />
           <AlertTitle>Dados atrasados · último dado {ago(live.lastUpdate)}</AlertTitle>
           <AlertDescription>
@@ -280,7 +278,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
         </Alert>
       )}
       {state === "NO_COMM" && !live.stale && (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="rounded-2xl">
           <UnplugIcon />
           <AlertTitle>Sem comunicação com o CLP desde {time(live.stateSince)}</AlertTitle>
           <AlertDescription>
@@ -304,53 +302,47 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
         micro={micro}
       />
 
-      <Card className="gap-4">
-        <CardHeader>
-          <CardTitle>Linha do tempo do turno</CardTitle>
-          <CardDescription>
-            {shift.name} · {time(shift.start)}–{time(shift.end)} · passe o mouse sobre um trecho para ver horário, duração e motivo
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          <MachineTimeline events={events} start={shift.start} end={shift.end} now={shift.now} reasonPaths={reasonPaths} />
-          <StateLegend />
-        </CardContent>
-      </Card>
+      <SectionCard
+        title="Linha do tempo do turno"
+        description={`${shift.name} · ${time(shift.start)}–${time(shift.end)} · passe o mouse sobre um trecho para ver horário, duração e motivo`}
+        bodyClassName="grid gap-3"
+      >
+        <MachineTimeline events={events} start={shift.start} end={shift.end} now={shift.now} reasonPaths={reasonPaths} />
+        <StateLegend />
+      </SectionCard>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="min-w-0 gap-2">
-          <CardHeader>
-            <CardTitle>Produção por hora</CardTitle>
-            <CardDescription>
-              {num(live.countShift)} peças no turno · barras = boas + refugo; contorno tracejado = meta da hora (sem paradas planejadas)
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="px-3 sm:px-4">
-            <HourlyProductionChart data={hourly} />
-          </CardContent>
-        </Card>
-        <Card className="min-w-0 gap-2">
-          <CardHeader>
-            <CardTitle>Tendência de OEE · 30 dias</CardTitle>
-            <CardDescription>
-              {daily.length > 0
-                ? `Média ${pct(dailyAvg)} · melhor dia ${bestDay ? `${bestDay.label} (${pct(bestDay.oee, 0)})` : "—"} · linha tracejada = classe mundial`
-                : "Sem histórico consolidado"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="px-3 sm:px-4">
-            {daily.length > 0 ? (
-              <OeeTrendChart data={daily} />
-            ) : (
-              <Empty className="h-[260px] border border-dashed">
-                <EmptyHeader>
-                  <EmptyTitle className="text-base">Sem histórico</EmptyTitle>
-                  <EmptyDescription>O histórico diário aparece após o fechamento do primeiro turno com dados.</EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            )}
-          </CardContent>
-        </Card>
+        <SectionCard
+          title="Produção por hora"
+          description={`${num(live.countShift)} peças no turno · barras = boas + refugo; contorno tracejado = meta da hora (sem paradas planejadas)`}
+          href={`/${slug}/relatorios/oee`}
+          linkLabel="Relatório"
+          bodyClassName="px-3 sm:px-4"
+        >
+          <HourlyProductionChart data={hourly} />
+        </SectionCard>
+        <SectionCard
+          title="Tendência de OEE · 30 dias"
+          description={
+            daily.length > 0
+              ? `Média ${pct(dailyAvg)} · melhor dia ${bestDay ? `${bestDay.label} (${pct(bestDay.oee, 0)})` : "—"} · linha tracejada = classe mundial`
+              : "Sem histórico consolidado"
+          }
+          href={`/${slug}/relatorios/oee`}
+          linkLabel="Ver histórico"
+          bodyClassName="px-3 sm:px-4"
+        >
+          {daily.length > 0 ? (
+            <OeeTrendChart data={daily} />
+          ) : (
+            <Empty className="h-[260px] border border-dashed">
+              <EmptyHeader>
+                <EmptyTitle className="text-base">Sem histórico</EmptyTitle>
+                <EmptyDescription>O histórico diário aparece após o fechamento do primeiro turno com dados.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </SectionCard>
       </div>
 
       <StopsTable
@@ -362,6 +354,6 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
       />
 
       {connection}
-    </PageBody>
+    </Shell>
   )
 }

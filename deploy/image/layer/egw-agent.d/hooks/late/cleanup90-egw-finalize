@@ -1,0 +1,110 @@
+#!/bin/bash
+# Engemase - última etapa do sistema de arquivos (cleanup, depois de todas as
+# camadas e dos hooks embutidos do rpi-image-gen).
+#
+# - troca as fontes apt do build (snapshot) pelas de produção, em HTTPS;
+# - tira da imagem tudo que precisa ser único por unidade (machine-id,
+#   chaves de host SSH, estado do agente, journal);
+# - grava o manifesto de integridade dos arquivos próprios da imagem;
+# - confere as exigências do docs/16 §7 e FALHA o build se alguma faltar.
+set -euo pipefail
+
+root=${1:?uso: $0 <rootfs>}
+codename=${IGconf_egw_debian_codename:-trixie}
+
+log() { printf 'egw-finalize: %s\n' "$*"; }
+fail=0
+check() { # check <descrição> <comando...>
+	local what=$1; shift
+	if "$@"; then log "ok: $what"; else log "FALHA: $what" >&2; fail=1; fi
+}
+in_root() { chroot "$root" "$@"; }
+not_installed() {
+	! in_root dpkg-query -W -f='${db:Status-Status}' "$1" 2>/dev/null | grep -qx installed
+}
+is_masked() { [[ $(readlink "$root/etc/systemd/system/$1" 2>/dev/null) == /dev/null ]]; }
+is_enabled() { [[ $(in_root systemctl is-enabled "$1" 2>/dev/null) == enabled ]]; }
+
+# --- Fontes apt de produção ---------------------------------------------------------
+debian_kr=/usr/share/keyrings/debian-archive-keyring.gpg
+rpi_kr=/usr/share/keyrings/raspberrypi-archive-keyring.gpg
+[[ -f $root$debian_kr ]] || { log "FALHA: $debian_kr ausente" >&2; exit 1; }
+[[ -f $root$rpi_kr ]] || { log "FALHA: $rpi_kr ausente" >&2; exit 1; }
+rm -f "$root"/etc/apt/sources.list "$root"/etc/apt/sources.list.d/*.list "$root"/etc/apt/sources.list.d/*.sources
+cat > "$root/etc/apt/sources.list.d/debian.sources" <<EOF
+# Engemase: Debian de produção. Só a origem de segurança é aplicada sozinha
+# (unattended-upgrades); o resto chega na imagem trimestral.
+Types: deb
+URIs: https://deb.debian.org/debian
+Suites: ${codename} ${codename}-updates
+Components: main contrib non-free non-free-firmware
+Signed-By: ${debian_kr}
+
+Types: deb
+URIs: https://deb.debian.org/debian-security
+Suites: ${codename}-security
+Components: main contrib non-free non-free-firmware
+Signed-By: ${debian_kr}
+EOF
+cat > "$root/etc/apt/sources.list.d/raspi.sources" <<EOF
+# Engemase: repositório Raspberry Pi. Kernel, firmware e bootloader ficam em
+# hold e só mudam pelo pacote de plataforma. HTTPS: A CONFIRMAR.
+Types: deb
+URIs: https://archive.raspberrypi.com/debian
+Suites: ${codename}
+Components: main
+Signed-By: ${rpi_kr}
+EOF
+
+# --- Nada único por unidade na imagem -----------------------------------------------
+: > "$root/etc/machine-id"
+rm -f "$root/var/lib/dbus/machine-id"
+rm -f "$root"/etc/ssh/ssh_host_*
+find "$root/var/lib/oee-gateway" -mindepth 1 -delete 2>/dev/null || true
+find "$root/var/log/journal" -mindepth 1 -delete 2>/dev/null || true
+rm -rf "$root/data/"* 2>/dev/null || true
+rm -f "$root"/etc/NetworkManager/system-connections/*
+
+# --- Manifesto de integridade (conferido no autoteste B0) ------------------------------
+manifest=/usr/share/engemase/image-files.sha256
+(
+	cd "$root"
+	# Só arquivos que nada muda em operação (o nftables.conf, por exemplo, é
+	# regenerado pelo oee-helper e por isso fica de fora).
+	find usr/lib/engemase usr/share/engemase etc/systemd/system/egw-factory-init.service \
+		etc/engemase-release etc/sudoers.d/50-egw-tecnico \
+		-type f ! -path "${manifest#/}" -print0 \
+		| sort -z | xargs -0 sha256sum | sed 's|  |  /|'
+) > "$root$manifest"
+chmod 0644 "$root$manifest"
+
+# --- Verificação final (docs/16 §7) -------------------------------------------------------
+check "sem cloud-init" not_installed cloud-init
+check "sem netplan" not_installed netplan.io
+check "sem /etc/netplan" test ! -e "$root/etc/netplan"
+check "sem systemd-timesyncd (relógio pelo chrony)" not_installed systemd-timesyncd
+check "chrony instalado" test -x "$root/usr/sbin/chronyd"
+check "nftables habilitado" is_enabled nftables.service
+check "ssh.service mascarado" is_masked ssh.service
+check "ssh.socket mascarado" is_masked ssh.socket
+check "fstrim.timer habilitado" is_enabled fstrim.timer
+check "unattended-upgrades instalado" test -x "$root/usr/bin/unattended-upgrade"
+check "janela do apt fora da do OTA" test -f "$root/etc/systemd/system/apt-daily-upgrade.timer.d/50-egw-window.conf"
+check "journald com limite" grep -q '^SystemMaxUse=' "$root/etc/systemd/journald.conf.d/40-egw.conf"
+check "watchdog do SoC" grep -q '^RuntimeWatchdogSec=10s' "$root/etc/systemd/system.conf.d/40-egw-watchdog.conf"
+check "definição da partição data" test -f "$root/etc/repart.d/50-egw-data.conf"
+check "factory init habilitado" is_enabled egw-factory-init.service
+check "/etc/engemase-release" test -s "$root/etc/engemase-release"
+check "sudo do tecnico restrito (sem ALL)" bash -c "! grep -rqsE '^[^#]*ALL *= *\\(ALL' '$root/etc/sudoers.d'"
+# shellcheck source=/dev/null
+. "$root/usr/share/engemase/platform.env"
+check "kernel ${EGW_KERNEL_ABI:-?} em hold" bash -c "chroot '$root' apt-mark showhold | grep -qx 'linux-image-${EGW_KERNEL_ABI:-x}'"
+check "um único kernel" bash -c "[[ \$(chroot '$root' dpkg-query -W -f='\${db:Status-Status} \${binary:Package}\n' 'linux-image-*' | awk '\$1==\"installed\"' | wc -l) -eq 1 ]]"
+check "machine-id vazio" test ! -s "$root/etc/machine-id"
+check "sem chaves de host SSH" bash -c "! compgen -G '$root/etc/ssh/ssh_host_*' >/dev/null"
+
+if (( fail )); then
+	log "a imagem NÃO atende ao docs/16 §7" >&2
+	exit 1
+fi
+log "ok"

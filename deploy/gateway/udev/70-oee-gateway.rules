@@ -1,0 +1,17 @@
+# Acesso do agente (usuário oee, sem root) aos indicadores do R1000 (docs/16 §6).
+# Instalado em /usr/lib/udev/rules.d/70-oee-gateway.rules.
+# Em PCs de bancada sem esses dispositivos as regras simplesmente não casam.
+
+# LEDs USER (led-red, led-green, led-blue no expansor PCA9535): os atributos do
+# sysfs não têm GROUP=/MODE=, então um script ajusta brightness e trigger para
+# o grupo oee. delay_on/delay_off só aparecem com o gatilho "timer"; o kernel
+# emite um evento "change" (TRIGGER=timer) e a mesma regra ajusta esses também.
+ACTION=="add|change", SUBSYSTEM=="leds", KERNEL=="led-red|led-green|led-blue", RUN+="/usr/lib/oee-gateway/oee-led-perms %S%p"
+
+# Buzzer como gpio-beeper (dispositivo de entrada com EV_SND). O nome do
+# dispositivo de entrada vem do device tree da Seeed: a confirmar no lote.
+ACTION=="add|change", SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="*beeper*|*buzzer*", GROUP="oee", MODE="0660", SYMLINK+="oee-buzzer"
+
+# GPIO (sinal de falta de energia; buzzer, se for GPIO direto): grupo gpio,
+# igual ao Raspberry Pi OS (99-com.rules), para funcionar também sem ele.
+SUBSYSTEM=="gpio", KERNEL=="gpiochip*", GROUP="gpio", MODE="0660"

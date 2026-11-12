@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 
-import { clientParams, getClientBySlug } from "@/lib/mock"
+import { clientParams, getClientBranding, getClientBySlug } from "@/lib/mock"
 
 export function generateStaticParams() {
   return clientParams()
@@ -12,6 +12,16 @@ export const instant = false
 
 export default async function KioskLayout({ children, params }: LayoutProps<"/[cliente]">) {
   const { cliente } = await params
-  if (!getClientBySlug(cliente)) notFound()
-  return <div className="min-h-dvh bg-background">{children}</div>
+  const client = getClientBySlug(cliente)
+  if (!client) notFound()
+  const branding = getClientBranding(client.id)
+  return (
+    <div className="min-h-dvh bg-background">
+      {branding && (
+        // Identidade visual do cliente (docs/14), igual à área do cliente: só primária e foco; cores de estado não mudam.
+        <style>{`html:root{--primary:${branding.tokens.light.primary};--ring:${branding.tokens.light.ring}}html.dark{--primary:${branding.tokens.dark.primary};--ring:${branding.tokens.dark.ring}}`}</style>
+      )}
+      {children}
+    </div>
+  )
 }

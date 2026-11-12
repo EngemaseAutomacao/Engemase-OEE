@@ -1,0 +1,79 @@
+#!/bin/bash
+# Engemase OEE gateway - PLANO B da partição /data (docs/16 §4).
+#
+# O caminho normal é o systemd-repart no 1º boot (/etc/repart.d/50-egw-data.conf).
+# Se ele não existir ou falhar, o factory init chama este script, que:
+#   1. move o cabeçalho GPT reserva para o fim do eMMC (a imagem é menor
+#      que o disco);
+#   2. acrescenta a partição "data" (tipo Linux) com todo o espaço livre;
+#   3. avisa o kernel só dessa partição (a raiz está em uso);
+#   4. formata em ext4 (rótulo "data", 1% reservado) se não houver sistema de
+#      arquivos.
+# Nunca mexe nas partições boot e root. Idempotente.
+#
+# Uso: egw-data-fallback [--dry-run]
+set -euo pipefail
+
+EGW_LIB_DIR=${EGW_LIB_DIR:-/usr/lib/engemase/factory}
+# shellcheck source=egw-common.sh
+. "$EGW_LIB_DIR/egw-common.sh"
+
+LINUX_FS_TYPE=0FC63DAF-8483-4772-8E79-3D69D8477DE4
+dry=0
+[[ ${1:-} == --dry-run ]] && dry=1
+
+run() {
+	if (( dry )); then egw_log "[dry-run] $*"; else "$@"; fi
+}
+
+[[ $(id -u) -eq 0 ]] || { egw_err "precisa de root"; exit 2; }
+
+disk=$(egw_boot_disk)
+[[ -b $disk ]] || { egw_err "disco de boot não encontrado ($disk)"; exit 2; }
+case $disk in
+	/dev/mmcblk*) part_prefix=${disk}p ;;
+	*) egw_err "disco de boot inesperado: $disk (esperado eMMC /dev/mmcblkN)"; exit 2 ;;
+esac
+
+if ! sfdisk --dump "$disk" 2>/dev/null | grep -q '^label: gpt'; then
+	egw_err "$disk não tem tabela GPT (layout image-egw-gpt esperado)"
+	exit 2
+fi
+
+# Partição "data" já existe?
+dev=""
+while read -r name partlabel; do
+	if [[ $partlabel == data ]]; then dev=/dev/$name; break; fi
+done < <(lsblk -lno NAME,PARTLABEL "$disk" | awk 'NF == 2')
+
+if [[ -z $dev ]]; then
+	nparts=$(lsblk -lno TYPE "$disk" | grep -c '^part$' || true)
+	if (( nparts != 2 )); then
+		egw_err "$disk tem $nparts partições e nenhuma chamada data: não mexo (esperado boot + root)"
+		exit 2
+	fi
+	egw_log "criando a partição data em $disk"
+	run sfdisk --relocate gpt-bak-std "$disk"
+	printf 'type=%s, name="data"\n' "$LINUX_FS_TYPE" \
+		| run sfdisk --append --no-reread --wipe never "$disk"
+	run partx --add --nr 3 "$disk"
+	run udevadm settle --timeout=30
+	dev=${part_prefix}3
+fi
+
+if (( dry )); then
+	egw_log "[dry-run] partição data: $dev"
+	exit 0
+fi
+[[ -b $dev ]] || { egw_err "partição data não apareceu ($dev)"; exit 1; }
+
+fstype=$(blkid -p -s TYPE -o value "$dev" 2>/dev/null || true)
+if [[ -z $fstype ]]; then
+	egw_log "formatando $dev em ext4"
+	mkfs.ext4 -q -F -L data -m 1 "$dev"
+elif [[ $fstype != ext4 ]]; then
+	egw_err "$dev já tem sistema de arquivos $fstype: não formato"
+	exit 1
+fi
+udevadm trigger --settle --action=change "$dev" 2>/dev/null || udevadm settle --timeout=30
+egw_log "partição data pronta: $dev"

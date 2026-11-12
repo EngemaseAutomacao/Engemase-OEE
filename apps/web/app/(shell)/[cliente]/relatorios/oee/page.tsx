@@ -1,11 +1,12 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ChartNoAxesCombinedIcon, RouterIcon } from "lucide-react"
+import { ChartNoAxesCombinedIcon, ListOrderedIcon, RouterIcon } from "lucide-react"
 
 import { getClientBySlug, getLines, getMachines, getShiftHistory, getUnits } from "@/lib/mock"
-import { PageBody, PageHeader } from "@/components/shell/page-header"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { PageTitle } from "@/components/refresh/page-title"
+import { SoftLink } from "@/components/refresh/soft-action"
 import { OeeReport } from "@/components/reports/oee-report"
 
 /** Histórico carregado: 28 dias = período máximo do filtro (14) + período anterior para comparação. */
@@ -35,13 +36,19 @@ export default async function Page({ params }: PageProps<"/[cliente]/relatorios/
     .map((u) => ({ id: u.id, name: u.name }))
 
   return (
-    <PageBody>
-      <PageHeader
+    <div className="flex flex-col gap-5 p-4 md:p-6">
+      <PageTitle
         title="Relatório de OEE"
         description={`${client.name} · OEE por período, turno e máquina, calculado a partir dos turnos fechados (até ontem).`}
+        actions={
+          <SoftLink href={`/${client.slug}/relatorios/paradas`} tone="teal">
+            <ListOrderedIcon />
+            Paradas (Pareto)
+          </SoftLink>
+        }
       />
       {rows.length === 0 ? (
-        <Empty className="border border-dashed">
+        <Empty className="rounded-2xl border border-dashed bg-card">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <ChartNoAxesCombinedIcon />
@@ -65,6 +72,6 @@ export default async function Page({ params }: PageProps<"/[cliente]/relatorios/
       ) : (
         <OeeReport clientSlug={client.slug} rows={rows} machines={machines} units={units} lines={lines} />
       )}
-    </PageBody>
+    </div>
   )
 }

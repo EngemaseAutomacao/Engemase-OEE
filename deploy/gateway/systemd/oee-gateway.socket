@@ -1,0 +1,20 @@
+# API local do agente para a CLI de campo (docs/16 §3, módulo localapi).
+# Comandos de leitura: grupo oee-admin (o técnico é membro). Comandos que mudam
+# o sistema: root (sudo restrito do tecnico, docs/16 §4). O agente confere o
+# chamador por SO_PEERCRED em toda requisição.
+[Unit]
+Description=Engemase OEE - API local do agente (CLI)
+Documentation=file:/usr/share/doc/oee-gateway/README.md
+
+[Socket]
+ListenStream=/run/oee-gateway/agent.sock
+SocketUser=oee
+SocketGroup=oee-admin
+SocketMode=0660
+DirectoryMode=0755
+RemoveOnStop=yes
+FileDescriptorName=cli
+Service=oee-gateway.service
+
+[Install]
+WantedBy=sockets.target

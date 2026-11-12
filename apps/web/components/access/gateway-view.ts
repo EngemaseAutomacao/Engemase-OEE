@@ -2,7 +2,9 @@
  * Monta os "view models" serializáveis dos gateways (servidor → componentes de cliente).
  * Tudo pré-formatado no servidor para evitar diferenças de formatação na hidratação.
  */
-import { type AuditEntry, type Device, type Gateway, type GatewayStatus, type Machine, nowMs } from "@/lib/mock"
+import type { AuditEntry, Device, Gateway, GatewayStatus, Machine } from "@/lib/mock"
+// Relógio de um módulo leve: este arquivo também é importado por componentes de cliente (STATUS_RANK).
+import { nowMs } from "@/lib/mock/clock"
 import { ago, dateTime, num } from "@/lib/format"
 import { CLOCK_ALERT_MS, clockLabel, configLabel } from "./labels"
 

@@ -1,0 +1,37 @@
+#!/bin/sh
+# prerm do pacote oee-gateway. Idempotente; respeita DPKG_ROOT.
+# Na remoção, para os serviços e os sockets. Na atualização não para nada: o
+# postinst da versão nova reinicia só o necessário (menos tempo sem coleta).
+set -e
+set -f
+
+ROOT="${DPKG_ROOT:-}"
+
+systemd_running() {
+	[ -z "$ROOT" ] && [ -d /run/systemd/system ]
+}
+
+stop_all() {
+	# Serviços antes dos sockets, um por vez (unit ausente não interrompe as outras).
+	for u in oee-localui.service oee-localui.socket \
+		oee-helper.service oee-helper.socket \
+		oee-gateway.service oee-gateway.socket oee-gateway-ui.socket; do
+		systemctl stop "$u" >/dev/null 2>&1 || true
+	done
+}
+
+case "$1" in
+	remove | deconfigure)
+		if systemd_running; then
+			stop_all
+		fi
+		;;
+	upgrade | failed-upgrade)
+		;;
+	*)
+		echo "prerm chamado com argumento desconhecido: '$1'" >&2
+		exit 1
+		;;
+esac
+
+exit 0

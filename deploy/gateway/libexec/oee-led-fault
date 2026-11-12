@@ -1,0 +1,23 @@
+#!/bin/sh
+# Indica "erro crítico (agente)" no LED USER quando o agente para (docs/16 §6:
+# vermelho piscando). Roda como oee no ExecStopPost= do oee-gateway.service.
+# Usa o gatilho "timer" do kernel (500 ms aceso / 500 ms apagado), que continua
+# piscando sem nenhum processo; o agente, ao subir, volta o LED ao estado real.
+# Instalado em /usr/lib/oee-gateway/oee-led-fault. Sem LEDs (bancada): não faz nada.
+set -u
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+leds=/sys/class/leds
+[ -d "$leds/led-red" ] || exit 0
+
+for color in green blue; do
+	d="$leds/led-$color"
+	[ -d "$d" ] || continue
+	[ -w "$d/trigger" ] && echo none > "$d/trigger"
+	[ -w "$d/brightness" ] && echo 0 > "$d/brightness"
+done
+
+if [ -w "$leds/led-red/trigger" ]; then
+	echo timer > "$leds/led-red/trigger"
+fi
+exit 0

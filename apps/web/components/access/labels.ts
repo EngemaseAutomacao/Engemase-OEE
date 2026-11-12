@@ -72,11 +72,14 @@ export function serialSummary(p: { baudRate?: number; dataBits?: number; parity?
   return `${p.baudRate ?? "—"} bps · ${p.dataBits ?? 8}${p.parity ?? "N"}${p.stopBits ?? 1}`
 }
 
-/** Portas RS-485 do gateway a partir da descrição do hardware ("2× RS-485"). */
+/** Dispositivos das portas RS-485 isoladas do gateway padrão (reComputer R1000, docs/03), na ordem dos bornes. */
+const RS485_TTY = ["/dev/ttyAMA2", "/dev/ttyAMA3", "/dev/ttyAMA5"] as const
+
+/** Portas RS-485 do gateway a partir da descrição do hardware ("3× RS-485"). */
 export function serialPortsFor(hardware: string): string[] {
   const m = hardware.match(/(\d+)\s*×\s*RS-485/)
-  const n = m ? Number(m[1]) : 0
-  return Array.from({ length: n }, (_, i) => `/dev/ttyRS485-${i + 1}`)
+  const n = Math.min(RS485_TTY.length, m ? Number(m[1]) : 0)
+  return RS485_TTY.slice(0, n)
 }
 
 export const MODBUS_AREA_LABEL: Record<ModbusArea, string> = {
