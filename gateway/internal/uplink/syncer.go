@@ -364,7 +364,9 @@ func (s *Syncer) probeWait() time.Duration {
 }
 
 // probe testa o token atual com um /sync só de saúde: sem itens, o buffer fica
-// intacto. Devolve true (e desbloqueia) se o servidor voltou a aceitar o token.
+// intacto. Devolve true (e desbloqueia) se o servidor voltou a aceitar o token: 200,
+// ou 409 (config_outdated), que a nuvem só responde depois de autenticar; no 409 a
+// config é pedida, senão a sonda seguinte levaria 409 de novo e o envio não voltaria.
 // Um novo 401 mantém o bloqueio e repete o alarme local; outro erro (rede, 5xx)
 // não testou o token e só adia a sonda.
 func (s *Syncer) probe(ctx context.Context) bool {
@@ -374,13 +376,19 @@ func (s *Syncer) probe(ctx context.Context) bool {
 
 	var res Result
 	err := s.send(ctx, nil, &res)
+	outdated := ActionFor(err) == ActionRefreshConfig
 
 	s.mu.Lock()
 	s.lastErr = err
-	if err == nil {
-		s.lastOK = s.Now()
+	if err == nil || outdated {
+		if err == nil {
+			s.lastOK = s.Now()
+		}
 		s.blocked = false
 		s.mu.Unlock()
+		if outdated && s.OnConfigOutdated != nil {
+			s.OnConfigOutdated()
+		}
 		return true
 	}
 	s.blockedAt = s.Now()

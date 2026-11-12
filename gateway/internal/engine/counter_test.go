@@ -19,6 +19,7 @@ func TestCounterTracker(t *testing.T) {
 		name     string
 		bits     int
 		maxRate  float64
+		cadence  time.Duration // 0 = mínimo de 1 s
 		restored *CounterState
 		steps    []step
 	}{
@@ -48,15 +49,45 @@ func TestCounterTracker(t *testing.T) {
 		},
 		{
 			// CLP religado (contador não retentivo 12000 → 5) depois de 90 s sem gateway:
-			// a janela 1000 × 90 + 10 cobre a faixa inteira de 16 bits, então qualquer
-			// queda caberia como overflow. Ambíguo → reset, sem inventar 53541 peças.
-			name: "uint16: queda depois de lacuna longa é reset, não overflow", bits: 16, maxRate: 1000,
+			// 1000 × 90 + 10 cobriria a faixa inteira de 16 bits. Reset, sem inventar 53541.
+			name: "uint16: queda depois de lacuna longa é reset, não overflow", bits: 16, maxRate: 1000, cadence: 2 * time.Second,
 			restored: &CounterState{AddrKey: "k", Bits: 16, LastRaw: 12000, LastAt: t0.Add(-90 * time.Second)},
 			steps:    []step{{5, 0, 5, CounterReset}, {8, 1, 3, CounterNormal}},
 		},
 		{
-			name: "uint16: janela exatamente do tamanho da faixa também é ambígua", bits: 16, maxRate: 65525,
-			steps: []step{{65535, 0, 0, CounterFirst}, {0, 1, 0, CounterReset}},
+			// Lacuna típica de reinício (resto do minuto + boot): 1000 × 60 + 10 ainda não
+			// cobre a faixa, mas 12000 não está perto do máximo. A janela não cresce com Δt.
+			name: "uint16: queda depois de lacuna de 60 s é reset, não overflow", bits: 16, maxRate: 1000, cadence: 2 * time.Second,
+			restored: &CounterState{AddrKey: "k", Bits: 16, LastRaw: 12000, LastAt: t0.Add(-60 * time.Second)},
+			steps:    []step{{5, 0, 5, CounterReset}},
+		},
+		{
+			name: "uint16: queda depois de lacuna de 65 s é reset, não overflow", bits: 16, maxRate: 1000, cadence: 2 * time.Second,
+			restored: &CounterState{AddrKey: "k", Bits: 16, LastRaw: 12000, LastAt: t0.Add(-65 * time.Second)},
+			steps:    []step{{5, 0, 5, CounterReset}},
+		},
+		{
+			// CLP religado com o gateway rodando: 20 s de leituras falhas e o contador
+			// volta a ~0. 50000 não está perto do máximo: reset, não +15541.
+			name: "uint16: queda depois de 20 s de falhas é reset", bits: 16, maxRate: 1000, cadence: 2 * time.Second,
+			steps: []step{{50000, 0, 0, CounterFirst}, {5, 20, 5, CounterReset}},
+		},
+		{
+			// O contador estava de fato perto do máximo antes do reinício: overflow.
+			name: "uint16: overflow perto do máximo depois de lacuna continua overflow", bits: 16, maxRate: 1000, cadence: 2 * time.Second,
+			restored: &CounterState{AddrKey: "k", Bits: 16, LastRaw: 65500, LastAt: t0.Add(-69 * time.Second)},
+			steps:    []step{{96, 0, 132, CounterOverflow}},
+		},
+		{
+			// max_rate_per_s acima da faixa de 16 bits (a config aceita até 100000): a janela
+			// cobre a faixa já com Δt = 1 s, mas a volta real perto do máximo é overflow...
+			name: "uint16 com taxa acima da faixa: overflow perto do máximo continua overflow", bits: 16, maxRate: 70000,
+			steps: []step{{65000, 0, 0, CounterFirst}, {100, 1, 636, CounterOverflow}, {101, 2, 1, CounterNormal}},
+		},
+		{
+			// ... e a queda longe do máximo (mais de meia faixa) é reset.
+			name: "uint16 com taxa acima da faixa: queda longe do máximo é reset", bits: 16, maxRate: 70000,
+			steps: []step{{12000, 0, 0, CounterFirst}, {5, 1, 5, CounterReset}},
 		},
 		{
 			name: "uint16: overflow com taxa alta e Δt curto continua overflow", bits: 16, maxRate: 1000,
@@ -93,7 +124,7 @@ func TestCounterTracker(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			tr := &counterTracker{state: CounterState{Bits: c.bits, AddrKey: "k"}, maxRate: c.maxRate, restored: c.restored}
+			tr := &counterTracker{state: CounterState{Bits: c.bits, AddrKey: "k"}, maxRate: c.maxRate, cadence: c.cadence, restored: c.restored}
 			for i, s := range c.steps {
 				res := tr.update(s.raw, sec(s.at))
 				if res.Delta != s.wantDelta || res.Kind != s.wantKind {

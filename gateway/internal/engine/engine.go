@@ -118,11 +118,13 @@ func New(cfg *config.GatewayConfig, start time.Time, opts Options) (*Engine, err
 			}
 			b := &binding{tag: tag, machine: m}
 			b.mul, b.add = tag.ScaleFactors()
+			poll := time.Duration(dev.EffectivePollMS(tag)) * time.Millisecond
 			if config.IsCounterRole(tag.Role) {
 				spec := tag.Spec()
 				b.counter = &counterTracker{
 					state:   CounterState{TagID: tag.ID, MachineID: m.id, Role: tag.Role, Bits: spec.Type.Bits(), AddrKey: tag.AddrKey()},
 					maxRate: m.maxRate,
+					cadence: 2*poll + time.Second,
 				}
 				if tag.Role == config.RoleCountGood {
 					m.hasGood = true
@@ -135,7 +137,7 @@ func New(cfg *config.GatewayConfig, start time.Time, opts Options) (*Engine, err
 				m.hasHeartbeat = true
 			}
 			if config.IsStateOrCounterRole(tag.Role) {
-				if poll := time.Duration(dev.EffectivePollMS(tag)) * time.Millisecond; poll > m.expectedPoll {
+				if poll > m.expectedPoll {
 					m.expectedPoll = poll
 				}
 				if !seen[m] {
@@ -171,11 +173,19 @@ func (e *Engine) OnRead(at time.Time, samples []Sample) {
 		if b == nil {
 			continue
 		}
-		if !touched[b.machine] {
-			// Avalia com os sinais antigos antes que a leitura nova esconda o silêncio:
-			// se a lacuna até aqui passou de comm_loss_after_s sem Tick no meio, ela
-			// vira NO_COMM (tempo não observado), não tempo do último estado.
-			b.machine.evaluate(at)
+		if m := b.machine; !touched[m] {
+			// Lacuna maior que comm_loss_after_s sem Tick no meio: avalia com os sinais
+			// antigos antes que a leitura nova esconda o silêncio, para a lacuna virar
+			// NO_COMM (tempo não observado) e não tempo do último estado. Só nesse
+			// caso: fora dele, avaliar aqui confirmaria com sinais velhos um candidato
+			// que esta leitura desmente (debounce, heartbeat, count_derived).
+			ref := m.lastGood
+			if ref.IsZero() {
+				ref = m.started
+			}
+			if at.Sub(ref) >= m.commLoss {
+				m.evaluate(at)
+			}
 		}
 		b.machine.apply(b, s.Value, at)
 		touched[b.machine] = true

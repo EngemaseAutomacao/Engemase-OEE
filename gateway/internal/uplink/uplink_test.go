@@ -414,6 +414,62 @@ func TestUnauthorizedProbesSameTokenAndResumes(t *testing.T) {
 	}
 }
 
+// Bloqueado por 401, a sonda leva 409 (config_outdated): a nuvem autenticou o token,
+// só falta a config publicada durante a falha. A sonda desbloqueia e pede a config;
+// sem isso, toda sonda levaria 409 e o envio nunca voltaria.
+func TestUnauthorizedProbeAnsweredWithConflictUnblocksAndRefreshesConfig(t *testing.T) {
+	var mu sync.Mutex
+	calls, configFetched := 0, false
+	fc := newCloud(t, func(req contracts.SyncRequest) (int, any, http.Header) {
+		mu.Lock()
+		defer mu.Unlock()
+		calls++
+		switch {
+		case calls == 1:
+			return apiErr(401, "token_revoked", nil)
+		case !configFetched:
+			return apiErr(409, "config_outdated", nil)
+		}
+		return ok(req, 10)
+	})
+	store, _ := newStore(t, 3, 0)
+	sy := newSyncer(t, fc, store)
+	clock := t0
+	sy.Now = func() time.Time { return clock }
+	refreshes := 0
+	sy.OnConfigOutdated = func() { // o agente baixa a config com o mesmo token
+		mu.Lock()
+		defer mu.Unlock()
+		refreshes++
+		configFetched = true
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var waits []time.Duration
+	sy.Sleep = func(ctx context.Context, d time.Duration) error {
+		waits = append(waits, d)
+		clock = clock.Add(d)
+		if len(waits) == 2 {
+			cancel()
+			return ctx.Err()
+		}
+		return nil
+	}
+	if err := sy.Run(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run: %v", err)
+	}
+	if want := []time.Duration{uplink.DefaultProbeEvery, 10 * time.Second}; len(waits) != 2 || waits[0] != want[0] || waits[1] != want[1] {
+		t.Fatalf("esperas = %v, quer %v", waits, want)
+	}
+	if sy.Blocked() || refreshes != 1 {
+		t.Fatalf("depois da sonda com 409: bloqueado=%v, config pedida %d vez(es); quer desbloqueado e 1", sy.Blocked(), refreshes)
+	}
+	if st := pending(t, store); st.Pending != 0 {
+		t.Fatalf("a fila deveria ter ido depois da config: %+v", st)
+	}
+}
+
 func TestConflictRefreshesConfig(t *testing.T) {
 	fc := newCloud(t, func(req contracts.SyncRequest) (int, any, http.Header) { return apiErr(409, "config_outdated", nil) })
 	store, _ := newStore(t, 1, 0)

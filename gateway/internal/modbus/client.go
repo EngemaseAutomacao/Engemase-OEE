@@ -32,6 +32,10 @@ var (
 	ErrTimeout         = errors.New("modbus: timeout")
 	ErrConnRefused     = errors.New("modbus: conexão recusada")
 	ErrPortUnavailable = errors.New("modbus: porta serial indisponível")
+	// ErrDesync é um quadro válido que não responde à requisição feita (outra função,
+	// tamanho diferente): em RTU, sem id de transação, é sinal de resposta atrasada de
+	// outra leitura, e a linha é escoada antes da próxima requisição.
+	ErrDesync = errors.New("modbus: resposta não corresponde à requisição")
 )
 
 // ExceptionError é uma exceção Modbus devolvida pelo escravo (ex.: 02 = endereço inválido).
@@ -60,6 +64,12 @@ func Classify(err error) error {
 	}
 	var mbErr *mb.Error
 	if errors.As(err, &mbErr) {
+		// A grid-x devolve *mb.Error para QUALQUER função diferente da pedida. Só é
+		// exceção do escravo o quadro com o bit 0x80; um quadro normal de outra função é
+		// resposta de outra requisição.
+		if mbErr.FunctionCode&0x80 == 0 {
+			return fmt.Errorf("%w: quadro da função %02d", ErrDesync, mbErr.FunctionCode)
+		}
 		return &ExceptionError{Function: mbErr.FunctionCode, Code: mbErr.ExceptionCode}
 	}
 	var netErr net.Error
@@ -105,7 +115,12 @@ type Target struct {
 	Parity   string // N, E ou O
 	DataBits int
 	StopBits int
-	// Timeout por leitura; zero = padrão do transporte.
+	// Timeout por leitura; zero = padrão do transporte. Tem de cobrir a latência de
+	// pior caso do escravo: nos transportes RTU (sem id de transação), depois de um
+	// erro a linha fica mais um Timeout sem requisição nova e o que chegar nesse
+	// intervalo é descartado, então um escravo sempre mais lento que o Timeout não é
+	// lido nunca (antes, a repetição "acertava" lendo a resposta atrasada, e as
+	// leituras seguintes ficavam desalinhadas).
 	Timeout time.Duration
 	// ConnectTimeout do TCP; zero = DefaultConnectTimeout.
 	ConnectTimeout time.Duration
@@ -221,6 +236,12 @@ type client struct {
 	conn    closer
 	mbc     mb.Client
 	pause   time.Duration
+	// sock é o socket atual do RTU sobre TCP, guardado no Dial (a grid-x não o expõe);
+	// nil quando fechado. Só é lido entre requisições, para escoar a linha.
+	sock net.Conn
+	// quietUntil marca, depois de um erro num transporte RTU, até quando a linha fica
+	// sem requisição nova (zero = livre). Ver dropAfterError.
+	quietUntil time.Time
 }
 
 // Open cria um Reader para o alvo. A conexão (ou a porta) é aberta na primeira leitura.
@@ -259,7 +280,13 @@ func Open(t Target) (Reader, error) {
 			c.target.Timeout = DefaultTCPTimeout
 		}
 		h := mb.NewRTUOverTCPClientHandler(t.Address)
-		h.Dial = dial
+		h.Dial = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			conn, err := dial(ctx, network, addr)
+			if err == nil {
+				c.sock = conn // a discagem acontece dentro de ReadBlock, com c.mu travado
+			}
+			return conn, err
+		}
 		h.Timeout = c.target.Timeout
 		h.IdleTimeout = -1
 		h.LinkRecoveryTimeout = 0
@@ -287,6 +314,7 @@ func (c *client) Info() string { return c.target.String() }
 func (c *client) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.sock = nil
 	return c.conn.Close()
 }
 
@@ -303,6 +331,11 @@ func (c *client) ReadBlock(ctx context.Context, unit uint8, s Span) (Raw, error)
 
 	var err error
 	for attempt := 0; attempt <= c.target.Retries; attempt++ {
+		// Depois de um erro num transporte RTU, nenhuma requisição (nem esta repetição)
+		// sai antes de a linha ficar quieta.
+		if err := c.settle(ctx); err != nil {
+			return Raw{}, err
+		}
 		if c.pause > 0 {
 			select {
 			case <-ctx.Done():
@@ -327,29 +360,44 @@ func (c *client) readOnce(ctx context.Context, unit uint8, s Span) (Raw, error) 
 	var (
 		b   []byte
 		err error
+		fc  byte
 	)
 	switch s.Area {
 	case Coil:
+		fc = mb.FuncCodeReadCoils
 		b, err = c.mbc.ReadCoils(ctx, s.Start, s.Count)
 	case DiscreteInput:
+		fc = mb.FuncCodeReadDiscreteInputs
 		b, err = c.mbc.ReadDiscreteInputs(ctx, s.Start, s.Count)
 	case InputRegister:
+		fc = mb.FuncCodeReadInputRegisters
 		b, err = c.mbc.ReadInputRegisters(ctx, s.Start, s.Count)
 	case HoldingRegister:
+		fc = mb.FuncCodeReadHoldingRegisters
 		b, err = c.mbc.ReadHoldingRegisters(ctx, s.Start, s.Count)
 	}
 	if err != nil {
 		err = Classify(err)
+		// Exceção de OUTRA função é resposta atrasada de outra leitura, não desta.
+		var exc *ExceptionError
+		if errors.As(err, &exc) && exc.Function != fc|0x80 {
+			err = fmt.Errorf("%w: exceção da função %02d numa leitura da função %02d", ErrDesync, exc.Function&0x7F, fc)
+		}
 		c.dropAfterError(err)
 		return Raw{}, err
 	}
 	raw := Raw{Span: s}
 	if s.Area.IsBit() {
-		raw.Bits, err = BitsFromBytes(b, int(s.Count))
+		// A grid-x não compara o número de bytes com a quantidade pedida nos bits.
+		if want := (int(s.Count) + 7) / 8; len(b) != want {
+			err = fmt.Errorf("%w: resposta com %d bytes (esperado %d para %d bits)", ErrDesync, len(b), want, s.Count)
+		} else {
+			raw.Bits, err = BitsFromBytes(b, int(s.Count))
+		}
 	} else {
 		raw.Regs, err = RegistersFromBytes(b)
 		if err == nil && len(raw.Regs) != int(s.Count) {
-			err = fmt.Errorf("resposta com %d registradores (esperado %d)", len(raw.Regs), s.Count)
+			err = fmt.Errorf("%w: resposta com %d registradores (esperado %d)", ErrDesync, len(raw.Regs), s.Count)
 		}
 	}
 	if err != nil {
@@ -359,36 +407,140 @@ func (c *client) readOnce(ctx context.Context, unit uint8, s Span) (Raw, error) 
 	return raw, nil
 }
 
-// dropAfterError fecha o socket (RTU sobre TCP) ou a porta serial (RTU) depois de uma
-// leitura que falhou sem ser exceção Modbus. A próxima leitura reconecta ou reabre a
-// porta sozinha: o Send da grid-x chama connect, que disca/abre quando não há conexão.
+// dropAfterError prepara a linha para a próxima requisição depois de uma leitura que
+// falhou sem ser exceção Modbus desta requisição.
 //
 // Quadro RTU não tem id de transação: a grid-x aceita como resposta o primeiro quadro
 // com o mesmo unit id e função (e, no RTU sobre TCP, o tamanho esperado). Depois de um
-// timeout, a resposta atrasada ficaria no caminho e seria lida como resposta da
-// PRÓXIMA requisição, com o valor de outro endereço. Fechar descarta esses bytes. No
-// RTU sobre TCP é também o que recupera o link quando o conversor serial↔Ethernet
-// reinicia: a biblioteca não fecha o socket em erro nesse transporte e usamos
-// IdleTimeout=-1, então o socket morto devolveria "broken pipe" para sempre.
+// timeout, a resposta atrasada que ainda está na linha seria lida como resposta da
+// PRÓXIMA requisição, com o valor de outro endereço, e tudo o que viesse depois ficaria
+// deslocado de um quadro. Fechar e reabrir logo não resolve: a repetição sai poucos
+// milissegundos depois (o poller também passa direto ao próximo grupo) e a resposta
+// atrasada chega pela porta reaberta, ou pela conexão nova de um conversor
+// serial↔Ethernet, que não fecha o lado serial e entrega à conexão do momento o que
+// o escravo responder. Por isso a linha fica quieta por mais um Timeout (settle) antes
+// de qualquer requisição nova, e o que chegar nesse intervalo é descartado:
 //
-// Na porta serial o Close é o "flush" possível: a grid-x não expõe o descritor (não
-// dá para chamar tcflush), mas o último close de uma UART descarta o buffer de entrada
-// e, com a porta fechada, nada é recebido; a reabertura começa vazia. Sobra uma
-// janela que nenhum lado do mestre fecha: um quadro que chegue depois de a próxima
-// requisição já ter sido escrita. Escravo que responde depois do timeout está fora do
-// tempo do barramento; a correção ali é aumentar timeout_ms.
+//   - RTU sobre TCP: o socket fica aberto e é escoado (drain). Fechar a cada timeout só
+//     criava conexões novas (um unit ausente custava uma por tentativa) sem descartar
+//     nada num conversor de verdade. O socket morto (conversor reiniciou: EOF, reset,
+//     "broken pipe") é percebido no escoamento e fechado; a próxima leitura disca de
+//     novo, o que tira o dispositivo do NO_COMM sem reiniciar o agente.
+//   - RTU serial: a porta é fechada agora e só é reaberta depois do intervalo. A grid-x
+//     não expõe o descritor (não dá para chamar tcflush); numa UART, o último close
+//     descarta o buffer de entrada e, com a porta fechada, nada é recebido, então a
+//     resposta que chega no intervalo se perde. Isso é comportamento do driver e só se
+//     confirma no hardware (o teste com pty emula a UART).
 //
-// Exceção Modbus é um quadro completo que responde a esta requisição: o fluxo segue
-// alinhado e a conexão fica. No Modbus TCP a própria biblioteca casa o id de
-// transação, descarta respostas atrasadas (ProtocolRecoveryTimeout) e fecha o socket
-// quando perde o alinhamento; ali não mexemos.
+// O que nenhum lado do mestre resolve é a resposta que chega depois desse intervalo
+// (escravo mais lento que 2× o Timeout): timeout_ms tem de cobrir a latência do
+// escravo.
+//
+// Exceção Modbus desta requisição é um quadro completo que responde a ela: o fluxo
+// segue alinhado. Conexão recusada e porta indisponível não chegaram a escrever nada.
+// No Modbus TCP a própria biblioteca casa o id de transação, descarta respostas
+// atrasadas (ProtocolRecoveryTimeout) e fecha o socket quando perde o alinhamento;
+// ali não mexemos.
 func (c *client) dropAfterError(err error) {
 	if c.target.Transport == TransportTCP {
 		return
 	}
 	var exc *ExceptionError
-	if errors.As(err, &exc) {
+	if errors.As(err, &exc) || errors.Is(err, ErrConnRefused) || errors.Is(err, ErrPortUnavailable) {
 		return
 	}
+	c.quietUntil = time.Now().Add(c.target.Timeout)
+	if c.target.Transport == TransportRTU {
+		_ = c.conn.Close()
+	}
+}
+
+// settle segura a próxima requisição até a linha ficar quieta (ver dropAfterError).
+// Só devolve erro quando o contexto acaba.
+func (c *client) settle(ctx context.Context) error {
+	if c.quietUntil.IsZero() {
+		return nil
+	}
+	if c.target.Transport == TransportRTUOverTCP {
+		if err := c.drain(ctx, c.quietUntil); err != nil {
+			return err
+		}
+	} else if d := time.Until(c.quietUntil); d > 0 { // serial: a porta já está fechada
+		t := time.NewTimer(d)
+		defer t.Stop()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-t.C:
+		}
+	}
+	c.quietUntil = time.Time{}
+	return nil
+}
+
+// drain lê e descarta o que chegar no socket do RTU sobre TCP até a linha ficar
+// quieta: nada recebido até until e, depois de cada byte recebido, por mais um
+// Timeout. Socket morto é fechado (a próxima leitura disca de novo), assim como o de
+// uma linha que não sossega em 2 Timeouts além disso.
+func (c *client) drain(ctx context.Context, until time.Time) error {
+	conn := c.sock
+	if conn == nil {
+		return nil // nada aberto: a próxima leitura disca um socket novo
+	}
+	guard := c.target.Timeout
+	// Mesmo com o intervalo já vencido (a leitura seguinte veio bem depois do erro),
+	// uma passada recolhe o que já está no buffer.
+	if earliest := time.Now().Add(time.Millisecond); until.Before(earliest) {
+		until = earliest
+	}
+	limit := until.Add(2 * guard)
+	// Contexto cancelado interrompe a leitura em curso. Na saída, espera o AfterFunc
+	// que já começou, para ele não mexer no prazo da próxima requisição.
+	cancelado := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		defer close(cancelado)
+		_ = conn.SetReadDeadline(time.Now())
+	})
+	defer func() {
+		if !stop() {
+			<-cancelado
+		}
+	}()
+	buf := make([]byte, 256)
+	for {
+		deadline := until
+		if limit.Before(deadline) {
+			deadline = limit
+		}
+		if err := conn.SetReadDeadline(deadline); err != nil {
+			c.closeConn()
+			return nil
+		}
+		if err := ctx.Err(); err != nil { // depois do SetReadDeadline: o AfterFunc não se perde
+			return err
+		}
+		n, err := conn.Read(buf)
+		now := time.Now()
+		if n > 0 {
+			until = now.Add(guard) // a linha falou: o silêncio conta de novo
+		}
+		switch {
+		case err == nil:
+		case !errors.Is(err, os.ErrDeadlineExceeded):
+			c.closeConn() // EOF, reset: socket morto
+			return nil
+		case ctx.Err() != nil:
+			return ctx.Err()
+		case !now.Before(until):
+			return nil // linha quieta
+		case !now.Before(limit):
+			c.closeConn() // a linha não sossega: recomeça numa conexão nova
+			return nil
+		}
+	}
+}
+
+func (c *client) closeConn() {
 	_ = c.conn.Close()
+	c.sock = nil
 }

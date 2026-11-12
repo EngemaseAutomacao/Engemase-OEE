@@ -250,6 +250,87 @@ func TestDebounceFiltersGlitch(t *testing.T) {
 	checkMinute(t, mins[0], 60, 0, 0, 0, 0, 0, 0) // 59,5 s rodando + 0,5 desconhecido → arredonda
 }
 
+// A janela de overflow acompanha o poll da tag: um uint16 lido a cada 5 s que dá a
+// volta com 20 peças entre duas leituras (max_rate_per_s 5) é overflow, não reset.
+func TestSlowPolledU16CounterOverflow(t *testing.T) {
+	cfg := buildConfig(t, `{"mode":"signals"}`, tRunning, tTotal16)
+	cfg.Machines[0].MaxRatePerS = ptr(5.0)
+	cfg.Devices[0].Blocks[0].PollMS = 5000
+	s := &sim{e: newEngine(t, cfg, t0)}
+	s.runUntil(65, 5, func(now float64) ([]engine.Sample, bool) {
+		total := uint16(65500 + 4*uint16(now)) // 4 peças/s: passa de 65535 entre 5 e 10 s
+		return []engine.Sample{{TagID: tRunning, Value: boolV(true)}, {TagID: tTotal16, Value: u16(total)}}, true
+	})
+	// Primeira leitura em 5 s; 20 peças em cada uma das leituras de 10 a 55 s.
+	if m := s.minutes()[0]; m.Total != 200 {
+		t.Fatalf("peças no minuto = %d, quer 200", m.Total)
+	}
+	if resets := s.eventsOfType(contracts.EventCounterReset); len(resets) != 0 {
+		t.Fatalf("counter_reset inesperado: %+v", resets)
+	}
+}
+
+// Sem lacuna de comunicação, a leitura que desmente um candidato não pode
+// confirmá-lo com os sinais anteriores a ela: o candidato não se manteve pelo prazo.
+// Casos de fronteira com a configuração padrão do template (poll 500 ms, debounce
+// de 1 s), heartbeat lido a cada 1 s e count_derived com peça logo depois da janela
+// ociosa: nenhum evento de estado além do inicial.
+func TestReadThatEndsCandidateDoesNotConfirmIt(t *testing.T) {
+	cases := []struct {
+		name  string
+		rules string
+		tags  []string
+		step  float64
+		read  func(now float64) []engine.Sample
+		want  []wantEv
+		secs  [5]int // run, stop, fault, setup, no_comm do primeiro minuto
+		total int64
+	}{
+		{
+			name: "parada vista em 2 amostras (20,0 e 20,5) e desfeita em 21,0", rules: `{"mode":"signals"}`,
+			tags: []string{tRunning}, step: 0.5,
+			read: func(now float64) []engine.Sample {
+				return []engine.Sample{{TagID: tRunning, Value: boolV(!(now >= 20 && now < 21))}}
+			},
+			want: []wantEv{{"2026-11-11T13:00:00.500Z", "RUNNING", "", -1}},
+			secs: [5]int{60, 0, 0, 0, 0},
+		},
+		{
+			name: "heartbeat repete uma amostra", rules: `{"mode":"state_code","map":{"1":"RUNNING"},"heartbeat_timeout_s":2}`,
+			tags: []string{tCode, tHB}, step: 1,
+			read: func(now float64) []engine.Sample {
+				hb := uint16(now)
+				if now == 21 {
+					hb = 20 // o CLP incrementou logo depois da leitura
+				}
+				return []engine.Sample{{TagID: tCode, Value: u16(1)}, {TagID: tHB, Value: u16(hb)}}
+			},
+			want: []wantEv{{"2026-11-11T13:00:01.000Z", "RUNNING", "", -1}},
+			secs: [5]int{59, 0, 0, 0, 1},
+		},
+		{
+			name: "count_derived com peça a cada 7 s e janela ociosa de 6 s", rules: `{"mode":"count_derived","ideal_cycle_s":2,"idle_after_cycles":3}`,
+			tags: []string{tTotal}, step: 1,
+			read: func(now float64) []engine.Sample {
+				return []engine.Sample{{TagID: tTotal, Value: u32(uint32(now / 7))}}
+			},
+			want: []wantEv{
+				{"2026-11-11T13:00:01.000Z", "STOPPED", "", -1},
+				{"2026-11-11T13:00:07.000Z", "RUNNING", "STOPPED", -1},
+			},
+			secs: [5]int{53, 6, 0, 0, 1}, total: 8, // peças em 7, 14, ..., 56
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := &sim{e: newEngine(t, buildConfig(t, c.rules, c.tags...), t0)}
+			s.runUntil(61, c.step, func(now float64) ([]engine.Sample, bool) { return c.read(now), true })
+			checkStates(t, s.stateEvents(), c.want)
+			checkMinute(t, s.minutes()[0], c.secs[0], c.secs[1], c.secs[2], c.secs[3], c.secs[4], c.total, 0)
+		})
+	}
+}
+
 // Modo state_code com mapa, estado padrão e SETUP.
 func TestStateCodeMode(t *testing.T) {
 	cfg := buildConfig(t, `{"mode":"state_code","map":{"0":"STOPPED","1":"RUNNING","2":"FAULT","3":"SETUP"},"default_state":"STOPPED"}`, tCode, tFaultC, tTotal)
@@ -424,29 +505,73 @@ func TestCounterEventsInEngine(t *testing.T) {
 }
 
 // CLP religado (contador de 16 bits não retentivo volta a ~0) enquanto o gateway
-// ficou 90 s fora: com a taxa padrão (1000/s) a janela de plausibilidade cobre a
-// faixa inteira de 16 bits e qualquer queda caberia como overflow. A queda é reset
-// (counter_reset, delta = valor atual), não um overflow que inventaria 53541 peças.
-func TestU16CounterDropAfterLongGapIsReset(t *testing.T) {
-	cfg := buildConfig(t, `{"mode":"signals"}`, tRunning, tTotal16)
-	e := newEngine(t, cfg, t0)
-	tag := cfg.Devices[0].Tags[1]
-	e.RestoreCounters([]engine.CounterState{{
-		TagID: tTotal16, MachineID: machineID, Role: "count.total", Bits: 16, AddrKey: tag.AddrKey(),
-		LastRaw: 12000, LastAt: t0.Add(-90 * time.Second),
-	}})
-	s := &sim{e: e}
-	s.runUntil(61, 1, func(now float64) ([]engine.Sample, bool) {
-		return []engine.Sample{{TagID: tRunning, Value: boolV(true)}, {TagID: tTotal16, Value: u16(5 + uint16(now/10))}}, true
-	})
-	// 5 (reset em 1 s) + 5 (de 5 para 10 até 59 s).
-	if m := s.minutes()[0]; m.Total != 10 {
-		t.Fatalf("peças no minuto = %d, quer 10", m.Total)
+// ficou fora: com a taxa padrão (1000/s), taxa × Δt cobre quase toda a faixa de 16
+// bits já com 60 s e qualquer queda caberia como overflow. A janela de overflow não
+// cresce com a lacuna (vale a cadência do poll): a queda é reset (counter_reset,
+// delta = valor atual), não um overflow que inventaria até 53541 peças. Um contador
+// que estava de fato perto do máximo continua overflow.
+func TestU16CounterDropAfterGap(t *testing.T) {
+	cases := []struct {
+		name    string
+		lastRaw uint32
+		gap     time.Duration
+		first   uint16 // leitura em 1 s; depois +1 a cada 10 s (5 peças até 59 s)
+		total   int64
+		reset   bool
+	}{
+		{"reset depois de 20 s", 50000, 20 * time.Second, 5, 5 + 5, true},
+		{"reset depois de 60 s", 12000, 60 * time.Second, 5, 5 + 5, true},
+		{"reset depois de 64 s", 12000, 64 * time.Second, 5, 5 + 5, true},
+		{"reset depois de 90 s", 12000, 90 * time.Second, 5, 5 + 5, true},
+		{"overflow perto do máximo depois de 69 s", 65500, 69 * time.Second, 96, 132 + 5, false},
 	}
-	resets := s.eventsOfType(contracts.EventCounterReset)
-	if len(resets) != 1 || resets[0].PreviousRaw == nil || *resets[0].PreviousRaw != 12000 || resets[0].Raw != 5 ||
-		resets[0].At != "2026-11-11T13:00:01.000Z" || resets[0].TagID != tTotal16 {
-		t.Fatalf("counter_reset: %+v", resets)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := buildConfig(t, `{"mode":"signals"}`, tRunning, tTotal16)
+			e := newEngine(t, cfg, t0)
+			tag := cfg.Devices[0].Tags[1]
+			e.RestoreCounters([]engine.CounterState{{
+				TagID: tTotal16, MachineID: machineID, Role: "count.total", Bits: 16, AddrKey: tag.AddrKey(),
+				LastRaw: c.lastRaw, LastAt: t0.Add(-c.gap),
+			}})
+			s := &sim{e: e}
+			s.runUntil(61, 1, func(now float64) ([]engine.Sample, bool) {
+				return []engine.Sample{{TagID: tRunning, Value: boolV(true)}, {TagID: tTotal16, Value: u16(c.first + uint16(now/10))}}, true
+			})
+			if m := s.minutes()[0]; m.Total != c.total {
+				t.Fatalf("peças no minuto = %d, quer %d", m.Total, c.total)
+			}
+			resets := s.eventsOfType(contracts.EventCounterReset)
+			if !c.reset {
+				if len(resets) != 0 {
+					t.Fatalf("counter_reset inesperado: %+v", resets)
+				}
+				return
+			}
+			if len(resets) != 1 || resets[0].PreviousRaw == nil || *resets[0].PreviousRaw != int64(c.lastRaw) || resets[0].Raw != int64(c.first) ||
+				resets[0].At != "2026-11-11T13:00:01.000Z" || resets[0].TagID != tTotal16 {
+				t.Fatalf("counter_reset: %+v", resets)
+			}
+		})
+	}
+}
+
+// max_rate_per_s acima da faixa de 16 bits (a config aceita até 100000): a volta
+// real do contador com leituras a cada segundo continua overflow, sem counter_reset.
+func TestU16CounterOverflowWithMaxRateAboveRange(t *testing.T) {
+	cfg := buildConfig(t, `{"mode":"signals"}`, tRunning, tTotal16)
+	cfg.Machines[0].MaxRatePerS = ptr(70000.0)
+	s := &sim{e: newEngine(t, cfg, t0)}
+	s.runUntil(61, 1, func(now float64) ([]engine.Sample, bool) {
+		total := uint16(65530 + uint16(now)) // passa de 65535 em t = 6 s
+		return []engine.Sample{{TagID: tRunning, Value: boolV(true)}, {TagID: tTotal16, Value: u16(total)}}, true
+	})
+	// Primeira leitura em 1 s; 1 peça por segundo até 59 s.
+	if m := s.minutes()[0]; m.Total != 58 {
+		t.Fatalf("peças no minuto = %d, quer 58", m.Total)
+	}
+	if resets := s.eventsOfType(contracts.EventCounterReset); len(resets) != 0 {
+		t.Fatalf("counter_reset inesperado: %+v", resets)
 	}
 }
 

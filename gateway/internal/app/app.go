@@ -45,8 +45,17 @@ type Options struct {
 // perda: ela nunca é silenciosa.
 const maxUnsentItems = 10_000
 
-// commitErrLogEvery espaça o log de falha de gravação (a regravação é a cada tick).
+// commitErrLogEvery espaça o log de falha de gravação.
 const commitErrLogEvery = time.Minute
+
+// Espera entre tentativas de regravar a saída pendente enquanto o buffer falha: dobra
+// a cada falha, de commitRetryMin até commitRetryMax. Cada tentativa regrava tudo (até
+// maxUnsentItems itens) na rotina de coleta, que também lê os pollers e alimenta o
+// watchdog; tentar a cada tick num disco lento ou com erro de E/S a travaria.
+const (
+	commitRetryMin = time.Second
+	commitRetryMax = time.Minute
+)
 
 // clockJumpMin é a menor diferença, entre dois ticks, do avanço do relógio de parede
 // para o do monotônico que conta como salto do relógio (passo do NTP ou do RTC).
@@ -54,11 +63,17 @@ const commitErrLogEvery = time.Minute
 const clockJumpMin = 2 * time.Second
 
 // Meta (tabela meta do buffer) da última config recusada: depois de reiniciar, o
-// agente não baixa nem recusa de novo a mesma versão.
+// agente não baixa nem recusa de novo a mesma versão. A recusa depende do binário
+// (protocolos, papéis e limites que ele valida), então só vale para o mesmo build
+// (metaRejectedAgent): depois de uma atualização, a versão é baixada e validada de novo.
 const (
 	metaRejectedVersion = "config_rejected_version"
 	metaRejectedError   = "config_rejected_error"
+	metaRejectedAgent   = "config_rejected_agent"
 )
+
+// agentBuild identifica o binário que recusou a config (versão e commit).
+func agentBuild() string { return buildinfo.Version + " " + buildinfo.Commit }
 
 type agent struct {
 	local   *config.Local
@@ -77,9 +92,15 @@ type agent struct {
 	unsent      buffer.Write                      // saída do motor que o buffer ainda não gravou (ver flush)
 	lost        *unsentLoss                       // o que saiu de unsent pelo limite, ainda sem data_loss gravado
 	commitLogAt time.Time                         // último log de falha de gravação (zero: gravando)
+	retryAt     time.Duration                     // monotônico da próxima tentativa de gravar unsent
+	retryWait   time.Duration                     // espera atual entre tentativas (0: gravando)
 	clock       func() (time.Time, time.Duration) // parede e monotônico (nil = relógio do sistema)
 	clockWall   time.Time                         // parede no tick anterior, sem leitura monotônica
 	clockMono   time.Duration                     // monotônico no tick anterior
+
+	// writeMu serializa as gravações do app na outbox (coleta e configLoop): o
+	// data_loss lê o próprio seq (Stats) antes do Commit, e nada pode entrar no meio.
+	writeMu sync.Mutex
 
 	mu              sync.Mutex
 	cfg             *config.GatewayConfig
@@ -209,8 +230,10 @@ func (a *agent) loadAppliedConfig(ctx context.Context) error {
 }
 
 // loadRejected lê a última config_version recusada (gravada junto com o
-// config_rejected). Se ela é mais nova que a aplicada, a recusa continua valendo: a
-// saúde segue informando, e a versão não é baixada de novo.
+// config_rejected). Se ela é mais nova que a aplicada e foi recusada por este mesmo
+// build, a recusa continua valendo: a saúde segue informando, e a versão não é
+// baixada de novo. Recusada por outro binário (atualização do agente), ela é
+// ignorada: este binário baixa e valida a versão uma vez.
 func (a *agent) loadRejected(ctx context.Context) error {
 	v, err := a.store.Meta(ctx, metaRejectedVersion)
 	if err != nil || v == "" {
@@ -219,6 +242,15 @@ func (a *agent) loadRejected(ctx context.Context) error {
 	n, err := strconv.Atoi(v)
 	if err != nil || n <= a.configVersion() {
 		return nil // meta estranha ou recusa superada: no pior caso, baixa e recusa uma vez de novo
+	}
+	by, err := a.store.Meta(ctx, metaRejectedAgent)
+	if err != nil {
+		return err
+	}
+	if by != agentBuild() {
+		a.log.Info("config recusada por outro build do agente; será baixada e validada de novo",
+			"versao", n, "recusada_por", by, "build", agentBuild())
+		return nil
 	}
 	msg, err := a.store.Meta(ctx, metaRejectedError)
 	if err != nil {
@@ -325,8 +357,9 @@ func (a *agent) applyConfig(ctx context.Context, body []byte, etag string) {
 			if prev > 0 {
 				ev.RevertedTo = &prev
 			}
-			// Evento e versão recusada na mesma transação (vale depois de reiniciar).
-			a.enqueueEventMeta(ctx, ev, now, map[string]string{metaRejectedVersion: strconv.Itoa(v), metaRejectedError: msg})
+			// Evento e versão recusada na mesma transação (vale depois de reiniciar, com este build).
+			a.enqueueEventMeta(ctx, ev, now, map[string]string{
+				metaRejectedVersion: strconv.Itoa(v), metaRejectedError: msg, metaRejectedAgent: agentBuild()})
 		}
 		return
 	}
@@ -391,14 +424,9 @@ func (a *agent) collectWith(ctx context.Context, cfg *config.GatewayConfig) erro
 	if err != nil {
 		return err
 	}
-	counters, err := a.store.LoadCounters(ctx)
-	if err != nil {
+	if err := a.restoreCounters(ctx, eng); err != nil {
 		return err
 	}
-	// Contadores que o motor anterior já usou e o buffer ainda não gravou (falha de
-	// Commit) valem mais que os do disco: partir dos do disco contaria de novo as
-	// peças dos minutos que ainda estão em unsent.
-	eng.RestoreCounters(mergeCounters(counters, a.unsent.Counters))
 
 	pollers, err := poller.Build(cfg, a.local)
 	if err != nil {
@@ -433,6 +461,7 @@ func (a *agent) collectWith(ctx context.Context, cfg *config.GatewayConfig) erro
 	stop := func() {
 		stopPollers()
 		wg.Wait()
+		a.retryAt = 0             // na parada, tenta gravar mesmo durante a espera entre tentativas
 		a.tick(ctx, eng, pollers) // grava o que já fechou
 	}
 
@@ -453,6 +482,7 @@ func (a *agent) collectWith(ctx context.Context, cfg *config.GatewayConfig) erro
 			return nil
 		case <-ctx.Done():
 			stop()
+			a.logUnsentAtExit()
 			return ctx.Err()
 		}
 	}
@@ -469,7 +499,16 @@ func (a *agent) tick(ctx context.Context, eng *engine.Engine, pollers []*poller.
 		}
 		a.addUnsent(w)
 	}
-	a.flush(ctx, now)
+	if mono >= a.retryAt {
+		if a.flush(ctx, now) {
+			a.retryWait = 0
+		} else {
+			a.retryWait = min(max(2*a.retryWait, commitRetryMin), commitRetryMax)
+			a.retryAt = mono + a.retryWait
+		}
+	} else {
+		a.trimUnsent(now) // entre tentativas, o limite de memória continua valendo
+	}
 	for _, r := range out.Records {
 		if ev, ok := r.Payload.(contracts.StateEvent); ok {
 			a.log.Debug("estado", "maquina", ev.MachineID, "estado", ev.State, "desde", ev.At)
@@ -528,6 +567,19 @@ func (a *agent) checkClock(wall time.Time, mono time.Duration) {
 	a.addUnsent(buffer.Write{Items: []buffer.Item{{Kind: buffer.KindEvent, ItemID: ev.ID, At: wall, Payload: b}}})
 }
 
+// restoreCounters dá ao motor novo os contadores do fim do último minuto fechado.
+// Os que o motor anterior já usou e o buffer ainda não gravou (falha de Commit) valem
+// mais que os do disco: partir dos do disco contaria de novo as peças dos minutos
+// que ainda estão em unsent.
+func (a *agent) restoreCounters(ctx context.Context, eng *engine.Engine) error {
+	counters, err := a.store.LoadCounters(ctx)
+	if err != nil {
+		return err
+	}
+	eng.RestoreCounters(mergeCounters(counters, a.unsent.Counters))
+	return nil
+}
+
 // addUnsent junta uma saída nova ao que falta gravar. Contadores ficam um por tag
 // (o mais recente): é o mesmo efeito dos upserts em ordem, e RestoreCounters usa o
 // primeiro que encontra.
@@ -548,42 +600,72 @@ func mergeCounters(base, newer []engine.CounterState) []engine.CounterState {
 	return base
 }
 
-// flush grava unsent numa transação. O motor não devolve o que já entregou (minutos
-// fechados saem da memória dele, contadores avançam), então uma falha de Commit
-// (disco cheio, erro de E/S) não pode descartar a saída: ela fica para o próximo
-// tick. Regravar é idempotente: itens repetidos são ignorados por kind + item_id e
-// os contadores são upserts.
-func (a *agent) flush(ctx context.Context, now time.Time) {
+// flush grava unsent numa transação e diz se gravou. O motor não devolve o que já
+// entregou (minutos fechados saem da memória dele, contadores avançam), então uma
+// falha de Commit (disco cheio, erro de E/S) não pode descartar a saída: ela fica
+// para a próxima tentativa (tick, com espera crescente). Regravar é idempotente:
+// itens repetidos são ignorados por kind + item_id e os contadores são upserts.
+func (a *agent) flush(ctx context.Context, now time.Time) bool {
 	if len(a.unsent.Items) == 0 && len(a.unsent.Counters) == 0 {
-		return
+		return true
 	}
 	ctx = context.WithoutCancel(ctx) // o tick da parada também grava
 	a.trimUnsent(now)
 	w := a.unsent
 	if a.lost != nil {
+		// Stats e Commit sem outra gravação do app no meio: o seq que o data_loss
+		// informa é o que ele mesmo recebe.
+		a.writeMu.Lock()
+		defer a.writeMu.Unlock()
 		item, err := a.dataLossItem(ctx)
 		if err != nil {
 			a.commitFailed(now, err)
-			return
+			return false
 		}
 		w.Items = append([]buffer.Item{item}, a.unsent.Items...)
 	}
 	if _, err := a.store.Commit(ctx, w); err != nil {
 		a.commitFailed(now, err)
-		return
+		return false
 	}
 	if !a.commitLogAt.IsZero() {
 		a.log.Info("buffer voltou a gravar; saída pendente gravada", "itens", len(w.Items))
 	}
 	a.unsent, a.lost, a.commitLogAt = buffer.Write{}, nil, time.Time{}
+	return true
 }
 
 func (a *agent) commitFailed(now time.Time, err error) {
 	if d := now.Sub(a.commitLogAt); a.commitLogAt.IsZero() || d >= commitErrLogEvery || d < 0 {
-		a.log.Error("falha ao gravar no buffer; a saída do motor fica em memória e é regravada a cada tick",
+		a.log.Error("falha ao gravar no buffer; a saída do motor fica em memória e é regravada com espera crescente",
 			"erro", err, "itens_pendentes", len(a.unsent.Items), "limite", maxUnsentItems)
 		a.commitLogAt = now
 	}
+}
+
+// logUnsentAtExit registra, sempre (sem o espaçamento de commitFailed), o que a parada
+// perde: a saída do motor que o buffer não gravou só existe em memória, e o data_loss
+// dela não tem onde ser gravado.
+func (a *agent) logUnsentAtExit() {
+	n := len(a.unsent.Items)
+	if n == 0 && a.lost == nil {
+		return
+	}
+	var from, to time.Time
+	if l := a.lost; l != nil {
+		n += l.items
+		from, to = l.from, l.to
+	}
+	for _, it := range a.unsent.Items {
+		if from.IsZero() || it.At.Before(from) {
+			from = it.At
+		}
+		if it.At.After(to) {
+			to = it.At
+		}
+	}
+	a.log.Error("agente parando sem conseguir gravar no buffer: saída do motor perdida",
+		"itens_perdidos", n, "de", from, "ate", to)
 }
 
 // unsentLoss acumula o que saiu de unsent pelo limite. Vira UM evento data_loss, com
@@ -625,7 +707,7 @@ func (a *agent) trimUnsent(now time.Time) {
 // retention_limit, o limite de retenção em memória). Esses itens nunca chegaram à
 // outbox e não têm seq; o contrato exige a faixa, então lost_seq_from/to marcam a
 // posição da lacuna: o próximo seq, que este evento ocupa ao ser gravado à frente
-// do restante.
+// do restante (flush chama com writeMu, até o Commit).
 func (a *agent) dataLossItem(ctx context.Context) (buffer.Item, error) {
 	st, err := a.store.Stats(ctx)
 	if err != nil {
@@ -826,9 +908,12 @@ func (a *agent) enqueueEventMeta(ctx context.Context, ev any, at time.Time, meta
 		return
 	}
 	id := eventID(b)
-	if _, err := a.store.Commit(context.WithoutCancel(ctx), buffer.Write{
+	a.writeMu.Lock()
+	_, err = a.store.Commit(context.WithoutCancel(ctx), buffer.Write{
 		Items: []buffer.Item{{Kind: buffer.KindEvent, ItemID: id, At: at, Payload: b}}, Meta: meta,
-	}); err != nil {
+	})
+	a.writeMu.Unlock()
+	if err != nil {
 		a.log.Error("falha ao gravar evento", "erro", err)
 	}
 	a.kick()

@@ -1,9 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -345,6 +348,57 @@ func TestRejectedConfigIsFetchedAndReportedOncePerVersion(t *testing.T) {
 	}
 }
 
+// A recusa de uma config depende do binário (protocolos, papéis e limites que ele
+// valida). Depois de uma atualização do agente, a versão que o build anterior recusou
+// é baixada e validada de novo; se agora passa, é aplicada. Sem isso o gateway ficaria
+// na config antiga até a nuvem publicar outra versão.
+func TestConfigRejectedByAnotherBuildIsFetchedAgain(t *testing.T) {
+	plc, err := mbtest.Start(mbtest.MBAP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer plc.Close()
+	cl := &cloud{}
+	srv := syncCloud(t, cl, 2, oeeConfig(plc.Addr(), 2), `"2"`) // v2 válida para este build
+
+	dir := t.TempDir()
+	local := config.DefaultLocal()
+	local.Cloud.URL = srv.URL
+	local.Paths.StateDir = dir
+	local.Paths.Buffer = filepath.Join(dir, "buffer.db")
+	local.Paths.Credentials = filepath.Join(dir, "credentials.json")
+	if err := config.SaveCredentials(local.Paths.Credentials, &config.Credentials{GatewayID: "01a1c5d4-9208-752e-89a7-834df2a74de4", Token: token, Org: "acme", CloudURL: srv.URL}); err != nil {
+		t.Fatal(err)
+	}
+	// v1 aplicada; v2 recusada por um build anterior (o que ele deixa no buffer).
+	store, err := buffer.Open(local.Paths.Buffer, buffer.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveConfig(context.Background(), 1, oeeConfig(plc.Addr(), 1)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Commit(context.Background(), buffer.Write{Meta: map[string]string{
+		metaRejectedVersion: "2", metaRejectedError: `protocolo "modbus-tcp" não suportado`, metaRejectedAgent: "0.0.9 antigo",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	store.Close()
+
+	runAgentUntil(t, local, func() bool {
+		syncs, _ := cl.snapshot()
+		return len(eventsOfType(syncs, contracts.EventConfigApplied)) > 0
+	})
+	syncs, configs := cl.snapshot()
+	applied := eventsOfType(syncs, contracts.EventConfigApplied)
+	if configs != 1 || applied[0]["version"] != float64(2) || applied[0]["previous_version"] != float64(1) {
+		t.Fatalf("GET /config x%d, config_applied %v; quer 1 GET e a v2 aplicada sobre a v1", configs, applied[0])
+	}
+	if n := len(eventsOfType(syncs, contracts.EventConfigRejected)); n != 0 {
+		t.Fatalf("%d config_rejected; a v2 é válida para este build", n)
+	}
+}
+
 // Config de uma máquina (estado + contador total), sem CLP: o motor é alimentado à mão.
 func engineTestConfig(t *testing.T) *config.GatewayConfig {
 	t.Helper()
@@ -437,8 +491,11 @@ func TestTickKeepsEngineOutputWhenCommitFails(t *testing.T) {
 	}
 	broken.Close() // toda gravação falha
 	a := testAgent(broken)
+	at := func(d time.Duration) { a.clock = func() (time.Time, time.Duration) { return now.Add(d), d } }
+	at(0)
 	a.tick(context.Background(), eng, nil) // o motor fecha os minutos aqui; o Commit falha
-	a.tick(context.Background(), eng, nil) // nova tentativa, ainda falhando
+	at(commitRetryMin)
+	a.tick(context.Background(), eng, nil) // nova tentativa (depois da espera), ainda falhando
 
 	store, err := buffer.Open(path, buffer.Options{})
 	if err != nil {
@@ -446,7 +503,8 @@ func TestTickKeepsEngineOutputWhenCommitFails(t *testing.T) {
 	}
 	defer store.Close()
 	a.store = store
-	a.tick(context.Background(), eng, nil) // o buffer voltou
+	at(3 * commitRetryMin)
+	a.tick(context.Background(), eng, nil) // o buffer voltou; a espera dobrou (2 s) e acabou
 	minutes, states := 0, 0
 	seen := map[string]bool{}
 	for _, it := range outbox(t, store) {
@@ -470,6 +528,79 @@ func TestTickKeepsEngineOutputWhenCommitFails(t *testing.T) {
 	}
 	if len(a.unsent.Items) != 0 || len(a.unsent.Counters) != 0 {
 		t.Fatalf("nada deveria sobrar em memória: %d itens", len(a.unsent.Items))
+	}
+}
+
+// Troca de config (motor novo) enquanto o buffer não grava: o motor novo parte dos
+// contadores ainda em memória, não dos do disco, senão as peças dos minutos que
+// esperam gravação seriam contadas de novo. Soma dos minutos = delta do contador.
+func TestEngineRestartDuringCommitFailureConservesPieces(t *testing.T) {
+	t0 := time.Date(2026, 11, 11, 13, 0, 0, 0, time.UTC)
+	cfg := engineTestConfig(t)
+	running, _ := modbus.DecodeRegisters([]uint16{1}, modbus.Uint16, modbus.WordOrderNone, -1)
+	var total uint32 = 1000
+	feed := func(eng *engine.Engine, from, to time.Time) {
+		for ts := from; ts.Before(to); ts = ts.Add(time.Second) {
+			total++
+			r, _ := modbus.Split32(total, modbus.CDAB)
+			v, _ := modbus.DecodeRegisters(r[:], modbus.Uint32, modbus.CDAB, -1)
+			eng.OnRead(ts, []engine.Sample{{TagID: tState, Value: running}, {TagID: tTotal, Value: v}})
+		}
+	}
+	path := filepath.Join(t.TempDir(), "b.db")
+	store, err := buffer.Open(path, buffer.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := testAgent(store)
+	at := func(d time.Duration) { a.clock = func() (time.Time, time.Duration) { return t0.Add(d), d } }
+
+	engA, err := engine.New(cfg, t0, engine.Options{IDs: a.ids})
+	if err != nil {
+		t.Fatal(err)
+	}
+	feed(engA, t0, t0.Add(2*time.Minute))
+	at(2 * time.Minute)
+	a.tick(context.Background(), engA, nil) // 13:00 e 13:01 gravados (contadores no disco)
+
+	store.Close() // o buffer para de gravar
+	feed(engA, t0.Add(2*time.Minute), t0.Add(4*time.Minute))
+	at(4 * time.Minute)
+	a.tick(context.Background(), engA, nil) // 13:02 e 13:03 ficam em memória
+
+	store, err = buffer.Open(path, buffer.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	a.store = store
+	engB, err := engine.New(cfg, t0.Add(4*time.Minute), engine.Options{IDs: a.ids}) // nova config
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.restoreCounters(context.Background(), engB); err != nil {
+		t.Fatal(err)
+	}
+	feed(engB, t0.Add(4*time.Minute), t0.Add(5*time.Minute))
+	at(5 * time.Minute)
+	a.tick(context.Background(), engB, nil) // grava o pendente e 13:04
+
+	var sum int64
+	minutes := 0
+	for _, it := range outbox(t, store) {
+		if it.Kind != buffer.KindMinute {
+			continue
+		}
+		var m contracts.Minute
+		if err := json.Unmarshal(it.Payload, &m); err != nil {
+			t.Fatal(err)
+		}
+		sum += m.Total
+		minutes++
+	}
+	// A primeira leitura (1001) é a referência; daí em diante cada leitura é 1 peça.
+	if want := int64(total - 1001); minutes != 5 || sum != want {
+		t.Fatalf("%d minutos somando %d peças; quer 5 minutos e %d (delta do contador)", minutes, sum, want)
 	}
 }
 
@@ -546,9 +677,9 @@ func TestTickReportsWallClockJump(t *testing.T) {
 	}{
 		{t0, 0},
 		{t0.Add(time.Second), time.Second}, // normal
-		{t0.Add(2*time.Second + 1500*time.Millisecond), 3 * time.Second}, // ruído abaixo do limite
-		{t0.Add(-time.Hour + 4*time.Second), 4 * time.Second},            // voltou 1 h
-		{t0.Add(-time.Hour + 15*time.Second), 5 * time.Second},           // adiantou 10 s
+		{t0.Add(2500 * time.Millisecond), 3 * time.Second},     // ruído abaixo do limite
+		{t0.Add(-time.Hour + 4*time.Second), 4 * time.Second},  // voltou 1 h
+		{t0.Add(-time.Hour + 15*time.Second), 5 * time.Second}, // adiantou 10 s
 	}
 	for _, s := range steps {
 		a.clock = func() (time.Time, time.Duration) { return s.wall, s.mono }
@@ -565,4 +696,176 @@ func TestTickReportsWallClockJump(t *testing.T) {
 		t.Fatalf("clock_jump: %v, quer %v", jumps, want)
 	}
 	validEvents(t, outbox(t, store))
+}
+
+// setWriteFailure liga ou desliga uma falha de gravação na outbox (como disco cheio):
+// todo INSERT falha, as leituras (contadores, Stats, Peek) seguem funcionando.
+func setWriteFailure(t *testing.T, path string, fail bool) {
+	t.Helper()
+	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	q := `DROP TRIGGER IF EXISTS falha_de_gravacao`
+	if fail {
+		q = `CREATE TRIGGER falha_de_gravacao BEFORE INSERT ON outbox_core BEGIN SELECT RAISE(ABORT, 'disco cheio'); END`
+	}
+	if _, err := db.Exec(q); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// stateItem é um evento de estado pronto para a outbox.
+func stateItem(gen *ids.Generator, at time.Time) buffer.Item {
+	ev := contracts.StateEvent{ID: gen.New(at), Type: contracts.EventState, At: contracts.FormatTime(at), MachineID: mID, State: "RUNNING"}
+	b, _ := json.Marshal(ev)
+	return buffer.Item{Kind: buffer.KindEvent, ItemID: ev.ID, MachineID: mID, At: at, Payload: b}
+}
+
+// Enquanto o buffer falha, a saída pendente (até maxUnsentItems itens) não é regravada
+// a cada tick: a espera entre tentativas dobra (1 s, 2 s, ...) até commitRetryMax, para
+// não travar a rotina de coleta (leituras dos pollers, watchdog) num disco lento.
+func TestCommitRetryBacksOffWhileBufferFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "b.db")
+	store, err := buffer.Open(path, buffer.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	setWriteFailure(t, path, true)
+	t0 := time.Date(2026, 11, 11, 13, 0, 0, 0, time.UTC)
+	eng, err := engine.New(engineTestConfig(t), t0, engine.Options{IDs: ids.NewGenerator(nil)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := testAgent(store)
+	gen := ids.NewGenerator(nil)
+	a.addUnsent(buffer.Write{Items: []buffer.Item{stateItem(gen, t0.Add(-time.Minute))}})
+	tickAt := func(d time.Duration) {
+		a.clock = func() (time.Time, time.Duration) { return t0.Add(d), d }
+		a.tick(context.Background(), eng, nil)
+	}
+
+	tickAt(0)              // falha: próxima tentativa em 1 s
+	tickAt(commitRetryMin) // falha de novo: a espera dobra, próxima em 3 s
+	setWriteFailure(t, path, false)
+	tickAt(2 * commitRetryMin) // o disco voltou, mas ainda é tempo de espera: não tenta
+	if n := len(outbox(t, store)); n != 0 {
+		t.Fatalf("regravou antes de a espera acabar: %d itens na outbox", n)
+	}
+	tickAt(3 * commitRetryMin)
+	if n := len(outbox(t, store)); n != 1 || len(a.unsent.Items) != 0 {
+		t.Fatalf("depois da espera: %d itens na outbox, %d em memória; quer 1 e 0", n, len(a.unsent.Items))
+	}
+
+	// A espera tem teto: uma falha longa tenta de novo pelo menos a cada commitRetryMax.
+	setWriteFailure(t, path, true)
+	a.addUnsent(buffer.Write{Items: []buffer.Item{stateItem(gen, t0)}})
+	for d := 4 * commitRetryMin; d < 30*time.Minute; d += commitRetryMin {
+		tickAt(d)
+	}
+	if a.retryWait != commitRetryMax {
+		t.Fatalf("espera entre tentativas = %v, teto %v", a.retryWait, commitRetryMax)
+	}
+}
+
+// Na parada com o buffer sem gravar, a saída do motor em memória se perde: isso vai
+// sempre para o log como erro, mesmo que a falha de gravação tenha sido registrada há
+// pouco (o log de falha é espaçado) e sem data_loss possível.
+func TestShutdownWithUnwritableBufferLogsLostOutput(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "b.db")
+	store, err := buffer.Open(path, buffer.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	setWriteFailure(t, path, true)
+	var logs bytes.Buffer
+	a := testAgent(store)
+	a.log = slog.New(slog.NewTextHandler(&logs, nil))
+	a.local, a.opts.TickEvery = config.DefaultLocal(), 10*time.Millisecond
+	gen := ids.NewGenerator(nil)
+	now := time.Now()
+	for i := 3; i >= 1; i-- {
+		a.addUnsent(buffer.Write{Items: []buffer.Item{stateItem(gen, now.Add(-time.Duration(i)*time.Minute))}})
+	}
+	a.commitLogAt = now // falha já registrada: os ticks e o da parada não logam de novo
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- a.collectWith(ctx, engineTestConfig(t)) }()
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+		a.mu.Lock()
+		ticked := !a.lastTick.IsZero()
+		a.mu.Unlock()
+		if ticked {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("a coleta não chegou a dar um tick")
+		}
+	}
+	cancel() // SIGTERM
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("collectWith: %v", err)
+	}
+	if len(a.unsent.Items) != 3 {
+		t.Fatalf("%d itens em memória; o buffer não deveria ter gravado", len(a.unsent.Items))
+	}
+	if out := logs.String(); !strings.Contains(out, "level=ERROR") || !strings.Contains(out, "itens_perdidos=3") {
+		t.Fatalf("a parada deveria registrar os 3 itens perdidos; log:\n%s", out)
+	}
+}
+
+// O data_loss informa como lost_seq o seq que ele mesmo recebe. Um evento gravado por
+// outra rotina (configLoop: config_applied/config_rejected) entre a leitura do seq e o
+// Commit não pode deslocá-lo para o seq de um evento entregue.
+func TestDataLossSeqNotShiftedByConcurrentEvents(t *testing.T) {
+	store, err := buffer.Open(filepath.Join(t.TempDir(), "b.db"), buffer.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	a := testAgent(store)
+	ctx := context.Background()
+	gen := ids.NewGenerator(nil)
+	stop, done := make(chan struct{}), make(chan struct{})
+	go func() { // configLoop gravando eventos sem parar
+		defer close(done)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			now := time.Now()
+			a.enqueueEvent(ctx, contracts.AgentStopEvent{ID: gen.New(now), Type: contracts.EventAgentStop, At: contracts.FormatTime(now), Reason: "shutdown"}, now)
+		}
+	}()
+	t0 := time.Date(2026, 11, 11, 8, 0, 0, 0, time.UTC)
+	const rounds = 20
+	for i := 0; i < rounds; i++ {
+		at := t0.Add(time.Duration(i) * time.Minute)
+		a.lost = &unsentLoss{id: gen.New(at), at: at, items: 1, from: at, to: at}
+		a.addUnsent(buffer.Write{Items: []buffer.Item{stateItem(gen, at)}})
+		if !a.flush(ctx, at) {
+			t.Fatal("flush falhou")
+		}
+	}
+	close(stop)
+	<-done
+	losses := 0
+	for _, it := range outbox(t, store) {
+		if p := payloadOf(t, it); p["type"] == "data_loss" {
+			losses++
+			if p["lost_seq_from"] != float64(it.Seq) || p["lost_seq_to"] != float64(it.Seq) {
+				t.Fatalf("data_loss no seq %d informa lost_seq %v..%v", it.Seq, p["lost_seq_from"], p["lost_seq_to"])
+			}
+		}
+	}
+	if losses != rounds {
+		t.Fatalf("%d data_loss, quer %d", losses, rounds)
+	}
 }

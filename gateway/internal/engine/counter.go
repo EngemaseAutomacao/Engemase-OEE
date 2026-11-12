@@ -46,6 +46,9 @@ type counterTracker struct {
 	valid    bool
 	restored *CounterState // estado lido do SQLite, usado na primeira leitura
 	maxRate  float64       // peças/s plausíveis
+	// cadence é o maior Δt de uma leitura normal da tag (2 × poll + 1 s, como o
+	// silêncio de holdPoint). A janela de overflow não cresce além dela.
+	cadence time.Duration
 }
 
 func (c *counterTracker) maxValue() uint64 {
@@ -59,13 +62,16 @@ func (c *counterTracker) maxValue() uint64 {
 //
 // Sendo Δt o tempo desde a última leitura (mínimo 1 s) e limite = taxa × Δt + 10:
 //   - cur ≥ prev: delta = cur − prev; acima do limite é salto (descarta e redefine a base);
-//   - cur < prev: wrap = (máx − prev) + cur + 1; se wrap ≤ limite é overflow (delta = wrap);
-//     senão é reset (delta = cur, se plausível).
+//   - cur < prev: wrap = (máx − prev) + cur + 1; é overflow (delta = wrap) só se o
+//     anterior estava perto do máximo (docs/03): wrap ≤ taxa × min(Δt, cadência) + 10
+//     e wrap menor que meia faixa do tipo. Senão é reset (delta = cur, se plausível).
 //
-// Se o limite cobre a faixa inteira do tipo (lacuna longa, contador de 16 bits),
-// qualquer queda caberia como overflow: overflow e reset ficam indistinguíveis e a
-// queda é tratada como reset, para nunca inventar peças (ex.: CLP religado com
-// contador não retentivo 12000 → 5 depois de 90 s sem gateway não vira +53541).
+// A janela de overflow não cresce com a lacuna: com taxa × Δt, 60 s sem leitura (CLP
+// religado, gateway reiniciado) já cobririam quase toda a faixa de 16 bits e um CLP
+// religado com contador não retentivo (12000 → 5) viraria +53541 peças inventadas.
+// Na dúvida é reset: o erro fica limitado à produção real da lacuna e o
+// counter_reset deixa rastro. A meia faixa vale quando taxa × cadência passa da
+// faixa (max_rate_per_s alto num uint16): aí recuar é mais curto que dar a volta.
 func (c *counterTracker) update(cur uint32, at time.Time) CounterResult {
 	if !c.valid {
 		r := c.restored
@@ -100,7 +106,8 @@ func (c *counterTracker) update(cur uint32, at time.Time) CounterResult {
 		}
 	default:
 		wrap := (c.maxValue() - uint64(prev)) + uint64(cur) + 1
-		if float64(wrap) <= limit && limit < float64(c.maxValue()) {
+		near := c.maxRate*min(dt, max(c.cadence.Seconds(), 1)) + 10
+		if float64(wrap) <= near && wrap < (c.maxValue()+1)/2 {
 			res.Kind, res.Delta = CounterOverflow, int64(wrap)
 		} else {
 			res.Kind = CounterReset

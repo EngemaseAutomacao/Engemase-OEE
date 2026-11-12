@@ -194,3 +194,81 @@ func TestRTUSerialDescartaRespostaAtrasadaAposTimeout(t *testing.T) {
 		t.Fatalf("respostas emitidas com a porta fechada = %d, quer 1 (a porta devia fechar no timeout)", n)
 	}
 }
+
+// iniciarEscravoPTY sobe um escravoPTY com HR100=111 e HR200=222 e devolve o caminho
+// da porta que o cliente abre.
+func iniciarEscravoPTY(t *testing.T) (*escravoPTY, string) {
+	t.Helper()
+	m, porta := abrirPTY(t)
+	esc := &escravoPTY{m: m, holding: make([]uint16, 512)}
+	esc.holding[100], esc.holding[200] = 111, 222
+	done := make(chan struct{})
+	go func() { defer close(done); esc.servir() }()
+	t.Cleanup(func() { _ = m.Close(); <-done })
+	return esc, porta
+}
+
+func abrirRTUSerial(t *testing.T, porta string, retries int) modbus.Reader {
+	t.Helper()
+	r, err := modbus.Open(modbus.Target{
+		Transport: modbus.TransportRTU, Address: porta,
+		Baud: 19200, Parity: "E", DataBits: 8, StopBits: 1,
+		Timeout: 100 * time.Millisecond, Retries: retries,
+		TurnaroundDelay: 5 * time.Millisecond, // o padrão do poller
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = r.Close() })
+	return r
+}
+
+// Na porta serial, fechar no timeout não basta se a próxima requisição reabre a porta
+// logo em seguida (a repetição sai 5 ms depois, e o poller passa direto ao próximo
+// grupo): a resposta atrasada chega com a porta já reaberta, é aceita como resposta da
+// repetição e a resposta da repetição fica na fila, trocando os valores de todas as
+// leituras seguintes. A porta tem de ficar fechada um intervalo de guarda antes da
+// próxima requisição.
+func TestRTUSerialPicoDeLatenciaNaoDesalinhaRespostas(t *testing.T) {
+	for _, retries := range []int{0, modbus.DefaultRetries} {
+		t.Run(fmt.Sprintf("retries=%d", retries), func(t *testing.T) {
+			esc, porta := iniciarEscravoPTY(t)
+			r := abrirRTUSerial(t, porta, retries)
+			if v, err := lerHR(r, 100); err != nil || v != 111 {
+				t.Fatalf("leitura inicial: %d (%v)", v, err)
+			}
+
+			esc.setDelay(150 * time.Millisecond) // um pico: responde depois do timeout
+			if v, err := lerHR(r, 100); !errors.Is(err, modbus.ErrTimeout) {
+				t.Fatalf("leitura lenta: esperava ErrTimeout, veio %d (%v)", v, err)
+			}
+			esc.setDelay(0)
+
+			if certas, trocadas, falhas, ultimo := lerAlternado(r, 8); certas != 8 {
+				t.Fatalf("depois do pico: %d certas, %d com valor de outro endereço, %d falhas (último erro %v); quer 8 certas", certas, trocadas, falhas, ultimo)
+			}
+			// Cada tentativa que expirou teve a resposta emitida com a porta fechada.
+			if n := esc.respostasDescartadas(); n != retries+1 {
+				t.Fatalf("respostas emitidas com a porta fechada = %d, quer %d", n, retries+1)
+			}
+		})
+	}
+}
+
+// Escravo sempre mais lento que o timeout: as leituras podem falhar, mas nunca devolver
+// o valor de outro endereço.
+func TestRTUSerialEscravoLentoNuncaDevolveValorDeOutroEndereco(t *testing.T) {
+	for _, retries := range []int{0, modbus.DefaultRetries} {
+		t.Run(fmt.Sprintf("retries=%d", retries), func(t *testing.T) {
+			esc, porta := iniciarEscravoPTY(t)
+			r := abrirRTUSerial(t, porta, retries)
+			if v, err := lerHR(r, 100); err != nil || v != 111 {
+				t.Fatalf("leitura inicial: %d (%v)", v, err)
+			}
+			esc.setDelay(150 * time.Millisecond)
+			if _, trocadas, _, _ := lerAlternado(r, 4); trocadas != 0 {
+				t.Fatalf("%d leituras devolveram o valor de outro endereço", trocadas)
+			}
+		})
+	}
+}
