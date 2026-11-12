@@ -1,80 +1,72 @@
 # Status do projeto e próximos passos
 
-> Nota de passagem, atualizada em 11/11/2026, para retomar o trabalho em outra sessão ou máquina.
+> Nota de passagem, atualizada em 12/11/2026, para retomar o trabalho em outra sessão ou máquina. O backlog completo, as decisões e as lacunas estão no [`docs/17`](17-backlog-e-pendencias.md).
 
-## Pronto
+## Resumo
 
-- **Arquitetura documentada** (docs 01–15): requisitos, gateway, protocolo, plataforma web, banco (Neon + Drizzle), cálculo de OEE, segurança, roadmap, ADRs 001–016, integração Modbus, acesso remoto (VPN), notificações, identidade visual e plataforma multi-cliente.
-- **Protótipo da interface** em `apps/web`, com dados simulados e rodando localmente:
-  - layout novo (menu em degradê, busca Ctrl+K, cartões com ícones) e barras de rolagem ocultas;
-  - Visão geral no estilo da referência;
-  - máquinas (lista e detalhe), relatórios de OEE e de paradas, TV Andon e tela do operador;
-  - seletor de cliente, login, unidades e linhas, cadastro de máquinas;
-  - marca Engemase, tema Claro/Escuro/Automático, sino de notificações e cor por cliente (exemplo: Serra Azul).
+- **Documentação:** arquitetura (docs 01–16), backlog (17) e operação (`docs/operacao/`), conferida contra o código.
+- **Protótipo da interface** (`apps/web`, dados simulados): completo para validação com clientes.
+- **Fase 0 de código:** pronta e testada sem contas na nuvem e sem hardware. Contrato, cálculo de OEE, banco com RLS, API real dos gateways, agente Go revisado, simulador de CLP, pacote `.deb`, receita da imagem e CI. Um teste de ponta a ponta liga tudo: simulador → agente → API → banco.
+- **Bloqueios para seguir:** contas (Vercel, Neon, domínio), hardware de bancada e as decisões D2, D7, D26, D28, D29, D36, D37 e D38.
 
-## Concluído nesta retomada
+## Protótipo da interface
 
-- **Projeto do gateway:** [`docs/16`](16-projeto-do-gateway.md), com as definições canônicas. Os 4 rascunhos detalhados estão em `docs/rascunhos/`.
-- **Levantamento do que falta:** [`docs/17`](17-backlog-e-pendencias.md), com backlog, decisões, lacunas e próximos passos. Os relatórios completos estão em `docs/rascunhos/`.
-- **18 contradições da documentação corrigidas.**
-- **Fase 0, parte de código** (detalhes na seção seguinte).
+Telas no layout novo (menu em degradê, busca Ctrl+K, cartões com ícones, barras de rolagem ocultas), tema Claro/Escuro/Automático e cor por cliente:
 
-## Fase 0: o que já foi entregue
+- **Cliente:** visão geral, máquinas (lista e detalhe), **tela de linha**, relatórios de OEE e de paradas, notificações, ajuda, acesso remoto e minha conta.
+- **Configurações:** unidades e linhas, máquinas e assistente de nova máquina (Modbus TCP, RTU e RTU sobre TCP), gateways, produtos, turnos, motivos, usuários, terminais, aparência e auditoria.
+- **Chão de fábrica:** TV Andon, tela do operador e o **terminal pareado** (`/terminal`, `/terminal/parear`), separado da sessão de pessoa.
+- **Console Engemase:** visão geral, clientes (lista, detalhe, novo), gateways, usuários, auditoria e acesso remoto.
+- **Conferido:** todas as rotas respondem sem erro de console, sem "NaN" e sem rolagem horizontal, em desktop (1440 px) e celular (390 px). O OEE agregado soma as bases (docs/07), nunca faz média de OEEs.
 
-A parte de código de W1, X1, W2a, W4 e G0 (`docs/17`, seção 2). Tudo roda e é testado sem contas na nuvem e sem hardware. Cada pacote tem um `README.md` com decisões e pendências próprias.
+## Fase 0: o que está pronto
 
 | Entrega | Onde | O que faz | Testes |
 |---|---|---|---|
-| Contrato gateway ↔ nuvem v1 | `packages/contracts` (`@engemase/contracts`) | Schemas Zod 4 de `/enroll`, `/sync`, config, comandos e erros; 45 regras semânticas com id; JSON Schema gerado (tolerante e estrito); 75 fixtures válidas e inválidas com `manifest.json` | 240 (Vitest) |
-| Cálculo de OEE | `packages/oee-core` (`@engemase/oee-core`) | Algoritmo do docs/07 puro em TS: turnos com fuso IANA e horário de verão, estados, micro-paradas, contagens, A × P × Q, agregação de linha | 52 (Vitest + fast-check), incluindo o caso de 78,4% |
-| Banco | `packages/db` (`@engemase/db`) | Schema Drizzle (Postgres 18), 51 tabelas (46 de cliente), migrações SQL, RLS forçada por cliente, FKs compostas, papéis sem BYPASSRLS, `withTenant()` | 58 (Vitest + PGlite, sem servidor) |
-| Simulador de CLP | `tools/plc-sim` (Go) | N máquinas Modbus TCP com o bloco OEE padrão; cenários `normal`, `overflow`, `counter-reset`, `offline` e `frozen`; determinístico por semente | 44 (`go test -race`) |
-| Agente do gateway | `gateway/` (Go) | Esqueleto funcional: Modbus TCP/RTU/RTU sobre TCP (somente leitura), motor de estados e contadores, minutos, outbox SQLite, `/enroll`, `/sync` e `/config`, CLI (`run`, `enroll`, `modbus read`, `config validate`, `diag`) | 71 + 2 de integração contra o `plc-sim` |
-| Integração e CI | raiz, `.github/workflows/ci.yml` | Scripts `pnpm test`, `typecheck`, `test:go`; CI com jobs paralelos `web`, `packages` e `go` | — |
+| Contrato gateway ↔ nuvem v1 | `packages/contracts` | Zod 4 de `/enroll`, `/sync`, config, comandos e erros; JSON Schema; 75 fixtures | 240 |
+| Cálculo de OEE | `packages/oee-core` | Algoritmo do docs/07 (turnos com fuso, micro-paradas, A × P × Q, agregação Σ/Σ) | 52 |
+| Banco | `packages/db` | Drizzle + Postgres 18, 51 tabelas, migrações 0000–0004, RLS forçada por cliente (inclusive `organization`), FKs compostas, funções de consulta com estado (código usado/vencido, token revogado) | 92 (PGlite) |
+| API dos gateways | `apps/web/lib/server/gateway`, `app/api/gateway/v1/*` | `/enroll`, `/sync` e `/config` reais: idempotência, isolamento entre clientes, ETag/304, erros do contrato, token rechecado na transação | 80 (+1 de ponta a ponta) |
+| Agente do gateway | `gateway/` (Go) | Modbus TCP/RTU/RTU sobre TCP, estados e contadores, minutos, outbox SQLite, uplink com retentativas, CLI. Revisado: 11 achados corrigidos e verificados por revisores independentes | 100+ com `-race`, 2 de integração |
+| Simulador de CLP | `tools/plc-sim` | Máquinas Modbus TCP com o bloco OEE padrão e cenários | 44 |
+| Implantação | `deploy/gateway`, `deploy/image` | `.deb` da Fase 0 (units endurecidas, firewall, sudo do técnico, udev das 3 RS-485), imagem Debian Trixie (rpi-image-gen), gravação do eMMC com a rede do cliente | `validate.sh`: 136 e 72 checagens |
+| Operação | `docs/operacao/` | 6 runbooks, ficha de TI, roteiro de bancada, bloco OEE v1, `FB_OEE_ENGEMASE.st`, guia por fabricante | Mermaid, links e ST validados |
+| CI | `.github/workflows/ci.yml` | Pacotes, web (typecheck, lint, build, testes), Go (gofmt, vet, `-race`, integração, build arm64) e ponta a ponta | — |
 
-**Amarração entre as partes:**
-- O gateway valida a própria config com as fixtures de `packages/contracts` (mesmo `rule` e `path` esperados) e confere tudo o que envia contra o JSON Schema estrito.
-- O teste de integração do gateway compila e sobe o `plc-sim` e lê o bloco OEE pela rede.
-- O `packages/db` confere que os "enums" do banco são iguais aos do contrato.
+**Como rodar os testes:**
 
-**Como rodar:** ver "Como rodar" no [README](../README.md#como-rodar). Em resumo: `pnpm test`, `pnpm typecheck:packages` e `pnpm test:go`.
+```bash
+pnpm install
+```
 
-## Em andamento
+```bash
+pnpm test
+```
 
-- **Telas pendentes do protótipo**, no layout novo.
-- **`deploy/`:** units systemd, nftables e pacote `.deb` do gateway (`deploy/gateway`) e imagem do sistema (`deploy/image`).
+```bash
+pnpm typecheck
+```
 
-## Pendente no protótipo
+```bash
+pnpm test:go
+```
 
-Telas ainda como "em construção":
-- **Configurações:** gateways (lista e detalhe), usuários, produtos, turnos, motivos, assistente de nova máquina, auditoria, terminais e aparência.
-- **Console Engemase:** todas as telas.
-- **Outras:** notificações, ajuda, acesso remoto e minha conta.
-- **Alinhamento visual:** as telas antigas precisam seguir o novo layout (`components/dashboard`).
+```bash
+pnpm --filter web test:e2e
+```
 
-Há componentes parciais em `components/config` e `components/access`, de uma rodada interrompida.
+## O que falta
 
-## Pendente na implementação real (Fases 0 e 1 de `docs/09`)
+**Depende de contas (N1):** criar Vercel, Neon e domínio; aplicar as migrações num branch de preview; deploy com `DATABASE_URL`; PoC com 100 gateways simulados (W3). O papel de login do banco precisa ser membro de `app_user`.
 
-**Fase 0, o que ainda falta:**
-- Contas e ambientes (N1): Vercel, Neon, domínio. Depois, `db:migrate` na Neon e confirmar se o papel dono das tabelas tem BYPASSRLS.
-- API mínima `/enroll` e `/sync` gravando na Neon (W3) e o teste do driver de banco com 100 gateways simulados.
-- Ligar os pacotes ao `apps/web` (`transpilePackages`); o assistente de máquina ainda oferece 7 bits de dados e não tem `modbus-rtu-over-tcp`.
-- PoC na bancada com o R1000 e CLPs reais (depende do hardware).
-- Turborepo e lint/format comuns ao monorepo (hoje: scripts `pnpm -r` na raiz).
-- `docs/04` e `docs/06` desatualizados em relação ao contrato e ao banco: `type` em `command_results`, `expires_at`/`issued_at` nos comandos, unit id 0–255 em TCP, `ack_samples_seq`, lista de eventos e de erros, e as seis tabelas novas.
+**Depende de hardware:** bancada com o R1000 (roteiro em `docs/operacao/verificacao-bancada-r1000.md`), pacote de suporte ao R1000 (overlay e RTC, sem o qual as RS-485 não têm alimentação) e a primeira imagem gravada.
 
-**Fase 1:**
-- Login e permissões (Better Auth), API completa dos gateways, ingestão e tarefas agendadas (cron).
-- Gateway: handlers de `tag.read`, `device.test`, `config.reload` e `agent.restart`; API local por socket; aplicação de config por diferença com volta automática; retenção da outbox; `.deb` e OTA. A lista completa está no README do `gateway/`.
-- Particionamento e retenção de `production_minute` e `tag_sample` (W2b).
+**Código da Fase 1 (resumo; lista completa no docs/17 e nos READMEs):**
+- Web: login e permissões (Better Auth), publicador de config e gerador de códigos de ativação, troca do mock pelo banco, tarefas agendadas, alertas.
+- Gateway: handlers de `tag.read`, `device.test`, `config.reload` e `agent.restart`; página local reduzida (`oee-localui`) e ajudante privilegiado (`oee-helper`); OTA mínimo.
+- Pendências conhecidas da API: alerta de minuto reescrito, `409 config_outdated`, histórico de saúde.
 
-## Fora do código
-
-- Comprar o hardware de bancada.
-- Criar as contas (Vercel, Neon, domínio, e-mail).
-- Fazer a cotação e consultar o despachante sobre importação e ANATEL.
-- Responder as decisões pendentes (`docs/15`, seção 10, e `docs/01`).
+**Limite aceito por enquanto (D38):** a RLS usa uma variável de sessão (`app.org_id`) que qualquer SQL rodando como a aplicação pode trocar. Ver `packages/db/README.md`.
 
 ## Como rodar o protótipo
 

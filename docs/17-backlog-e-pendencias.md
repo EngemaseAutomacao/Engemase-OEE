@@ -1,14 +1,14 @@
 # 17 — O que falta: backlog, decisões e próximos passos
 
-> Consolidado de duas auditorias de 11/11/2026: documentação e implementação. Os relatórios completos estão em `docs/rascunhos/auditoria-documentacao.md` e `docs/rascunhos/auditoria-implementacao.md`. Este documento substitui as estimativas de prazo do `docs/09` onde houver conflito.
+> Consolidado de duas auditorias de 11/11/2026 (documentação e implementação), atualizado em 12/11/2026 com o fechamento da Fase 0 de código. Os relatórios completos estão em `docs/rascunhos/auditoria-documentacao.md` e `docs/rascunhos/auditoria-implementacao.md`. Este documento substitui as estimativas de prazo do `docs/09` onde houver conflito.
 
 ## 1. Situação em uma tabela
 
 | Área | Situação |
 |---|---|
-| Arquitetura e documentação | **Ampla, com lacunas.** 22 lacunas de especificação (seção 4) e 20 contradições entre documentos, em correção. O projeto do gateway (`docs/16`) está sendo consolidado |
-| Protótipo da interface (`apps/web`) | **Parcial.** As telas principais estão prontas no layout novo; 22 telas estão sendo construídas agora. Dois desvios de cálculo precisam de correção (seção 5) |
-| **Implementação real** | **Começando.** A Fase 0 está em construção: `packages/contracts`, `packages/oee-core`, `packages/db` com RLS, `tools/plc-sim`, esqueleto do `gateway/` em Go e CI |
+| Arquitetura e documentação | **Ampla e alinhada ao código.** Contradições corrigidas; `docs/04`, `06` e `07` conferidos contra os pacotes; projeto do gateway consolidado no `docs/16`; documentos de operação em `docs/operacao/`. Restam as lacunas da seção 4 |
+| Protótipo da interface (`apps/web`) | **Completo para validação.** Todas as telas no layout novo, inclusive console Engemase, terminal pareado (`/terminal`) e tela de linha. Cálculo do OEE agregado pela soma das bases. 39+ rotas sem erro em desktop e celular |
+| **Implementação real** | **Fase 0 de código pronta.** Contrato, cálculo de OEE, banco com RLS, API real `/enroll` `/sync` `/config` com testes, agente Go revisado, simulador, pacote `.deb`, receita da imagem e CI. Teste de ponta a ponta (simulador → agente → API → banco) verde. Faltam contas na nuvem e hardware |
 | Ambientes (Vercel, Neon, domínio) | **Não criados.** Dependem de contas da Engemase |
 | Hardware de bancada | **Não comprado.** É o maior risco de prazo (importação) |
 | Decisões do dono do produto | **37 pendentes** (seção 3). Sete delas bloqueiam o início da Fase 0 |
@@ -51,7 +51,7 @@ Premissas: 2 desenvolvedores (**Web** e **Gateway**), semana 1 = 16/11/2026, sem
   - alertas e ajuda depois do piloto;
   - configuração de rede pela nuvem só na F2.
 
-**Já adiantado nesta sessão:** a parte de código de W1, X1, W2a, W4 e G0 está sendo implementada na Fase 0 (`packages/*`, `tools/plc-sim`, `gateway/`, CI). Ficam pendentes as partes que dependem de contas e de hardware.
+**Já adiantado:** a parte de código de W1, X1, W2a, W3, W4 e G0, e boa parte de W2b (RLS completa e FKs compostas) e de G4 (`.deb`, units, firewall, imagem). Ficam pendentes as partes que dependem de contas (deploy, Neon, PoC com 100 gateways) e de hardware (bancada, pacote de suporte ao R1000).
 
 ## 3. Decisões pendentes do dono do produto
 
@@ -68,6 +68,7 @@ A ordem de urgência vem da Fase 0. Os padrões adotados até a decisão estão 
 | D29 | OTA mínimo antes do piloto | Sim (+1 a 1,5 semana) |
 | D36 | Aceitar a nova estimativa (piloto nas semanas 14–16) e os cortes | — |
 | D37 | Aceitar formalmente as ADRs ainda como "Proposta" | Tratadas como decididas |
+| D38 | Isolamento no banco: aceitar a RLS por variável de sessão (`app.org_id`) ou endurecer | Aceita: a variável pode ser trocada por qualquer SQL rodando como a aplicação; o risco depende de não haver SQL arbitrário (injeção). Endurecer = valor assinado pelo servidor ou um papel por cliente (`packages/db/README.md`) |
 
 **Antes do contrato do piloto:**
 
@@ -91,7 +92,7 @@ A ordem de urgência vem da Fase 0. Os padrões adotados até a decisão estão 
 
 | # | Tema | O que falta | Quando |
 |---|---|---|---|
-| L1 | Contrato `/sync`, `/enroll`, `/config` | Formalização em `packages/contracts` (em andamento) e ajustes de protocolo: duas filas de ack, `setup_s`, catálogo de eventos, erros do `/enroll` | F0 |
+| L1 | Contrato `/sync`, `/enroll`, `/config` | **Fechada:** `packages/contracts` e `docs/04`. Pendente só o que é da F1: `logs.upload`/`log.level` mínimos, `/releases/latest`, `409 config_outdated` e `429` | F0 ✓ |
 | L2 | Turnos e calendário | Dia do turno noturno, feriados, exceções, turnos sobrepostos, produção fora do turno, vigência, "dia produtivo" | F1 |
 | L3 | Refugo manual e troca de produto | Soma ou substituição do refugo do CLP, motivos de refugo, retrabalho, lançamentos atrasados e estornos | F1 |
 | L4 | Metas e faixas de OEE | `oee_target` (onde e quem define) e faixas 85/60 documentadas | F1 |
@@ -105,7 +106,9 @@ A ordem de urgência vem da Fase 0. Os padrões adotados até a decisão estão 
 | L12 | Testes de aceite | Critérios por requisito, tolerância do OEE, carga, matriz de navegadores e TVs | F1 |
 | L13 | Observabilidade | SLOs, alertas operacionais, métricas de ingestão, retenção de logs | F1 |
 | L14 | Backup e recuperação | RPO/RTO, teste de restauração. **Depois de restaurar o banco, os dados confirmados não voltam dos gateways.** Backup das chaves (OTA, VAPID, CA SSH) | F1 |
-| L15 | Documentação para o usuário | Guias por papel, runbooks do `docs/08`, notas de versão | Piloto |
+| L15 | Documentação para o usuário | Guias por papel e notas de versão. Já feitos: 6 runbooks, ficha de TI, roteiro de bancada e guia por fabricante (`docs/operacao/`). Faltam 4 runbooks (contagem divergente, restauração PITR, rotação de token, troca de hardware) | Piloto |
+| L23 | Gateway em trânsito | Gateway ativado na bancada e desligado para envio gera "Gateway offline" no cliente. Falta um estado "em trânsito/não instalado" que suprime o alerta | F1 |
+| L24 | Revisão do agente no campo | Diagnóstico de RS-485 pelo técnico depende de leituras pela API local do agente (o `tecnico` não para o agente nem acessa a serial) | F1 |
 | L16 | Modelo de dados consolidado | Tabelas dos docs 12–15 no `docs/06` (sendo implementadas em `packages/db`) | F0 |
 | L17 | Jobs agendados | Alertas, reconciliação da VPN, expiração de concessões e tokens, partições | F1 |
 | L18 | i18n | Biblioteca e catálogos de texto | F2 |
@@ -116,15 +119,9 @@ A ordem de urgência vem da Fase 0. Os padrões adotados até a decisão estão 
 
 ## 5. Pendências do protótipo
 
-1. **Desvios de cálculo (não podem ir para o sistema real):**
-   - `aggregateOee` usa média simples, mas o `docs/07` exige Σ(boas × ciclo ideal) ÷ Σ tempo planejado;
-   - com tempo planejado zero, a disponibilidade sai 0, quando deveria sair "sem dado" (`null`).
-2. **Rotas do quiosque:** hoje ficam em `/[cliente]/andon` e `/[cliente]/operador`. O `docs/15` exige `/terminal` e `/terminal/parear`, separados da sessão de pessoa.
-3. **Papel "visualizador":** está descrito como "ideal para TV"; deve ser só leitura para pessoas, porque TV é terminal.
-4. **Status do cliente:** falta "Encerrado". O status do usuário diz "Convite pendente"; deve ser "Aguardando definir senha".
-5. **Comandos com o gateway offline:** "Testar leitura" fica enfileirado, mas pelo `docs/04` comandos expiram em 2 min.
-6. **Tela de linha:** falta `/[cliente]/linhas/[lineId]` (RF05).
-7. **Itens só do protótipo:** `generateStaticParams` e `instant = false` são permitidos só no protótipo e precisam sair na versão real.
+Fechadas em 12/11/2026: OEE agregado pela soma das bases e "sem dado" como "—"; rotas `/terminal` e `/terminal/parear`; papel "visualizador" só leitura; status "Encerrado" e "Aguardando definir senha"; comando com gateway offline expira em 2 min; tela de linha `/[cliente]/linhas/[linhaId]`; Modbus RTU sobre TCP e data bits fixo em 8 no assistente; template do bloco OEE com `plc.heartbeat` e sem `count.good`.
+
+Continua valendo: `generateStaticParams` e `instant = false` são permitidos só no protótipo e precisam sair na versão real.
 
 ## 6. Itens fora do código
 
@@ -141,17 +138,18 @@ A ordem de urgência vem da Fase 0. Os padrões adotados até a decisão estão 
   - semana 6: Resend;
   - antes da F2: Tailscale.
 - **Compra e importação:** cotação formal; despachante para a NCM; consulta a um OCD sobre a ANATEL para equipamento sem rádio.
-- **Jurídico:** contrato SaaS e DPA, termos de uso, política de privacidade, encarregado (DPO), termo de piloto, ficha técnica para o TI.
+- **Jurídico:** contrato SaaS e DPA, termos de uso, política de privacidade, encarregado (DPO), termo de piloto. (A ficha técnica para o TI já existe: `docs/operacao/ficha-tecnica-ti-cliente.md`.)
+- **Pacote de suporte ao R1000** (`engemase-r1000-support`: overlay da Seeed e `rtc-pcf8563w` para o kernel fixado): sem ele as RS-485 ficam sem alimentação e não há LEDs nem RTC. Só dá para fazer com a placa na mão.
 
 ## 7. Próximos 10 passos (semana de 16 a 20/11/2026)
 
 1. Pedir cotação formal e comprar o hardware de bancada. O prazo de importação é o maior risco.
 2. Consultar o despachante e um OCD sobre a NCM e a ANATEL.
 3. Criar as contas (Vercel Pro, Neon, domínio, Sentry) e a proteção de branch no GitHub.
-4. Dono do produto decide os bloqueios da Fase 0 (D2, D7, D26, D28, D29, D36, D37) e os ajustes de protocolo.
-5. Revisar e incorporar a Fase 0 que está sendo implementada agora (pacotes, simulador, agente e CI).
-6. Ligar o CI no GitHub e garantir PRs verdes.
-7. Aplicar a primeira migração num branch Neon de preview (com seed sintético).
-8. Implementar `/enroll` e `/sync` mínimos gravando na Neon (W3).
-9. Equipe de automação: especificação v1 do bloco OEE e implementação na primeira marca de CLP. Escolher o cliente e a linha do piloto.
-10. Abrir as issues no GitHub a partir dos épicos da seção 2.
+4. Dono do produto decide os bloqueios da Fase 0 (D2, D7, D26, D28, D29, D36, D37, D38).
+5. Abrir o PR do branch de trabalho, revisar e ligar o CI (já inclui o teste de ponta a ponta).
+6. Aplicar as migrações 0000–0004 num branch Neon de preview e confirmar que o papel de login é membro de `app_user` e que o dono das tabelas não tem BYPASSRLS.
+7. Deploy de preview na Vercel com `DATABASE_URL` e rodar o PoC com 100 gateways simulados contra ele (W3).
+8. Escrever o publicador de config e o gerador de códigos de ativação na web (hoje só a API do gateway existe).
+9. Equipe de automação: implementar o `FB_OEE_ENGEMASE` (`docs/operacao/`) na primeira marca de CLP e escolher o cliente e a linha do piloto.
+10. Com o hardware: roteiro de bancada (`docs/operacao/verificacao-bancada-r1000.md`), receita do pacote de suporte ao R1000 e primeira imagem Trixie.
