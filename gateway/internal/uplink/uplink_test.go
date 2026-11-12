@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -643,5 +644,78 @@ func TestActionTable(t *testing.T) {
 	}
 	if uplink.ActionFor(uplink.ErrBodyTooLarge) != uplink.ActionSplitBatch {
 		t.Error("lote grande demais deveria dividir")
+	}
+}
+
+// O agente não segue redirecionamento (docs/16 §4). Na troca para o domínio próprio,
+// um redirecionamento do endereço antigo para o novo levaria o lote a outro host sem
+// o token (o Go tira o Authorization ao mudar de host), a nuvem responderia 401 e o
+// envio pararia como "credencial recusada". A resposta 3xx volta como erro com o
+// destino, o outro host não recebe nada e o envio segue em backoff, não em 401.
+func TestRedirectIsNotFollowed(t *testing.T) {
+	var hits atomic.Int32
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		if r.Header.Get("Authorization") == "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer other.Close()
+
+	ctx := context.Background()
+	for _, status := range []int{http.StatusMovedPermanently, http.StatusFound, http.StatusTemporaryRedirect, http.StatusPermanentRedirect} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, other.URL+r.URL.Path, status)
+		}))
+		c, err := uplink.New(uplink.Options{BaseURL: srv.URL, Token: token, AgentVersion: "0.1.0", Timeout: 5 * time.Second})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check := func(op string, err error) {
+			t.Helper()
+			var he *uplink.HTTPError
+			if !errors.As(err, &he) || he.Status != status || !strings.Contains(he.Message, other.URL) ||
+				!strings.Contains(he.Message, "cloud.url") {
+				t.Fatalf("%s com %d: erro %v, quer HTTPError %d com o destino e o cloud.url", op, status, err, status)
+			}
+			if a := uplink.ActionFor(err); a == uplink.ActionStopSending {
+				t.Fatalf("%s com %d: ação %s (redirecionamento não pode parar o envio como 401)", op, status, a)
+			}
+			if got := uplink.FailureClass(err); got == uplink.ClassUnauthorized {
+				t.Fatalf("%s com %d: classe %s", op, status, got)
+			}
+		}
+		_, err = c.Sync(ctx, &contracts.SyncRequest{})
+		check("sync", err)
+		_, _, err = c.FetchConfig(ctx, "")
+		check("config", err)
+		srv.Close()
+	}
+	if n := hits.Load(); n != 0 {
+		t.Fatalf("o host do redirecionamento recebeu %d requisições", n)
+	}
+}
+
+// O cliente dado em Options.HTTPClient (testes) também não segue redirecionamento,
+// e o objeto do chamador não muda.
+func TestRedirectRefusedWithCallerClient(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "https://outro.exemplo.invalid"+r.URL.Path, http.StatusPermanentRedirect)
+	}))
+	defer srv.Close()
+	hc := &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()}
+	c, err := uplink.New(uplink.Options{BaseURL: srv.URL, Token: token, HTTPClient: hc})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.Sync(context.Background(), &contracts.SyncRequest{})
+	var he *uplink.HTTPError
+	if !errors.As(err, &he) || he.Status != http.StatusPermanentRedirect {
+		t.Fatalf("erro %v, quer HTTPError 308", err)
+	}
+	if hc.CheckRedirect != nil {
+		t.Fatal("o cliente do chamador foi alterado")
 	}
 }

@@ -54,19 +54,26 @@ flowchart LR
 
 ## 4. Tráfego de saída necessário (porta IT)
 
-**Nenhuma conexão de entrada.** Liberar **por nome (objeto FQDN)**: a nuvem não tem faixa de IP fixa.
+**Nenhuma conexão de entrada.** Liberar **por nome** (objeto FQDN no firewall ou lista de destinos do proxy), nunca por IP (veja abaixo).
 
 | Destino | Porta | Para quê | Obrigatório |
 |---|---|---|---|
-| `gw.oee.engemase.com.br`\* | TCP 443 | API dos gateways | Sim |
-| `oee.engemase.com.br`\* | TCP 443 | Plataforma (endereço padrão do agente enquanto o domínio dos gateways não for definido) | Sim |
+| `engemase-oee.vercel.app` | TCP 443 | Plataforma Engemase OEE: API dos gateways. É também o endereço que os usuários abrem no navegador | Sim |
 | Host de download das atualizações do agente (`<nome>.public.blob.vercel-storage.com`)\* | TCP 443 | Atualização assinada do software | Sim (nome exato na proposta) |
 | `deb.debian.org`, `archive.raspberrypi.com` | TCP 443 | Correções de segurança do sistema operacional (HTTPS) | Recomendado |
 | Servidor DNS interno | UDP/TCP 53 | Resolver os nomes acima | Sim |
 | Servidor NTP interno (preferido) ou `pool.ntp.br` | UDP 123 | Relógio. Sem relógio certo, a conexão segura falha | Sim |
 | Domínios da Tailscale (lista oficial anexa à proposta) | TCP 443; UDP 41641 e 3478 opcionais | Acesso remoto de manutenção sob demanda (seção 6) | Só se o cliente contratar |
 
-\* O domínio definitivo dos gateways e o host de atualização ainda estão em definição e serão confirmados na proposta.
+\* O host de atualização ainda está em definição e será confirmado na proposta.
+
+**Por que por nome, e não por IP:** a plataforma roda na Vercel, que não tem IP fixo nem exclusivo para o endereço. Os IPs são compartilhados com outros sites e mudam sem aviso: uma regra por IP pararia de funcionar sozinha ou liberaria sites de terceiros. Se o firewall não aceitar objeto FQDN, use o proxy com a lista de destinos.
+
+**Libere só o nome exato.** Não libere `*.vercel.app` inteiro: isso abriria qualquer site hospedado na Vercel. Alguns filtros de conteúdo bloqueiam endereços `vercel.app` por categoria (por exemplo, "hospedagem" ou "domínio novo"); nesse caso, a exceção também é pelo nome exato.
+
+**Computadores, TVs e tablets** que vão abrir a plataforma também precisam chegar a `engemase-oee.vercel.app` (HTTPS 443), pela rede onde estiverem.
+
+**Este endereço vai mudar.** Hoje a plataforma usa o endereço da Vercel. Quando a Engemase passar a usar um domínio próprio, avisaremos com antecedência e enviaremos o novo nome para liberar **antes** da troca. Os gateways só passam a usar o nome novo depois de o TI confirmar a liberação; mantenha o endereço atual liberado até a Engemase avisar que a troca terminou.
 
 **Proxy:** aceito proxy explícito **HTTP CONNECT**, sem autenticação ou com **Basic**. **NTLM, Kerberos e PAC/WPAD não são suportados**: nesses casos, criar uma regra de saída sem autenticação para o IP ou o MAC do gateway.
 
@@ -86,7 +93,7 @@ flowchart LR
 | Confirmação de configuração e resultado de testes de leitura pedidos pela plataforma | Dados pessoais (o gateway não coleta nenhum) |
 
 - Transporte: **HTTPS (TLS 1.2 ou superior)**, com validação de certificado. Autenticação por **token próprio de cada gateway**, guardado na plataforma só como hash e revogável a qualquer momento.
-- Hospedagem: Vercel e Neon. Região de hospedagem dos dados: em definição (proposta: São Paulo), informada na proposta.
+- Hospedagem: Vercel (aplicação) e Neon (banco de dados), na região de **São Paulo**: funções da Vercel em `gru1` e banco na AWS `sa-east-1`. Os dados de produção ficam no banco, em São Paulo.
 
 ## 6. Acesso remoto de manutenção (fase 2, opcional)
 
@@ -112,12 +119,11 @@ flowchart LR
 Rodar de um computador **na mesma VLAN e com as mesmas regras** que o gateway terá:
 
 ```powershell
-Test-NetConnection gw.oee.engemase.com.br -Port 443
-Test-NetConnection oee.engemase.com.br -Port 443
+Test-NetConnection engemase-oee.vercel.app -Port 443
 ```
 
 ```bash
-curl -sS -o /dev/null -w "%{http_code}\n" https://gw.oee.engemase.com.br/
+curl -sS -o /dev/null -w "%{http_code}\n" https://engemase-oee.vercel.app/
 ```
 
 Qualquer **código HTTP** na resposta (200, 401, 404...) mostra que DNS, rota, firewall e TLS estão certos. Erro de conexão, tempo esgotado ou erro de certificado indicam bloqueio. Um endpoint público de teste (`/api/gateway/v1/ping`) está previsto. Envie à Engemase o resultado (print ou texto).

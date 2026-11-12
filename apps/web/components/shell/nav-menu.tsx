@@ -17,7 +17,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
-import { adminNav, clientNav, type NavItem, type NavModel } from "@/components/shell/nav"
+import { adminNav, clientNav, type NavItem, type NavModel, type NavPerms } from "@/components/shell/nav"
 
 function isActive(pathname: string, href: string, exact?: boolean) {
   if (exact) return pathname === href
@@ -27,9 +27,18 @@ function isActive(pathname: string, href: string, exact?: boolean) {
 /** Botões do menu: altura confortável, item ativo destacado como na referência. */
 const BUTTON = "h-10 rounded-lg px-3 text-[13px] font-medium text-sidebar-foreground/85 hover:text-white data-[active=true]:bg-white/12 data-[active=true]:text-white data-[active=true]:shadow-[inset_3px_0_0_0_var(--color-sidebar-primary)]"
 
+/**
+ * Ação do botão "+" das ações rápidas: só uma que cria algo ("Nova máquina", "Novo cliente", "Adicionar usuário"…).
+ * Sem nenhuma (ex.: supervisor, que não configura nem gerencia usuários), o "+" não aparece.
+ */
+function createAction(quick: NavItem[]): NavItem | undefined {
+  return quick.find((q) => /^(Nov[ao]|Adicionar|Provisionar)\b/.test(q.title))
+}
+
 function Menu({ model }: { model: NavModel }) {
   const pathname = usePathname()
   const configOpen = model.config.some((i) => isActive(pathname, i.href))
+  const create = createAction(model.quick)
 
   return (
     <>
@@ -76,11 +85,13 @@ function Menu({ model }: { model: NavModel }) {
       {model.quick.length > 0 && (
         <SidebarGroup className="mt-1">
           <SidebarGroupLabel className="text-[11px] font-semibold tracking-wide text-sidebar-foreground/60 uppercase">Ações rápidas</SidebarGroupLabel>
-          <SidebarGroupAction asChild title="Nova máquina">
-            <Link href={model.quick.find((q) => q.title.startsWith("Nov"))?.href ?? model.quick[0].href} aria-label="Criar novo">
-              <PlusIcon />
-            </Link>
-          </SidebarGroupAction>
+          {create && (
+            <SidebarGroupAction asChild title={create.title}>
+              <Link href={create.href} aria-label={create.title}>
+                <PlusIcon />
+              </Link>
+            </SidebarGroupAction>
+          )}
           <SidebarGroupContent>
             <SidebarMenu className="gap-0">
               {model.quick.map((item) => (
@@ -114,8 +125,8 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   )
 }
 
-export function ClientNavMenu({ slug, machineId, lineId }: { slug: string; machineId?: string; lineId?: string }) {
-  return <Menu model={clientNav(slug, { machineId, lineId })} />
+export function ClientNavMenu({ slug, machineId, lineId, perms }: { slug: string; machineId?: string; lineId?: string; perms?: NavPerms }) {
+  return <Menu model={clientNav(slug, { machineId, lineId }, perms)} />
 }
 
 export function AdminNavMenu() {

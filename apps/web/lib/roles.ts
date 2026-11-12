@@ -17,10 +17,11 @@ export const CLIENT_ROLE_LABEL: Record<ClientRole, string> = {
 /**
  * O que cada papel do cliente faz (decisões D12 e D13). A configuração (unidades, linhas, máquinas,
  * gateways, tags, terminais, turnos, produtos, motivos e aparência) é feita só pela equipe Engemase.
+ * As ações do chão (classificar paradas, lançar refugo, trocar produto) valem para todos os papéis, menos o visualizador.
  */
 export const CLIENT_ROLE_DESCRIPTION: Record<ClientRole, string> = {
-  client_admin: "Gerencia os usuários do cliente (convites, papéis, escopos) e vê tudo, só leitura na configuração",
-  engineer: "Leitura técnica: saúde dos gateways, conexões com os CLPs e tags, sem editar",
+  client_admin: "Gerencia os usuários do cliente (convites, papéis, escopos). Vê tudo, só leitura na configuração, e faz as ações do chão",
+  engineer: "Leitura técnica: saúde dos gateways, conexões com os CLPs e tags, sem editar. Também faz as ações do chão",
   supervisor: "Dashboards e relatórios; classifica paradas, lança refugo e troca de produto",
   operator: "Tela do operador: classifica paradas, lança refugo e troca de produto",
   viewer: "Somente leitura: dashboards e relatórios do seu escopo",

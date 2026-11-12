@@ -1,5 +1,7 @@
 > **Rascunho** gerado pela auditoria de 11/11/2026 (implementação e backlog). Consolidado em `docs/17-backlog-e-pendencias.md`.
 
+> **Depois desta auditoria:** várias decisões foram tomadas em 12/11/2026 ([`docs/17` §3](../17-backlog-e-pendencias.md#3-decisões)). Em particular, D28: por enquanto só o domínio da Vercel (`engemase-oee.vercel.app`, produto e gateways); `oee.engemase.com.br` e `gw.oee.engemase.com.br`, citados abaixo, eram exemplos, e o domínio próprio fica para depois. Região (D7): São Paulo (Vercel `gru1`, Neon `sa-east-1`).
+
 # O que falta no sistema Engemase OEE: implementação real e backlog (11/11/2026)
 
 ## Resumo

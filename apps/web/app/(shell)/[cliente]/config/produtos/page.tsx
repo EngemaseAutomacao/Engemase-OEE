@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 
-import { getClientBySlug, getLines, getMachineLive, getMachines, getProducts, getUnits } from "@/lib/mock"
+import { getClientBySlug, getConfigAccess, getLines, getMachineLive, getMachines, getProducts, getUnits } from "@/lib/mock"
+import { ConfigAccessProvider, EngemaseManagedNote } from "@/components/config/engemase-managed"
 import { ProductsManager, type ProductMachine, type ProductRow } from "@/components/config/products-manager"
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/produtos">) {
@@ -34,5 +35,10 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/prod
     runningOn: rawMachines.filter((m) => runningCode.get(m.id) === p.code).map((m) => m.code),
   }))
 
-  return <ProductsManager initialProducts={products} machines={machines} units={units} />
+  return (
+    <ConfigAccessProvider canEdit={getConfigAccess(client.id).canConfigure}>
+      <EngemaseManagedNote padded clientSlug={client.slug} subject="Produtos e ciclos ideais" />
+      <ProductsManager initialProducts={products} machines={machines} units={units} />
+    </ConfigAccessProvider>
+  )
 }

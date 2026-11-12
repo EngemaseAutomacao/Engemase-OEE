@@ -1,5 +1,7 @@
 > **Consolidado:** as definições canônicas estão no [`docs/16`](../16-projeto-do-gateway.md); onde este rascunho divergir, vale o docs/16 (ex.: **ETH0 = OT** e **ETH1 = IT**; página local no `oee-localui`, porta 443, só na OT e no endereço de serviço). Implementação em `gateway/` e `deploy/`.
 
+> **Endereço (D28, 12/11/2026):** por enquanto só o domínio da Vercel, `engemase-oee.vercel.app`, para o produto e para os gateways. Os exemplos com `oee.engemase.com.br` e `gw.oee.engemase.com.br` foram trocados por ele; o domínio próprio (e um host só dos gateways) fica para depois. Troca futura: [`docs/16` §4](../16-projeto-do-gateway.md#4-caminhos-usuários-e-identidade-canônico).
+
 > **Rascunho** gerado pelo projeto do gateway (11/11/2026). Consolidado em `docs/16-projeto-do-gateway.md`.
 
 > **Rascunho** do projeto do gateway (parte "comissionamento local"), 11/11/2026. Ainda não foi revisado nem consolidado no `docs/16`. Nenhum arquivo do repositório foi criado ou alterado.
@@ -170,7 +172,7 @@ MemoryDenyWriteExecute=yes
 
 **Método A: aprovação pela plataforma (F2)**
 1. Na tela de entrada, o técnico escolhe "Entrar com a plataforma" e o perfil (técnico ou leitura).
-2. O agente gera um **desafio** de 8 caracteres em base32 Crockford (40 bits), por exemplo `K7QF-2M9X`, e um **QR** com `https://oee.engemase.com.br/gw/acesso-local?g=<gateway_id>&c=<desafio>`.
+2. O agente gera um **desafio** de 8 caracteres em base32 Crockford (40 bits), por exemplo `K7QF-2M9X`, e um **QR** com `https://engemase-oee.vercel.app/gw/acesso-local?g=<gateway_id>&c=<desafio>`.
    - O desafio vale 10 min e só pode ser usado uma vez.
    - Se o gateway estiver online, ele passa a sincronizar a cada 1 s enquanto houver desafio pendente.
 3. No celular, o técnico lê o QR, ou abre o gateway na plataforma, entra em "Acesso local" e digita o desafio.
@@ -374,7 +376,7 @@ O motor e as regras são os do rascunho de rede (§1.3 a §1.9): `network.json`,
   - Bloqueado (401, credencial revogada): "Reativar com novo código".
 - **Formulário** (só para gateway não ativado ou bloqueado):
   - **código de ativação** `XXXX-XXXX`;
-  - **URL da plataforma**: padrão `https://oee.engemase.com.br`. Em "Avançado" só se aceitam os hosts de uma lista embutida no binário (produção e homologação), o que impede redirecionar o gateway para um servidor qualquer. URL livre só por CLI root, com `--allow-custom-url`;
+  - **URL da plataforma**: padrão `https://engemase-oee.vercel.app`. Em "Avançado" só se aceitam os hosts de uma lista embutida no binário (produção e homologação), o que impede redirecionar o gateway para um servidor qualquer. URL livre só por CLI root, com `--allow-custom-url`;
   - **proxy e CA**: os mesmos campos da Rede, gravados no `network.json`.
 - **Ações:**
   - "Testar conexão": DNS, TCP, TLS, `/ping` e diferença de relógio;
@@ -495,7 +497,7 @@ O motor e as regras são os do rascunho de rede (§1.3 a §1.9): `network.json`,
 2. ping do gateway da IT;
 3. DNS do host da plataforma;
 4. TCP 443, direto ou pelo proxy;
-5. **TLS**: versão e emissor. Emissor inesperado gera "Inspeção SSL detectada: pedir ao TI exceção para gw.oee.engemase.com.br";
+5. **TLS**: versão e emissor. Emissor inesperado gera "Inspeção SSL detectada: pedir ao TI exceção para engemase-oee.vercel.app";
 6. `/api/gateway/v1/ping`, com a diferença de relógio;
 7. credencial (último `/sync` 200);
 8. NTP (fontes, estrato e offset, lidos pelo `oee-netd`);
@@ -725,8 +727,8 @@ BANCO    buffer.db 38 MB · quick_check ok · fila 15 · quarentena 0 ..........
 SERIAL   rs485-1 /dev/ttyAMA2 modo RS-485 ativo · rs485-2 e rs485-3 sem uso ............... OK
 RELÓGIO  NTP 10.20.0.5 estrato 3 +4 ms · RTC ok ...................................... OK
 IT       eth1 100 Mb/s full · 10.20.30.40/24 gw 10.20.30.1 ............................... OK
-DNS      gw.oee.engemase.com.br resolvido por 10.20.0.10 (12 ms) ......................... OK
-HTTPS    gw.oee.engemase.com.br:443 direto · TLS 1.3 · emissor esperado · 182 ms ......... OK
+DNS      engemase-oee.vercel.app resolvido por 10.20.0.10 (12 ms) ........................ OK
+HTTPS    engemase-oee.vercel.app:443 direto · TLS 1.3 · emissor esperado · 182 ms ........ OK
 API      /api/gateway/v1/ping · diferença de relógio +12 ms ............................. OK
 CREDENC. gw_01JD2X… · último /sync 200 há 4 s ........................................ OK
 OT       eth0 1000 Mb/s full · 192.168.10.250/24 + 169.254.127.58/16 ..................... OK
@@ -737,7 +739,7 @@ Resultado: 1 aviso (código de saída 1)
 
 ```
 $ sudo oee-gateway enroll --code ABCD-1234
-Plataforma https://oee.engemase.com.br · conexão ok (TLS 1.3, 190 ms) · relógio ok (+12 ms)
+Plataforma https://engemase-oee.vercel.app · conexão ok (TLS 1.3, 190 ms) · relógio ok (+12 ms)
 Ativado: "GW-01 Injeção" (gw_01JD2X…) · cliente Serra Azul · unidade Jundiaí
 Config v43 baixada e aplicada: 3 dispositivos, 5 máquinas, 22 tags.
 ```

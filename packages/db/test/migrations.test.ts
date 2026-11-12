@@ -10,13 +10,57 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import * as schema from "../src/schema/index"
 import { ALL_TABLES } from "../src/tenancy"
 import { tenantTablesWithoutForcedRls, tenantTablesWithoutIsolationPolicy } from "./catalog"
-import { count, createTestDatabase, MIGRATIONS_FOLDER, type TestDatabase } from "./helpers"
+import { count, createTestDatabase, expectDbError, MIGRATIONS_FOLDER, type TestDatabase } from "./helpers"
 
 interface Journal {
   readonly entries: readonly { readonly idx: number; readonly tag: string }[]
 }
 
 const journal = JSON.parse(readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8")) as Journal
+
+/** Banco com as migrações só até `lastIdx` (cópia da pasta com o journal cortado). */
+async function migratedUpTo(lastIdx: number): Promise<{ client: PGlite; folder: string }> {
+  // O migrator aplica o que o journal lista.
+  const folder = mkdtempSync(join(tmpdir(), `engemase-db-ate-${String(lastIdx).padStart(4, "0")}-`))
+  cpSync(MIGRATIONS_FOLDER, folder, { recursive: true })
+  const upTo = { ...journal, entries: journal.entries.filter((entry) => entry.idx <= lastIdx) }
+  writeFileSync(join(folder, "meta", "_journal.json"), JSON.stringify(upTo, null, 2))
+  const client = new PGlite()
+  await migrate(drizzle({ client }), { migrationsFolder: folder })
+  return { client, folder }
+}
+
+/** Dono das tabelas como na Neon: papel comum, sem SUPERUSER nem BYPASSRLS. */
+async function useOwnerWithoutBypassRls(client: PGlite): Promise<void> {
+  await client.exec(`
+    CREATE ROLE migration_owner NOLOGIN NOSUPERUSER NOBYPASSRLS;
+    DO $$
+    DECLARE r record;
+    BEGIN
+      EXECUTE format('GRANT CREATE ON DATABASE %I TO migration_owner', current_database());
+      FOR r IN
+        SELECT c.oid::regclass AS t FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname IN ('public', 'drizzle') AND c.relkind IN ('r', 'p')
+      LOOP
+        EXECUTE format('ALTER TABLE %s OWNER TO migration_owner', r.t);
+      END LOOP;
+    END
+    $$;
+    ALTER SCHEMA drizzle OWNER TO migration_owner;
+    GRANT CREATE ON SCHEMA public TO migration_owner;
+    GRANT USAGE ON SCHEMA app TO migration_owner;
+    GRANT EXECUTE ON FUNCTION app.enable_tenant_rls(regclass) TO migration_owner;`)
+}
+
+/** Aplica todas as migrações como `migration_owner`. */
+async function migrateAsOwner(client: PGlite): Promise<void> {
+  await client.exec("SET ROLE migration_owner")
+  try {
+    await migrate(drizzle({ client }), { migrationsFolder: MIGRATIONS_FOLDER })
+  } finally {
+    await client.exec("RESET ROLE")
+  }
+}
 
 describe("migrações", () => {
   let t: TestDatabase
@@ -42,6 +86,7 @@ describe("migrações", () => {
       "0003_organization_rls_state_lookups",
       "0004_organization_slug_check",
       "0005_member_machine_owner_decisions",
+      "0006_client_limits_machines_required",
     ])
   })
 
@@ -83,13 +128,9 @@ describe("0005 aplicada sobre um banco que já tinha clientes", () => {
   let client: PGlite
 
   beforeAll(async () => {
-    // Cópia das migrações com o journal só até a 0004 (o migrator aplica o que o journal lista).
-    folder = mkdtempSync(join(tmpdir(), "engemase-db-ate-0004-"))
-    cpSync(MIGRATIONS_FOLDER, folder, { recursive: true })
-    const upTo0004 = { ...journal, entries: journal.entries.filter((entry) => entry.idx <= 4) }
-    writeFileSync(join(folder, "meta", "_journal.json"), JSON.stringify(upTo0004, null, 2))
-    client = new PGlite()
-    await migrate(drizzle({ client }), { migrationsFolder: folder })
+    const migrated = await migratedUpTo(4)
+    client = migrated.client
+    folder = migrated.folder
   })
 
   afterAll(async () => {
@@ -106,25 +147,7 @@ describe("0005 aplicada sobre um banco que já tinha clientes", () => {
     const before = await client.query<{ managed: boolean }>("SELECT managed_by_engemase AS managed FROM client_account")
     expect(before.rows).toEqual([{ managed: false }])
 
-    // Dono das tabelas como na Neon: papel comum, sem SUPERUSER nem BYPASSRLS.
-    await client.exec(`
-      CREATE ROLE migration_owner NOLOGIN NOSUPERUSER NOBYPASSRLS;
-      DO $$
-      DECLARE r record;
-      BEGIN
-        EXECUTE format('GRANT CREATE ON DATABASE %I TO migration_owner', current_database());
-        FOR r IN
-          SELECT c.oid::regclass AS t FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-          WHERE n.nspname IN ('public', 'drizzle') AND c.relkind IN ('r', 'p')
-        LOOP
-          EXECUTE format('ALTER TABLE %s OWNER TO migration_owner', r.t);
-        END LOOP;
-      END
-      $$;
-      ALTER SCHEMA drizzle OWNER TO migration_owner;
-      GRANT CREATE ON SCHEMA public TO migration_owner;
-      GRANT USAGE ON SCHEMA app TO migration_owner;
-      GRANT EXECUTE ON FUNCTION app.enable_tenant_rls(regclass) TO migration_owner;`)
+    await useOwnerWithoutBypassRls(client)
 
     // A armadilha: com a RLS forçada, o dono sem BYPASSRLS não enxerga nenhuma linha (um UPDATE
     // simples não faria nada, sem erro).
@@ -136,12 +159,7 @@ describe("0005 aplicada sobre um banco que já tinha clientes", () => {
     })
     expect(seenByOwner).toBe(0)
 
-    await client.exec("SET ROLE migration_owner")
-    try {
-      await migrate(drizzle({ client }), { migrationsFolder: MIGRATIONS_FOLDER })
-    } finally {
-      await client.exec("RESET ROLE")
-    }
+    await migrateAsOwner(client)
 
     const after = await client.query<{ managed: boolean; forced: boolean }>(`
       SELECT a.managed_by_engemase AS managed, c.relforcerowsecurity AS forced
@@ -152,5 +170,41 @@ describe("0005 aplicada sobre um banco que já tinha clientes", () => {
     expect(await tenantTablesWithoutIsolationPolicy(client)).toEqual([])
     const applied = await client.query<{ n: number }>("SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations")
     expect(applied.rows[0]?.n).toBe(journal.entries.length)
+  })
+})
+
+describe("0006 aplicada sobre um cliente sem `machines` em `limits`", () => {
+  let folder: string
+  let client: PGlite
+
+  beforeAll(async () => {
+    const migrated = await migratedUpTo(5)
+    client = migrated.client
+    folder = migrated.folder
+  })
+
+  afterAll(async () => {
+    await client.close()
+    rmSync(folder, { recursive: true, force: true })
+  })
+
+  it("para de propósito (o número contratado não se inventa), mesmo com um dono SEM BYPASSRLS", async () => {
+    // Até a 0005, `limits` tinha padrão `{}` e aceitava objeto vazio.
+    await client.exec(`
+      INSERT INTO organization (name, slug) VALUES ('Cliente sem contrato', 'sem-contrato');
+      INSERT INTO client_account (organization_id) SELECT id FROM organization WHERE slug = 'sem-contrato';`)
+    await useOwnerWithoutBypassRls(client)
+
+    // O CHECK novo lê a linha mesmo com a RLS forçada (o dono não a enxergaria num SELECT).
+    await expectDbError(migrateAsOwner(client), /client_account_limits_chk/)
+    const applied = await client.query<{ n: number }>("SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations")
+    expect(applied.rows[0]?.n).toBe(6)
+
+    // Com o número gravado (como dono do banco), a 0006 passa.
+    await client.exec(`UPDATE client_account SET limits = '{"machines": 12}'`)
+    await migrateAsOwner(client)
+    const after = await client.query<{ n: number }>("SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations")
+    expect(after.rows[0]?.n).toBe(journal.entries.length)
+    expect(await tenantTablesWithoutForcedRls(client)).toEqual([])
   })
 })

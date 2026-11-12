@@ -58,34 +58,34 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/maqu
 
   return (
     <ConfigAccessProvider canEdit={access.canConfigure}>
-    <div className="flex flex-col gap-5 p-4 md:p-6">
-      <EngemaseManagedNote clientSlug={client.slug} subject="Máquinas, conexões com os CLPs e sinais" />
-      <PageTitle
-        title="Cadastro de máquinas"
-        description="Identificação, conexão Modbus com o CLP, modo de estado e ciclo ideal de cada máquina."
-        actions={
-          access.canConfigure && (
-            <>
-              <EngemaseOnlyChip />
-              <Button asChild>
-                <Link href={`/${client.slug}/config/maquinas/nova`}>
-                  <PlusIcon />
-                  Nova máquina
-                </Link>
-              </Button>
-            </>
-          )
-        }
-      />
-      <MachineRegistry
-        clientSlug={client.slug}
-        initialRows={rows}
-        units={units}
-        lines={lines}
-        gateways={gateways}
-        machineLimit={client.limits.machines}
-      />
-    </div>
+      <div className="flex flex-col gap-5 p-4 md:p-6">
+        <EngemaseManagedNote clientSlug={client.slug} subject="Máquinas, conexões com os CLPs e sinais" />
+        <PageTitle
+          title="Cadastro de máquinas"
+          description="Identificação, conexão Modbus com o CLP, modo de estado e ciclo ideal de cada máquina."
+          actions={
+            access.canConfigure && (
+              <>
+                <EngemaseOnlyChip />
+                <Button asChild>
+                  <Link href={`/${client.slug}/config/maquinas/nova`}>
+                    <PlusIcon />
+                    Nova máquina
+                  </Link>
+                </Button>
+              </>
+            )
+          }
+        />
+        <MachineRegistry
+          clientSlug={client.slug}
+          initialRows={rows}
+          units={units}
+          lines={lines}
+          gateways={gateways}
+          machineLimit={client.limits.machines}
+        />
+      </div>
     </ConfigAccessProvider>
   )
 }

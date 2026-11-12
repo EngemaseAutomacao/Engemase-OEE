@@ -40,7 +40,7 @@ import { Kbd } from "@/components/ui/kbd"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { HelpButton } from "@/components/shell/help-button"
-import { adminNav, clientNav } from "@/components/shell/nav"
+import { adminNav, clientNav, type NavPerms } from "@/components/shell/nav"
 import { NotificationBell, type BellItem } from "@/components/shell/notification-bell"
 import { ThemeToggle } from "@/components/theme-toggle"
 
@@ -66,6 +66,7 @@ export interface SearchEntity {
 export function AppHeader({
   slug,
   kiosk,
+  perms,
   user,
   bell,
   entities,
@@ -73,12 +74,14 @@ export function AppHeader({
 }: {
   slug?: string
   kiosk?: { machineId?: string; lineId?: string }
+  /** Ações rápidas de cadastro conforme o papel (D12/D13). */
+  perms?: NavPerms
   user: HeaderUser
   bell: BellItem[]
   entities: SearchEntity[]
   platformNotice?: string
 }) {
-  const model = slug ? clientNav(slug, kiosk) : adminNav
+  const model = slug ? clientNav(slug, kiosk, perms) : adminNav
   const helpHref = slug ? `/${slug}/ajuda` : "/admin"
   const bellHref = slug ? `/${slug}/notificacoes` : "/admin"
 
@@ -104,12 +107,12 @@ export function AppHeader({
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <Button size="icon" className="size-9 rounded-full shadow-sm" aria-label="Criar">
+                <Button size="icon" className="size-9 rounded-full shadow-sm" aria-label="Ações rápidas">
                   <PlusIcon className="size-4" />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
-            <TooltipContent>Criar</TooltipContent>
+            <TooltipContent>Ações rápidas</TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel className="text-xs text-muted-foreground">Ações rápidas</DropdownMenuLabel>

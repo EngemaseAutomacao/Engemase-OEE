@@ -18,8 +18,12 @@ schema: 1
 
 cloud:
   # URL base da plataforma; o caminho /api/gateway/v1 é fixo no agente.
-  # Domínio próprio dos gateways (gw.oee.engemase.com.br) depende da decisão D28.
-  url: https://oee.engemase.com.br
+  # D28 (12/11/2026): por enquanto só o domínio da Vercel; domínio próprio fica
+  # para depois. O valor é o mesmo de config.DefaultCloudURL (conferido nos testes
+  # do agente). A saída 443 para este host é liberada pelo TI do cliente (ficha
+  # técnica §4): trocar o host exige liberar o novo antes, e este arquivo é
+  # conffile, então a troca nos gateways instalados segue o docs/16 §4.
+  url: https://engemase-oee.vercel.app
   timeout_s: 30
   # PEM com CAs corporativas somadas às do sistema. Vazio = só as do sistema.
   # Com CA corporativa (inspeção SSL aceita por escrito pelo TI), use

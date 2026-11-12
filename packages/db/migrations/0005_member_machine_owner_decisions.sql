@@ -10,7 +10,7 @@
 --     passa a 'active'. Nenhum banco real usou o fluxo de aprovação: se existir concessão 'requested' ou
 --     'denied', o ADD CONSTRAINT do estado falha e a migração para (de propósito: tratar à mão);
 --   - D1 cobrança por máquina: `client_account.limits` precisa ser um objeto com valores inteiros >= 0
---     (`limits.machines` = máquinas contratadas). Linha fora disso também para a migração.
+--     (`limits.machines` = máquinas contratadas). Uma linha fora disso também faz a migração parar.
 -- Sem app em produção ainda, as remoções (estados e colunas) não precisam do expand → migrate → contract.
 CREATE TABLE "member_machine" (
 	"organization_id" uuid NOT NULL,
@@ -44,8 +44,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.member_machine TO app_user;
 -- MANUAL (D13): os clientes que já existiam passam a ser gerenciados pela Engemase.
 -- client_account tem RLS FORÇADA e o dono das tabelas não tem política: sem BYPASSRLS, o UPDATE
 -- enxergaria zero linhas e não faria nada, sem erro. Por isso o FORCE sai e volta DENTRO da
--- transação da migração (o migrator do Drizzle aplica tudo numa transação só, e o ALTER TABLE
--- trava a tabela até o COMMIT: ninguém enxerga a tabela sem FORCE).
+-- transação da migração (o migrator do Drizzle com `pg`/node-postgres, neon-serverless ou PGlite
+-- aplica tudo numa transação só, e o ALTER TABLE trava a tabela até o COMMIT: ninguém enxerga a
+-- tabela sem FORCE). O migrator de `neon-http` NÃO usa transação e não serve para migrar.
 -- ---------------------------------------------------------------------------------------------
 ALTER TABLE public.client_account NO FORCE ROW LEVEL SECURITY;
 --> statement-breakpoint

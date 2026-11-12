@@ -2,7 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { AlertTriangleIcon, FactoryIcon, GaugeIcon, PackageCheckIcon, PlusIcon } from "lucide-react"
 
-import { aggregateOee, getClientBySlug, getLines, getMachinesWithLive, getTimeline, getUnits } from "@/lib/mock"
+import { aggregateOee, getClientBySlug, getConfigAccess, getLines, getMachinesWithLive, getTimeline, getUnits } from "@/lib/mock"
 import { num, pct } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
@@ -46,16 +46,22 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas">)
               <FactoryIcon />
             </EmptyMedia>
             <EmptyTitle>Nenhuma máquina cadastrada</EmptyTitle>
-            <EmptyDescription>Cadastre a primeira máquina e vincule-a a um CLP do gateway para começar a medir o OEE.</EmptyDescription>
+            <EmptyDescription>
+              {getConfigAccess(client.id).canConfigure
+                ? "Cadastre a primeira máquina e vincule-a a um CLP do gateway para começar a medir o OEE."
+                : "A equipe Engemase cadastra as máquinas e liga cada uma ao CLP. Elas aparecem aqui assim que a coleta começar."}
+            </EmptyDescription>
           </EmptyHeader>
-          <EmptyContent>
-            <Button asChild>
-              <Link href={`/${client.slug}/config/maquinas/nova`}>
-                <PlusIcon />
-                Cadastrar máquina
-              </Link>
-            </Button>
-          </EmptyContent>
+          {getConfigAccess(client.id).canConfigure && (
+            <EmptyContent>
+              <Button asChild>
+                <Link href={`/${client.slug}/config/maquinas/nova`}>
+                  <PlusIcon />
+                  Cadastrar máquina
+                </Link>
+              </Button>
+            </EmptyContent>
+          )}
         </Empty>
       ) : (
         <>

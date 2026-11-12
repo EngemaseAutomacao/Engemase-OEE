@@ -6,6 +6,7 @@ import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
 import { SectionCard } from "@/components/dashboard/section-card"
+import { useCanEdit } from "@/components/config/engemase-managed"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
@@ -49,6 +50,7 @@ export function TagsTab({ tags, devices, run }: { tags: TagVM[]; devices: Device
   const [device, setDevice] = useState("all")
   const [query, setQuery] = useState("")
   const [live, setLive] = useState<Record<string, LiveValue>>({})
+  const canEdit = useCanEdit()
 
   const visible = useMemo(() => {
     const q = norm(query.trim())
@@ -111,7 +113,11 @@ export function TagsTab({ tags, devices, run }: { tags: TagVM[]; devices: Device
             <TagsIcon />
           </EmptyMedia>
           <EmptyTitle>Nenhuma tag mapeada</EmptyTitle>
-          <EmptyDescription>Mapeie as tags por papel (rodando, contagem, refugo…) no cadastro da máquina e teste a leitura antes de publicar.</EmptyDescription>
+          <EmptyDescription>
+            {canEdit
+              ? "Mapeie as tags por papel (rodando, contagem, refugo…) no cadastro da máquina e teste a leitura antes de publicar."
+              : "A equipe Engemase mapeia as tags por papel (rodando, contagem, refugo…) e testa a leitura antes de publicar."}
+          </EmptyDescription>
         </EmptyHeader>
       </Empty>
     )
@@ -190,7 +196,7 @@ export function TagsTab({ tags, devices, run }: { tags: TagVM[]; devices: Device
                           <Chip className={TAG_QUALITY_STYLE[quality]}>{TAG_QUALITY_LABEL[quality]}</Chip>
                         </TableCell>
                         <TableCell className="pr-5 text-right">
-                          <ReadButton tag={t} onRead={onRead} />
+                          {canEdit && <ReadButton tag={t} onRead={onRead} />}
                         </TableCell>
                       </TableRow>
                     )

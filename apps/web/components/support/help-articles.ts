@@ -108,12 +108,12 @@ export const ARTICLE_BODY: Record<string, ArticleBlock[]> = {
       items: [
         "Refeição, manutenção programada e “sem programação” **saem do tempo planejado**: não derrubam o OEE.",
         "Se a máquina **produziu durante** uma parada planejada (ex.: rodou no almoço), esse tempo **volta a contar** como planejado. Sem essa regra a performance passaria de 100%.",
-        "**Setup** pode contar como perda de disponibilidade (padrão) ou como planejado — a escolha é do cliente, em Configurações › Motivos.",
+        "**Setup** pode contar como perda de disponibilidade (padrão) ou como planejado. A escolha é do cliente; a equipe Engemase aplica em Configurações › Motivos.",
       ],
     },
     {
       kind: "p",
-      text: "Ajuste o limite de micro-parada em **Configurações › Máquinas**. Limites muito altos escondem paradas reais; muito baixos enchem o tablet do operador de paradas para classificar.",
+      text: "O limite de micro-parada de cada máquina aparece em **Configurações › Máquinas** e é ajustado pela equipe Engemase (peça por chamado). Limites muito altos escondem paradas reais; muito baixos enchem o tablet do operador de paradas para classificar.",
     },
   ],
 
@@ -127,7 +127,7 @@ export const ARTICLE_BODY: Record<string, ArticleBlock[]> = {
         { title: "Máquinas", text: "Lista com estado ao vivo; no detalhe de cada máquina, linha do tempo de estados, produção por hora, Pareto de paradas e histórico por turno." },
         { title: "Relatórios", text: "OEE por período, linha e máquina; paradas por motivo; exportação em CSV e PDF." },
         { title: "Notificações", text: "O sino reúne alertas de falha, máquina parada, gateway offline e pedidos de acesso remoto. Ative o push para receber no celular." },
-        { title: "Configurações", text: "Unidades, linhas, máquinas, turnos, produtos, motivos de parada, usuários, terminais (TV e tablets) e aparência." },
+        { title: "Configurações", text: "Unidades, linhas, máquinas, gateways, turnos, produtos, motivos de parada, terminais (TV e tablets) e aparência: configurados pela equipe Engemase, você consulta. O admin do cliente gerencia os usuários." },
       ],
     },
     {
@@ -159,14 +159,13 @@ export const ARTICLE_BODY: Record<string, ArticleBlock[]> = {
 
   // -------------------------------------------------------------------------
   "andon-tv": [
-    { kind: "p", text: "A TV Andon mostra o estado das máquinas de uma linha em tela cheia, com alarme visual e sonoro. Ela é pareada por código — sem login e senha na TV." },
+    { kind: "p", text: "A TV Andon mostra o estado das máquinas de uma linha em tela cheia, com alarme visual e sonoro. Ela é pareada por código — sem login e senha na TV. Quem pareia é a equipe Engemase." },
     {
       kind: "steps",
       items: [
         { title: "Abra o endereço de terminal na TV", text: "No navegador da TV (ou mini-PC), abra a página de terminal da plataforma. Aparece um código de 6 dígitos, ex.: 482 917." },
-        { title: "Cadastre o terminal", text: "Em Configurações › Terminais › Adicionar terminal, escolha “TV Andon”, a unidade e a linha." },
-        { title: "Digite o código", text: "Informe o código exibido na TV. O pareamento vale só para o escopo escolhido." },
-        { title: "Escolha o tema", text: "Escuro (recomendado para o chão de fábrica), claro ou do sistema." },
+        { title: "Passe o código para a Engemase", text: "Por chamado ou com o técnico no local. Diga a unidade, a linha que a TV deve mostrar e o tema (escuro é o recomendado para o chão de fábrica)." },
+        { title: "A Engemase pareia o terminal", text: "Em Configurações › Terminais, com o escopo escolhido. A TV passa a mostrar a linha em segundos." },
       ],
     },
     {
@@ -174,21 +173,21 @@ export const ARTICLE_BODY: Record<string, ArticleBlock[]> = {
       items: [
         "A TV **não usa notificação push**: o alarme é dentro da página.",
         "Terminal offline aparece em Configurações › Terminais com a hora do último contato.",
-        "Para trocar a linha exibida, edite o escopo do terminal; não é preciso parear de novo.",
+        "Para trocar a linha exibida, peça à Engemase: ela edita o escopo do terminal, sem parear de novo.",
       ],
     },
   ],
 
   // -------------------------------------------------------------------------
   "ligar-clp-modbus-tcp": [
-    { kind: "p", text: "Modbus TCP é o caminho mais simples: o CLP é **servidor** e aceita vários clientes ao mesmo tempo (IHM, SCADA e o gateway)." },
+    { kind: "p", text: "Modbus TCP é o caminho mais simples: o CLP é **servidor** e aceita vários clientes ao mesmo tempo (IHM, SCADA e o gateway). Quem cadastra e testa a conexão na plataforma é a equipe Engemase; este guia ajuda a preparar o CLP e a rede." },
     {
       kind: "steps",
       items: [
         { title: "Rede OT", text: "O CLP precisa de IP fixo na rede de máquinas (OT), alcançável pela porta OT do gateway. Nunca exponha Modbus TCP na rede administrativa: o protocolo não tem autenticação nem criptografia." },
         { title: "Servidor Modbus no CLP", text: "Em algumas marcas basta um parâmetro; em outras (ex.: Siemens S7-1200/1500) é preciso o bloco MB_SERVER no programa." },
-        { title: "Cadastre o dispositivo", text: "IP, porta **502** e **unit id** (normalmente 1; alguns CLPs usam 255 ou ignoram)." },
-        { title: "Teste", text: "Use **“Testar conexão”** e depois **“Ler agora”** em cada tag. Valide os contadores com um valor conhecido." },
+        { title: "Dados para a Engemase", text: "IP, porta **502** e **unit id** (normalmente 1; alguns CLPs usam 255 ou ignoram). A equipe Engemase cadastra o dispositivo." },
+        { title: "Teste", text: "A Engemase usa **“Testar conexão”** e depois **“Ler agora”** em cada tag. Tenha à mão um valor conhecido para validar os contadores." },
       ],
     },
     {
@@ -259,7 +258,7 @@ export const ARTICLE_BODY: Record<string, ArticleBlock[]> = {
         "Confirmar que **não há outro mestre** no barramento.",
         "Cascata, terminação nas pontas, polarização única, comum ligado, malha aterrada em um ponto.",
         "Mesma velocidade e formato em todos os escravos; endereços únicos de 1 a 247.",
-        "Na plataforma: **“Testar conexão”** e **“Ler agora”** em cada tag.",
+        "Na plataforma (equipe Engemase): **“Testar conexão”** e **“Ler agora”** em cada tag.",
         "Forçar uma parada e uma falha na máquina e conferir o estado na tela ao vivo.",
       ],
     },
@@ -319,7 +318,7 @@ export const ARTICLE_BODY: Record<string, ArticleBlock[]> = {
     {
       kind: "callout",
       tone: "tip",
-      text: "Na plataforma, ao cadastrar a máquina, escolha o template **“Bloco OEE padrão Engemase”**, informe o endereço base e use **“Testar conexão”** e **“Ler agora”**. A 19200 bps em RS-485, o bloco inteiro é lido em ~40 ms.",
+      text: "Ao cadastrar a máquina, a equipe Engemase escolhe o template **“Bloco OEE padrão Engemase”**, informa o endereço base e usa **“Testar conexão”** e **“Ler agora”**. A 19200 bps em RS-485, o bloco inteiro é lido em ~40 ms.",
     },
   ],
 
@@ -373,12 +372,12 @@ export const ARTICLE_BODY: Record<string, ArticleBlock[]> = {
         { title: "Rede administrativa (IT)", text: "Cabo na porta IT, link no switch e IP recebido. A porta OT (máquinas) não dá acesso à internet." },
         { title: "Firewall e proxy", text: "O gateway só precisa de saída TCP 443. Inspeção SSL/DPI do firewall pode bloquear a conexão: peça exceção à TI." },
         { title: "Relógio", text: "Relógio com desvio grande faz a nuvem recusar a conexão. Libere NTP ou deixe o gateway usar a hora vinda da plataforma." },
-        { title: "Token", text: "Se o gateway foi substituído ou revogado, ele precisa ser ativado de novo em Configurações › Gateways." },
+        { title: "Token", text: "Se o gateway foi substituído ou revogado, ele precisa ser ativado de novo pela equipe Engemase. Abra um chamado." },
       ],
     },
     {
       kind: "p",
-      text: "Gateway sem contato há mais de 5 minutos gera alerta **crítico** para a engenharia do cliente e para o suporte da Engemase. Se não resolver, abra um chamado informando o gateway e o horário da queda.",
+      text: "Gateway sem contato há mais de 5 minutos gera alerta **crítico** para a engenharia do cliente e para o suporte da Engemase. Energia e rede da fábrica são com você; a configuração do gateway é com a Engemase. Se não resolver, abra um chamado informando o gateway e o horário da queda.",
     },
   ],
 
@@ -388,22 +387,30 @@ export const ARTICLE_BODY: Record<string, ArticleBlock[]> = {
       kind: "table",
       head: ["Papel", "O que faz"],
       rows: [
-        ["Admin do cliente", "Gerencia unidades, máquinas, usuários, política de acesso remoto e de suporte. Vê sempre o cliente inteiro."],
-        ["Engenheiro", "Configura gateways, CLPs e tags; vê tudo das unidades permitidas."],
-        ["Supervisor", "Dashboards, relatórios, turnos, produtos e motivos de parada."],
+        ["Admin do cliente", "Gerencia os usuários do cliente: convida, define papel e escopo, desativa. Vê tudo, sempre o cliente inteiro. Aprova as sessões de acesso remoto. Também faz as ações do chão."],
+        ["Engenheiro", "Leitura técnica: saúde dos gateways, conexões com os CLPs e tags, sem editar. Dashboards, relatórios e ações do chão."],
+        ["Supervisor", "Dashboards e relatórios; classifica paradas, lança refugo e troca de produto."],
         ["Operador", "Tela do operador: classifica paradas, lança refugo e troca de produto."],
-        ["Visualizador", "Somente leitura (ideal para TV / Andon)."],
+        ["Visualizador", "Somente leitura: dashboards e relatórios do seu escopo."],
       ],
+    },
+    {
+      kind: "callout",
+      tone: "info",
+      title: "Configurado pela Engemase",
+      text: "Unidades, linhas, máquinas, gateways, tags, terminais, turnos, produtos, motivos de parada e aparência são configurados pela equipe Engemase. Você consulta tudo em Configurações e pede mudanças por chamado.",
     },
     {
       kind: "list",
       items: [
-        "**Escopo por unidade:** além do papel, cada pessoa pode ver “todas as unidades” ou só algumas. Alertas e relatórios respeitam esse escopo.",
-        "**Equipe Engemase:** o suporte só vê seus dados com **concessão ativa** (motivo, chamado e prazo de até 4 h); engenheiros de campo, só nos clientes atribuídos. Tudo fica na Auditoria.",
+        "**Ações do chão:** classificar paradas, lançar refugo e trocar produto. Valem para todos os papéis, menos o visualizador, sempre dentro do escopo da pessoa.",
+        "**Escopo:** além do papel, cada pessoa vê **todo o cliente**, **algumas unidades** ou **algumas máquinas**. Nenhuma unidade ou máquina escolhida = nenhum acesso.",
+        "**Totais respeitam o escopo:** OEE de linha e de unidade, relatórios, alertas e exportações somam só o que a pessoa pode ver.",
+        "**Equipe Engemase:** sempre tem acesso aos dados, para suporte e configuração, com faixa na tela e registro na Auditoria. Não depende de aprovação.",
         "Usuários de chão de fábrica podem entrar com **nome de usuário** (sem e-mail).",
       ],
     },
-    { kind: "p", text: "Convide pessoas e ajuste escopos em **Configurações › Usuários**." },
+    { kind: "p", text: "O admin do cliente convida pessoas e ajusta papéis e escopos em **Configurações › Usuários**." },
   ],
 
   // -------------------------------------------------------------------------

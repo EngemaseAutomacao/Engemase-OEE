@@ -127,8 +127,8 @@ export function EngemaseAccess({
       <div className="grid gap-3 md:grid-cols-3">
         {[
           { icon: ShieldCheckIcon, tone: "navy" as const, title: "Super admin", text: "Acesso a todos os clientes, sempre auditado; ações destrutivas pedem motivo." },
-          { icon: LifeBuoyIcon, tone: "blue" as const, title: "Suporte", text: `Só com concessão ativa (chamado e prazo de até 4 h). ${activeGrants === 0 ? "Nenhuma ativa agora." : `${activeGrants} ativa${activeGrants === 1 ? "" : "s"} agora.`}` },
-          { icon: HardHatIcon, tone: "teal" as const, title: "Engenheiro de campo", text: `Só nos clientes atribuídos, com validade. ${activeAssignments === 0 ? "Nenhuma atribuição válida." : activeAssignments === 1 ? "1 atribuição válida." : `${activeAssignments} atribuições válidas.`}` },
+          { icon: LifeBuoyIcon, tone: "blue" as const, title: "Suporte", text: `Concessão interna da Engemase (chamado e prazo de até 4 h), sem depender de aprovação do cliente (D5). ${activeGrants === 0 ? "Nenhuma ativa agora." : `${activeGrants} ativa${activeGrants === 1 ? "" : "s"} agora.`}` },
+          { icon: HardHatIcon, tone: "teal" as const, title: "Engenheiro de campo", text: `Configura o cliente (D13) nos clientes atribuídos, com validade. ${activeAssignments === 0 ? "Nenhuma atribuição válida." : activeAssignments === 1 ? "1 atribuição válida." : `${activeAssignments} atribuições válidas.`}` },
         ].map((c) => (
           <div key={c.title} className="flex items-start gap-3 rounded-2xl border bg-card p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
             <IconCircle icon={c.icon} tone={c.tone} soft size="sm" />
@@ -158,7 +158,7 @@ export function EngemaseAccess({
                   <LifeBuoyIcon />
                 </EmptyMedia>
                 <EmptyTitle>Nenhuma concessão</EmptyTitle>
-                <EmptyDescription>O suporte só entra em {clientName} com uma concessão ligada a um chamado.</EmptyDescription>
+                <EmptyDescription>Cada entrada do suporte em {clientName} fica registrada como concessão ligada a um chamado, visível ao cliente na auditoria.</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (

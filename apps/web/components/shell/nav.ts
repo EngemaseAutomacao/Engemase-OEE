@@ -42,8 +42,17 @@ export interface NavModel {
   quick: NavItem[]
 }
 
+/**
+ * O que o usuário atual pode fazer nas ações rápidas (D12/D13): configurar (só a equipe Engemase)
+ * e gerenciar usuários (admin do cliente). Sem a informação, as ações de cadastro não aparecem.
+ */
+export interface NavPerms {
+  canConfigure?: boolean
+  canManageUsers?: boolean
+}
+
 /** Menu da área do cliente. */
-export function clientNav(slug: string, kiosk: { machineId?: string; lineId?: string } = {}): NavModel {
+export function clientNav(slug: string, kiosk: { machineId?: string; lineId?: string } = {}, perms: NavPerms = {}): NavModel {
   const b = `/${slug}`
   return {
     main: [
@@ -71,8 +80,8 @@ export function clientNav(slug: string, kiosk: { machineId?: string; lineId?: st
     quick: [
       ...(kiosk.machineId ? [{ title: "Classificar parada", href: `${b}/operador/${kiosk.machineId}`, icon: ClipboardListIcon }] : []),
       ...(kiosk.machineId ? [{ title: "Lançar refugo", href: `${b}/operador/${kiosk.machineId}`, icon: PackageXIcon }] : []),
-      { title: "Nova máquina", href: `${b}/config/maquinas/nova`, icon: PlusCircleIcon },
-      { title: "Adicionar usuário", href: `${b}/config/usuarios`, icon: UserPlusIcon },
+      ...(perms.canConfigure ? [{ title: "Nova máquina", href: `${b}/config/maquinas/nova`, icon: PlusCircleIcon }] : []),
+      ...(perms.canManageUsers ? [{ title: "Adicionar usuário", href: `${b}/config/usuarios`, icon: UserPlusIcon }] : []),
       { title: "Abrir chamado", href: `${b}/ajuda`, icon: LifeBuoyIcon },
     ],
   }

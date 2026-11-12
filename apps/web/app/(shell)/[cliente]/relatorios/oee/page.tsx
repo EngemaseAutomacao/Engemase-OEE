@@ -2,7 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ChartNoAxesCombinedIcon, ListOrderedIcon, RouterIcon } from "lucide-react"
 
-import { getClientBySlug, getLines, getMachines, getShiftHistory, getUnits } from "@/lib/mock"
+import { getClientBySlug, getConfigAccess, getLines, getMachines, getShiftHistory, getUnits } from "@/lib/mock"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { PageTitle } from "@/components/refresh/page-title"
@@ -56,7 +56,9 @@ export default async function Page({ params }: PageProps<"/[cliente]/relatorios/
             <EmptyTitle>Ainda não há turnos fechados</EmptyTitle>
             <EmptyDescription>
               {allMachines.length === 0
-                ? "Cadastre as máquinas e vincule cada uma a um CLP de um gateway. O relatório aparece depois do primeiro turno completo com dados."
+                ? getConfigAccess(client.id).canConfigure
+                  ? "Cadastre as máquinas e vincule cada uma a um CLP de um gateway. O relatório aparece depois do primeiro turno completo com dados."
+                  : "A equipe Engemase cadastra as máquinas e liga cada uma ao CLP. O relatório aparece depois do primeiro turno completo com dados."
                 : "As máquinas ainda não enviaram contagens e eventos de estado. Assim que o gateway estiver online e o primeiro turno fechar, o relatório é gerado automaticamente."}
             </EmptyDescription>
           </EmptyHeader>

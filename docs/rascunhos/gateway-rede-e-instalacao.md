@@ -1,5 +1,7 @@
 > **Consolidado:** as definições canônicas estão no [`docs/16`](../16-projeto-do-gateway.md); onde este rascunho divergir, vale o docs/16 (ex.: **ETH0 = OT** e **ETH1 = IT**; página local no `oee-localui`, porta 443, só na OT e no endereço de serviço). Implementação em `gateway/` e `deploy/`.
 
+> **Endereço (D28, 12/11/2026):** por enquanto só o domínio da Vercel, `engemase-oee.vercel.app`, para o produto e para os gateways. Os exemplos com `oee.engemase.com.br` e `gw.oee.engemase.com.br` foram trocados por ele; o domínio próprio (e um host só dos gateways) fica para depois. Troca futura: [`docs/16` §4](../16-projeto-do-gateway.md#4-caminhos-usuários-e-identidade-canônico).
+
 > **Rascunho** gerado pela análise do projeto do gateway (interrompida em 11/11/2026). Ainda não revisado nem consolidado no `docs/16`.
 
 # Gateway: rede, instalação física e procedimento em campo
@@ -24,7 +26,7 @@
 | Pilha Linux | NetworkManager (perfis *keyfile* gerados), nftables gerado, chrony, sysctl |
 | Mudança de rede | Pela web, pela página local (OT), por CLI ou por pendrive de serviço. Sempre com **confirmação e rollback automático** em 3 camadas: checkpoint do NetworkManager (300 s), arquivo pendente que sobrevive ao reboot, e retorno à "última rede boa" após 30 min sem nuvem |
 | Firewall | Política *drop* nos três sentidos. Saída na IT só 443/53/123/DHCP **e só para os usuários de sistema esperados** (`meta skuid`). Na OT, só para os **IP:porta cadastrados**. Encaminhamento bloqueado, `ip_forward=0` |
-| Domínio das gateways | Host próprio para a API dos gateways, por exemplo **`gw.oee.engemase.com.br`**. Assim o TI libera um FQDN só, e a ingestão pode mudar de lugar depois sem nova liberação |
+| Domínio das gateways | **D28 (12/11/2026):** por enquanto o domínio da Vercel, **`engemase-oee.vercel.app`**, o mesmo do produto. Um host próprio para a API dos gateways (ex.: `gw.<domínio próprio>`) fica para depois, com o domínio próprio: com ele, a ingestão pode mudar de lugar sem nova liberação no TI |
 
 ---
 
@@ -346,8 +348,8 @@ O perfil da IT segue o mesmo formato:
 
 ```
 IT  eth1  link 100 Mb/s full  10.20.30.40/24  gw 10.20.30.1 .............. OK
-DNS 10.20.0.10  gw.oee.engemase.com.br ................................ OK
-TCP 443 gw.oee.engemase.com.br via proxy 10.20.0.5:3128 ............... OK  38 ms
+DNS 10.20.0.10  engemase-oee.vercel.app ............................... OK
+TCP 443 engemase-oee.vercel.app via proxy 10.20.0.5:3128 .............. OK  38 ms
 TLS emissor do certificado ............................................ OK (CA pública esperada)
 API /api/gateway/v1/ping  offset do relógio 12 ms ..................... OK
 NTP 10.20.0.5  stratum 3  offset 4 ms ................................. OK
@@ -357,7 +359,7 @@ OT  192.168.10.21:502 ................................................. OK   4 m
 OT  192.168.10.23:502 ................................................. FALHA timeout 2 s
 ```
 
-Se o emissor do TLS for inesperado (por exemplo, a CA de um FortiGate), a mensagem é: **"Inspeção SSL detectada. Pedir ao TI a exceção para gw.oee.engemase.com.br."**
+Se o emissor do TLS for inesperado (por exemplo, a CA de um FortiGate), a mensagem é: **"Inspeção SSL detectada. Pedir ao TI a exceção para engemase-oee.vercel.app."**
 
 ---
 
@@ -519,7 +521,7 @@ Observações:
 |---|---|---|
 | 1 | **Um ponto de rede IT** (RJ45) | Porta *access* sem tag, preferencialmente numa **VLAN de IoT ou DMZ industrial**, fora da VLAN de escritório. 100 Mb/s bastam |
 | 2 | **Endereço** | **DHCP com reserva** pelo MAC da porta IT (que enviamos antes da visita) **ou** IP fixo: IP, máscara, gateway, DNS 1 e 2 |
-| 3 | **Saída TCP 443** para estes FQDN | Obrigatórios: `gw.oee.engemase.com.br`\* (API dos gateways) e `<store>.public.blob.vercel-storage.com`\* (downloads de atualização do agente; nome exato informado na proposta). Atualizações de segurança do SO: `deb.debian.org`, `archive.raspberrypi.com`. **A nuvem não tem faixa de IP fixa: liberar por nome (objeto FQDN no firewall)** |
+| 3 | **Saída TCP 443** para estes FQDN | Obrigatórios: `engemase-oee.vercel.app` (API dos gateways; não liberar `*.vercel.app` inteiro) e `<store>.public.blob.vercel-storage.com`\* (downloads de atualização do agente; nome exato informado na proposta). Atualizações de segurança do SO: `deb.debian.org`, `archive.raspberrypi.com`. **A nuvem não tem faixa de IP fixa: liberar por nome (objeto FQDN no firewall)** |
 | 4 | **DNS** | O DNS interno precisa resolver os nomes acima |
 | 5 | **NTP** | Informe o servidor NTP interno (preferido). Se não houver, liberar UDP 123 para `pool.ntp.br` |
 | 6 | **Proxy** (se houver) | Endereço:porta, do tipo HTTP CONNECT. Autenticação só Basic. **NTLM e Kerberos não são suportados**: nesse caso, criar regra sem autenticação para o IP ou MAC do gateway |
@@ -540,12 +542,12 @@ Observações:
 **Teste de liberação (o TI roda antes da visita, de um computador na mesma VLAN)**
 
 ```powershell
-Test-NetConnection gw.oee.engemase.com.br -Port 443
-Invoke-RestMethod https://gw.oee.engemase.com.br/api/gateway/v1/ping
+Test-NetConnection engemase-oee.vercel.app -Port 443
+Invoke-RestMethod https://engemase-oee.vercel.app/api/gateway/v1/ping
 ```
 
 ```bash
-curl -sS https://gw.oee.engemase.com.br/api/gateway/v1/ping
+curl -sS https://engemase-oee.vercel.app/api/gateway/v1/ping
 ```
 
 Resposta esperada: `{"ok":true,"server_time":"..."}`. O endpoint `/ping` é público, sem dados, e está **a criar**.
@@ -970,7 +972,7 @@ Cada máquina pertence a **um** gateway (vínculo `gateway_machine`).
   - comandos `net.apply`, `net.status`, `net.test` e `gw.identify`;
   - endpoint público `GET /api/gateway/v1/ping`;
   - bloco `net` na saúde do `/sync`: IPs, link, NTP, proxy, temperatura, `power_loss` e contadores de descarte do firewall;
-  - host dedicado para os gateways (`gw.oee.engemase.com.br`, nome a definir).
+  - host dedicado para os gateways: fica para depois, com o domínio próprio (D28); por enquanto, `engemase-oee.vercel.app`.
 - **[08](08-seguranca-e-operacao.md):** trocar a linha "Firewall local" pela matriz 2.2; incluir a lista de serviços removidos (com `rpi-connect`).
 - **[12](12-acesso-remoto-vpn.md):**
   - usuário `oee-ra` para o helper;

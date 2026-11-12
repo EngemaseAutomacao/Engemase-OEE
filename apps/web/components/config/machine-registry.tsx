@@ -250,13 +250,17 @@ export function MachineRegistry({
           tone="orange"
           label="Sem conexão"
           value={counts.none}
-          hint={counts.none > 0 ? "Configure o CLP para medir o OEE" : "Todas com CLP configurado"}
+          hint={counts.none > 0 ? (canEdit ? "Configure o CLP para medir o OEE" : "Sem CLP, o OEE não é medido") : "Todas com CLP configurado"}
         />
       </div>
 
       <SectionCard
         title="Máquinas cadastradas"
-        description="Clique no nome para editar. Alterações geram uma nova versão de configuração para o gateway."
+        description={
+          canEdit
+            ? "Clique no nome para editar. Alterações geram uma nova versão de configuração para o gateway."
+            : "Cadastro mantido pela equipe Engemase. Use o ícone ao lado para ver cada máquina ao vivo."
+        }
         className="overflow-hidden"
         bodyClassName="px-0 pb-0"
       >
@@ -332,7 +336,11 @@ export function MachineRegistry({
                 <FactoryIcon />
               </EmptyMedia>
               <EmptyTitle>Nenhuma máquina cadastrada</EmptyTitle>
-              <EmptyDescription>Use o assistente para cadastrar a primeira máquina, conectar o CLP via Modbus e mapear os sinais.</EmptyDescription>
+              <EmptyDescription>
+                {canEdit
+                  ? "Use o assistente para cadastrar a primeira máquina, conectar o CLP via Modbus e mapear os sinais."
+                  : "A equipe Engemase cadastra as máquinas, liga cada uma ao CLP e mapeia os sinais. Para pedir, abra um chamado."}
+              </EmptyDescription>
             </EmptyHeader>
             {canEdit && (
               <EmptyContent>

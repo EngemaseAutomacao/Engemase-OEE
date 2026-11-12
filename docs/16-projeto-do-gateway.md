@@ -93,7 +93,52 @@ Se uma falhar, o agente registra `watchdog não alimentado` (warn, `verificacao=
 | Hostname | `egw-00042` |
 | Usuários | `oee` (agente), `oee-ui` (página local), `oee-ra` (VPN, F2), `tecnico` (só console local, sem SSH) |
 | Sudo do `tecnico` | Só subcomandos explícitos, executados como o usuário `oee`: `oee-gateway diag` e `enroll --code` (Fase 0); `status` e `net show/set/confirm/rollback` entram com a CLI da Fase 1. **Sem** reset de fábrica, URL personalizada, `--config`, `--force` ou acesso remoto |
-| Domínio dos gateways | `gw.oee.engemase.com.br` (proposta, decisão D28) |
+| Endereço da plataforma (produto e gateways) | `https://engemase-oee.vercel.app` (D28, 12/11/2026): só o domínio da Vercel por enquanto; domínio próprio fica para depois. Região São Paulo (D7): funções da Vercel em `gru1`, Neon na AWS `sa-east-1` |
+
+**Onde o endereço está:**
+
+| Lugar | O que muda se o endereço mudar |
+|---|---|
+| Agente: `config.DefaultCloudURL` (`gateway/internal/config/local.go`) | Único ponto no código Go. Vale só para gateway sem `cloud.url` no `gateway.yaml`. Um teste (`TestDefaultCloudURLMatchesShippedYAML`) confere que o `cloud.url` do exemplo e do conffile e o `homepage` dos dois `nfpm*.yaml` repetem o mesmo valor |
+| Pacote: `cloud.url` do `/etc/oee-gateway/gateway.yaml` (conffile) | É o que cada gateway instalado usa. Não muda com versão nova do agente |
+| Pacote: `homepage` de `deploy/gateway/nfpm.yaml` e `nfpm-updater.yaml` | Só metadado do `.deb` (campo `Homepage`). Não muda nada no gateway |
+| Web: `PLATFORM_HOST` em `apps/web/lib/site.ts` | Ativação de gateway, pareamento de terminais, console e ajuda |
+| Ficha de TI (§4 e §8) | Liberação de saída 443 por nome em cada cliente |
+
+Se o projeto na Vercel tiver outro nome, troque o agente, o pacote e a web **antes** de o primeiro gateway sair da bancada.
+
+**O `--url` do `enroll` não troca o host do gateway.** Vale só para a requisição de ativação e fica registrado no `cloud_url` do `credentials.json`, que o agente não lê. O agente sincroniza com o `cloud.url` do `gateway.yaml`. Na bancada, contra outro host (ex.: homologação), troque o `cloud.url` do `gateway.yaml`; só com o `--url`, o token novo vai para o host do `gateway.yaml` e, se for outra instalação, a nuvem responde 401 e o gateway marca a credencial como recusada. Pelo mesmo motivo, o `--url` não serve para migrar um gateway (passo 3 abaixo).
+
+**Cuidados enquanto valer o domínio da Vercel:**
+- **Liberação só por nome.** Os IPs da Vercel não são fixos nem exclusivos; o TI libera o host exato, nunca `*.vercel.app` (ficha de TI §4).
+- **Endereço de produção sem proteção de deploy.** Com a Deployment Protection (login da Vercel ou senha) cobrindo `engemase-oee.vercel.app`, a nuvem responde 401 a todos os gateways, e cada um marca a credencial como recusada (o envio para, o buffer fica). O modo Standard atual protege tudo que não é domínio próprio, o que pode incluir o endereço `.vercel.app`; ver [08](08-seguranca-e-operacao.md#ambientes).
+- **Sem redirecionamento do endereço que os gateways usam.** O agente **não segue redirecionamento** (`refuseRedirect` em `internal/uplink`): o 3xx vira erro "redirecionamento para ...", classe `outro`, e o envio segue em backoff. Se seguisse, o Go tiraria o token ao mudar de host, a nuvem responderia 401 e o agente pararia como "credencial recusada".
+
+**Troca para o domínio próprio (pendência, antes de qualquer gateway instalado mudar de host):**
+
+| O que | Impacto |
+|---|---|
+| TI de cada cliente | Liberar o host novo (e a exceção de inspeção SSL) **antes** da troca daquele cliente; ficha de TI nova |
+| Gateways instalados | Usam o `cloud.url` do `gateway.yaml` local. O agente roda sem root e não escreve em `/etc`; o `tecnico` não tem root nem `--url` no sudo (e o `--url` não troca o host do agente). Hoje, só o pacote (root) ou a bancada, editando o `cloud.url`, trocam o endereço |
+| Pacote | Não trocar o `cloud.url` do conffile numa versão comum: o dpkg aplica sem perguntar onde o arquivo não foi editado, e os gateways cujo TI ainda não liberou o host novo ficariam offline |
+| Credencial | O token vale nos dois endereços (mesma aplicação). O `cloud_url` do `credentials.json` é só o registro do enroll |
+| Endereço da Vercel | Continua servindo a API até o último gateway migrar (pode ficar de reserva). Redirecionar navegadores, se quiser, só por caminho no app, fora de `/api/gateway/*` |
+| Usuários e terminais | Sessões e pareamentos são por endereço: no domínio novo, login e pareamento de novo, ou manter o antigo até a troca |
+| Etiquetas e QR | O que for impresso com o domínio da Vercel continua valendo enquanto o endereço antigo responder |
+
+**Caminho proposto:**
+1. Registrar o domínio próprio e incluí-lo no projeto da Vercel, mantendo `engemase-oee.vercel.app`: os dois servem a mesma aplicação.
+2. Enviar a ficha de TI nova; o TI de cada cliente libera o host novo e roda o teste de liberação.
+3. Trocar **gateway por gateway**, depois do aceite do TI, com volta automática. Proposta: um comando novo no contrato (ex.: `cloud.migrate` com a URL nova), em que o agente:
+   - aceita só HTTPS e um host de uma lista embutida no binário (produção e homologação);
+   - testa o host novo com o mesmo token (um `/sync` só de saúde) antes de trocar;
+   - grava o endereço novo em `/var/lib/oee-gateway/`, que passa a valer sobre o `cloud.url`;
+   - volta sozinho ao endereço anterior se o novo falhar por rede (DNS, conexão, TLS, proxy) por um prazo (ex.: 30 min) e o anterior responder; registra evento e audita.
+
+   Alternativa sem contrato novo: pacote OTA por cliente com um passo de migração que troca o `cloud.url` só quando ele for exatamente o endereço antigo. É mais simples, mas depende de OTA por cliente (D29), não tem volta automática e a volta do pacote não desfaz o endereço.
+4. Com todos migrados: pacote e imagem novos com o domínio próprio no `gateway.yaml` e no `config.DefaultCloudURL`.
+
+O mecanismo do passo 3 precisa estar no agente **antes** de ele ir a campo, ou chegar por OTA (D29). Por isso o [17](17-backlog-e-pendencias.md#3-decisões) recomenda registrar o domínio próprio antes do primeiro gateway ir a um cliente. Hoje está implementada só a proteção contra redirecionamento; o comando de migração depende de contrato (`packages/contracts`), da nuvem e do OTA, e fica para a F1.
 
 ## 5. Rede e instalação
 
@@ -247,7 +292,8 @@ Bancada inicial de **4 posições** (~R$ 4–8 mil, mais 2–3 R1000 e SuperCAP)
 | Perder acesso a um gateway remoto por erro de rede | Sem `net.apply` pela nuvem no MVP; checkpoint com retorno; endereço de serviço; pendrive de reset |
 | Contagem dupla ou perda em casos de borda | `no_comm_s`, testes de propriedade, 500 cortes de energia, `kill -9` repetido e saltos de relógio no CI noturno e na bancada |
 | Desgaste do eMMC | Medir os bytes escritos por dia no teste de 14 dias; alerta pelo indicador de vida do eMMC; `/data` separada |
-| Pacote do OTA maior que o limite de 4,5 MB das Vercel Functions | Baixar do Vercel Blob (FQDN na ficha de TI) ou por streaming no domínio `gw.`, validado na Fase 0 |
+| Pacote do OTA maior que o limite de 4,5 MB das Vercel Functions | Baixar do Vercel Blob (FQDN na ficha de TI) ou por streaming pelo endereço da plataforma, validado na Fase 0 |
+| Trocar o domínio da Vercel pelo próprio com gateways já instalados | Host novo liberado pelo TI antes; troca por gateway com volta automática (§4); o agente não segue redirecionamento |
 | TI do cliente com inspeção SSL ou proxy NTLM | Ficha de TI e teste do `/ping` antes da visita; `diag` que identifica o problema; roteador 4G homologado como alternativa |
 | Correção no piloto exigir ida à fábrica | OTA mínimo com `logs.upload`; piloto perto da Engemase |
 
@@ -261,7 +307,7 @@ Bancada inicial de **4 posições** (~R$ 4–8 mil, mais 2–3 R1000 e SuperCAP)
 | D29 | OTA mínimo antes do piloto | Sim, com `logs.upload` e `log.level` mínimos |
 | D-g1 | Sistema base | Trixie (plano B Bookworm), imagem própria já no MVP |
 | D27 | SuperCAP em todas as unidades | Só depois do teste T-PWR-3; até lá, `reboot` |
-| D28 | Domínio dos gateways e origem do pacote OTA | `gw.oee.engemase.com.br`; OTA pelo Vercel Blob |
+| D28 | Domínio dos gateways e origem do pacote OTA | **Decidida (12/11/2026):** só o domínio da Vercel por enquanto (`engemase-oee.vercel.app`, produto e gateways); domínio próprio fica para depois (§4). OTA pelo Vercel Blob (proposta) |
 | D-g2 | Senha local | Cartão lacrado + cofre; visível só para a equipe Engemase com atribuição |
 | D-g3 | `device.test` em IP ainda não cadastrado | Sim, só na sub-rede OT, com limite e auditoria |
 | D2 | Hardware vendido ou em comodato | — |

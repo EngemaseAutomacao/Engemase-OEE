@@ -4,6 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { ActivityIcon, CableIcon, CloudUploadIcon, FactoryIcon, KeyRoundIcon, PlusIcon, TagsIcon } from "lucide-react"
 
+import { PLATFORM_HOST } from "@/lib/site"
 import { cn } from "@/lib/utils"
 import { ActivityTimeline, type TimelineEvent } from "@/components/dashboard/activity-timeline"
 import { IconCircle } from "@/components/dashboard/icon-circle"
@@ -15,7 +16,7 @@ import { Chip } from "./status-chip"
 
 const CHECKLIST = [
   "Computador industrial com Debian 12 e acesso de administrador (sudo)",
-  "Rede de TI (eth0): saída HTTPS 443 para oee.engemase.com.br e NTP liberados",
+  `Rede de TI (eth0): saída HTTPS 443 para ${PLATFORM_HOST} e NTP liberados`,
   "Rede OT (eth1): IP fixo na faixa dos CLPs, sem rota para a rede de TI",
   "RS-485: cabo blindado com fio de comum (0 V) e terminação de 120 Ω nas pontas",
   "Mapa Modbus dos CLPs em mãos (ou bloco OEE padrão Engemase no programa)",

@@ -41,11 +41,15 @@ import {
  * assinatura COBRADA POR MÁQUINA, com planos (D1, 12/11/2026): `machines` é a base da cobrança.
  * Preços e regras de cada plano ficam fora do banco (ainda não definidos); não há tabela de
  * faturamento. Todo valor é um inteiro >= 0 (`client_account_limits_chk`).
+ *
+ * `machines` é OBRIGATÓRIO (o banco recusa `limits` sem ele, inclusive a organização interna
+ * "Engemase Lab"): todo cliente nasce com as máquinas contratadas, e `0` = nenhuma máquina pode ser
+ * cadastrada. As outras chaves são opcionais: chave ausente = sem limite para aquele item.
  */
 export interface ClientLimits {
   readonly units?: number
-  /** Número de máquinas contratadas (cobrança por máquina, D1). */
-  readonly machines?: number
+  /** Número de máquinas contratadas (cobrança por máquina, D1). Obrigatório. */
+  readonly machines: number
   readonly gateways?: number
   readonly users?: number
   readonly terminals?: number
@@ -64,7 +68,8 @@ export const clientAccount = pgTable(
     status: text("status", { enum: CLIENT_STATUSES }).notNull().default("onboarding"),
     /** Plano da assinatura (o protótipo usa starter, pro e enterprise). Nomes e preços ainda abertos (D1). */
     plan: text("plan"),
-    limits: jsonb("limits").$type<ClientLimits>().notNull().default({}),
+    /** Sem padrão: quem cria o cliente informa as máquinas contratadas (`ClientLimits`). */
+    limits: jsonb("limits").$type<ClientLimits>().notNull(),
     /**
      * Ligado: gateways, conexões, tags e publicação de config são só da equipe Engemase; para o
      * cliente, leitura técnica (D13). No MVP TODO cliente é gerenciado pela Engemase: padrão `true`
@@ -84,11 +89,12 @@ export const clientAccount = pgTable(
   },
   (t) => [
     check("client_account_status_chk", oneOf(t.status, CLIENT_STATUSES)),
-    // `limits` é um objeto e todo valor é inteiro >= 0 (`strict`: um valor em lista não passa).
-    // O `true` do fim (silent) troca erro por NULL, e aí o `jsonb_typeof` decide.
+    // `limits` é um objeto, tem a chave `machines` (D1) e todo valor é inteiro >= 0 (`strict`: um
+    // valor em lista não passa). O `true` do fim (silent) troca erro por NULL, e aí o
+    // `jsonb_typeof` decide.
     check(
       "client_account_limits_chk",
-      sql`jsonb_typeof(${t.limits}) = 'object' AND NOT jsonb_path_exists(${t.limits}, 'strict $.* ? (@.type() != "number" || @ < 0 || @ != @.floor())', '{}', true)`,
+      sql`jsonb_typeof(${t.limits}) = 'object' AND ${t.limits} ? 'machines' AND NOT jsonb_path_exists(${t.limits}, 'strict $.* ? (@.type() != "number" || @ < 0 || @ != @.floor())', '{}', true)`,
     ),
   ],
 )

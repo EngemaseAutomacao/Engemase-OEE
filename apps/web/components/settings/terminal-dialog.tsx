@@ -4,6 +4,7 @@ import { useState } from "react"
 import { CopyIcon, InfoIcon, LoaderCircleIcon, MonitorIcon, MoonIcon, RefreshCwIcon, SunIcon, SunMoonIcon, TabletSmartphoneIcon, TriangleAlertIcon } from "lucide-react"
 import { toast } from "sonner"
 
+import { PAIRING_HOST } from "@/lib/site"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -18,7 +19,8 @@ import type { SettingsUnit, TerminalKind, TerminalLine, TerminalMachine, Termina
 
 export const KIND_LABEL: Record<TerminalKind, string> = { andon_tv: "TV Andon", operator_tablet: "Tablet do operador" }
 export const THEME_LABEL: Record<TerminalTheme, string> = { dark: "Escuro", light: "Claro", system: "Automático" }
-export const PAIRING_HOST = "oee.engemase.com.br/terminal"
+/** Endereço de pareamento (D28): definido em `@/lib/site`. */
+export { PAIRING_HOST }
 
 export interface TerminalFormValue {
   name: string

@@ -9,6 +9,7 @@ import { isNetworkProtocol } from "@/lib/mock/types"
 import { cn } from "@/lib/utils"
 import { IconCircle, type IconTone } from "@/components/dashboard/icon-circle"
 import { SectionCard } from "@/components/dashboard/section-card"
+import { useCanEdit } from "@/components/config/engemase-managed"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
@@ -31,6 +32,7 @@ function Figure({ label, value, alert }: { label: string; value: string; alert?:
 
 function DeviceRow({ d, offline, onTest }: { d: DeviceVM; offline: boolean; onTest: (d: DeviceVM) => Promise<void> }) {
   const [testing, setTesting] = useState(false)
+  const canEdit = useCanEdit()
   const test = async () => {
     setTesting(true)
     await onTest(d)
@@ -65,10 +67,12 @@ function DeviceRow({ d, offline, onTest }: { d: DeviceVM; offline: boolean; onTe
           <Figure label="Latência" value={offline || d.latencyMs === null ? "—" : `${d.latencyMs} ms`} />
           <Figure label="Erros/min" value={offline ? "—" : String(d.errors1m)} alert={!offline && d.errors1m > 0} />
         </div>
-        <Button variant="outline" size="sm" onClick={test} disabled={testing}>
-          {testing ? <Spinner /> : <PlugZapIcon />}
-          {testing ? "Testando…" : "Testar conexão"}
-        </Button>
+        {canEdit && (
+          <Button variant="outline" size="sm" onClick={test} disabled={testing}>
+            {testing ? <Spinner /> : <PlugZapIcon />}
+            {testing ? "Testando…" : "Testar conexão"}
+          </Button>
+        )}
       </div>
     </li>
   )
@@ -125,6 +129,7 @@ export function ConnectionsTab({
   run: RunCommand
 }) {
   const rtuCount = buses.reduce((s, b) => s + b.devices.length, 0)
+  const canEdit = useCanEdit()
 
   const onTest = async (d: DeviceVM) => {
     const target = isNetworkProtocol(d.protocol) ? `${d.name} · ${d.endpoint}` : `${d.name} · ${d.serialPort} #${d.unitId}`
@@ -139,7 +144,7 @@ export function ConnectionsTab({
     else toast.error(`${d.name}: falha no teste`, { description: out.result })
   }
 
-  const newConnection = (
+  const newConnection = canEdit && (
     <Button asChild variant="outline" size="sm" className="shrink-0">
       <Link href={newConnectionHref}>
         <PlusIcon />
@@ -156,9 +161,13 @@ export function ConnectionsTab({
             <CableIcon />
           </EmptyMedia>
           <EmptyTitle>Nenhuma conexão de CLP</EmptyTitle>
-          <EmptyDescription>Cadastre a primeira conexão Modbus TCP ou um escravo Modbus RTU (RS-485) pelo assistente de nova máquina.</EmptyDescription>
+          <EmptyDescription>
+            {canEdit
+              ? "Cadastre a primeira conexão Modbus TCP ou um escravo Modbus RTU (RS-485) pelo assistente de nova máquina."
+              : "A equipe Engemase cadastra as conexões Modbus TCP e RTU deste gateway. Para pedir, abra um chamado."}
+          </EmptyDescription>
         </EmptyHeader>
-        <EmptyContent>{newConnection}</EmptyContent>
+        {newConnection && <EmptyContent>{newConnection}</EmptyContent>}
       </Empty>
     )
   }

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 
-import { brandPresets, getClientBranding, getClientBySlug, getLine, getMachines } from "@/lib/mock"
+import { brandPresets, getClientBranding, getClientBySlug, getConfigAccess, getLine, getMachines } from "@/lib/mock"
+import { ConfigAccessProvider, EngemaseManagedNote } from "@/components/config/engemase-managed"
 import { BrandEditor } from "@/components/settings/brand-editor"
 import type { BrandingInitial, PreviewMachine } from "@/components/settings/types"
 
@@ -36,8 +37,11 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/apar
   const machine: PreviewMachine = first ? { name: first.name, line: getLine(first.lineId)?.name ?? "" } : { name: "Máquina 01", line: "Linha 1" }
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6">
-      <BrandEditor clientName={client.name} initial={initial} presets={brandPresets} machine={machine} />
-    </div>
+    <ConfigAccessProvider canEdit={getConfigAccess(client.id).canConfigure}>
+      <div className="flex flex-col gap-5 p-4 md:p-6">
+        <EngemaseManagedNote clientSlug={client.slug} subject="Cor da marca, menu lateral, nome exibido e logotipos" />
+        <BrandEditor clientName={client.name} initial={initial} presets={brandPresets} machine={machine} />
+      </div>
+    </ConfigAccessProvider>
   )
 }

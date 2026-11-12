@@ -21,7 +21,7 @@ export default function Page() {
     <div className="flex flex-col gap-5 p-4 md:p-6">
       <PageTitle
         title="Clientes"
-        description="Todos os clientes da plataforma: status, plano, uso × limites e gateways com problema."
+        description="Todos os clientes da plataforma: status, plano, máquinas contratadas × em uso (a assinatura é cobrada por máquina) e gateways com problema."
         actions={
           <Button asChild>
             <Link href="/admin/clientes/novo">
@@ -46,7 +46,7 @@ export default function Page() {
               <span className="text-base font-semibold text-muted-foreground"> / {num(limit)}</span>
             </>
           }
-          hint={`${pct(limit > 0 ? used / limit : 0, 0)} do total contratado`}
+          hint={`${pct(limit > 0 ? used / limit : 0, 0)} das contratadas`}
         />
       </div>
 

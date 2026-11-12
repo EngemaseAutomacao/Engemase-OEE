@@ -169,7 +169,6 @@ export interface GatewayDetail {
   status: Gateway["status"]
   clientName: string
   clientSlug: string
-  managed: boolean
   lastSeenAgo: string
   lastSeenLabel: string | null
   agentVersion: string | null
@@ -231,11 +230,8 @@ export function buildGatewayDetail(client: Client, g: Gateway): GatewayDetail {
   // Pessoas (autores de configuração, solicitantes de comandos, aprovadores)
   const clientUsers = getClientUsers(client.id)
   const platform = getPlatformUsers()
-  const engineers = clientUsers
-    .filter((u) => u.status === "active" && u.memberships.some((m) => m.clientId === client.id && (m.role === "client_admin" || m.role === "engineer")))
-    .map((u) => u.name)
-  const engemase = platform.map((u) => u.name)
-  const authors = client.management === "engemase" ? [...engemase, ...engineers] : [...engineers, ...engemase]
+  // Só a equipe Engemase (super admin e engenheiro de campo) publica configuração e manda comandos ao gateway (D13).
+  const authors = platform.filter((u) => u.platformRole === "super_admin" || u.platformRole === "field_engineer").map((u) => u.name)
   const approvers = clientUsers
     .filter((u) => u.status !== "disabled" && u.memberships.some((m) => m.clientId === client.id && m.role === "client_admin"))
     .map((u) => ({ name: u.name, invited: u.status === "invited" }))
@@ -361,7 +357,6 @@ export function buildGatewayDetail(client: Client, g: Gateway): GatewayDetail {
     status: g.status,
     clientName: client.name,
     clientSlug: client.slug,
-    managed: client.management === "engemase",
     lastSeenAgo: g.lastSeen ? ago(g.lastSeen) : "nunca conectou",
     lastSeenLabel: g.lastSeen ? dateTime(g.lastSeen) : null,
     agentVersion: g.agentVersion,

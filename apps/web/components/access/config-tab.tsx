@@ -5,6 +5,7 @@ import { CheckCircle2Icon, CloudUploadIcon, HardDriveDownloadIcon, HistoryIcon, 
 import { cn } from "@/lib/utils"
 import { IconCircle } from "@/components/dashboard/icon-circle"
 import { SectionCard } from "@/components/dashboard/section-card"
+import { useCanEdit } from "@/components/config/engemase-managed"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,6 +75,7 @@ export function ConfigTab({
 }) {
   const synced = applied !== null && applied >= published
   const current = versions.find((v) => v.version === published)
+  const canEdit = useCanEdit()
 
   return (
     <div className="grid gap-4 xl:grid-cols-12">
@@ -117,10 +119,12 @@ export function ConfigTab({
             </p>
           )}
 
-          <Button variant={synced ? "outline" : "default"} onClick={onReload} disabled={reloading} className="w-full">
-            {reloading ? <Spinner /> : <RefreshCwIcon />}
-            {reloading ? "Recarregando…" : "Forçar recarga da configuração"}
-          </Button>
+          {canEdit && (
+            <Button variant={synced ? "outline" : "default"} onClick={onReload} disabled={reloading} className="w-full">
+              {reloading ? <Spinner /> : <RefreshCwIcon />}
+              {reloading ? "Recarregando…" : "Forçar recarga da configuração"}
+            </Button>
+          )}
           <p className="text-xs text-muted-foreground">
             Cada publicação gera uma versão imutável. O gateway baixa a versão nova no sincronismo, valida e confirma a aplicação; se a validação falhar, ele
             continua na versão anterior.
@@ -163,7 +167,7 @@ export function ConfigTab({
                       )
                     })}
                   </ul>
-                  {!isPublished && (
+                  {canEdit && !isPublished && (
                     <div className="mt-2 flex justify-end border-t pt-2">
                       <RevertButton v={v.version} next={published + 1} onRevert={onRevert} />
                     </div>

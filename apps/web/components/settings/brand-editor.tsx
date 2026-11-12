@@ -28,6 +28,7 @@ import { SectionCard } from "@/components/dashboard/section-card"
 import { AA, ENGEMASE_BRAND, analyzeBrand, normalizeHex, ratioLabel } from "@/components/settings/brand-color"
 import { BrandPreview, type PreviewLogo } from "@/components/settings/brand-preview"
 import { ConfirmAction, SettingsTitle, SoftBadge } from "@/components/settings/bits"
+import { EngemaseOnlyChip, useCanEdit } from "@/components/config/engemase-managed"
 import type { BrandingInitial, PreviewMachine, SidebarMode } from "@/components/settings/types"
 
 type LogoKey = "light" | "dark" | "symbol"
@@ -68,6 +69,7 @@ export function BrandEditor({
   const [logos, setLogos] = useState<Partial<Record<LogoKey, LogoFile>>>({})
   const [logosChanged, setLogosChanged] = useState(false)
   const [restoreOpen, setRestoreOpen] = useState(false)
+  const canEdit = useCanEdit()
 
   const stored = brand === initialBrand ? initial.tokens : null
   const a = analyzeBrand(brand, sidebarMode, stored)
@@ -110,7 +112,7 @@ export function BrandEditor({
   }
 
   const acceptFile = (key: LogoKey, file: File | undefined) => {
-    if (!file) return
+    if (!file || !canEdit) return
     if (!/^image\/(png|svg\+xml|webp)$/.test(file.type)) {
       toast.error("Formato não aceito", { description: "Use SVG ou PNG com fundo transparente." })
       return
@@ -129,6 +131,7 @@ export function BrandEditor({
   }
 
   const removeLogo = (key: LogoKey) => {
+    if (!canEdit) return
     const prev = logos[key]
     if (prev) URL.revokeObjectURL(prev.url)
     setLogos((l) => {
@@ -147,251 +150,268 @@ export function BrandEditor({
         title="Aparência"
         description={`Cor da marca, menu lateral e logotipos de ${clientName}. As cores de estado das máquinas e as faixas de OEE nunca mudam.`}
         actions={
-          <>
-            <Button variant="outline" onClick={() => setRestoreOpen(true)}>
-              <RotateCcwIcon />
-              Restaurar padrão Engemase
-            </Button>
-            <Button onClick={save} disabled={!dirty || blocked || !!nameError}>
-              <SaveIcon />
-              Salvar identidade
-            </Button>
-          </>
+          canEdit && (
+            <>
+              <EngemaseOnlyChip />
+              <Button variant="outline" onClick={() => setRestoreOpen(true)}>
+                <RotateCcwIcon />
+                Restaurar padrão Engemase
+              </Button>
+              <Button onClick={save} disabled={!dirty || blocked || !!nameError}>
+                <SaveIcon />
+                Salvar identidade
+              </Button>
+            </>
+          )
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-12">
+      {/* Só a equipe Engemase edita (D12): para o cliente, os controles ficam desabilitados e a prévia continua visível. */}
+      <fieldset disabled={!canEdit} className="contents">
+        <div className="grid gap-4 xl:grid-cols-12">
+          <SectionCard
+            title="Cor da marca"
+            description="Paletas prontas já validadas contra as cores de estado, ou uma cor personalizada"
+            className="xl:col-span-7"
+            action={
+              dirty ? (
+                <SoftBadge tone="amber">Alterações não salvas</SoftBadge>
+              ) : (
+                <SoftBadge tone="green" icon={CheckIcon}>
+                  Salvo
+                </SoftBadge>
+              )
+            }
+          >
+            <div className="grid gap-5">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {presets.map((p) => {
+                  const selected = p.hex.toLowerCase() === brand
+                  return (
+                    <button
+                      key={p.name}
+                      type="button"
+                      onClick={() => pick(p.hex)}
+                      aria-pressed={selected}
+                      className={cn(
+                        "flex min-w-0 items-center gap-2.5 rounded-xl border p-2.5 text-left transition outline-none hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                        selected && "border-primary bg-primary/5 ring-1 ring-primary/30",
+                      )}
+                    >
+                      <span className="relative flex size-8 shrink-0 items-center justify-center rounded-full ring-1 ring-black/10" style={{ background: p.hex }}>
+                        {selected && <CheckIcon className="size-4 text-white" />}
+                      </span>
+                      <span className="min-w-0 leading-tight">
+                        <span className="block truncate text-xs font-semibold">{p.name}</span>
+                        <span className="block font-mono text-[10px] text-muted-foreground uppercase">{p.hex}</span>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-xl bg-muted/50 p-3 sm:flex-row sm:items-center">
+                <div className="flex items-center gap-3">
+                  <label className="relative size-10 shrink-0 cursor-pointer overflow-hidden rounded-full ring-2 ring-card" style={{ background: brand }} title="Escolher cor">
+                    <input type="color" value={brand} onChange={(e) => pick(e.target.value)} className="absolute inset-0 size-full cursor-pointer opacity-0" aria-label="Seletor de cor personalizada" />
+                  </label>
+                  <div className="leading-tight">
+                    <div className="text-sm font-semibold">Cor personalizada</div>
+                    <div className="text-xs text-muted-foreground">{preset ? `Paleta “${preset.name}”` : "Cor livre (validada abaixo)"}</div>
+                  </div>
+                </div>
+                <div className="grid gap-1 sm:ml-auto">
+                  <Label htmlFor="brand-hex" className="sr-only">
+                    Código hexadecimal
+                  </Label>
+                  <div className="relative">
+                    <PaletteIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="brand-hex"
+                      value={hexDraft}
+                      onChange={(e) => {
+                        setHexDraft(e.target.value)
+                        // aplica enquanto digita só com 6 dígitos; o formato curto (#RGB) é aceito ao sair do campo
+                        if (/^#?[0-9a-f]{6}$/i.test(e.target.value.trim())) pick(e.target.value)
+                      }}
+                      onBlur={() => {
+                        const n = normalizeHex(hexDraft)
+                        if (n) pick(n)
+                      }}
+                      maxLength={7}
+                      spellCheck={false}
+                      className="h-9 w-full bg-card pl-8 font-mono uppercase sm:w-36"
+                      aria-invalid={hexInvalid}
+                    />
+                  </div>
+                  {hexInvalid && <span className="text-[11px] text-destructive">Use o formato #RRGGBB</span>}
+                </div>
+              </div>
+
+              <div className="grid gap-3">
+                <div className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Contraste (WCAG) e cores de estado</div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Seal
+                    label="Botões e links · tema claro"
+                    ratio={a.light.ratio}
+                    swatch={a.light.primary}
+                    adjusted={a.light.adjusted}
+                    note={a.light.adjusted ? `A cor original tem ${ratioLabel(a.light.originalRatio)} sobre o fundo; escurecemos só a luminosidade (mesmo matiz) para ${ratioLabel(a.light.ratio)}.` : undefined}
+                  />
+                  <Seal label={`Texto ${a.light.onPrimary === "#ffffff" ? "branco" : "escuro"} no botão · claro`} ratio={a.light.onPrimaryRatio} swatch={a.light.primary} fg={a.light.onPrimary} />
+                  <Seal label="Botões e links · tema escuro" ratio={a.dark.ratio} swatch={a.dark.primary} note="No escuro usamos uma versão mais clara da mesma cor." />
+                  <Seal label={`Texto ${a.dark.onPrimary === "#ffffff" ? "branco" : "escuro"} no botão · escuro`} ratio={a.dark.onPrimaryRatio} swatch={a.dark.primary} fg={a.dark.onPrimary} />
+                </div>
+
+                {a.proximity.level === "block" && (
+                  <Alert variant="destructive">
+                    <OctagonXIcon />
+                    <AlertTitle>Cor bloqueada: muito próxima do {a.proximity.stateLabel}</AlertTitle>
+                    <AlertDescription>
+                      <p>
+                        No chão de fábrica essa cor significa um estado de máquina; usá-la em botões e destaques confundiria a leitura. Escolha outro tom (azul, petróleo, teal ou
+                        grafite funcionam bem).
+                      </p>
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {a.proximity.level === "warn" && (
+                  <Alert className="border-state-stopped/40 bg-state-stopped/10">
+                    <TriangleAlertIcon className="text-amber-700! dark:text-state-stopped!" />
+                    <AlertTitle>Atenção: parecida com o {a.proximity.stateLabel}</AlertTitle>
+                    <AlertDescription>
+                      <p>Pode ser confundida com o estado em TVs e tablets. É possível salvar, mas prefira um tom mais distante.</p>
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {a.proximity.level === "ok" && (
+                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <CircleCheckIcon className="size-4 shrink-0 text-state-running" />
+                    {a.neutral ? "Cor neutra: não conflita com nenhuma cor de estado." : "Distante do verde, âmbar, vermelho e violeta usados nos estados das máquinas."}
+                  </p>
+                )}
+                <p className="font-mono text-[11px] text-muted-foreground">
+                  Tokens: primária {a.light.primary.toUpperCase()} (claro) · {a.dark.primary.toUpperCase()} (escuro) · menu{" "}
+                  {a.light.sidebar.startsWith("#") ? a.light.sidebar.toUpperCase() : "—"}
+                </p>
+              </div>
+            </div>
+          </SectionCard>
+
+          <div className="grid content-start gap-4 xl:col-span-5">
+            <SectionCard title="Menu lateral" description="Fundo do menu para todos os usuários do cliente">
+              <RadioGroup value={sidebarMode} onValueChange={(v) => setSidebarMode(v as SidebarMode)} className="grid gap-2 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
+                {SIDEBAR_MODES.map((m) => {
+                  const sw = analyzeBrand(brand, m.value, stored).light
+                  return (
+                    <Label
+                      key={m.value}
+                      htmlFor={`sb-${m.value}`}
+                      className={cn(
+                        "flex cursor-pointer items-center gap-3 rounded-xl border p-2.5 font-normal transition hover:bg-muted/50",
+                        sidebarMode === m.value && "border-primary bg-primary/5 ring-1 ring-primary/30",
+                      )}
+                    >
+                      <RadioGroupItem id={`sb-${m.value}`} value={m.value} className="sr-only" />
+                      <span className="flex h-9 w-7 shrink-0 flex-col gap-0.5 overflow-hidden rounded-md p-1 ring-1 ring-black/10" style={{ background: sw.sidebar }} aria-hidden>
+                        <span className="h-1.5 rounded-sm" style={{ background: sw.sidebarActiveBg }} />
+                        <span className="h-1 rounded-sm opacity-40" style={{ background: sw.sidebarFg }} />
+                        <span className="h-1 rounded-sm opacity-40" style={{ background: sw.sidebarFg }} />
+                      </span>
+                      <span className="min-w-0 leading-tight">
+                        <span className="block text-sm font-semibold">{m.title}</span>
+                        <span className="block text-[11px] text-muted-foreground">{m.hint}</span>
+                      </span>
+                    </Label>
+                  )
+                })}
+              </RadioGroup>
+            </SectionCard>
+
+            <SectionCard title="Nome exibido" description="Aparece no menu, nas abas do navegador e nos e-mails">
+              <div className="grid gap-4 sm:grid-cols-[1fr_10rem]">
+                <div className="grid gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="brand-name">Nome</Label>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">{displayName.length}/40</span>
+                  </div>
+                  <Input id="brand-name" value={displayName} maxLength={40} onChange={(e) => setDisplayName(e.target.value)} aria-invalid={!!nameError} />
+                  {nameError && <span className="text-[11px] text-destructive">{nameError}</span>}
+                </div>
+                <div className="grid gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="brand-short">Nome curto</Label>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">{shortName.length}/12</span>
+                  </div>
+                  <Input id="brand-short" value={shortName} maxLength={12} onChange={(e) => setShortName(e.target.value)} />
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] text-muted-foreground">O nome curto aparece embaixo do ícone do app instalado no celular.</p>
+            </SectionCard>
+          </div>
+        </div>
+
         <SectionCard
-          title="Cor da marca"
-          description="Paletas prontas já validadas contra as cores de estado, ou uma cor personalizada"
-          className="xl:col-span-7"
+          title="Prévia"
+          description="Botão, link, badge, menu, barra de progresso e card de máquina, nos dois temas"
           action={
-            dirty ? (
-              <SoftBadge tone="amber">Alterações não salvas</SoftBadge>
+            blocked ? (
+              <SoftBadge tone="red" icon={OctagonXIcon}>
+                Cor bloqueada
+              </SoftBadge>
+            ) : a.light.adjusted ? (
+              <SoftBadge tone="blue" icon={WandSparklesIcon}>
+                Ajustado para AA
+              </SoftBadge>
             ) : (
               <SoftBadge tone="green" icon={CheckIcon}>
-                Salvo
+                AA ok
               </SoftBadge>
             )
           }
         >
-          <div className="grid gap-5">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {presets.map((p) => {
-                const selected = p.hex.toLowerCase() === brand
-                return (
-                  <button
-                    key={p.name}
-                    type="button"
-                    onClick={() => pick(p.hex)}
-                    aria-pressed={selected}
-                    className={cn(
-                      "flex min-w-0 items-center gap-2.5 rounded-xl border p-2.5 text-left transition outline-none hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                      selected && "border-primary bg-primary/5 ring-1 ring-primary/30",
-                    )}
-                  >
-                    <span className="relative flex size-8 shrink-0 items-center justify-center rounded-full ring-1 ring-black/10" style={{ background: p.hex }}>
-                      {selected && <CheckIcon className="size-4 text-white" />}
-                    </span>
-                    <span className="min-w-0 leading-tight">
-                      <span className="block truncate text-xs font-semibold">{p.name}</span>
-                      <span className="block font-mono text-[10px] text-muted-foreground uppercase">{p.hex}</span>
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <BrandPreview theme="light" tokens={a.light} displayName={displayName} machine={machine} logo={lightLogo} symbol={logos.symbol} />
+            <BrandPreview theme="dark" tokens={a.dark} displayName={displayName} machine={machine} logo={logos.dark} symbol={logos.symbol} />
+          </div>
+        </SectionCard>
 
-            <div className="flex flex-col gap-3 rounded-xl bg-muted/50 p-3 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-3">
-                <label className="relative size-10 shrink-0 cursor-pointer overflow-hidden rounded-full ring-2 ring-card" style={{ background: brand }} title="Escolher cor">
-                  <input type="color" value={brand} onChange={(e) => pick(e.target.value)} className="absolute inset-0 size-full cursor-pointer opacity-0" aria-label="Seletor de cor personalizada" />
-                </label>
-                <div className="leading-tight">
-                  <div className="text-sm font-semibold">Cor personalizada</div>
-                  <div className="text-xs text-muted-foreground">{preset ? `Paleta “${preset.name}”` : "Cor livre (validada abaixo)"}</div>
-                </div>
-              </div>
-              <div className="grid gap-1 sm:ml-auto">
-                <Label htmlFor="brand-hex" className="sr-only">
-                  Código hexadecimal
-                </Label>
-                <div className="relative">
-                  <PaletteIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="brand-hex"
-                    value={hexDraft}
-                    onChange={(e) => {
-                      setHexDraft(e.target.value)
-                      // aplica enquanto digita só com 6 dígitos; o formato curto (#RGB) é aceito ao sair do campo
-                      if (/^#?[0-9a-f]{6}$/i.test(e.target.value.trim())) pick(e.target.value)
-                    }}
-                    onBlur={() => {
-                      const n = normalizeHex(hexDraft)
-                      if (n) pick(n)
-                    }}
-                    maxLength={7}
-                    spellCheck={false}
-                    className="h-9 w-full bg-card pl-8 font-mono uppercase sm:w-36"
-                    aria-invalid={hexInvalid}
-                  />
-                </div>
-                {hexInvalid && <span className="text-[11px] text-destructive">Use o formato #RRGGBB</span>}
-              </div>
-            </div>
-
-            <div className="grid gap-3">
-              <div className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Contraste (WCAG) e cores de estado</div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Seal
-                  label="Botões e links · tema claro"
-                  ratio={a.light.ratio}
-                  swatch={a.light.primary}
-                  adjusted={a.light.adjusted}
-                  note={a.light.adjusted ? `A cor original tem ${ratioLabel(a.light.originalRatio)} sobre o fundo; escurecemos só a luminosidade (mesmo matiz) para ${ratioLabel(a.light.ratio)}.` : undefined}
+        <div className="grid gap-4 xl:grid-cols-12">
+          <SectionCard
+            title="Logotipos"
+            description={canEdit ? "Arraste o arquivo para a área ou clique para escolher" : "Enviados pela equipe Engemase. Para trocar, abra um chamado."}
+            className="xl:col-span-8"
+          >
+            <div className="grid gap-3 md:grid-cols-3">
+              {LOGO_SLOTS.map((slot) => (
+                <LogoDrop
+                  key={slot.key}
+                  slot={slot}
+                  file={logos[slot.key]}
+                  canEdit={canEdit}
+                  onFile={(f) => acceptFile(slot.key, f)}
+                  onRemove={() => removeLogo(slot.key)}
                 />
-                <Seal label={`Texto ${a.light.onPrimary === "#ffffff" ? "branco" : "escuro"} no botão · claro`} ratio={a.light.onPrimaryRatio} swatch={a.light.primary} fg={a.light.onPrimary} />
-                <Seal label="Botões e links · tema escuro" ratio={a.dark.ratio} swatch={a.dark.primary} note="No escuro usamos uma versão mais clara da mesma cor." />
-                <Seal label={`Texto ${a.dark.onPrimary === "#ffffff" ? "branco" : "escuro"} no botão · escuro`} ratio={a.dark.onPrimaryRatio} swatch={a.dark.primary} fg={a.dark.onPrimary} />
-              </div>
-
-              {a.proximity.level === "block" && (
-                <Alert variant="destructive">
-                  <OctagonXIcon />
-                  <AlertTitle>Cor bloqueada: muito próxima do {a.proximity.stateLabel}</AlertTitle>
-                  <AlertDescription>
-                    <p>
-                      No chão de fábrica essa cor significa um estado de máquina; usá-la em botões e destaques confundiria a leitura. Escolha outro tom (azul, petróleo, teal ou
-                      grafite funcionam bem).
-                    </p>
-                  </AlertDescription>
-                </Alert>
-              )}
-              {a.proximity.level === "warn" && (
-                <Alert className="border-state-stopped/40 bg-state-stopped/10">
-                  <TriangleAlertIcon className="text-amber-700! dark:text-state-stopped!" />
-                  <AlertTitle>Atenção: parecida com o {a.proximity.stateLabel}</AlertTitle>
-                  <AlertDescription>
-                    <p>Pode ser confundida com o estado em TVs e tablets. É possível salvar, mas prefira um tom mais distante.</p>
-                  </AlertDescription>
-                </Alert>
-              )}
-              {a.proximity.level === "ok" && (
-                <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <CircleCheckIcon className="size-4 shrink-0 text-state-running" />
-                  {a.neutral ? "Cor neutra: não conflita com nenhuma cor de estado." : "Distante do verde, âmbar, vermelho e violeta usados nos estados das máquinas."}
-                </p>
-              )}
-              <p className="font-mono text-[11px] text-muted-foreground">
-                Tokens: primária {a.light.primary.toUpperCase()} (claro) · {a.dark.primary.toUpperCase()} (escuro) · menu{" "}
-                {a.light.sidebar.startsWith("#") ? a.light.sidebar.toUpperCase() : "—"}
-              </p>
+              ))}
             </div>
-          </div>
-        </SectionCard>
-
-        <div className="grid content-start gap-4 xl:col-span-5">
-          <SectionCard title="Menu lateral" description="Fundo do menu para todos os usuários do cliente">
-            <RadioGroup value={sidebarMode} onValueChange={(v) => setSidebarMode(v as SidebarMode)} className="grid gap-2 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
-              {SIDEBAR_MODES.map((m) => {
-                const sw = analyzeBrand(brand, m.value, stored).light
-                return (
-                  <Label
-                    key={m.value}
-                    htmlFor={`sb-${m.value}`}
-                    className={cn(
-                      "flex cursor-pointer items-center gap-3 rounded-xl border p-2.5 font-normal transition hover:bg-muted/50",
-                      sidebarMode === m.value && "border-primary bg-primary/5 ring-1 ring-primary/30",
-                    )}
-                  >
-                    <RadioGroupItem id={`sb-${m.value}`} value={m.value} className="sr-only" />
-                    <span className="flex h-9 w-7 shrink-0 flex-col gap-0.5 overflow-hidden rounded-md p-1 ring-1 ring-black/10" style={{ background: sw.sidebar }} aria-hidden>
-                      <span className="h-1.5 rounded-sm" style={{ background: sw.sidebarActiveBg }} />
-                      <span className="h-1 rounded-sm opacity-40" style={{ background: sw.sidebarFg }} />
-                      <span className="h-1 rounded-sm opacity-40" style={{ background: sw.sidebarFg }} />
-                    </span>
-                    <span className="min-w-0 leading-tight">
-                      <span className="block text-sm font-semibold">{m.title}</span>
-                      <span className="block text-[11px] text-muted-foreground">{m.hint}</span>
-                    </span>
-                  </Label>
-                )
-              })}
-            </RadioGroup>
           </SectionCard>
 
-          <SectionCard title="Nome exibido" description="Aparece no menu, nas abas do navegador e nos e-mails">
-            <div className="grid gap-4 sm:grid-cols-[1fr_10rem]">
-              <div className="grid gap-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="brand-name">Nome</Label>
-                  <span className="text-[11px] text-muted-foreground tabular-nums">{displayName.length}/40</span>
-                </div>
-                <Input id="brand-name" value={displayName} maxLength={40} onChange={(e) => setDisplayName(e.target.value)} aria-invalid={!!nameError} />
-                {nameError && <span className="text-[11px] text-destructive">{nameError}</span>}
-              </div>
-              <div className="grid gap-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="brand-short">Nome curto</Label>
-                  <span className="text-[11px] text-muted-foreground tabular-nums">{shortName.length}/12</span>
-                </div>
-                <Input id="brand-short" value={shortName} maxLength={12} onChange={(e) => setShortName(e.target.value)} />
-              </div>
-            </div>
-            <p className="mt-2 text-[11px] text-muted-foreground">O nome curto aparece embaixo do ícone do app instalado no celular.</p>
+          <SectionCard title="Cores que não mudam" description="Iguais para todos os clientes (ISA-101)" className="xl:col-span-4">
+            <ul className="grid gap-2">
+              {STATE_ORDER.map((s) => (
+                <li key={s} className="flex items-center gap-2.5 text-sm">
+                  <span className={cn("size-3 shrink-0 rounded-full", STATE_META[s].dot)} />
+                  <span className="flex-1">{STATE_META[s].label}</span>
+                  <LockIcon className="size-3.5 text-muted-foreground" aria-label="Travada" />
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
+              Também ficam travadas as faixas de OEE e a cor de erro. Cor nunca é o único sinal: estados sempre aparecem com texto e ícone.
+            </p>
           </SectionCard>
         </div>
-      </div>
-
-      <SectionCard
-        title="Prévia"
-        description="Botão, link, badge, menu, barra de progresso e card de máquina, nos dois temas"
-        action={
-          blocked ? (
-            <SoftBadge tone="red" icon={OctagonXIcon}>
-              Cor bloqueada
-            </SoftBadge>
-          ) : a.light.adjusted ? (
-            <SoftBadge tone="blue" icon={WandSparklesIcon}>
-              Ajustado para AA
-            </SoftBadge>
-          ) : (
-            <SoftBadge tone="green" icon={CheckIcon}>
-              AA ok
-            </SoftBadge>
-          )
-        }
-      >
-        <div className="grid gap-4 lg:grid-cols-2">
-          <BrandPreview theme="light" tokens={a.light} displayName={displayName} machine={machine} logo={lightLogo} symbol={logos.symbol} />
-          <BrandPreview theme="dark" tokens={a.dark} displayName={displayName} machine={machine} logo={logos.dark} symbol={logos.symbol} />
-        </div>
-      </SectionCard>
-
-      <div className="grid gap-4 xl:grid-cols-12">
-        <SectionCard title="Logotipos" description="Arraste o arquivo para a área ou clique para escolher" className="xl:col-span-8">
-          <div className="grid gap-3 md:grid-cols-3">
-            {LOGO_SLOTS.map((slot) => (
-              <LogoDrop key={slot.key} slot={slot} file={logos[slot.key]} onFile={(f) => acceptFile(slot.key, f)} onRemove={() => removeLogo(slot.key)} />
-            ))}
-          </div>
-        </SectionCard>
-
-        <SectionCard title="Cores que não mudam" description="Iguais para todos os clientes (ISA-101)" className="xl:col-span-4">
-          <ul className="grid gap-2">
-            {STATE_ORDER.map((s) => (
-              <li key={s} className="flex items-center gap-2.5 text-sm">
-                <span className={cn("size-3 shrink-0 rounded-full", STATE_META[s].dot)} />
-                <span className="flex-1">{STATE_META[s].label}</span>
-                <LockIcon className="size-3.5 text-muted-foreground" aria-label="Travada" />
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
-            Também ficam travadas as faixas de OEE e a cor de erro. Cor nunca é o único sinal: estados sempre aparecem com texto e ícone.
-          </p>
-        </SectionCard>
-      </div>
+      </fieldset>
 
       <ConfirmAction
         open={restoreOpen}
@@ -446,43 +466,55 @@ function Seal({ label, ratio, swatch, fg, adjusted, note }: { label: string; rat
   )
 }
 
+/**
+ * Área de envio de um logotipo. Não é controle de formulário, então o `<fieldset disabled>` não a desliga:
+ * sem `canEdit` (cliente, D12) ela não recebe clique, teclado nem arquivo arrastado e vira só a prévia.
+ */
 function LogoDrop({
   slot,
   file,
+  canEdit,
   onFile,
   onRemove,
 }: {
   slot: (typeof LOGO_SLOTS)[number]
   file: LogoFile | undefined
+  canEdit: boolean
   onFile: (f: File | undefined) => void
   onRemove: () => void
 }) {
   const [over, setOver] = useState(false)
   const input = useRef<HTMLInputElement>(null)
-  return (
-    <div className="grid gap-2">
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => input.current?.click()}
-        onKeyDown={(e) => {
+  const interactive = canEdit
+    ? {
+        role: "button" as const,
+        tabIndex: 0,
+        onClick: () => input.current?.click(),
+        onKeyDown: (e: React.KeyboardEvent) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault()
             input.current?.click()
           }
-        }}
-        onDragOver={(e) => {
+        },
+        onDragOver: (e: React.DragEvent) => {
           e.preventDefault()
           setOver(true)
-        }}
-        onDragLeave={() => setOver(false)}
-        onDrop={(e) => {
+        },
+        onDragLeave: () => setOver(false),
+        onDrop: (e: React.DragEvent) => {
           e.preventDefault()
           setOver(false)
           onFile(e.dataTransfer.files[0])
-        }}
+        },
+      }
+    : {}
+  return (
+    <div className="grid gap-2">
+      <div
+        {...interactive}
         className={cn(
-          "flex min-h-36 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-4 text-center transition outline-none hover:border-primary/50 hover:bg-primary/5 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+          "flex min-h-36 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-4 text-center transition outline-none",
+          canEdit ? "cursor-pointer hover:border-primary/50 hover:bg-primary/5 focus-visible:ring-[3px] focus-visible:ring-ring/50" : "bg-muted/30",
           over && "border-primary bg-primary/10",
           slot.key === "dark" && file && "bg-[#2c4e73]",
         )}
@@ -496,31 +528,35 @@ function LogoDrop({
           />
         ) : (
           <>
-            <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <ImageUpIcon className="size-5" />
+            <span className={cn("flex size-10 items-center justify-center rounded-full", canEdit ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
+              {canEdit ? <ImageUpIcon className="size-5" /> : <LockIcon className="size-4" />}
             </span>
-            <span className="text-xs font-semibold">{over ? "Solte para enviar" : "Arraste ou clique"}</span>
+            <span className={cn("text-xs font-semibold", !canEdit && "text-muted-foreground")}>
+              {!canEdit ? "Envio pela equipe Engemase" : over ? "Solte para enviar" : "Arraste ou clique"}
+            </span>
           </>
         )}
       </div>
-      <input
-        ref={input}
-        type="file"
-        accept="image/svg+xml,image/png,image/webp"
-        className="sr-only"
-        tabIndex={-1}
-        aria-hidden
-        onChange={(e) => {
-          onFile(e.target.files?.[0])
-          e.target.value = ""
-        }}
-      />
+      {canEdit && (
+        <input
+          ref={input}
+          type="file"
+          accept="image/svg+xml,image/png,image/webp"
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden
+          onChange={(e) => {
+            onFile(e.target.files?.[0])
+            e.target.value = ""
+          }}
+        />
+      )}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 leading-tight">
           <div className="text-xs font-semibold">{slot.title}</div>
           <div className="text-[11px] text-muted-foreground">{file ? `${file.name} · ${Math.max(1, Math.round(file.size / 1024))} KB` : slot.hint}</div>
         </div>
-        {file && (
+        {file && canEdit && (
           <button type="button" onClick={onRemove} aria-label={`Remover ${slot.title}`} className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
             <XIcon className="size-3.5" />
           </button>

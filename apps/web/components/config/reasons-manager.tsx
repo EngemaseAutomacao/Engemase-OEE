@@ -32,6 +32,7 @@ import { REASON_CATEGORIES, REASON_CATEGORY_META, REASON_PALETTE, plural } from 
 import { FaultMap, type FaultMapRow } from "@/components/config/fault-map"
 import { ColorPopover, ReasonDialog, type ReasonEdit, type ReasonNode } from "@/components/config/reason-dialogs"
 import { ConfirmDialog, IconAction, PageTitle } from "@/components/config/ui-bits"
+import { EngemaseOnlyChip, useCanEdit } from "@/components/config/engemase-managed"
 
 /** Ícone do grupo na prévia do operador (mesma convenção da tela do operador). */
 const GROUP_ICON: Record<string, LucideIcon> = {
@@ -59,6 +60,7 @@ export function ReasonsManager({
   const [edit, setEdit] = useState<ReasonEdit | null>(null)
   const [removing, setRemoving] = useState<ReasonNode | null>(null)
   const [previewGroup, setPreviewGroup] = useState<string | null>(null)
+  const canEdit = useCanEdit()
 
   const groups = nodes.filter((n) => !n.parentId)
   const childrenOf = (id: string) => nodes.filter((n) => n.parentId === id)
@@ -136,10 +138,15 @@ export function ReasonsManager({
         title="Motivos de parada"
         description="Árvore de dois níveis usada na tela do operador, no Pareto e no mapa de falhas. A categoria define o efeito no OEE."
         actions={
-          <Button onClick={() => setEdit({ mode: "group", node: null })}>
-            <PlusIcon />
-            Novo grupo
-          </Button>
+          canEdit && (
+            <>
+              <EngemaseOnlyChip />
+              <Button onClick={() => setEdit({ mode: "group", node: null })}>
+                <PlusIcon />
+                Novo grupo
+              </Button>
+            </>
+          )
         }
       />
 
@@ -173,10 +180,12 @@ export function ReasonsManager({
           description="Grupo (1º nível) › motivo (2º nível). Uso dos últimos 7 dias ao lado."
           className="xl:col-span-8"
           action={
-            <Button size="sm" variant="outline" onClick={() => setEdit({ mode: "group", node: null })}>
-              <PlusIcon />
-              Grupo
-            </Button>
+            canEdit && (
+              <Button size="sm" variant="outline" onClick={() => setEdit({ mode: "group", node: null })}>
+                <PlusIcon />
+                Grupo
+              </Button>
+            )
           }
         >
           <div className="flex flex-col gap-6">
@@ -193,7 +202,7 @@ export function ReasonsManager({
                     <span className="min-w-0 flex-1 text-xs text-muted-foreground">{meta.effect}</span>
                   </header>
 
-                  {catGroups.length === 0 && (
+                  {canEdit && catGroups.length === 0 && (
                     <button
                       type="button"
                       onClick={() => setEdit({ mode: "group", node: null })}
@@ -210,6 +219,7 @@ export function ReasonsManager({
                       <div key={g.id} className={cn("overflow-hidden rounded-xl border border-l-4", !g.active && "opacity-60")} style={{ borderLeftColor: g.color }}>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-muted/30 px-3 py-2.5">
                           <ColorPopover
+                            readOnly={!canEdit}
                             color={g.color}
                             label={g.name}
                             onChange={(color) => {
@@ -224,11 +234,13 @@ export function ReasonsManager({
                             </span>
                           </div>
                           {!g.active && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">oculto</span>}
-                          <div className="flex gap-1">
-                            <IconAction icon={PlusIcon} label={`Adicionar motivo em ${g.name}`} tone="teal" onClick={() => setEdit({ mode: "child", parent: g, node: null })} />
-                            <IconAction icon={PencilIcon} label={`Editar grupo ${g.name}`} onClick={() => setEdit({ mode: "group", node: g })} />
-                            <IconAction icon={Trash2Icon} label={`Excluir grupo ${g.name}`} tone="red" onClick={() => setRemoving(g)} />
-                          </div>
+                          {canEdit && (
+                            <div className="flex gap-1">
+                              <IconAction icon={PlusIcon} label={`Adicionar motivo em ${g.name}`} tone="teal" onClick={() => setEdit({ mode: "child", parent: g, node: null })} />
+                              <IconAction icon={PencilIcon} label={`Editar grupo ${g.name}`} onClick={() => setEdit({ mode: "group", node: g })} />
+                              <IconAction icon={Trash2Icon} label={`Excluir grupo ${g.name}`} tone="red" onClick={() => setRemoving(g)} />
+                            </div>
+                          )}
                         </div>
                         <ul className="divide-y border-t">
                           {kids.map((k) => (
@@ -245,9 +257,13 @@ export function ReasonsManager({
                                   <span className="block h-full rounded-full" style={{ width: `${Math.min(100, (k.minutes / (top?.minutes || 1)) * 100)}%`, background: g.color }} />
                                 </span>
                               )}
-                              <Switch checked={k.active} onCheckedChange={(v) => setActive(k, v)} aria-label={`Mostrar “${k.name}” ao operador`} disabled={!g.active} />
-                              <IconAction icon={PencilIcon} label={`Renomear ${k.name}`} onClick={() => setEdit({ mode: "child", parent: g, node: k })} />
-                              <IconAction icon={Trash2Icon} label={`Excluir ${k.name}`} tone="red" onClick={() => setRemoving(k)} />
+                              <Switch checked={k.active} onCheckedChange={(v) => setActive(k, v)} aria-label={`Mostrar “${k.name}” ao operador`} disabled={!canEdit || !g.active} />
+                              {canEdit && (
+                                <>
+                                  <IconAction icon={PencilIcon} label={`Renomear ${k.name}`} onClick={() => setEdit({ mode: "child", parent: g, node: k })} />
+                                  <IconAction icon={Trash2Icon} label={`Excluir ${k.name}`} tone="red" onClick={() => setRemoving(k)} />
+                                </>
+                              )}
                             </li>
                           ))}
                           {kids.length === 0 && <li className="px-4 py-3 text-xs text-muted-foreground">Sem motivos: o grupo não aparece para o operador.</li>}

@@ -6,6 +6,7 @@ import {
   getAccessibleClients,
   getClientBranding,
   getClientBySlug,
+  getConfigAccess,
   getCurrentUser,
   getGateways,
   getLines,
@@ -43,6 +44,8 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/[
   const me = getCurrentUser()
   const membership = me.memberships.find((m) => m.clientId === client.id)
   const roleLabel = me.platformRole ? `Engemase · ${PLATFORM_ROLE_LABEL[me.platformRole]}` : membership ? CLIENT_ROLE_LABEL[membership.role] : ""
+  const access = getConfigAccess(client.id)
+  const perms = { canConfigure: access.canConfigure, canManageUsers: access.canManageUsers }
   const branding = getClientBranding(client.id)
   const firstMachine = getMachines(client.id)[0]
   const firstLine = getLines(client.id)[0]
@@ -75,7 +78,7 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/[
           />
         </SidebarHeader>
         <SidebarContent>
-          <ClientNavMenu slug={client.slug} machineId={firstMachine?.id} lineId={firstLine?.id} />
+          <ClientNavMenu slug={client.slug} machineId={firstMachine?.id} lineId={firstLine?.id} perms={perms} />
         </SidebarContent>
         <SidebarFooter className="p-3">
           <HelpCard href={`/${client.slug}/ajuda`} />
@@ -92,6 +95,7 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/[
         <AppHeader
           slug={client.slug}
           kiosk={{ machineId: firstMachine?.id, lineId: firstLine?.id }}
+          perms={perms}
           user={{ name: me.name, email: me.email ?? me.username ?? "", roleLabel, initials: initials(me.name), isPlatform: Boolean(me.platformRole) }}
           bell={bellItems}
           entities={entities}

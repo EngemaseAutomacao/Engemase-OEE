@@ -1,5 +1,7 @@
 > **Consolidado:** as definições canônicas estão no [`docs/16`](../16-projeto-do-gateway.md); onde este rascunho divergir, vale o docs/16 (ex.: **ETH0 = OT** e **ETH1 = IT**; página local no `oee-localui`, porta 443, só na OT e no endereço de serviço). Implementação em `gateway/` e `deploy/`.
 
+> **Endereço (D28, 12/11/2026):** por enquanto só o domínio da Vercel, `engemase-oee.vercel.app`, para o produto e para os gateways. Os exemplos com `oee.engemase.com.br` e `gw.oee.engemase.com.br` foram trocados por ele; o domínio próprio (e um host só dos gateways) fica para depois. Troca futura: [`docs/16` §4](../16-projeto-do-gateway.md#4-caminhos-usuários-e-identidade-canônico).
+
 > **Rascunho** gerado pelo projeto do gateway (11/11/2026). Consolidado em `docs/16-projeto-do-gateway.md`.
 
 # Gateway: preparação na Engemase e ciclo de vida (proposta para documentação técnica)
@@ -404,10 +406,10 @@ ENGEMASE OEE GATEWAY                 EGW-00042
 R10xx-00 · 2 GB/16 GB · placa v1.1 · fab. 2026-11
 ETH0 (OT) d8:3a:dd:xx:xx:01   ETH1 (IT) xx:xx:xx:xx:xx:02
 Serviço OT: 169.254.127.58
-[QR] https://oee.engemase.com.br/g/EGW-00042
+[QR] https://engemase-oee.vercel.app/g/EGW-00042
 Suporte: (xx) xxxx-xxxx
 ```
-- O QR **não carrega segredo**.
+- O QR **não carrega segredo**. Com o domínio da Vercel (D28), a etiqueta impressa só continua valendo se o endereço antigo seguir respondendo depois da troca para o domínio próprio ([`docs/16` §4](../16-projeto-do-gateway.md#4-caminhos-usuários-e-identidade-canônico)).
 - A URL exige login. Quem tem acesso ao gateway lógico vê a página dele; papel de plataforma vê a ficha da unidade; quem não tem acesso recebe 404, conforme o isolamento do [15](15-multi-cliente-e-acesso.md).
 
 **Etiqueta 2, da caixa**: nº de série + QR, para leitura no recebimento e na expedição.

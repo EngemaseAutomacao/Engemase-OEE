@@ -345,52 +345,52 @@ function UnitCard({
             </div>
           </div>
           {canEdit && (
-          <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              className={cn(
-                "hidden h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40 md:inline-flex",
-                SOFT_TONES.blue,
-              )}
-              onClick={() => onAddLine()}
-              disabled={areas.length === 0}
-            >
-              <PlusIcon className="size-4" />
-              Nova linha
-            </button>
-            <SoftIconButton label={`Editar ${unit.name}`} tone="slate" onClick={onEditUnit}>
-              <PencilIcon />
-            </SoftIconButton>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={`Ações da ${unit.name}`}
-                  className={cn(
-                    "flex size-8 shrink-0 items-center justify-center rounded-lg transition outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                    SOFT_TONES.slate,
-                  )}
-                >
-                  <MoreHorizontalIcon className="size-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onSelect={onEditUnit}>
-                  <PencilIcon />
-                  Editar unidade
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={onAddArea}>
-                  <LayersIcon />
-                  Nova área
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onAddLine()} disabled={areas.length === 0}>
-                  <PlusIcon />
-                  Nova linha
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                className={cn(
+                  "hidden h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40 md:inline-flex",
+                  SOFT_TONES.blue,
+                )}
+                onClick={() => onAddLine()}
+                disabled={areas.length === 0}
+              >
+                <PlusIcon className="size-4" />
+                Nova linha
+              </button>
+              <SoftIconButton label={`Editar ${unit.name}`} tone="slate" onClick={onEditUnit}>
+                <PencilIcon />
+              </SoftIconButton>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`Ações da ${unit.name}`}
+                    className={cn(
+                      "flex size-8 shrink-0 items-center justify-center rounded-lg transition outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                      SOFT_TONES.slate,
+                    )}
+                  >
+                    <MoreHorizontalIcon className="size-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onSelect={onEditUnit}>
+                    <PencilIcon />
+                    Editar unidade
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={onAddArea}>
+                    <LayersIcon />
+                    Nova área
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onAddLine()} disabled={areas.length === 0}>
+                    <PlusIcon />
+                    Nova linha
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           )}
         </div>
 

@@ -59,7 +59,7 @@ Regras:
 |---|---|---|
 | **Super admin** (`super_admin`) | 2–3 pessoas da direção técnica | Acesso a todos os clientes, sempre auditado. Cria clientes e o primeiro admin de cada um e faz toda a configuração (seção 2). Ações destrutivas com reautenticação e motivo; ninguém altera o próprio papel; existe proteção do "último super admin" |
 | **Suporte** (`support`) | Suporte técnico | **Com concessão de suporte ativa**, que ele mesmo abre (cliente, motivo, chamado, prazo de até 4 h) e que vale na hora, **sem aprovação do cliente** (D5). Leitura de cadastros, configs, saúde e dashboards + comandos de diagnóstico. Não mexe em usuários nem papéis |
-| **Engenheiro de campo** (`field_engineer`) | Comissionamento | **Somente nos clientes atribuídos** (atribuição com validade, criada pelo super admin). Faz a configuração do cliente (seção 2): unidades, linhas, máquinas, gateways, conexões, tags, terminais, turnos, produtos e motivos. Não mexe em usuários |
+| **Engenheiro de campo** (`field_engineer`) | Comissionamento | **Somente nos clientes atribuídos** (atribuição com validade, criada pelo super admin). Faz toda a configuração do cliente (seção 2): unidades, linhas, máquinas, gateways, conexões, tags, terminais, turnos, produtos, motivos de parada, aparência/marca e políticas. Não mexe em usuários |
 
 - A equipe Engemase **não vira membro** dos clientes (exceto a organização interna "Engemase Lab").
 - **O acesso da Engemase aos dados do cliente é sempre liberado com registro (D5, 12/11/2026).** Não existe a opção "mediante aprovação do cliente". Toda entrada da Engemase num cliente aparece com **faixa na tela** e fica na **auditoria visível ao cliente** ("Carlos Mendes (suporte Engemase), chamado #1042, 25 min").
@@ -110,7 +110,7 @@ Regras:
 
 **Autogestão pelo admin do cliente** (`/[cliente]/config`): **só usuários** (D12): convidar (e-mail "definir senha"), papéis, escopos (cliente inteiro, unidades ou máquinas) e desativar. O resto da configuração aparece para o cliente só como leitura, no escopo de cada papel; os pedidos de mudança vão pelo canal de suporte.
 
-**Cobrança (D1):** a Engemase vende o software como assinatura **cobrada por máquina**, com planos. O plano e as máquinas contratadas ficam em `client_account` (`plan`, `limits.machines`), gravados só pela plataforma. Preços ainda não definidos; não há faturamento automático no MVP.
+**Cobrança (D1):** a Engemase vende o software como assinatura **cobrada por máquina**, com planos. O plano e as máquinas contratadas ficam em `client_account` (`plan`, `limits.machines`), gravados só pela plataforma. **`limits.machines` é obrigatório** (o banco recusa cliente sem ele): todo cliente nasce com as máquinas contratadas, e `0` = nenhuma máquina pode ser cadastrada. Os outros limites (`gateways`, `users`...) são opcionais: chave ausente = sem limite para aquele item. Preços ainda não definidos; não há faturamento automático no MVP.
 
 **Fluxo de implantação** (passos A a F: equipe Engemase; passo G: admin do cliente):
 
@@ -153,7 +153,7 @@ flowchart LR
 
 | Tabela | Conteúdo |
 |---|---|
-| `client_account` | organização (1:1), status, plano, limites (`limits.machines` = máquinas contratadas, base da cobrança, D1), `managed_by_engemase` (padrão ligado, D13), slug histórico — **só a plataforma grava** |
+| `client_account` | organização (1:1), status, plano, limites (`limits.machines` = máquinas contratadas, base da cobrança, D1, obrigatório; os demais opcionais), `managed_by_engemase` (padrão ligado, D13), slug histórico — **só a plataforma grava** |
 | `member_access` | vínculo, papel, escopo (`all`/`units`/`machines`), ativo — gravado pelo admin do cliente |
 | `member_unit` | vínculo × unidade (quando o escopo é por unidades) |
 | `member_machine` | vínculo × máquina (quando o escopo é por máquinas, D11) |
@@ -166,18 +166,18 @@ flowchart LR
 
 ## 10. Perguntas para o dono do produto
 
-Respostas de 12/11/2026 marcadas com a decisão (numeração do [17](17-backlog-e-pendencias.md)). As demais seguem com o padrão adotado até a resposta.
+Respostas de 12/11/2026 marcadas com a decisão (numeração do [17](17-backlog-e-pendencias.md)). As demais seguem em aberto para o dono, valendo até a resposta a **escolha provisória da equipe técnica** registrada no [17, seção 3](17-backlog-e-pendencias.md#3-decisões) (copiada abaixo; se mudar lá, vale a de lá).
 
-| # | Pergunta | Resposta ou padrão adotado |
+| # | Pergunta | Resposta ou escolha provisória |
 |---|---|---|
 | P1 | "Verá apenas suas máquinas" é por cliente e unidade, ou também por linha/máquina para pessoas? | **Respondida (D11):** cliente inteiro, unidades ou máquinas específicas, fail-closed; agregados somam só as máquinas permitidas (seção 2) |
 | P2 | No MVP, o admin do cliente já adiciona a própria equipe, ou só a Engemase? | **Respondida (D12):** o admin do cliente gerencia os usuários; a Engemase cria o cliente e o primeiro admin e faz todo o resto da configuração (seções 2 e 7) |
 | P3 | O cliente configura gateways/tags sozinho, a Engemase faz como serviço, ou os dois? | **Respondida (D13):** só a Engemase. Todo cliente é "gerenciado pela Engemase"; o engenheiro do cliente tem leitura técnica |
 | P4 | A Engemase pode ver dados de produção dos clientes sem autorização caso a caso? O que o contrato vai dizer? | **Respondida (D5):** sim, sempre, com registro na auditoria visível ao cliente e faixa na tela; não existe aprovação caso a caso (seção 3). O texto do contrato fica com a lacuna L7 (LGPD) |
 | P5 | Haverá limites por plano no MVP? Bloqueio ou aviso? | **Respondida em parte (D1):** assinatura cobrada por máquina, com planos; `limits.machines` guarda as máquinas contratadas. Preços em aberto (L9). Bloqueio ou aviso: segue o padrão, bloqueio na criação, com limites editados pelo super admin |
-| P6 | Inadimplência: perde acesso, fica só leitura ou continua? Gateways continuam enviando? | Em aberto (D3). Padrão: perde acesso; gateways continuam enviando |
-| P7 | Encerramento: prazos e formato de entrega dos dados; quem recolhe os gateways? | Em aberto (D4). Padrão: 30 dias para exportar + 30 para excluir; CSV/Parquet |
-| P8 | 2FA obrigatório para admins do cliente no MVP? | Em aberto (D14). Padrão: obrigatório para a Engemase; opcional para o cliente |
-| P9 | "Área" é nível obrigatório? | Em aberto (D15). Padrão: opcional |
-| P10 | Um grupo com vários CNPJs é um cliente com várias unidades? | Em aberto (D16). Padrão: sim |
-| P11 | Quem serão os super admins iniciais e quantas pessoas da Engemase usarão a plataforma? | Em aberto (D17) |
+| P6 | Inadimplência: perde acesso, fica só leitura ou continua? Gateways continuam enviando? | Em aberto (D3). Provisória: aviso com 5 dias de atraso; com 30 dias, cliente **Suspenso** (login bloqueado com aviso); os gateways continuam enviando e os dados ficam guardados; volta ao pagar |
+| P7 | Encerramento: prazos e formato de entrega dos dados; quem recolhe os gateways? | Em aberto (D4). Provisória: 30 dias para exportar (CSV) + 30 para excluir. O cliente devolve os gateways em até 30 dias (coleta agendada pela Engemase, frete do cliente); gateway não devolvido é cobrado pelo valor de reposição |
+| P8 | 2FA obrigatório para admins do cliente no MVP? | Em aberto (D14). Provisória: **obrigatório para a equipe Engemase e para o admin do cliente** (ele gerencia usuários e aprova sessões de acesso remoto); opcional para os demais papéis |
+| P9 | "Área" é nível obrigatório? | Em aberto (D15). Provisória: sim, no banco. Cada unidade nasce com a área "Geral", que a interface esconde quando é a única. Ainda não aplicada: hoje `line.area_id` é opcional ([06](06-banco-de-dados.md)) |
+| P10 | Um grupo com vários CNPJs é um cliente com várias unidades? | Em aberto (D16). Provisória: um cliente = um contrato (CNPJ de cobrança); cada unidade pode ter o próprio CNPJ (opcional; coluna ainda não criada) |
+| P11 | Quem serão os super admins iniciais e quantas pessoas da Engemase usarão a plataforma? | Em aberto (D17). Provisória: 2 super admins da direção técnica (nomes no seed de produção); equipe inicial da Engemase de até 5 pessoas, todas com 2FA |

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 
-import { MOCK_NOW, getClientBySlug, getDowntimeReasons, getMachines, getShifts, getUnits } from "@/lib/mock"
+import { MOCK_NOW, getClientBySlug, getConfigAccess, getDowntimeReasons, getMachines, getShifts, getUnits } from "@/lib/mock"
+import { ConfigAccessProvider, EngemaseManagedNote } from "@/components/config/engemase-managed"
 import { timezoneShort } from "@/components/config/labels"
 import { addDays, weekdayOf, type PlannedStop, type ShiftRow } from "@/components/config/shift-utils"
 import { ShiftsManager, type ShiftMachine, type ShiftUnit, type StopReason } from "@/components/config/shifts-manager"
@@ -87,5 +88,10 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/turn
       })
     : []
 
-  return <ShiftsManager units={units} initialShifts={shifts} initialStops={stops} reasons={reasons} machines={machines} />
+  return (
+    <ConfigAccessProvider canEdit={getConfigAccess(client.id).canConfigure}>
+      <EngemaseManagedNote padded clientSlug={client.slug} subject="Turnos, pausas e paradas planejadas" />
+      <ShiftsManager units={units} initialShifts={shifts} initialStops={stops} reasons={reasons} machines={machines} />
+    </ConfigAccessProvider>
+  )
 }

@@ -3,7 +3,9 @@
 schema: 1
 
 cloud:
-  url: https://oee.engemase.com.br   # só a URL base; o caminho /api/gateway/v1 é fixo no agente
+  # Só a URL base; o caminho /api/gateway/v1 é fixo no agente. Padrão: o domínio da
+  # Vercel (D28; domínio próprio fica para depois), igual a config.DefaultCloudURL.
+  url: https://engemase-oee.vercel.app
   timeout_s: 30
   extra_ca_file: ""                  # PEM com CAs corporativas (gerado do network.json); vazio = só as do sistema
 

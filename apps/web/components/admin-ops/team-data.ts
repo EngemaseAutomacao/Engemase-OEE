@@ -144,7 +144,7 @@ export function buildTeam(): TeamData {
         validFromLabel: date(new Date(from).toISOString()),
         validUntilLabel: date(new Date(until).toISOString()),
         daysLeft: Math.ceil((until - now) / DAY),
-        reason: onboarding ? "Implantação: gateways, máquinas e tags" : c.management === "engemase" ? "Serviço gerenciado: manutenção da configuração" : "Apoio de campo ao engenheiro do cliente",
+        reason: onboarding ? "Implantação: gateways, máquinas e tags" : "Configuração do cliente: gateways, máquinas, tags e cadastros",
         createdBy: superAdmin,
       })
     }

@@ -4,13 +4,12 @@ import { useState } from "react"
 import { DownloadIcon, GlobeIcon, RefreshCwIcon, ShieldCheckIcon, TriangleAlertIcon } from "lucide-react"
 import { toast } from "sonner"
 
+import { GATEWAY_URL, PLATFORM_HOST } from "@/lib/site"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { CopyBlock, CopyCode } from "./copy-block"
 import { LATEST_AGENT as AGENT_VERSION, activationCode } from "./labels"
-
-export const PLATFORM_URL = "https://oee.engemase.com.br"
 
 type Arch = "arm64" | "amd64"
 
@@ -136,7 +135,7 @@ export function ActivationSteps({
               O código anterior venceu. Gere um novo código para liberar o comando de ativação.
             </p>
           ) : (
-            <CopyBlock code={`sudo oee-gateway enroll --url ${PLATFORM_URL} --code ${code}`} />
+            <CopyBlock code={`sudo oee-gateway enroll --url ${GATEWAY_URL} --code ${code}`} />
           )}
         </Step>
         <Step n={3} title="Inicie o serviço e habilite na inicialização">
@@ -153,7 +152,7 @@ export function ActivationSteps({
       <div className="grid gap-2 rounded-xl border border-dashed p-3 text-xs text-muted-foreground sm:grid-cols-2">
         <div className="flex items-start gap-2">
           <GlobeIcon className="mt-px size-3.5 shrink-0" />
-          <span>Rede de TI: só saída HTTPS (porta 443) para oee.engemase.com.br e NTP. Nenhuma porta de entrada.</span>
+          <span>Rede de TI: só saída HTTPS (porta 443) para {PLATFORM_HOST} e NTP. Nenhuma porta de entrada.</span>
         </div>
         <div className="flex items-start gap-2">
           <ShieldCheckIcon className="mt-px size-3.5 shrink-0" />

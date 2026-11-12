@@ -2,9 +2,9 @@
 
 Especificação formal do **bloco OEE padrão Engemase**: o conjunto de holding registers que a Engemase coloca no programa dos CLPs que ela programa ou altera, para o gateway ler a máquina numa única leitura Modbus. Formaliza a proposta do [docs/11 §3](../11-integracao-modbus.md#3-bloco-oee-padrão-engemase) **sem mudar o layout**: 32 registradores a partir de um endereço base (padrão **HR 1000**), valores de 32 bits em **CDAB**.
 
-> **Status:** versão 1, para aprovação na decisão **D26** ([docs/17 §3](../17-backlog-e-pendencias.md#3-decisões-pendentes-do-dono-do-produto)). O layout é o mesmo já usado pelo gateway (`gateway/internal/modbus/oeeblock.go`), pelo simulador (`tools/plc-sim/block`) e pelo template do protótipo. O que esta especificação acrescenta está marcado com **(novo na v1)**.
+> **Status:** versão 1, **mantida pela decisão D26** do dono do produto (12/11/2026, [docs/17 §3](../17-backlog-e-pendencias.md#3-decisões)), que também definiu as **marcas de CLP prioritárias: Siemens, Schneider, Rockwell e ABB**. O layout é o mesmo já usado pelo gateway (`gateway/internal/modbus/oeeblock.go`), pelo simulador (`tools/plc-sim/block`) e pelo template do protótipo. O que esta especificação acrescenta está marcado com **(novo na v1)**.
 >
-> **Arquivos relacionados:** bloco de função em ST: [`FB_OEE_ENGEMASE.st`](FB_OEE_ENGEMASE.st). Como expor o bloco em cada marca de CLP: [adaptacoes-por-fabricante.md](adaptacoes-por-fabricante.md).
+> **Arquivos relacionados:** bloco de função em ST: [`FB_OEE_ENGEMASE.st`](FB_OEE_ENGEMASE.st). Como expor o bloco em cada marca de CLP, com as notas de portabilidade do FB: [adaptacoes-por-fabricante.md](adaptacoes-por-fabricante.md). Teste por marca: [verificação de bancada, Parte C](verificacao-bancada-r1000.md#6-parte-c--clps-das-marcas-prioritárias-d26).
 
 ## 1. Visão geral
 
@@ -179,7 +179,7 @@ Exemplo com `contador_total` = **100.000** (0x000186A0): word alta 0x0001, word 
 | Ordem | Offset 4 | Offset 5 | Observação |
 |---|---|---|---|
 | **CDAB (padrão do bloco)** | 0x86A0 = **34464** | 0x0001 = **1** | O que o FB produz |
-| ABCD | 0x0001 = 1 | 0x86A0 = 34464 | Típico de quem copia um DINT nativo em CLP big-endian (ex.: Siemens) |
+| ABCD | 0x0001 = 1 | 0x86A0 = 34464 | Típico de quem copia um DINT nativo em CLP big-endian (ex.: Siemens S7, Rockwell Micro800) |
 | BADC | 0x0100 = 256 | 0xA086 = 41094 | Bytes trocados dentro de cada word |
 | DCBA | 0xA086 = 41094 | 0x0100 = 256 | Bytes trocados e words invertidas |
 
@@ -194,7 +194,7 @@ Se o CLP entregar outra ordem, o certo é corrigir o programa (usar o FB). Em ú
 | Estados | Mínimo de 1 s em cada estado para aparecer na plataforma (debounce do gateway) |
 | Heartbeat | +1 a cada 1 s |
 | Servidor Modbus | Responder em até **200 ms** (o timeout do gateway é de 500 ms em TCP e 300 ms em RTU) |
-| Consistência | Os 14 primeiros registradores vêm do mesmo ciclo. Atenção aos servidores que rodam em tarefa própria (CODESYS e afins): copie o bloco na mesma tarefa que atualiza a área do servidor ou use a cópia consistente do fabricante. Uma leitura "rasgada" de um contador na virada da word baixa aparece como reset seguido de salto |
+| Consistência | Os 14 primeiros registradores vêm do mesmo ciclo. Atenção aos servidores que rodam em tarefa própria (CODESYS e afins): copie o bloco na mesma tarefa que atualiza a área do servidor ou use a cópia consistente do fabricante. Exemplo: o servidor embarcado dos Schneider M241/M251/M262 só garante uma word por vez; o Modbus TCP Slave Device garante o conjunto ([adaptações](adaptacoes-por-fabricante.md#72-m241-m251-e-m262-machine-expert)). Uma leitura "rasgada" de um contador na virada da word baixa aparece como reset seguido de salto |
 
 ## 8. Como o gateway lê o bloco
 
@@ -285,7 +285,7 @@ Regras do contrato que este template já respeita:
 | Campos novos | Só nos offsets 14–31 e nos bits reservados do `bits_status` |
 | Qualquer mudança de layout | `versao_bloco` + 1, novo documento `bloco-oee-vN.md` e novo template "Bloco OEE vN" na plataforma |
 | Compatibilidade | Um template v1 lê um bloco v2 sem erro (lê só os 14 primeiros). Um template v2 exige CLP com bloco v2 |
-| Quem aprova | Engenharia de automação da Engemase + dono do produto (D26) |
+| Quem aprova | Engenharia de automação da Engemase + dono do produto (a v1 foi mantida pela D26) |
 | Biblioteca | O `FB_OEE_ENGEMASE.st` e as adaptações por fabricante seguem a versão do bloco |
 
 ## 11. Verificação no comissionamento
@@ -327,7 +327,9 @@ Com o comando `modbus oee-block` **(Fase 1)**, a mesma conferência sai pronta, 
 
 | Item | Situação |
 |---|---|
-| Aprovação desta v1 e das marcas prioritárias | Decisão D26 |
+| Aprovação desta v1 e das marcas prioritárias | **Decidida** (D26, 12/11/2026): v1 mantida; Siemens, Schneider, Rockwell e ABB |
+| Teste do bloco nas 4 marcas prioritárias | Bancada, [Parte C](verificacao-bancada-r1000.md#6-parte-c--clps-das-marcas-prioritárias-d26) |
+| CompactLogix/ControlLogix sem servidor Modbus nativo | Caminho padrão em decisão ([adaptações §13](adaptacoes-por-fabricante.md#13-pendências-e-decisões)) |
 | Bit 4 (parada planejada) e uso futuro na sugestão de motivo | Proposto nesta v1; uso na plataforma depende de decisão (F2) |
 | Conferência automática de `versao_bloco` pelo agente | Previsto no `modbus oee-block` (Fase 1) |
 | Leitura de `ciclo_ultimo_ms` e `bits_status` como amostras | Amostras `custom` (F2) |

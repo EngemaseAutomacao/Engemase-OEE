@@ -176,12 +176,14 @@ func newEnrollCmd() *cobra.Command {
 	var code, url, hostname string
 	var force bool
 	cmd := &cobra.Command{
-		Use:   "enroll --code ABCD-1234 [--url https://oee.engemase.com.br]",
+		Use:   "enroll --code ABCD-1234 [--url URL]",
 		Short: "Registra o gateway na plataforma com o código de ativação",
 		Long: "Troca o código de ativação (uso único, válido por 24 h) pela credencial do gateway e a grava em\n" +
 			"/var/lib/oee-gateway/credentials.json (0600). Se o agente estiver rodando, ele percebe a credencial nova sozinho.\n" +
 			"Roda como o usuário do agente (sudo -u oee oee-gateway enroll --code ...); como root é recusado se o\n" +
 			"diretório da credencial for de outro usuário. Sem proxy no ambiente, usa o do proxy.env ao lado do gateway.yaml.\n" +
+			"O --url vale só para esta ativação: o agente sincroniza com o cloud.url do gateway.yaml, que precisa ter o\n" +
+			"mesmo host (senão o agente manda o token a outro host, que pode recusá-lo). Na bancada, prefira editar o cloud.url.\n" +
 			"Com credencial já gravada, só registra de novo sem --force se o agente marcou que a nuvem recusa o token\n" +
 			"(401: token revogado ou inválido), pelo arquivo auth-blocked ao lado da credencial.",
 		Args: cobra.NoArgs,
@@ -275,7 +277,7 @@ func newEnrollCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&code, "code", "", "código de ativação mostrado na web (ex.: ABCD-1234)")
-	cmd.Flags().StringVar(&url, "url", "", "URL da plataforma (padrão: cloud.url do gateway.yaml)")
+	cmd.Flags().StringVar(&url, "url", "", "URL da plataforma só para esta ativação (padrão: cloud.url do gateway.yaml, que é o que o agente usa)")
 	cmd.Flags().StringVar(&hostname, "hostname", "", "nome do gateway (padrão: hostname do sistema)")
 	cmd.Flags().BoolVar(&force, "force", false, "registrar de novo mesmo se já houver credencial")
 	_ = cmd.MarkFlagRequired("code")

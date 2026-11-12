@@ -43,32 +43,32 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/unid
 
   return (
     <ConfigAccessProvider canEdit={getConfigAccess(client.id).canConfigure}>
-    <div className="flex flex-col gap-5 p-4 md:p-6">
-      <EngemaseManagedNote clientSlug={client.slug} subject="Unidades, áreas e linhas" />
-      <UnitsManager
-        clientSlug={client.slug}
-        title="Unidades e linhas"
-        description={`Estrutura de ${client.name}: unidade → área → linha → máquinas.`}
-        machineLimit={client.limits.machines}
-        initialUnits={unitNodes}
-        initialAreas={areaNodes}
-        initialLines={lineNodes}
-        summary={
-          <SectionCard
-            title={`Plano ${PLAN_LABEL[client.plan]}`}
-            description={`Assinatura cobrada por máquina: ${client.limits.machines} máquinas contratadas · retenção de dados de ${client.limits.retentionMonths} meses. Para contratar mais máquinas, fale com a Engemase.`}
-            href={`/${client.slug}/ajuda`}
-            linkLabel="Falar com a Engemase"
-          >
-            <div className="grid gap-4 sm:grid-cols-3">
-              {usage.map((it) => (
-                <UsageMeter key={it.label} item={it} />
-              ))}
-            </div>
-          </SectionCard>
-        }
-      />
-    </div>
+      <div className="flex flex-col gap-5 p-4 md:p-6">
+        <EngemaseManagedNote clientSlug={client.slug} subject="Unidades, áreas e linhas" />
+        <UnitsManager
+          clientSlug={client.slug}
+          title="Unidades e linhas"
+          description={`Estrutura de ${client.name}: unidade → área → linha → máquinas.`}
+          machineLimit={client.limits.machines}
+          initialUnits={unitNodes}
+          initialAreas={areaNodes}
+          initialLines={lineNodes}
+          summary={
+            <SectionCard
+              title={`Plano ${PLAN_LABEL[client.plan]}`}
+              description={`Assinatura cobrada por máquina: ${client.limits.machines} máquinas contratadas · retenção de dados de ${client.limits.retentionMonths} meses. Para contratar mais máquinas, fale com a Engemase.`}
+              href={`/${client.slug}/ajuda`}
+              linkLabel="Falar com a Engemase"
+            >
+              <div className="grid gap-4 sm:grid-cols-3">
+                {usage.map((it) => (
+                  <UsageMeter key={it.label} item={it} />
+                ))}
+              </div>
+            </SectionCard>
+          }
+        />
+      </div>
     </ConfigAccessProvider>
   )
 }

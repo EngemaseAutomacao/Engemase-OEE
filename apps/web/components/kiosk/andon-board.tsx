@@ -245,7 +245,7 @@ export async function AndonBoard({ params, terminal }: { params: Promise<{ clien
                 <FactoryIcon />
               </EmptyMedia>
               <EmptyTitle>Nenhuma máquina nesta linha</EmptyTitle>
-              <EmptyDescription>Cadastre máquinas na linha {line.name} para que elas apareçam no Andon.</EmptyDescription>
+              <EmptyDescription>A equipe Engemase cadastra as máquinas da linha {line.name}. Elas aparecem no Andon em seguida.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (

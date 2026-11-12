@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation"
 
-import { getClientBySlug, getCurrentUser, getLines, getMachines, getTerminals, getUnits } from "@/lib/mock"
+import { getClientBySlug, getConfigAccess, getCurrentUser, getLines, getMachines, getTerminals, getUnits } from "@/lib/mock"
 import { ago, date } from "@/lib/format"
+import { ConfigAccessProvider, EngemaseManagedNote } from "@/components/config/engemase-managed"
 import { TerminalsManager } from "@/components/settings/terminals-manager"
 import type { TerminalRow } from "@/components/settings/types"
 
@@ -31,16 +32,19 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/term
   }))
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6">
-      <TerminalsManager
-        clientSlug={client.slug}
-        clientName={client.name}
-        currentUserName={me.platformRole ? `${me.name} (Engemase)` : me.name}
-        units={units}
-        lines={lines}
-        machines={machines}
-        initialTerminals={terminals}
-      />
-    </div>
+    <ConfigAccessProvider canEdit={getConfigAccess(client.id).canConfigure}>
+      <div className="flex flex-col gap-5 p-4 md:p-6">
+        <EngemaseManagedNote clientSlug={client.slug} subject="Terminais (TVs Andon e tablets) e o que cada um mostra" />
+        <TerminalsManager
+          clientSlug={client.slug}
+          clientName={client.name}
+          currentUserName={me.platformRole ? `${me.name} (Engemase)` : me.name}
+          units={units}
+          lines={lines}
+          machines={machines}
+          initialTerminals={terminals}
+        />
+      </div>
+    </ConfigAccessProvider>
   )
 }

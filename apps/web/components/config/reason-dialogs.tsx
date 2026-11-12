@@ -53,8 +53,11 @@ export function ColorSwatches({ value, onChange }: { value: string; onChange: (c
 }
 
 /** Bolinha de cor que abre a paleta (troca rápida na árvore). */
-export function ColorPopover({ color, label, onChange }: { color: string; label: string; onChange: (c: string) => void }) {
+export function ColorPopover({ color, label, onChange, readOnly = false }: { color: string; label: string; onChange: (c: string) => void; readOnly?: boolean }) {
   const [open, setOpen] = useState(false)
+  if (readOnly) {
+    return <span aria-label={`Cor de ${label}`} className="size-4 shrink-0 rounded-full ring-2 ring-background" style={{ background: color, boxShadow: `0 0 0 1px ${color}` }} />
+  }
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>

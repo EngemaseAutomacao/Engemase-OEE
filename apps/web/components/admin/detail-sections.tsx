@@ -254,7 +254,7 @@ export function MachinesSection({ machines, slug, limit }: { machines: MachineRo
   return (
     <SectionCard
       title="Máquinas"
-      description={`${machines.length} de ${limit} do plano · estado agora`}
+      description={`${machines.length} em uso de ${limit} contratadas · estado agora`}
       action={<LinkButton compact href={`/${slug}/config/maquinas`} icon={FactoryIcon}>Cadastro no cliente</LinkButton>}
     >
       {machines.length === 0 ? (

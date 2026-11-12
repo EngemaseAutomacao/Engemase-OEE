@@ -43,6 +43,7 @@ import {
   type ShiftRow,
 } from "@/components/config/shift-utils"
 import { ConfirmDialog, IconAction, PageTitle } from "@/components/config/ui-bits"
+import { EngemaseOnlyChip, useCanEdit } from "@/components/config/engemase-managed"
 
 export interface ShiftUnit {
   id: string
@@ -88,6 +89,7 @@ export function ShiftsManager({
   const [editingShift, setEditingShift] = useState<ShiftRow | "new" | null>(null)
   const [editingStop, setEditingStop] = useState<PlannedStop | "new" | null>(null)
   const [deleting, setDeleting] = useState<{ kind: "shift"; item: ShiftRow } | { kind: "stop"; item: PlannedStop } | null>(null)
+  const canEdit = useCanEdit()
 
   const unit = units.find((u) => u.id === unitId) ?? units[0]
   if (!unit) {
@@ -99,7 +101,11 @@ export function ShiftsManager({
               <CalendarClockIcon />
             </EmptyMedia>
             <EmptyTitle>Nenhuma unidade cadastrada</EmptyTitle>
-            <EmptyDescription>Os turnos são definidos por unidade. Cadastre uma unidade primeiro.</EmptyDescription>
+            <EmptyDescription>
+              {canEdit
+                ? "Os turnos são definidos por unidade. Cadastre uma unidade primeiro."
+                : "Os turnos são definidos por unidade. A equipe Engemase cadastra as unidades e os turnos."}
+            </EmptyDescription>
           </EmptyHeader>
         </Empty>
       </div>
@@ -185,14 +191,19 @@ export function ShiftsManager({
                 </SelectContent>
               </Select>
             )}
-            <Button variant="outline" onClick={() => setEditingStop("new")}>
-              <CalendarPlusIcon />
-              Parada planejada
-            </Button>
-            <Button onClick={() => setEditingShift("new")}>
-              <PlusIcon />
-              Novo turno
-            </Button>
+            {canEdit && (
+              <>
+                <EngemaseOnlyChip />
+                <Button variant="outline" onClick={() => setEditingStop("new")}>
+                  <CalendarPlusIcon />
+                  Parada planejada
+                </Button>
+                <Button onClick={() => setEditingShift("new")}>
+                  <PlusIcon />
+                  Novo turno
+                </Button>
+              </>
+            )}
           </>
         }
       />
@@ -269,14 +280,20 @@ export function ShiftsManager({
                   <CalendarClockIcon />
                 </EmptyMedia>
                 <EmptyTitle>Nenhum turno nesta unidade</EmptyTitle>
-                <EmptyDescription>Cadastre os turnos com horário, dias e pausas. Sem turno não há tempo planejado.</EmptyDescription>
+                <EmptyDescription>
+                  {canEdit
+                    ? "Cadastre os turnos com horário, dias e pausas. Sem turno não há tempo planejado."
+                    : "Sem turno não há tempo planejado. A equipe Engemase cadastra os turnos; para pedir, abra um chamado."}
+                </EmptyDescription>
               </EmptyHeader>
-              <EmptyContent>
-                <Button onClick={() => setEditingShift("new")}>
-                  <PlusIcon />
-                  Novo turno
-                </Button>
-              </EmptyContent>
+              {canEdit && (
+                <EmptyContent>
+                  <Button onClick={() => setEditingShift("new")}>
+                    <PlusIcon />
+                    Novo turno
+                  </Button>
+                </EmptyContent>
+              )}
             </Empty>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
@@ -300,11 +317,13 @@ export function ShiftsManager({
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-1">
-                        <IconAction icon={PencilIcon} label={`Editar ${s.name}`} onClick={() => setEditingShift(s)} />
-                        <IconAction icon={CopyIcon} label="Duplicar" tone="slate" onClick={() => duplicate(s)} />
-                        <IconAction icon={Trash2Icon} label={`Excluir ${s.name}`} tone="red" onClick={() => setDeleting({ kind: "shift", item: s })} />
-                      </div>
+                      {canEdit && (
+                        <div className="flex gap-1">
+                          <IconAction icon={PencilIcon} label={`Editar ${s.name}`} onClick={() => setEditingShift(s)} />
+                          <IconAction icon={CopyIcon} label="Duplicar" tone="slate" onClick={() => duplicate(s)} />
+                          <IconAction icon={Trash2Icon} label={`Excluir ${s.name}`} tone="red" onClick={() => setDeleting({ kind: "shift", item: s })} />
+                        </div>
+                      )}
                     </header>
                     <div className="-mt-1 text-xl leading-tight font-bold whitespace-nowrap tabular-nums">
                       {s.start} – {s.end}
@@ -356,14 +375,16 @@ export function ShiftsManager({
                   </article>
                 )
               })}
-              <button
-                type="button"
-                onClick={() => setEditingShift("new")}
-                className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-sm text-muted-foreground transition hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
-              >
-                <PlusIcon className="size-5" />
-                Adicionar turno
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setEditingShift("new")}
+                  className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-sm text-muted-foreground transition hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
+                >
+                  <PlusIcon className="size-5" />
+                  Adicionar turno
+                </button>
+              )}
             </div>
           )}
         </SectionCard>
@@ -373,9 +394,11 @@ export function ShiftsManager({
           description="Preventivas, feriados e falta de programação"
           className="xl:col-span-5"
           action={
-            <Button size="sm" variant="ghost" className="h-auto px-0 text-xs font-semibold text-primary hover:bg-transparent hover:underline" onClick={() => setEditingStop("new")}>
-              Agendar
-            </Button>
+            canEdit && (
+              <Button size="sm" variant="ghost" className="h-auto px-0 text-xs font-semibold text-primary hover:bg-transparent hover:underline" onClick={() => setEditingStop("new")}>
+                Agendar
+              </Button>
+            )
           }
         >
           {upcoming.length === 0 ? (
@@ -385,14 +408,20 @@ export function ShiftsManager({
                   <CalendarOffIcon />
                 </EmptyMedia>
                 <EmptyTitle>Nenhuma parada agendada</EmptyTitle>
-                <EmptyDescription>Agende preventivas e feriados para que não penalizem o OEE.</EmptyDescription>
+                <EmptyDescription>
+                  {canEdit
+                    ? "Agende preventivas e feriados para que não penalizem o OEE."
+                    : "Preventivas e feriados agendados não penalizam o OEE. Para agendar, abra um chamado com a equipe Engemase."}
+                </EmptyDescription>
               </EmptyHeader>
-              <EmptyContent>
-                <Button variant="outline" onClick={() => setEditingStop("new")}>
-                  <CalendarPlusIcon />
-                  Nova parada planejada
-                </Button>
-              </EmptyContent>
+              {canEdit && (
+                <EmptyContent>
+                  <Button variant="outline" onClick={() => setEditingStop("new")}>
+                    <CalendarPlusIcon />
+                    Nova parada planejada
+                  </Button>
+                </EmptyContent>
+              )}
             </Empty>
           ) : (
             <ul className="divide-y">
@@ -438,10 +467,12 @@ export function ShiftsManager({
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-1">
-                      <IconAction icon={PencilIcon} label="Editar parada" onClick={() => setEditingStop(p)} />
-                      <IconAction icon={Trash2Icon} label="Cancelar parada" tone="red" onClick={() => setDeleting({ kind: "stop", item: p })} />
-                    </div>
+                    {canEdit && (
+                      <div className="flex gap-1">
+                        <IconAction icon={PencilIcon} label="Editar parada" onClick={() => setEditingStop(p)} />
+                        <IconAction icon={Trash2Icon} label="Cancelar parada" tone="red" onClick={() => setDeleting({ kind: "stop", item: p })} />
+                      </div>
+                    )}
                   </li>
                 )
               })}

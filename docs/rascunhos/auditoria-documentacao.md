@@ -1,5 +1,7 @@
 > **Rascunho** gerado pela auditoria de 11/11/2026 (documentação e decisões). Consolidado em `docs/17-backlog-e-pendencias.md`.
 
+> **Depois desta auditoria:** várias decisões foram tomadas em 12/11/2026 ([`docs/17` §3](../17-backlog-e-pendencias.md#3-decisões)). Em particular, D28: por enquanto só o domínio da Vercel (`engemase-oee.vercel.app`, produto e gateways); `oee.engemase.com.br` e `gw.oee.engemase.com.br`, citados abaixo, eram exemplos, e o domínio próprio fica para depois. Região (D7): São Paulo (Vercel `gru1`, Neon `sa-east-1`).
+
 # Auditoria da documentação e decisões pendentes (Engemase OEE, 11/11/2026)
 
 **O que li:** `README.md`, `docs/00` a `docs/15` e os dois rascunhos em `docs/rascunhos/`. Do protótipo vi só os nomes de rota em `apps/web/app` e fiz buscas pontuais com grep. Não editei nenhum arquivo. O doc 16 do gateway está sendo consolidado em paralelo; aqui ele aparece como "em andamento".

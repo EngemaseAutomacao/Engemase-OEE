@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { CableIcon, CpuIcon, RouterIcon, Settings2Icon, TagsIcon, TriangleAlertIcon } from "lucide-react"
+import { CableIcon, CpuIcon, LifeBuoyIcon, RouterIcon, Settings2Icon, TagsIcon, TriangleAlertIcon } from "lucide-react"
 
 import { isNetworkProtocol } from "@/lib/mock/types"
 import { cn } from "@/lib/utils"
@@ -78,7 +78,11 @@ function BlockTitle({
   )
 }
 
-/** Card "Conexão": gateway, CLP (Modbus TCP ou RTU), tags e últimos valores. */
+/**
+ * Card "Conexão": gateway, CLP (Modbus TCP ou RTU), tags e últimos valores.
+ * `canConfigure` (D12/D13): só a equipe Engemase configura o gateway e dispara leituras de teste.
+ * Para o cliente, o card é só leitura: "Ver gateway" e os estados vazios apontam para a Engemase.
+ */
 export function ConnectionCard({
   clientSlug,
   gateway,
@@ -86,6 +90,7 @@ export function ConnectionCard({
   busPeers,
   tags,
   stateMode,
+  canConfigure,
 }: {
   clientSlug: string
   gateway: Gateway | undefined
@@ -94,22 +99,32 @@ export function ConnectionCard({
   busPeers: Device[]
   tags: Tag[]
   stateMode: StateMode
+  /** Usuário atual é da equipe Engemase com permissão de configurar (getConfigAccess). */
+  canConfigure: boolean
 }) {
   const gatewayOffline = !gateway || gateway.status === "offline" || gateway.status === "pending"
   const readCtx = { gatewayOffline, deviceError: device?.lastError, latencyMs: device?.latencyMs ?? null }
+  const gatewayHref = gateway ? `/${clientSlug}/config/gateways/${gateway.id}` : ""
 
   return (
     <SectionCard
       title="Conexão"
       description="Gateway, CLP e tags lidas para calcular estado, contagem e OEE"
       action={
-        gateway && (
-          <SoftLink href={`/${clientSlug}/config/gateways/${gateway.id}`} className="h-8 shrink-0 px-2.5 text-xs">
+        gateway &&
+        (canConfigure ? (
+          <SoftLink href={gatewayHref} className="h-8 shrink-0 px-2.5 text-xs">
             <Settings2Icon />
             <span className="hidden sm:inline">Configurar</span>
             <span className="sr-only sm:hidden">Configurar gateway</span>
           </SoftLink>
-        )
+        ) : (
+          <SoftLink href={gatewayHref} className="h-8 shrink-0 px-2.5 text-xs">
+            <RouterIcon />
+            <span className="hidden sm:inline">Ver gateway</span>
+            <span className="sr-only sm:hidden">Ver gateway</span>
+          </SoftLink>
+        ))
       }
       bodyClassName="grid gap-6 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]"
     >
@@ -138,9 +153,15 @@ export function ConnectionCard({
                 ["Buffer local", `${num(gateway.bufferPending)} leituras`],
               ]}
             />
-            {gateway.status === "pending" && gateway.enrollmentCode && (
+            {gateway.status === "pending" && (
               <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
-                Aguardando ativação no local com o código <span className="font-mono font-semibold text-foreground">{gateway.enrollmentCode}</span>.
+                {canConfigure && gateway.enrollmentCode ? (
+                  <>
+                    Aguardando ativação no local com o código <span className="font-mono font-semibold text-foreground">{gateway.enrollmentCode}</span>.
+                  </>
+                ) : (
+                  "Aguardando a ativação pela equipe Engemase."
+                )}
               </p>
             )}
           </div>
@@ -197,7 +218,11 @@ export function ConnectionCard({
             )}
           </div>
         ) : (
-          <div className="border-t pt-5 text-sm text-muted-foreground">Nenhum CLP vinculado. Cadastre a conexão Modbus TCP ou RTU no gateway.</div>
+          <div className="border-t pt-5 text-sm text-muted-foreground">
+            {canConfigure
+              ? "Nenhum CLP vinculado. Cadastre a conexão Modbus TCP ou RTU no gateway."
+              : "Nenhum CLP vinculado. A equipe Engemase liga a máquina ao CLP; para pedir, abra um chamado."}
+          </div>
         )}
       </div>
 
@@ -210,7 +235,7 @@ export function ConnectionCard({
               {tags.length}
             </Badge>
           </div>
-          {tags.length > 0 && <ReadAllTagsButton total={tags.length} good={tags.filter((t) => t.quality === "good").length} {...readCtx} />}
+          {canConfigure && tags.length > 0 && <ReadAllTagsButton total={tags.length} good={tags.filter((t) => t.quality === "good").length} {...readCtx} />}
         </div>
         {tags.length === 0 ? (
           <Empty className="border border-dashed py-8 md:py-10">
@@ -220,13 +245,33 @@ export function ConnectionCard({
               </EmptyMedia>
               <EmptyTitle className="text-base">Nenhuma tag mapeada</EmptyTitle>
               <EmptyDescription>
-                Mapeie ao menos as tags de <strong>rodando</strong> e <strong>contagem total</strong> para o OEE ser calculado.
+                {canConfigure ? (
+                  <>
+                    Mapeie ao menos as tags de <strong>rodando</strong> e <strong>contagem total</strong> para o OEE ser calculado.
+                  </>
+                ) : (
+                  <>
+                    A equipe Engemase mapeia as tags de <strong>rodando</strong> e <strong>contagem total</strong> para o OEE ser calculado. Para pedir, abra um
+                    chamado.
+                  </>
+                )}
               </EmptyDescription>
             </EmptyHeader>
-            {gateway && (
+            {canConfigure ? (
+              gateway && (
+                <EmptyContent>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={gatewayHref}>Mapear tags no gateway</Link>
+                  </Button>
+                </EmptyContent>
+              )
+            ) : (
               <EmptyContent>
                 <Button asChild variant="outline" size="sm">
-                  <Link href={`/${clientSlug}/config/gateways/${gateway.id}`}>Mapear tags no gateway</Link>
+                  <Link href={`/${clientSlug}/ajuda`}>
+                    <LifeBuoyIcon />
+                    Abrir chamado
+                  </Link>
                 </Button>
               </EmptyContent>
             )}
@@ -240,10 +285,12 @@ export function ConnectionCard({
                   <TableHead>Endereço</TableHead>
                   <TableHead className="text-right">Último valor</TableHead>
                   <TableHead>Qualidade</TableHead>
-                  <TableHead className="text-right">Ciclo</TableHead>
-                  <TableHead className="pr-3">
-                    <span className="sr-only">Testar</span>
-                  </TableHead>
+                  <TableHead className={cn("text-right", !canConfigure && "pr-3")}>Ciclo</TableHead>
+                  {canConfigure && (
+                    <TableHead className="pr-3">
+                      <span className="sr-only">Testar</span>
+                    </TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -264,10 +311,12 @@ export function ConnectionCard({
                     <TableCell>
                       <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", QUALITY_STYLE[t.quality])}>{TAG_QUALITY_LABEL[t.quality]}</span>
                     </TableCell>
-                    <TableCell className="text-right text-xs text-muted-foreground tabular-nums">{num(t.pollMs)} ms</TableCell>
-                    <TableCell className="pr-3 text-right">
-                      <TagReadButton tagName={t.name} value={formatTagValue(t.lastValue, t.dataType, t.role)} quality={t.quality} {...readCtx} />
-                    </TableCell>
+                    <TableCell className={cn("text-right text-xs text-muted-foreground tabular-nums", !canConfigure && "pr-3")}>{num(t.pollMs)} ms</TableCell>
+                    {canConfigure && (
+                      <TableCell className="pr-3 text-right">
+                        <TagReadButton tagName={t.name} value={formatTagValue(t.lastValue, t.dataType, t.role)} quality={t.quality} {...readCtx} />
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

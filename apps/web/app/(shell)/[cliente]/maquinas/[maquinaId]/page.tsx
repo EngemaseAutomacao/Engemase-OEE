@@ -1,11 +1,12 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { MonitorIcon, OctagonAlertIcon, Settings2Icon, TabletSmartphoneIcon, UnplugIcon, WifiOffIcon } from "lucide-react"
+import { LifeBuoyIcon, MonitorIcon, OctagonAlertIcon, Settings2Icon, TabletSmartphoneIcon, UnplugIcon, WifiOffIcon } from "lucide-react"
 
 import {
   MOCK_NOW,
   getAreas,
   getClientBySlug,
+  getConfigAccess,
   getDailyOee,
   getDevice,
   getDevices,
@@ -69,6 +70,8 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
   if (!machine || machine.clientId !== client.id) notFound()
 
   const slug = client.slug
+  // Só a equipe Engemase configura gateway, CLP e tags (D12/D13); para o cliente a tela é só leitura.
+  const { canConfigure } = getConfigAccess(client.id)
   const live = getMachineLive(machine.id)
   const line = getLine(machine.lineId)
   const unit = getUnit(machine.unitId)
@@ -98,7 +101,15 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
   })
 
   const connection = (
-    <ConnectionCard clientSlug={slug} gateway={gateway} device={device} busPeers={busPeers} tags={tags} stateMode={machine.stateMode} />
+    <ConnectionCard
+      clientSlug={slug}
+      gateway={gateway}
+      device={device}
+      busPeers={busPeers}
+      tags={tags}
+      stateMode={machine.stateMode}
+      canConfigure={canConfigure}
+    />
   )
 
   // ---------------------------------------------------------------------------
@@ -180,11 +191,18 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
     if (!gateway) causes.push("Esta máquina ainda não está vinculada a um gateway.")
     else if (gateway.status === "pending")
       causes.push(
-        `O ${gateway.name} ainda não foi ativado no local${gateway.enrollmentCode ? ` (código ${gateway.enrollmentCode})` : ""}. Assim que ele se conectar e a configuração for publicada, estado, contagens e OEE aparecem aqui.`,
+        canConfigure
+          ? `O ${gateway.name} ainda não foi ativado no local${gateway.enrollmentCode ? ` (código ${gateway.enrollmentCode})` : ""}. Assim que ele se conectar e a configuração for publicada, estado, contagens e OEE aparecem aqui.`
+          : `O ${gateway.name} ainda não foi ativado pela equipe Engemase. Assim que ele se conectar e a configuração for publicada, estado, contagens e OEE aparecem aqui.`,
       )
     else if (gateway.status === "offline")
       causes.push(`O ${gateway.name} está offline desde ${gateway.lastSeen ? dateTime(gateway.lastSeen) : "a instalação"} e nenhum dado desta máquina chegou no turno.`)
-    if (!device) causes.push("Nenhum CLP vinculado: cadastre a conexão Modbus TCP ou RTU no gateway e mapeie as tags.")
+    if (!device)
+      causes.push(
+        canConfigure
+          ? "Nenhum CLP vinculado: cadastre a conexão Modbus TCP ou RTU no gateway e mapeie as tags."
+          : "Nenhum CLP vinculado: a equipe Engemase liga a máquina ao CLP e mapeia as tags.",
+      )
     else if (device.status === "disabled") causes.push(`A conexão ${device.name} está desativada.`)
     if (causes.length === 0) causes.push("A máquina ainda não enviou contagens neste turno.")
 
@@ -199,12 +217,23 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
             <EmptyTitle>Aguardando os primeiros dados</EmptyTitle>
             <EmptyDescription>{causes.join(" ")}</EmptyDescription>
           </EmptyHeader>
-          {gateway && (
+          {canConfigure ? (
+            gateway && (
+              <EmptyContent>
+                <Button asChild variant="outline">
+                  <Link href={`/${slug}/config/gateways/${gateway.id}`}>
+                    <Settings2Icon />
+                    Abrir configuração do gateway
+                  </Link>
+                </Button>
+              </EmptyContent>
+            )
+          ) : (
             <EmptyContent>
               <Button asChild variant="outline">
-                <Link href={`/${slug}/config/gateways/${gateway.id}`}>
-                  <Settings2Icon />
-                  Abrir configuração do gateway
+                <Link href={`/${slug}/ajuda`}>
+                  <LifeBuoyIcon />
+                  Abrir chamado
                 </Link>
               </Button>
             </EmptyContent>

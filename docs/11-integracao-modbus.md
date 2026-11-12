@@ -2,7 +2,7 @@
 
 Na **versão 1**, o gateway conversa com os CLPs **só por Modbus**: **Modbus TCP** (Ethernet) ou **Modbus RTU** (serial RS-485). Este guia orienta engenharia e campo. Ver também [ADR-011](10-decisoes-arquiteturais.md#adr-011--modbus-tcp-e-rtu-como-únicos-protocolos-do-mvp).
 
-> **Status das informações:** a tabela de suporte por CLP veio de conhecimento técnico e de pesquisa, **sem conferência em todos os manuais**. Antes de prometer algo a um cliente, confirme no manual do modelo e teste em bancada.
+> **Status das informações:** as **marcas prioritárias (D26, 12/11/2026): Siemens, Schneider, Rockwell e ABB** foram conferidas em documentação oficial dos fabricantes; os detalhes e as fontes estão nas [adaptações por fabricante](operacao/adaptacoes-por-fabricante.md). As demais linhas da tabela vêm de conhecimento técnico e de pesquisa, **sem conferência em todos os manuais**. Antes de prometer algo a um cliente, confirme no manual do modelo e teste em bancada (seção 8).
 
 ## 1. A realidade: "ler sem mexer no CLP" raramente funciona
 
@@ -17,11 +17,25 @@ Por isso a recomendação central deste guia é o **bloco OEE padrão Engemase**
 
 Legenda da última coluna: ✅ provável leitura sem alterar o programa · ⚙️ só configuração/parâmetro (sem mexer na lógica) · ✏️ exige bloco no programa ou módulo.
 
+**Marcas prioritárias (D26)**
+
 | CLP | Modbus TCP | Modbus RTU (RS-485) | Leitura |
 |---|---|---|---|
-| **Schneider M221** (modelos Ethernet) | Servidor nativo; %MWn = HR n | SL1/SL2 como escravo (a SL1 costuma estar com a IHM) | ✅ se os dados estiverem em %MW |
-| **Schneider M241 / M251** | Servidor nativo (pode estar desabilitado); só %MW localizadas | M241 tem seriais | ⚙️ |
+| **Siemens S7-1200 / S7-1500** | Só com **MB_SERVER** no programa (uma instância por cliente); sem licença extra | S7-1200: **CM/CB 1241** + `Modbus_Slave`; S7-1500: **CM PtP RS422/485 HF** | ✏️ (futuro: S7comm PUT/GET, que só lê DBs **não otimizados**) |
+| **Siemens S7-300 / S7-400** | Biblioteca Modbus/TCP da Siemens (CPU PN ou CP 343-1/443-1), **licença paga por CPU** | CP 341 / CP 441-2 com driver Modbus | ✏️ |
+| **Siemens LOGO! 8** (FS4+) | Nativo; habilitar a conexão de servidor no LOGO!Soft | — | ⚙️ (memória pequena: confirmar se o bloco cabe) |
+| **Schneider M221** (modelos Ethernet) | Servidor nativo ("Modbus server enabled"); %MWn = HR n; unit id 255 | SL1 como escravo (a SL1 costuma estar com a IHM). Os TM221CE só têm a SL1; a SL2 exige o cartucho TMC2SL1 | ✅ se os dados estiverem em %MW |
+| **Schneider M241 / M251 / M262** | Servidor embarcado (vem desativado; %MW, unit id 255, consistência de 1 word) ou Modbus TCP Slave Device (%QW, consistente) | M241 tem seriais | ⚙️ |
 | **Schneider M340 / M580** | Servidor nativo (CPU Ethernet, NOE/NOC); atenção ao controle de acesso por IP | M340: serial pode ser escravo | ✅ (%MW) |
+| **Rockwell Micro800** (820/850/870) | Nativo; preencher a tabela "Modbus Mapping" no CCW, sem lacunas | Nativo | ⚙️ |
+| **Rockwell CompactLogix/ControlLogix** | **Não nativo.** AOI de servidor Modbus TCP da Rockwell (sockets), gateway de protocolo EtherNet/IP↔Modbus TCP (ProSoft, HMS Anybus) ou, no futuro, driver EtherNet/IP no gateway Engemase | Módulo de terceiros | ✏️ (caminho padrão em decisão) |
+| **ABB AC500 V3 / AC500-eCo V3** | Nativo: objeto "Modbus TCP/IP Server" na ETH (eCo a partir do firmware 3.4.1); %MWn = HR n; bloqueio de escrita por faixa | COM como escravo | ⚙️ |
+| **ABB AC500 V2 / AC500-eCo V2** | Nativo: protocolo Modbus na ETH; HR n = %MW0.n | COM como escravo | ⚙️ |
+
+**Outras marcas** (sob demanda)
+
+| CLP | Modbus TCP | Modbus RTU (RS-485) | Leitura |
+|---|---|---|---|
 | **Delta DVP** | Nativo nos modelos Ethernet ou com DVP-EN01-SL | **Escravo nativo** (COM2 RS-485). **Padrão de fábrica: Modbus ASCII 9600 7E1**; RTU via D1120/M1143. Mapa fixo: D0 = 0x1000, M0 = 0x0800, X0 = 0x0400, Y0 = 0x0500 | ✅ se a porta estiver livre |
 | **Delta AS** | Servidor nativo | COM1/COM2 configuráveis (HWCONFIG) | ✅ provável |
 | **WEG PLC300** | Servidor nativo | Mestre e escravo nativos | ✅ provável |
@@ -29,10 +43,6 @@ Legenda da última coluna: ✅ provável leitura sem alterar o programa · ⚙�
 | **WEG CLIC02 / TPW04** | A confirmar | A confirmar | A confirmar |
 | **Mitsubishi FX5U** | MODBUS/TCP por parâmetro | RS-485 embutida, MODBUS_RTU por parâmetro | ⚙️ |
 | **Mitsubishi FX3U/FX3G, iQ-R** | Só com módulo | Só com módulo/adaptador | ✏️ |
-| **Rockwell Micro800** (820/850/870) | Nativo; preencher a tabela "Modbus Mapping" no CCW | Nativo | ⚙️ |
-| **Rockwell CompactLogix/ControlLogix** | Não nativo (AOI de sockets ou ProSoft) | ProSoft | ✏️ (futuro: EtherNet/IP) |
-| **Siemens S7-1200 / S7-1500** | Só com **MB_SERVER** no programa (uma instância por cliente) | Exige **CM/CB 1241** + Modbus_Slave | ✏️ (futuro: S7comm PUT/GET, que só lê DBs **não otimizados**) |
-| **Siemens LOGO! 8** (FS4+) | Nativo; habilitar a conexão de servidor no LOGO!Soft | — | ⚙️ |
 | **Omron CP1, NX1P, NJ** | Só com FBs sobre sockets | CP1: nativo **só como mestre** | ✏️ (futuro: FINS / EtherNet/IP) |
 | **Altus Nexto** | Nativo; adicionar a instância de servidor no MasterTool | Nativo (COM) | ⚙️ |
 | **Altus Duo** | DU351 | COM1/COM2 | A confirmar |
@@ -46,12 +56,12 @@ Bloco de **holding registers contíguos** que a Engemase inclui nos programas do
 - **template de máquina pronto** na plataforma: cadastrar uma máquina vira "informar IP/endereço";
 - mesmo significado em qualquer marca, o que simplifica suporte e comissionamento.
 
-Proposta inicial (32 HR a partir de um endereço base configurável, por exemplo HR 1000):
+Layout (32 HR a partir de um endereço base configurável, padrão HR 1000). A **especificação formal v1** está em [operacao/bloco-oee-v1.md](operacao/bloco-oee-v1.md), mantida pela D26: onde houver diferença, vale ela.
 
 | Offset | Tipo | Nome | Descrição |
 |---|---|---|---|
 | 0 | uint16 | `versao_bloco` | Versão do layout (começa em 1) |
-| 1 | uint16 | `heartbeat` | Incrementado pelo CLP a cada ciclo de scan ou a cada 1 s (detecta CLP "congelado") |
+| 1 | uint16 | `heartbeat` | Incrementado pelo CLP a cada 1 s (detecta CLP "congelado"; a v1 fixou o incremento por tempo) |
 | 2 | uint16 | `estado` | 0 = parada · 1 = produzindo · 2 = falha · 3 = setup · 4 = manual · 5 = emergência |
 | 3 | uint16 | `codigo_falha` | Código do alarme ativo (0 = nenhum) |
 | 4–5 | uint32 | `contador_total` | Ciclos/peças acumulados (nunca zerar por programa; overflow tratado pelo gateway) |
@@ -66,7 +76,7 @@ Proposta inicial (32 HR a partir de um endereço base configurável, por exemplo
 Regras:
 - **Ordem das words em 32 bits:** definida por padrão como **CDAB** (word baixa primeiro), que é o comum em CLPs. Fica registrada no template e pode ser trocada por máquina.
 - O bloco é **somente leitura** para o gateway (o gateway nunca escreve no v1).
-- A especificação do bloco vira um documento versionado e uma biblioteca de FB/rotina por fabricante (Delta, WEG, Schneider, Siemens, Rockwell...), mantidos pela Engemase.
+- A especificação do bloco é um documento versionado ([bloco-oee-v1.md](operacao/bloco-oee-v1.md)) com um FB em ST ([FB_OEE_ENGEMASE.st](operacao/FB_OEE_ENGEMASE.st)) e notas de portabilidade e de exposição por fabricante ([adaptações](operacao/adaptacoes-por-fabricante.md)), mantidos pela Engemase. Prioridade (D26): **Siemens, Schneider, Rockwell e ABB**; as demais marcas sob demanda.
 
 ## 4. RS-485: boas práticas de instalação
 
@@ -122,7 +132,7 @@ O Modbus RTU tem **um único mestre** por barramento. Se a IHM já é mestre na 
 
 ## 7. Checklist de comissionamento em campo
 
-1. CLP: modelo, firmware, porta usada (TCP/RTU), endereço/IP, unit id, velocidade e formato serial.
+1. CLP: marca, modelo, firmware, porta usada (TCP/RTU), endereço/IP, unit id, velocidade e formato serial. Conferir se o modelo e o firmware já passaram na bancada (seção 8).
 2. Confirmar que **não há outro mestre** no barramento RS-485 (seção 5).
 3. Cabeamento RS-485: cascata, terminação nas pontas, polarização única, comum ligado, malha aterrada em um ponto.
 4. Na plataforma: cadastrar a máquina (ou aplicar o template do bloco OEE padrão) e usar **"Testar conexão"** e **"Ler agora"** em cada tag.
@@ -130,3 +140,16 @@ O Modbus RTU tem **um único mestre** por barramento. Se a IHM já é mestre na 
 6. Forçar uma parada e uma falha na máquina e conferir o estado na tela ao vivo.
 7. Desligar o cabo de rede IT por alguns minutos e conferir que **nenhuma contagem se perde** (buffer do gateway).
 8. Registrar fotos do painel e da ligação no cadastro do gateway.
+
+## 8. Bancada por marca (D26)
+
+Cada marca prioritária tem um CLP de bancada, o mais barato com Modbus TCP, para qualificar o bloco OEE e o agente antes do primeiro cliente. Roteiro, matriz de testes e registro na [verificação de bancada, Parte C](operacao/verificacao-bancada-r1000.md#6-parte-c--clps-das-marcas-prioritárias-d26).
+
+| Marca | CLP de bancada | Software | O que a bancada não cobre |
+|---|---|---|---|
+| Siemens | S7-1200 CPU 1211C DC/DC/DC | TIA Portal STEP 7 Basic (pago) | S7-1500 (mesmo `MB_SERVER`, outro CLP), S7-300/400 (licença Modbus por CPU) |
+| Schneider | M221 TM221CE16T | Machine Expert – Basic (gratuito) | M241/M251/M262 (CODESYS, Slave Device), M340/M580 |
+| Rockwell | Micro820 com Ethernet | CCW Standard (gratuito, confirmar) | CompactLogix/ControlLogix (caminho em decisão) |
+| ABB | AC500-eCo V3 PM5012-T-ETH | Automation Builder Basic (gratuito) | AC500 V3 de linha completa, AC500 V2 |
+
+Resumo da matriz (C1 a C17): leitura dos 32 registradores sem exceção, unit id, deslocamento, ordem CDAB com o valor 100.000, ordem nativa da marca, heartbeat, estados, contagem, **virada da word baixa sem leitura rasgada**, retenção, **download sem zerar contadores**, CLP em STOP, escrita externa, limite de conexões, tempo de resposta abaixo de 200 ms, conservação de peças na plataforma e, opcionalmente, Modbus RTU.

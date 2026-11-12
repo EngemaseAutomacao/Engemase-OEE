@@ -35,6 +35,7 @@ import { Ring } from "@/components/dashboard/ring"
 import { SectionCard } from "@/components/dashboard/section-card"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { ConfirmAction, SettingsTitle, SquareAction, StatusDot, plural } from "@/components/settings/bits"
+import { EngemaseOnlyChip, useCanEdit } from "@/components/config/engemase-managed"
 import { KIND_LABEL, PAIRING_HOST, THEME_LABEL, TerminalDialog, type TerminalFormValue } from "@/components/settings/terminal-dialog"
 import type { SettingsUnit, TerminalKind, TerminalLine, TerminalMachine, TerminalRow } from "@/components/settings/types"
 
@@ -62,6 +63,7 @@ export function TerminalsManager({
   const [unitFilter, setUnitFilter] = useState<string>("all")
   const [dialog, setDialog] = useState<{ editing: { row: TerminalRow; mode: "edit" | "code" } | null } | null>(null)
   const [revoking, setRevoking] = useState<TerminalRow | null>(null)
+  const canEdit = useCanEdit()
 
   const unitName = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units])
   const lineById = useMemo(() => new Map(lines.map((l) => [l.id, l])), [lines])
@@ -136,10 +138,15 @@ export function TerminalsManager({
         title="Terminais (TV e tablets)"
         description={`TVs Andon e tablets pareados de ${clientName}. Terminal é um aparelho, não uma pessoa: entra por código de pareamento, sem e-mail nem senha.`}
         actions={
-          <Button onClick={() => setDialog({ editing: null })}>
-            <PlusIcon />
-            Parear novo terminal
-          </Button>
+          canEdit && (
+            <>
+              <EngemaseOnlyChip />
+              <Button onClick={() => setDialog({ editing: null })}>
+                <PlusIcon />
+                Parear novo terminal
+              </Button>
+            </>
+          )
         }
       />
 
@@ -183,10 +190,14 @@ export function TerminalsManager({
               </EmptyMedia>
               <EmptyTitle>{terminals.length === 0 ? "Nenhum terminal pareado" : "Nenhum terminal neste filtro"}</EmptyTitle>
               <EmptyDescription>
-                {terminals.length === 0 ? "Pareie a TV da linha ou o tablet da máquina com um código de 6 dígitos." : "Troque o tipo ou a unidade para ver os demais aparelhos."}
+                {terminals.length === 0
+                  ? canEdit
+                    ? "Pareie a TV da linha ou o tablet da máquina com um código de 6 dígitos."
+                    : "A equipe Engemase pareia a TV da linha e o tablet da máquina. Para pedir, abra um chamado."
+                  : "Troque o tipo ou a unidade para ver os demais aparelhos."}
               </EmptyDescription>
             </EmptyHeader>
-            {terminals.length === 0 && (
+            {canEdit && terminals.length === 0 && (
               <EmptyContent>
                 <Button onClick={() => setDialog({ editing: null })}>
                   <PlusIcon />
@@ -273,7 +284,7 @@ export function TerminalsManager({
                       <td className="py-3 pr-5 pl-3">
                         <div className="flex justify-end gap-1.5">
                           {t.status === "pending" ? (
-                            <SquareAction icon={QrCodeIcon} label="Ver código de pareamento" onClick={() => setDialog({ editing: { row: t, mode: "code" } })} />
+                            canEdit && <SquareAction icon={QrCodeIcon} label="Ver código de pareamento" onClick={() => setDialog({ editing: { row: t, mode: "code" } })} />
                           ) : (
                             href && (
                               <Tooltip>
@@ -290,8 +301,12 @@ export function TerminalsManager({
                               </Tooltip>
                             )
                           )}
-                          {t.status !== "pending" && <SquareAction icon={PencilIcon} label="Editar nome, escopo e tema" tone="slate" onClick={() => setDialog({ editing: { row: t, mode: "edit" } })} />}
-                          <SquareAction icon={BanIcon} label={t.status === "pending" ? "Cancelar pareamento" : "Revogar terminal"} tone="red" onClick={() => setRevoking(t)} />
+                          {canEdit && t.status !== "pending" && (
+                            <SquareAction icon={PencilIcon} label="Editar nome, escopo e tema" tone="slate" onClick={() => setDialog({ editing: { row: t, mode: "edit" } })} />
+                          )}
+                          {canEdit && (
+                            <SquareAction icon={BanIcon} label={t.status === "pending" ? "Cancelar pareamento" : "Revogar terminal"} tone="red" onClick={() => setRevoking(t)} />
+                          )}
                         </div>
                       </td>
                     </tr>

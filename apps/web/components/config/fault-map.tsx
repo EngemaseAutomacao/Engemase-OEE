@@ -14,6 +14,7 @@ import { SectionCard } from "@/components/dashboard/section-card"
 import { REASON_CATEGORIES, REASON_CATEGORY_META, plural } from "@/components/config/labels"
 import type { ReasonNode } from "@/components/config/reason-dialogs"
 import { IconAction } from "@/components/config/ui-bits"
+import { useCanEdit } from "@/components/config/engemase-managed"
 
 export interface FaultMapRow {
   code: number
@@ -42,6 +43,7 @@ export function FaultMap({
   const [code, setCode] = useState("")
   const [text, setText] = useState("")
   const [showNew, setShowNew] = useState(false)
+  const canEdit = useCanEdit()
 
   const groups = reasons.filter((r) => !r.parentId)
   const leaves = reasons.filter((r) => r.parentId)
@@ -76,17 +78,19 @@ export function FaultMap({
       title="Mapa de códigos de falha → motivo"
       description="Quando o CLP sinaliza falha com um código conhecido, a parada já nasce classificada. O operador ainda pode corrigir."
       action={
-        <Button
-          size="sm"
-          onClick={() =>
-            toast.success("Mapa de falhas salvo", {
-              description: `${mapped} de ${rows.length} códigos com motivo automático. Vale para as próximas paradas em falha.`,
-            })
-          }
-        >
-          <SaveIcon />
-          Salvar mapa
-        </Button>
+        canEdit && (
+          <Button
+            size="sm"
+            onClick={() =>
+              toast.success("Mapa de falhas salvo", {
+                description: `${mapped} de ${rows.length} códigos com motivo automático. Vale para as próximas paradas em falha.`,
+              })
+            }
+          >
+            <SaveIcon />
+            Salvar mapa
+          </Button>
+        )
       }
     >
       {rows.length === 0 ? (
@@ -96,7 +100,11 @@ export function FaultMap({
               <ZapIcon />
             </EmptyMedia>
             <EmptyTitle>Nenhum código de falha mapeado</EmptyTitle>
-            <EmptyDescription>Cadastre os códigos de alarme do CLP para classificar as falhas automaticamente.</EmptyDescription>
+            <EmptyDescription>
+              {canEdit
+                ? "Cadastre os códigos de alarme do CLP para classificar as falhas automaticamente."
+                : "A equipe Engemase cadastra os códigos de alarme do CLP para classificar as falhas automaticamente."}
+            </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -124,7 +132,7 @@ export function FaultMap({
                   </TableCell>
                   <TableCell className="text-sm">{r.text}</TableCell>
                   <TableCell>
-                    <Select value={reason ? reason.id : ASK} onValueChange={(v) => update(r.code, { reasonId: v === ASK ? null : v })}>
+                    <Select value={reason ? reason.id : ASK} onValueChange={(v) => update(r.code, { reasonId: v === ASK ? null : v })} disabled={!canEdit}>
                       <SelectTrigger size="sm" className={cn("w-full", !reason && "text-muted-foreground", inactive && "border-state-stopped")} aria-label={`Motivo do código ${r.code}`}>
                         <SelectValue />
                       </SelectTrigger>
@@ -165,7 +173,7 @@ export function FaultMap({
                     )}
                   </TableCell>
                   <TableCell>
-                    <Select value={r.machineType} onValueChange={(v) => update(r.code, { machineType: v })}>
+                    <Select value={r.machineType} onValueChange={(v) => update(r.code, { machineType: v })} disabled={!canEdit}>
                       <SelectTrigger size="sm" className="w-full" aria-label={`Máquinas do código ${r.code}`}>
                         <SelectValue />
                       </SelectTrigger>
@@ -180,17 +188,19 @@ export function FaultMap({
                     </Select>
                   </TableCell>
                   <TableCell>
-                    <IconAction
-                      icon={Trash2Icon}
-                      label={`Remover código ${r.code}`}
-                      tone="red"
-                      onClick={() => {
-                        onChange(rows.filter((x) => x.code !== r.code))
-                        toast.success(`Código ${r.code} removido do mapa`, {
-                          action: { label: "Desfazer", onClick: () => onChange(rows) },
-                        })
-                      }}
-                    />
+                    {canEdit && (
+                      <IconAction
+                        icon={Trash2Icon}
+                        label={`Remover código ${r.code}`}
+                        tone="red"
+                        onClick={() => {
+                          onChange(rows.filter((x) => x.code !== r.code))
+                          toast.success(`Código ${r.code} removido do mapa`, {
+                            action: { label: "Desfazer", onClick: () => onChange(rows) },
+                          })
+                        }}
+                      />
+                    )}
                   </TableCell>
                 </TableRow>
               )
@@ -200,32 +210,36 @@ export function FaultMap({
       )}
 
       <div className="mt-4 flex flex-col gap-2 rounded-xl bg-muted/50 p-3">
-        <div className="text-xs font-medium">Adicionar código de alarme</div>
-        <div className="grid gap-2 sm:grid-cols-[7rem_minmax(0,1fr)_auto]">
-          <Input
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-            placeholder="Código"
-            inputMode="numeric"
-            className="h-8 bg-background font-mono"
-            aria-label="Código do alarme"
-            aria-invalid={showNew && !!codeError}
-          />
-          <Input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
-            placeholder="Texto do alarme (ex.: Termopar da zona 3 aberto)"
-            className="h-8 bg-background"
-            aria-label="Texto do alarme"
-            aria-invalid={showNew && !!textError}
-          />
-          <Button type="button" size="sm" variant="outline" onClick={add}>
-            <PlusIcon />
-            Adicionar
-          </Button>
-        </div>
-        {showNew && (codeError || textError) && <p className="text-xs text-destructive">{codeError ?? textError}</p>}
+        {canEdit && (
+          <>
+            <div className="text-xs font-medium">Adicionar código de alarme</div>
+            <div className="grid gap-2 sm:grid-cols-[7rem_minmax(0,1fr)_auto]">
+              <Input
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="Código"
+                inputMode="numeric"
+                className="h-8 bg-background font-mono"
+                aria-label="Código do alarme"
+                aria-invalid={showNew && !!codeError}
+              />
+              <Input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
+                placeholder="Texto do alarme (ex.: Termopar da zona 3 aberto)"
+                className="h-8 bg-background"
+                aria-label="Texto do alarme"
+                aria-invalid={showNew && !!textError}
+              />
+              <Button type="button" size="sm" variant="outline" onClick={add}>
+                <PlusIcon />
+                Adicionar
+              </Button>
+            </div>
+            {showNew && (codeError || textError) && <p className="text-xs text-destructive">{codeError ?? textError}</p>}
+          </>
+        )}
         <p className="text-[11px] text-muted-foreground">
           {plural(rows.length - mapped, "código pergunta", "códigos perguntam")} ao operador. O código vem do registrador “Código de falha” mapeado em cada máquina.
         </p>

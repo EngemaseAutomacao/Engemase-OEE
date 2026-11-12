@@ -43,6 +43,13 @@
       "when": 1794520302128,
       "tag": "0005_member_machine_owner_decisions",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794526145003,
+      "tag": "0006_client_limits_machines_required",
+      "breakpoints": true
     }
   ]
 }

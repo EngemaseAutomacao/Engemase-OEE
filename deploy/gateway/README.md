@@ -213,5 +213,5 @@ Proxy corporativo numa bancada: `/etc/oee-gateway/proxy.env` (root:oee 0640) com
 
 - E-mail do mantenedor nos `nfpm*.yaml` (`a-definir@engemase.invalid`).
 - Código da Fase 1 no `gateway/`: ativação por socket (`localapi`), `localui serve`, `helper serve`, `status`, `net`, `logs`, `support-bundle`, LEDs; e o `oee-updater` (M4b).
-- Domínio dos gateways (D28) no `gateway.yaml`.
+- Domínio próprio (D28): por enquanto o `gateway.yaml` usa o domínio da Vercel (`https://engemase-oee.vercel.app`, igual ao `config.DefaultCloudURL` do agente); o `homepage` dos dois `nfpm*.yaml` repete o host (só metadado do `.deb`), e o `TestDefaultCloudURLMatchesShippedYAML` do agente confere os três. O `gateway.yaml` é **conffile**: numa atualização, se o pacote novo trouxer outro conteúdo, o dpkg troca sem perguntar o arquivo não editado e, no editado, pergunta (ou mantém o antigo, com `--force-confold`). Por isso o `cloud.url` **não** muda numa versão comum do pacote (trocaria o host de gateways cujo TI ainda não liberou o novo); a migração para o domínio próprio segue o [docs/16 §4](../../docs/16-projeto-do-gateway.md#4-caminhos-usuários-e-identidade-canônico).
 - Assinatura do `.deb`/manifesto (Ed25519, `tools/release-sign`) e publicação no Vercel Blob: fora deste diretório.

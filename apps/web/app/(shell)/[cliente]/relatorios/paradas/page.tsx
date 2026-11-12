@@ -2,7 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ChartNoAxesCombinedIcon, ListOrderedIcon, RouterIcon } from "lucide-react"
 
-import { MOCK_NOW, getClientBySlug, getLines, getMachines, getUnits } from "@/lib/mock"
+import { MOCK_NOW, getClientBySlug, getConfigAccess, getLines, getMachines, getUnits } from "@/lib/mock"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { PageTitle } from "@/components/refresh/page-title"
@@ -54,7 +54,9 @@ export default async function Page({ params }: PageProps<"/[cliente]/relatorios/
             <EmptyTitle>Ainda não há paradas registradas</EmptyTitle>
             <EmptyDescription>
               {allMachines.length === 0
-                ? "Cadastre as máquinas e vincule cada uma a um CLP de um gateway. As paradas aparecem aqui assim que os eventos de estado começarem a chegar."
+                ? getConfigAccess(client.id).canConfigure
+                  ? "Cadastre as máquinas e vincule cada uma a um CLP de um gateway. As paradas aparecem aqui assim que os eventos de estado começarem a chegar."
+                  : "A equipe Engemase cadastra as máquinas e liga cada uma ao CLP. As paradas aparecem aqui assim que os eventos de estado começarem a chegar."
                 : "Os gateways deste cliente ainda não enviaram eventos de estado. Assim que as máquinas estiverem comunicando, o Pareto de paradas é montado automaticamente."}
             </EmptyDescription>
           </EmptyHeader>

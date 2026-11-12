@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 
-import { faultTexts, getClientBySlug, getDowntimeReasons, getMachines, getPareto } from "@/lib/mock"
+import { faultTexts, getClientBySlug, getConfigAccess, getDowntimeReasons, getMachines, getPareto } from "@/lib/mock"
+import { ConfigAccessProvider, EngemaseManagedNote } from "@/components/config/engemase-managed"
 import { REASON_PALETTE } from "@/components/config/labels"
 import type { FaultMapRow } from "@/components/config/fault-map"
 import type { ReasonNode } from "@/components/config/reason-dialogs"
@@ -54,5 +55,10 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/moti
 
   const machineTypes = [...new Set(machines.map((m) => m.type))]
 
-  return <ReasonsManager initialReasons={reasons} initialFaultMap={faultMap} machineTypes={machineTypes} />
+  return (
+    <ConfigAccessProvider canEdit={getConfigAccess(client.id).canConfigure}>
+      <EngemaseManagedNote padded clientSlug={client.slug} subject="Motivos de parada e mapa de códigos de falha" />
+      <ReasonsManager initialReasons={reasons} initialFaultMap={faultMap} machineTypes={machineTypes} />
+    </ConfigAccessProvider>
+  )
 }

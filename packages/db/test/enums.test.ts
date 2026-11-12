@@ -204,7 +204,8 @@ describe("CHECKs do banco", () => {
   })
 
   it("member_access: escopo 'machines' aceito (D11); escopo desconhecido e admin fora de 'all' recusados", async () => {
-    const scope = (id: string, value: string) => attempt("UPDATE member_access SET scope = $2 WHERE id = $1", [id, value])
+    const scope = (id: string, value: string) =>
+      attempt("UPDATE member_access SET scope = $2 WHERE id = $1", [id, value])
     for (const value of ["all", "units", "machines"]) await scope(a.memberAccessId, value)
     for (const value of ["lines", "", "MACHINES"]) {
       await expectDbError(scope(a.memberAccessId, value), /member_access_scope_chk/)
@@ -241,7 +242,7 @@ describe("CHECKs do banco", () => {
     expect(approval.rows).toEqual([])
   })
 
-  it("client_account: gerenciado pela Engemase por padrão (D13); limites são inteiros >= 0 (D1)", async () => {
+  it("client_account: gerenciado pela Engemase por padrão (D13); limites com `machines` e inteiros >= 0 (D1)", async () => {
     // O seed não informa managed_by_engemase: vale o padrão.
     const managed = await t.client.query<{ managed: boolean }>(
       "SELECT managed_by_engemase AS managed FROM client_account WHERE organization_id = $1",
@@ -251,10 +252,14 @@ describe("CHECKs do banco", () => {
 
     const limits = (value: string) =>
       attempt("UPDATE client_account SET limits = $2::jsonb WHERE organization_id = $1", [a.organizationId, value])
-    for (const ok of ["{}", '{"machines": 0}', '{"machines": 50, "gateways": 4, "users": 30, "retentionMonths": 24}']) {
+    for (const ok of ['{"machines": 0}', '{"machines": 50, "gateways": 4, "users": 30, "retentionMonths": 24}']) {
       await limits(ok)
     }
     for (const bad of [
+      // Sem `machines` (a base da cobrança): não existe cliente "sem limite definido".
+      "{}",
+      '{"gateways": 4, "users": 30}',
+      '["machines"]',
       "[]",
       "50",
       '{"machines": -1}',
@@ -267,6 +272,15 @@ describe("CHECKs do banco", () => {
     ]) {
       await expectDbError(limits(bad), /client_account_limits_chk/)
     }
+    // Sem padrão: criar o cliente sem informar `limits` falha (não nasce com `{}`).
+    await expectDbError(
+      attempt(
+        `WITH o AS (INSERT INTO organization (name, slug) VALUES ('Sem limites', 'sem-limites') RETURNING id)
+         INSERT INTO client_account (organization_id) SELECT id FROM o`,
+        [],
+      ),
+      /null value in column "limits"/,
+    )
   })
 
   it("recusam valores fora da lista e regras quebradas", async () => {

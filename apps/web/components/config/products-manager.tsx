@@ -29,6 +29,7 @@ import { StatCard } from "@/components/dashboard/stat-card"
 import { norm, piecesPerHour, plural, seconds } from "@/components/config/labels"
 import { CycleMatrixDialog, ImportCsvDialog, ProductDialog, type ProductDraft } from "@/components/config/product-dialogs"
 import { ConfirmDialog, IconAction, PageTitle } from "@/components/config/ui-bits"
+import { EngemaseOnlyChip, useCanEdit } from "@/components/config/engemase-managed"
 
 export interface ProductMachine {
   id: string
@@ -65,6 +66,7 @@ export function ProductsManager({
   units: { id: string; name: string }[]
 }) {
   const [products, setProducts] = useState(initialProducts)
+  const canEdit = useCanEdit()
   const [query, setQuery] = useState("")
   const [unitId, setUnitId] = useState("all")
   const [editing, setEditing] = useState<ProductRow | "new" | null>(null)
@@ -127,20 +129,23 @@ export function ProductsManager({
         title="Produtos"
         description="Ciclo ideal de cada produto em cada máquina: é a base da performance do OEE."
         actions={
-          <>
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <UploadIcon />
-              Importar CSV
-            </Button>
-            <Button variant="outline" onClick={() => setMatrixOpen(true)} disabled={products.length === 0 || machines.length === 0}>
-              <Grid3x3Icon />
-              Matriz de ciclos
-            </Button>
-            <Button onClick={() => setEditing("new")}>
-              <PlusIcon />
-              Novo produto
-            </Button>
-          </>
+          canEdit && (
+            <>
+              <EngemaseOnlyChip />
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <UploadIcon />
+                Importar CSV
+              </Button>
+              <Button variant="outline" onClick={() => setMatrixOpen(true)} disabled={products.length === 0 || machines.length === 0}>
+                <Grid3x3Icon />
+                Matriz de ciclos
+              </Button>
+              <Button onClick={() => setEditing("new")}>
+                <PlusIcon />
+                Novo produto
+              </Button>
+            </>
+          )
         }
       />
 
@@ -174,7 +179,7 @@ export function ProductsManager({
           description={`${plural(visible.length, "produto", "produtos")}${q ? ` para “${query.trim()}”` : ""}`}
           className="xl:col-span-8"
           action={
-            products.length > 0 && machines.length > 0 ? (
+            canEdit && products.length > 0 && machines.length > 0 ? (
               <button type="button" onClick={() => setMatrixOpen(true)} className="shrink-0 text-xs font-semibold text-primary hover:underline">
                 Editar matriz
               </button>
@@ -213,16 +218,20 @@ export function ProductsManager({
                 <EmptyTitle>{products.length === 0 ? "Nenhum produto cadastrado" : "Nenhum produto encontrado"}</EmptyTitle>
                 <EmptyDescription>
                   {products.length === 0
-                    ? "Cadastre os produtos com o ciclo ideal de cada máquina, ou importe uma planilha CSV."
+                    ? canEdit
+                      ? "Cadastre os produtos com o ciclo ideal de cada máquina, ou importe uma planilha CSV."
+                      : "A equipe Engemase cadastra os produtos e o ciclo ideal de cada máquina. Para pedir, abra um chamado."
                     : "Tente outro código ou nome, ou mude a unidade."}
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent className="flex-row flex-wrap justify-center">
                 {products.length === 0 ? (
-                  <Button onClick={() => setEditing("new")}>
-                    <PlusIcon />
-                    Novo produto
-                  </Button>
+                  canEdit && (
+                    <Button onClick={() => setEditing("new")}>
+                      <PlusIcon />
+                      Novo produto
+                    </Button>
+                  )
                 ) : (
                   <Button
                     variant="outline"
@@ -293,10 +302,12 @@ export function ProductsManager({
                       </TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground tabular-nums">{best ? piecesPerHour(best) : "—"}</TableCell>
                       <TableCell>
-                        <div className="flex justify-end gap-1.5">
-                          <IconAction icon={PencilIcon} label={`Editar ${p.name}`} onClick={() => setEditing(p)} />
-                          <IconAction icon={Trash2Icon} label={`Excluir ${p.name}`} tone="red" onClick={() => setDeleting(p)} />
-                        </div>
+                        {canEdit && (
+                          <div className="flex justify-end gap-1.5">
+                            <IconAction icon={PencilIcon} label={`Editar ${p.name}`} onClick={() => setEditing(p)} />
+                            <IconAction icon={Trash2Icon} label={`Excluir ${p.name}`} tone="red" onClick={() => setDeleting(p)} />
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   )
@@ -344,10 +355,12 @@ export function ProductsManager({
                   {plural(uncovered.length, "máquina usa", "máquinas usam")} só o ciclo padrão: {uncovered.map((m) => m.code).join(", ")}.
                 </p>
               )}
-              <Button variant="outline" size="sm" className="self-start" onClick={() => setImportOpen(true)}>
-                <FileSpreadsheetIcon />
-                Importar planilha de ciclos
-              </Button>
+              {canEdit && (
+                <Button variant="outline" size="sm" className="self-start" onClick={() => setImportOpen(true)}>
+                  <FileSpreadsheetIcon />
+                  Importar planilha de ciclos
+                </Button>
+              )}
             </div>
           </SectionCard>
         </div>

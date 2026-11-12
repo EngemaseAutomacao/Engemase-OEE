@@ -32,7 +32,9 @@ priority: optional
 # A DEFINIR: e-mail de contato do mantenedor do pacote.
 maintainer: "Engemase Automação <a-definir@engemase.invalid>"
 vendor: Engemase Automação
-homepage: https://oee.engemase.com.br
+# Domínio da Vercel (D28); domínio próprio fica para depois. Só metadado do
+# .deb; igual ao config.DefaultCloudURL do agente (TestDefaultCloudURLMatchesShippedYAML).
+homepage: https://engemase-oee.vercel.app
 license: Proprietary
 description: |-
   Agente de coleta do gateway OEE da Engemase

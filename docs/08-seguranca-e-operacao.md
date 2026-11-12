@@ -58,7 +58,13 @@ flowchart LR
 |---|---|---|---|
 | **Local** | `pnpm dev` | Postgres em Docker ou branch `dev` da Neon | Agente local + `plc-sim` |
 | **Preview** (por PR) | Deploy de preview da Vercel (com Deployment Protection) | Branch Neon automático por preview, a partir de **branch-semente sintético** (nunca dados de produção) | Gateway de bancada (opcional), com o header de bypass da Deployment Protection |
-| **Produção** | Domínio próprio (ex.: `oee.engemase.com.br`) | Branch `main` da Neon | Gateways dos clientes |
+| **Produção** | `https://engemase-oee.vercel.app` (domínio da Vercel; domínio próprio fica para depois, D28) | Branch `main` da Neon (AWS `sa-east-1`) | Gateways dos clientes |
+
+**Endereço e região (decididos em 12/11/2026):**
+- **Endereço (D28):** por enquanto só o domínio da Vercel, para o produto e para os gateways. O domínio próprio fica para depois. A troca com gateways já instalados exige liberação nova no TI de cada cliente e a migração do `cloud.url` de cada gateway ([16 §4](16-projeto-do-gateway.md#4-caminhos-usuários-e-identidade-canônico)).
+- **Região (D7):** São Paulo. Funções da Vercel em `gru1` e Neon na AWS `sa-east-1`, em produção e nos previews.
+- **Deployment Protection:** o endereço de produção fica aberto (usuários e gateways); previews e URLs de cada deploy ficam protegidos. O modo Standard atual protege tudo que não é domínio próprio e pode cobrir `engemase-oee.vercel.app`. Conferir antes do primeiro gateway: abrir o endereço numa janela anônima; se aparecer o login da Vercel, ajustar a proteção para só previews e URLs de deploy. Com o endereço protegido, os gateways recebem 401 e param de enviar (o buffer fica).
+- **Sem redirecionamento** do endereço que os gateways usam: o agente não segue redirecionamento ([16 §4](16-projeto-do-gateway.md#4-caminhos-usuários-e-identidade-canônico)).
 
 Um **gateway de bancada** na Engemase (com CLPs reais de cada marca suportada) roda contra produção numa organização interna "Engemase Lab". Ele funciona como teste de fumaça contínuo e como demonstração.
 
@@ -96,7 +102,7 @@ flowchart LR
 
 | Item | Base | Observação |
 |---|---|---|
-| Vercel Pro | US$ 20 por membro/mês + uso | Functions, Cron, Blob e Firewall entram no uso. Na escala de 100 gateways sincronizando a cada 10 s, são ~26 milhões de invocações/mês, na casa de dezenas de US$ |
+| Vercel Pro | US$ 20 por membro/mês + uso | Functions, Cron, Blob e Firewall entram no uso. Na escala de 100 gateways sincronizando a cada 10 s, são ~26 milhões de invocações/mês, na casa de dezenas de US$. Preços de uso variam por região: conferir os de São Paulo (`gru1`, D7) |
 | Neon (produção) | ~US$ 20–160/mês | Compute 24/7 (0,25–1 CU) + armazenamento (~5 GB/ano para 100 máquinas). Ver [06](06-banco-de-dados.md#custo-de-referência-estimativa-de-nov2026-confirmar-na-página-de-preços) |
 | Neon (previews/dev) | Quase zero | Escala a zero |
 | Sentry | Plano gratuito ou Team | |

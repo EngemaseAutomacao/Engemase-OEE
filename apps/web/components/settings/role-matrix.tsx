@@ -12,7 +12,7 @@ const SHORT: Record<ClientRole, string> = { client_admin: "Admin", engineer: "En
 /** Resumo de docs/05 (RBAC) e docs/15 (papéis e escopo), com as decisões D11, D12 e D13. */
 const ROWS: { label: string; cells: Cell[] }[] = [
   { label: "Dashboards e relatórios (no seu escopo)", cells: ["yes", "yes", "yes", "yes", "yes"] },
-  { label: "Classificar paradas, lançar refugo e trocar produto", cells: ["no", "no", "yes", "yes", "no"] },
+  { label: "Classificar paradas, lançar refugo e trocar produto", cells: ["yes", "yes", "yes", "yes", "no"] },
   { label: "Saúde dos gateways, conexões com os CLPs e tags (leitura)", cells: ["yes", "yes", "no", "no", "no"] },
   { label: "Usuários do cliente: convidar, papéis, escopos e desativar", cells: ["yes", "no", "no", "no", "no"] },
   { label: "Aprovar sessões de acesso remoto aos gateways", cells: ["yes", "no", "no", "no", "no"] },

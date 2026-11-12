@@ -18,11 +18,27 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// DefaultCloudURL é o endereço padrão da plataforma: só a URL base (o caminho
+// /api/gateway/v1 é fixo no agente). É o ÚNICO lugar do código Go com o host; a
+// CLI e os testes usam esta constante. Pela decisão D28 (12/11/2026), por
+// enquanto vale só o domínio da Vercel; o domínio próprio fica para depois. Se o
+// projeto na Vercel tiver outro nome, troque aqui e nos quatro YAML conferidos
+// pelo TestDefaultCloudURLMatchesShippedYAML: o cloud.url de
+// examples/gateway.yaml e de deploy/gateway/etc/gateway.yaml e o homepage de
+// deploy/gateway/nfpm.yaml e nfpm-updater.yaml (só metadado do .deb).
+//
+// Trocar o domínio aqui NÃO muda os gateways já instalados: eles usam o
+// cloud.url gravado no /etc/oee-gateway/gateway.yaml. Cada gateway instalado
+// precisa ter o cloud.url atualizado (pelo pacote OTA, com um passo de
+// migração, ou pelo técnico com root, na bancada), e só depois de o TI do
+// cliente liberar o host novo. O "enroll --url" não troca o host do agente: vale
+// só para a ativação. Caminho e cuidados: docs/16 §4.
+const DefaultCloudURL = "https://engemase-oee.vercel.app"
+
 // Caminhos canônicos (docs/16 §4).
 const (
 	DefaultLocalPath  = "/etc/oee-gateway/gateway.yaml"
 	DefaultStateDir   = "/var/lib/oee-gateway"
-	DefaultCloudURL   = "https://oee.engemase.com.br"
 	DefaultIdentity   = "/data/identity/hw.json"
 	credentialsFile   = "credentials.json"
 	bufferFile        = "buffer.db"

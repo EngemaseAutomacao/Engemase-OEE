@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { LayersIcon, RouterIcon, SearchIcon, ShieldCheckIcon, TriangleAlertIcon, WifiIcon, WifiOffIcon } from "lucide-react"
+import { LayersIcon, RouterIcon, SearchIcon, TriangleAlertIcon, WifiIcon, WifiOffIcon } from "lucide-react"
 
 import type { GatewayStatus } from "@/lib/mock/types"
 import { GATEWAY_STATUS_LABEL } from "@/lib/roles"
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { EngemaseManagedNote, EngemaseOnlyChip, useCanEdit } from "@/components/config/engemase-managed"
 import { FilterPills, type PillOption } from "./filter-pills"
 import { GatewayCard } from "./gateway-card"
 import { STATUS_RANK, type GatewayRow } from "./gateway-view"
@@ -24,15 +25,12 @@ const STATUSES: GatewayStatus[] = ["online", "degraded", "offline", "pending"]
 /** Lista de gateways do cliente: KPIs, filtros, cards e provisionamento. */
 export function GatewaysView({
   clientSlug,
-  managed,
   rows: initialRows,
   units,
   limit,
   freshExpiresLabel,
 }: {
   clientSlug: string
-  /** Cliente "gerenciado pela Engemase" (docs/15). */
-  managed: boolean
   rows: GatewayRow[]
   units: { id: string; name: string }[]
   limit: number
@@ -42,6 +40,7 @@ export function GatewaysView({
   const [status, setStatus] = useState<StatusFilter>("all")
   const [unit, setUnit] = useState("all")
   const [query, setQuery] = useState("")
+  const canEdit = useCanEdit()
 
   const counts = useMemo(() => {
     const c: Record<GatewayStatus, number> = { online: 0, degraded: 0, offline: 0, pending: 0 }
@@ -74,7 +73,7 @@ export function GatewaysView({
     ...STATUSES.map((s) => ({ value: s, label: GATEWAY_STATUS_LABEL[s], count: counts[s], dot: GATEWAY_STATUS_STYLE[s].dot })),
   ]
 
-  const provision = (
+  const provision = canEdit && (
     <ProvisionGatewayDialog
       units={units}
       used={rows.length}
@@ -89,19 +88,17 @@ export function GatewaysView({
 
   return (
     <div className="flex flex-col gap-5 p-4 md:p-6">
+      <EngemaseManagedNote clientSlug={clientSlug} subject="Gateways, conexões com os CLPs e tags" />
       <PageTitle
         title="Gateways"
         description="Computadores de borda que leem os CLPs por Modbus TCP ou RTU (RS-485) e enviam os dados para a plataforma."
         actions={
-          <>
-            {managed && (
-              <span className="inline-flex h-9 items-center gap-2 rounded-lg border bg-card px-3 text-xs font-medium text-muted-foreground shadow-xs">
-                <ShieldCheckIcon className="size-4 text-[#0e9384]" />
-                Gerenciado pela Engemase
-              </span>
-            )}
-            {provision}
-          </>
+          canEdit && (
+            <>
+              <EngemaseOnlyChip />
+              {provision}
+            </>
+          )
         }
       />
 
@@ -135,7 +132,7 @@ export function GatewaysView({
         <StatCard
           icon={LayersIcon}
           tone="blue"
-          label="Uso do plano"
+          label="Gateways do contrato"
           value={
             <>
               {rows.length}
@@ -182,10 +179,12 @@ export function GatewaysView({
             </EmptyMedia>
             <EmptyTitle>Nenhum gateway cadastrado</EmptyTitle>
             <EmptyDescription>
-              Cadastre o primeiro gateway para começar a coletar dados dos CLPs. Você recebe um código de ativação e os comandos de instalação.
+              {canEdit
+                ? "Cadastre o primeiro gateway para começar a coletar dados dos CLPs. Você recebe um código de ativação e os comandos de instalação."
+                : "A equipe Engemase instala e ativa os gateways desta conta. Eles aparecem aqui assim que forem cadastrados."}
             </EmptyDescription>
           </EmptyHeader>
-          <EmptyContent>{provision}</EmptyContent>
+          {provision && <EmptyContent>{provision}</EmptyContent>}
         </Empty>
       ) : visible.length === 0 ? (
         <Empty className="rounded-2xl border border-dashed bg-card py-10">

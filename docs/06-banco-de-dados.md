@@ -88,7 +88,7 @@ erDiagram
 | Tabela | Campos principais |
 |---|---|
 | `organization` | id, slug, nome, criado_em (tabela do Better Auth) |
-| `client_account` | organização (1:1), status, plano, limites (`limits.machines` = máquinas contratadas: a cobrança é **por máquina**, D1), `managed_by_engemase` (ligado em todo cliente, D13) — só a plataforma grava ([15](15-multi-cliente-e-acesso.md#9-modelo-de-dados-acréscimos)) |
+| `client_account` | organização (1:1), status, plano, limites (`limits.machines` = máquinas contratadas, **obrigatório**: a cobrança é **por máquina**, D1; as outras chaves são opcionais, ausente = sem limite), `managed_by_engemase` (ligado em todo cliente, D13) — só a plataforma grava ([15](15-multi-cliente-e-acesso.md#9-modelo-de-dados-acréscimos)) |
 | `user` | id, nome, e-mail, 2FA... |
 | `session` · `account` · `verification` | Tabelas padrão do Better Auth: sessões, credenciais (hash da senha) e verificações |
 | `member` | organization_id, user_id (tabela do Better Auth) |
@@ -103,7 +103,7 @@ erDiagram
 | Tabela | Campos principais |
 |---|---|
 | `unit` | id, organization_id, nome, **timezone** (ex.: `America/Sao_Paulo`). "Unidade" é o termo único no produto e no código (`unit`) |
-| `area` | id, organization_id, unit_id, nome. **Opcional**, só agrupador |
+| `area` | id, organization_id, unit_id, nome. **Opcional**, só agrupador (D15 em aberto: a escolha provisória da equipe é torná-la obrigatória, com a área "Geral" em cada unidade) |
 | `line` | id, organization_id, unit_id, area_id (nulo = linha ligada direto à unidade), nome |
 | `machine` | id, organization_id, line_id, nome, código, `ideal_cycle_s` padrão, `micro_stop_threshold_s`, `state_mode`, template_id, ativo |
 | `machine_template` (F2) | id, organization_id, nome, definição de tags e regras (jsonb) |
@@ -220,6 +220,7 @@ Estimativa para **100 máquinas**:
 
 - Migrações geradas pelo `drizzle-kit generate`, em **SQL versionado no repositório**.
 - O CI aplica as migrações no branch de preview a cada PR. No merge para `main`, o pipeline aplica em produção **antes** de promover o deploy.
+- As migrações rodam **numa transação só**: migrator do Drizzle com `pg` (ou o driver serverless da Neon via WebSocket), **nunca o de `neon-http`**, que aplica comando a comando, sem transação (README de `packages/db`).
 - Migrações precisam ser **compatíveis com a versão anterior do app** (expand → migrate → contract), porque a Vercel faz deploys sem downtime.
 - Branches de preview antigos são removidos automaticamente para não acumular custo de armazenamento.
 

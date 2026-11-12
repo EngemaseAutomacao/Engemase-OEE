@@ -8,6 +8,9 @@ Roteiro para conferir **cada R1000 novo** na bancada da Engemase antes de ele ir
 >
 > **Marcações:** **CONFIRMAR NA BANCADA** = fato do hardware ainda não verificado: anote o valor na tabela da seção 4 e atualize este roteiro. **(Fase 1)** = depende de algo ainda não pronto (imagem gerada, binários do agente, LEDs pelo agente, página local); faça o equivalente indicado ou registre "não aplicável".
 
+A mesma bancada tem uma terceira parte, que **não é por unidade**:
+- **Parte C — CLPs das marcas prioritárias (D26):** Siemens, Schneider, Rockwell e ABB. Qualifica o bloco OEE v1 e o agente em um CLP real de cada marca, antes do primeiro cliente e a cada versão nova do agente, do FB ou do firmware (seção 6). Base: [adaptações por fabricante](adaptacoes-por-fabricante.md).
+
 ## 1. Material
 
 | Item | Para quê |
@@ -22,6 +25,8 @@ Roteiro para conferir **cada R1000 novo** na bancada da Engemase antes de ele ir
 | Multímetro, testador de cabo, patch cords, teclado USB e cabo HDMI | Medidas e console |
 | Gateway de bancada na plataforma (organização **Engemase Lab**, nome "Bancada-NN") | Registro e sincronização |
 | Etiquetadora | Etiquetas |
+| Um CLP de cada marca prioritária, com fonte 24 VDC e 4 botões (rodando, falha, peça boa, refugo) | Parte C (lista na seção 6.1) |
+| Notebook com o software de programação de cada marca e as licenças (só o TIA Portal é pago na lista da seção 6.1) | Parte C |
 
 ## 2. Registro da unidade
 
@@ -183,3 +188,82 @@ Ponto em aberto: depois de registrada, a unidade desligada (em estoque ou em tr�
 | B5.5 | Relatório | Planilha: identificadores, resultados das Partes A (lote) e B, versão da imagem e do agente, operador, data. Unidade em "reservado para cliente" | ☐ |
 
 **Reprovação:** falha em B2.8 (RS-485) ou B1.4 (Ethernet) → trocar cabo ou chicote e repetir **uma vez**. Falha repetida, autoteste B0 reprovado, ou falha em B3.1 ou B3.2 → unidade reprovada, separada para devolução ao fornecedor.
+
+## 6. Parte C — CLPs das marcas prioritárias (D26)
+
+Qualifica a integração de cada marca prioritária com o [bloco OEE v1](bloco-oee-v1.md) e o agente. **Não é por unidade de R1000:** faça uma vez antes do primeiro cliente de cada marca e repita na seção 6.5. Use um R1000 já aprovado na Parte B, registrado no "Bancada-NN", e o notebook com a CLI `oee-gateway` para as leituras diretas. Os detalhes de cada marca (endereços, unit id, licenças, fontes oficiais) estão nas [adaptações por fabricante](adaptacoes-por-fabricante.md).
+
+### 6.1 CLPs de bancada
+
+O modelo mais barato de cada marca com **Modbus TCP**, todos em 24 VDC. Os preços são só ordem de grandeza (distribuidores no exterior, nov/2026): **cotar no Brasil** antes de comprar.
+
+| Marca | Modelo sugerido | Por quê | Software | Ordem de grandeza | Opcional, se aparecer cliente |
+|---|---|---|---|---|---|
+| Siemens | S7-1200 **CPU 1211C DC/DC/DC** (6ES7211-1AE40-0XB0) | Menor S7-1200 com PROFINET; o `MB_SERVER` é o mesmo do S7-1500 | TIA Portal **STEP 7 Basic** (pago) | US$ 270–290 | CB 1241 RS-485 (teste RTU); S7-1500 (exige STEP 7 Professional) |
+| Schneider | M221 **TM221CE16T** (24 VDC; a TM221CE16R é a versão com relé e fonte CA) | Menor M221 com Ethernet e servidor Modbus TCP nativo | Machine Expert – Basic (gratuito) | US$ 290–400 | M241 (ex.: TM241CE24T) para o caminho CODESYS e o Modbus TCP Slave Device |
+| Rockwell | **Micro820** com Ethernet (ex.: 2080-LC20-20QBB; conferir a porta no catálogo 2080-TD001) | Menor Micro800 com Modbus TCP nativo | Connected Components Workbench Standard (gratuito, confirmar) | US$ 325–400 | CompactLogix + gateway de protocolo, só depois da decisão sobre o caminho Logix ([adaptações §13](adaptacoes-por-fabricante.md#13-pendências-e-decisões)) |
+| ABB | AC500-eCo V3 **PM5012-T-ETH**, firmware 3.4.1 ou superior | Menor eCo V3 com Ethernet e servidor Modbus TCP | Automation Builder Basic (gratuito) | £ 175–235 | PM5032-T-ETH (8 conexões Modbus TCP em vez de 3) |
+
+### 6.2 Preparação (igual nas quatro marcas)
+
+1. Programe o `FB_OEE_ENGEMASE` com as notas de portabilidade ([adaptações §10](adaptacoes-por-fabricante.md#10-portabilidade-do-fb_oee_engemase)): uma máquina, bloco no HR 1000 (ou na base da marca), escrita word a word todo ciclo.
+2. Ligue os 4 botões às entradas do FB (rodando, falha, peça boa, refugo) ou force as variáveis online.
+3. Ligue o CLP na VLAN **OT-bancada**, com IP fixo.
+4. Na plataforma, cadastre o CLP no "Bancada-NN" com o template **bloco OEE** (base e unit id da marca).
+5. Anote na seção 6.4 o firmware do CLP, a versão do software de programação e a versão do agente.
+
+### 6.3 Matriz de testes por marca
+
+`<base>` e `<unit>` são os da marca ([adaptações §3](adaptacoes-por-fabricante.md#3-endereços-a-fonte-nº-1-de-erro)). As leituras diretas são feitas do notebook, com o agente parado ou com o CLP fora da config publicada.
+
+| # | Teste | Como | Esperado | Siemens S7-1200 | Schneider M221 | Rockwell Micro820 | ABB PM5012 |
+|---|---|---|---|---|---|---|---|
+| C1 | Leitura do bloco | `oee-gateway modbus read --target tcp://<IP>:502 --unit <unit> --offset <base> --count 32 --oee-block` | `versao_bloco` = 1; offsets 14–31 em 0; sem exceção 02 | ☐ `HR_Start_Offset` = 1000 | ☐ | ☐ 32 variáveis sem lacuna | ☐ |
+| C2 | Unit id | Repetir C1 com unit 1, 0 e 255 | Anotar quais respondem | ☐ confirmar | ☐ esperado: 255 | ☐ confirmar | ☐ confirmar |
+| C3 | Deslocamento | Procurar o valor 1 e o heartbeat | 1 no offset 0, heartbeat no offset 1 | ☐ | ☐ | ☐ | ☐ |
+| C4 | Ordem CDAB | Forçar o contador total do FB em 100.000; `--decode uint32:CDAB@4 --decode uint32:ABCD@4` | Offsets 4 e 5 = 34464 e 1; CDAB = 100000 | ☐ | ☐ | ☐ | ☐ |
+| C5 | Ordem nativa (informativo) | Gravar 100.000 numa variável de 32 bits de teste mapeada direto numa área livre e ler com as duas ordens. Os registradores que um %MD ocupa mudam com o software ([adaptações §4](adaptacoes-por-fabricante.md#4-ordem-de-bytes-e-de-words)) | Anotar a ordem nativa | ☐ esperado ABCD | ☐ esperado CDAB | ☐ esperado ABCD | ☐ esperado CDAB |
+| C6 | Heartbeat | Ler de novo depois de 5 s | Subiu cerca de 5 | ☐ | ☐ | ☐ | ☐ |
+| C7 | Estados | Forçar parada, produção, falha com código, setup, manual e emergência | `estado` e `codigo_falha` seguem; tela ao vivo também | ☐ | ☐ | ☐ | ☐ |
+| C8 | Contagem | 10 peças boas e 1 refugo | Total +11, refugo +1, boas +10 | ☐ | ☐ | ☐ | ☐ |
+| C9 | Virada da word baixa (consistência) | Com o CLP **fora** da config do agente: FB com 1.000 peças por pulso e pulsos a 5 Hz (a word baixa vira a cada ~13 s). Ler com `--json` num laço de 100 ms por 10 min. Depois, voltar as peças por pulso para 1 | O total nunca diminui entre duas leituras (uma queda = leitura "rasgada") | ☐ | ☐ | ☐ | ☐ |
+| C10 | Retenção | Desligar e religar o CLP | Contadores mantidos | ☐ | ☐ | ☐ | ☐ |
+| C11 | Download | Mudar uma lógica fora do FB e baixar pelo procedimento recomendado da marca | Contadores mantidos; nenhum `counter_reset` | ☐ "carregar sem reinicialização" | ☐ confirmar | ☐ confirmar | ☐ PERSISTENT ou procedimento equivalente |
+| C12 | CLP em STOP | Colocar o CLP em STOP | `NO_COMM` em até ~10 s na tela ao vivo | ☐ | ☐ | ☐ | ☐ |
+| C13 | Escrita externa | Escrever 9999 no HR `<base>`+4 com um cliente Modbus | O valor volta no ciclo seguinte (ou exceção, se a escrita estiver bloqueada) | ☐ | ☐ | ☐ | ☐ esperado: exceção (proteção de %MB) |
+| C14 | Conexões | Agente coletando + 2 clientes lendo ao mesmo tempo | Todos leem; anotar o limite | ☐ 1 instância de `MB_SERVER` por cliente | ☐ confirmar | ☐ confirmar | ☐ limite: 3 |
+| C15 | Tempo de resposta | 100 leituras de 14 registradores; campo `read_ms` do `--json` | Média abaixo de 200 ms | ☐ | ☐ | ☐ | ☐ |
+| C16 | Conservação na plataforma | 1 h de coleta pelo agente, com 10 min sem internet no meio | Soma dos minutos = delta dos contadores do CLP | ☐ | ☐ | ☐ | ☐ |
+| C17 | Modbus RTU (opcional) | Escravo RTU a 19200 8E1; 100 leituras de 14 registradores pela RS-485 do R1000 | Zero falhas | ☐ CB 1241 | ☐ SL1 em RS-485 (a única serial do TM221CE16T) | ☐ porta serial embarcada | ☐ COM (confirmar no modelo) |
+
+**Aprovação** (vale só para o modelo e o firmware testados):
+
+| Resultado | Decisão |
+|---|---|
+| C1–C4 e C6–C16 aprovados | Marca **liberada** para clientes em Modbus TCP. C5 é só informativo |
+| C17 aprovado | Libera também o Modbus RTU na marca. Reprovado ou não feito: só Modbus TCP |
+| C9 reprovado (leitura rasgada; regra G8 da [especificação](bloco-oee-v1.md#2-regras-gerais)) | Marca **não liberada**. Registre a pendência nas [adaptações §13](adaptacoes-por-fabricante.md#13-pendências-e-decisões). No **M221** não há alternativa documentada: a Schneider fica sem liberação nesse modelo até haver solução escrita nas [adaptações §7.1](adaptacoes-por-fabricante.md#71-m221-machine-expert--basic). Trocar para o Modbus TCP Slave Device ([adaptações §7.2](adaptacoes-por-fabricante.md#72-m241-m251-e-m262-machine-expert)) só vale quando o teste for repetido num M241, M251 ou M262 (seção 6.5) |
+| C15 reprovado (média acima de 200 ms; [especificação §7](bloco-oee-v1.md#7-requisitos-de-temporização-no-clp)) | Marca **não liberada**. Revise o tempo de ciclo e a tarefa do servidor Modbus no CLP e repita a marca inteira |
+| Qualquer outra reprovação | Marca **não liberada**. Corrija o guia de adaptações ou o FB e repita a marca inteira |
+
+### 6.4 Fatos por marca (preencher na Parte C)
+
+| Fato | Siemens S7-1200 | Schneider M221 | Rockwell Micro820 | ABB PM5012 |
+|---|---|---|---|---|
+| Firmware do CLP e versão do software | | | | |
+| Versão do agente e do FB | | | | |
+| Unit id que responde (C2) | | | | |
+| Ordem nativa de 32 bits (C5) | | | | |
+| Limite de conexões Modbus TCP (C14) | | | | |
+| Tempo médio de resposta (C15) | | | | |
+| Procedimento de download que mantém os contadores (C11) | | | | |
+| Data, operador e resultado | | | | |
+
+Depois de preencher, atualize as marcações "confirmar" do [guia de adaptações](adaptacoes-por-fabricante.md) com o que foi visto.
+
+### 6.5 Quando repetir
+
+- Versão nova do agente que mexa no Modbus, nos contadores ou nos estados.
+- Versão nova do `FB_OEE_ENGEMASE` ou do bloco.
+- Firmware de CLP de um cliente diferente do testado.
+- Família nova de uma marca prioritária (ex.: S7-1500, M241, AC500 V3, CompactLogix com gateway de protocolo): só os testes C1–C16 dessa família.

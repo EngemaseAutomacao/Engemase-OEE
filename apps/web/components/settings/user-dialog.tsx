@@ -23,7 +23,7 @@ const ROLE_NOTE: Partial<Record<ClientRole, string>> = {
   engineer: "Não edita gateways, conexões nem tags: quem configura é a equipe Engemase.",
   supervisor: "Turnos, produtos e motivos de parada são cadastrados pela Engemase; peça pelo suporte.",
   operator: "Para quem aponta no próprio aparelho (ex.: líder de linha). Operadores do chão usam o tablet pareado e não precisam de conta.",
-  viewer: "TV e Andon não usam conta de pessoa: pareie um terminal em Configurações › Terminais.",
+  viewer: "TV e Andon não usam conta de pessoa: são terminais pareados pela Engemase (Configurações › Terminais).",
 }
 
 export interface UserFormValue {

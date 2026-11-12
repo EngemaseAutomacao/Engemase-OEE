@@ -29,7 +29,7 @@ Da mais comum para a mais rara:
 4. **Relógio errado:** a conexão TLS falha com o certificado "ainda não válido" ou "expirado" ([RB-04](04-relogio-fora-de-sincronia.md)).
 5. **Token recusado (401):** credencial revogada na plataforma ou gateway registrado de novo em outro lugar. O agente **para de enviar e mantém o buffer**.
 6. **Agente parado ou em laço de reinício:** erro no disco, `/data` cheia, banco corrompido, atualização com problema ([RB-05](05-atualizacao-falhou-rollback.md)).
-7. **Plataforma fora do ar ou recusando a ingestão:** afeta **vários gateways** ao mesmo tempo.
+7. **Plataforma fora do ar ou recusando a ingestão:** afeta **vários gateways** ao mesmo tempo. Inclui mudança no endereço da plataforma na Vercel: proteção de deploy (senha ou login da Vercel) ligada no endereço de produção faz a nuvem responder 401 a todos; redirecionamento do endereço faz todo `/sync` falhar com "redirecionamento para ..." (o agente não segue redirecionamento).
 8. **Hardware:** falha do R1000, da porta ETH1 (USB) ou do eMMC.
 
 ## 4. Diagnóstico
@@ -71,9 +71,11 @@ sudo oee-gateway status             # (Fase 1) nuvem, relógio, fila, dispositiv
 sudo oee-gateway net show           # (Fase 1) IPs, rotas, DNS, proxy e NTP aplicados
 ip -br addr                         # eth1 tem IP? eth0 tem o IP OT e o 169.254.x.y?
 ip route                            # rota padrão só pela eth1
-getent hosts gw.oee.engemase.com.br # o DNS resolve? (ou o domínio do cloud.url do gateway.yaml)
+getent hosts engemase-oee.vercel.app # o DNS resolve? (o host do cloud.url do gateway.yaml)
 timedatectl                         # hora certa? "System clock synchronized: yes"?
 ```
+
+O endereço da plataforma, hoje, é o domínio da Vercel (`engemase-oee.vercel.app`); o domínio próprio fica para depois (D28). Vale o que estiver no `cloud.url` do `/etc/oee-gateway/gateway.yaml` (o `diag` mostra o host na linha "DNS da nuvem").
 
 5. **Logs do agente** (o `tecnico` está no grupo `systemd-journal`; também pela tela de logs da página local ou `oee-gateway logs`, **Fase 1**):
 
@@ -85,16 +87,17 @@ Mensagens que indicam a causa:
 
 | Mensagem no log | Causa | Vá para |
 |---|---|---|
-| `nuvem recusou o token: envio parado, buffer mantido (refaça o enroll)` | 401: credencial revogada ou inválida | Seção 5, item "Token" |
+| `nuvem recusou o token: envio parado, buffer mantido; o mesmo token é testado de novo a cada 15m0s ...` | 401: credencial revogada ou inválida. Se vários gateways de clientes diferentes receberam 401 ao mesmo tempo, suspeite da plataforma (seção 3, item 7) | Seção 5, item "Token" |
 | `falha ao gravar no buffer` | Disco ou banco | Seção 6 (N2) |
 | `sem config salva: aguardando a nuvem (nada é coletado até lá)` | Gateway sem config | Seção 5, item "Sem config" |
 | `credencial ilegível` | `credentials.json` corrompido ou sem permissão para o usuário `oee` | Seção 6 (N2) |
-| `x509: certificate has expired or is not yet valid` **(Fase 1)** | Relógio errado | [RB-04](04-relogio-fora-de-sincronia.md) |
-| `x509: certificate signed by unknown authority` **(Fase 1)** | Inspeção SSL sem a CA do cliente | Seção 5, item "Inspeção SSL" |
-| `no such host` **(Fase 1)** | DNS | Seção 5, item "DNS" |
-| `connection refused`, `i/o timeout`, `proxyconnect` **(Fase 1)** | Firewall ou proxy | Seção 5, item "Firewall/proxy" |
+| `falha no sync ...` com `classe=tls` e `x509: certificate has expired or is not yet valid` | Relógio errado | [RB-04](04-relogio-fora-de-sincronia.md) |
+| `falha no sync ...` com `classe=tls` e `x509: certificate signed by unknown authority` | Inspeção SSL sem a CA do cliente | Seção 5, item "Inspeção SSL" |
+| `falha no sync ...` com `classe=dns` (`no such host`) | DNS | Seção 5, item "DNS" |
+| `falha no sync ...` com `classe=conexao`, `timeout` ou `proxy` (`connection refused`, `i/o timeout`, `recusou o túnel (CONNECT)`) | Firewall ou proxy | Seção 5, item "Firewall/proxy" |
+| `falha no sync ...` com `classe=outro` e `redirecionamento para ...` | O endereço da plataforma passou a redirecionar (por exemplo, numa troca de domínio). O agente não segue redirecionamento, para não mandar dados nem perder o token em outro host | Seção 6 (N2) |
 
-Hoje o agente registra no log só a recusa do token (401). Os erros de rede e TLS do `/sync` ainda não vão para o log (as linhas marcadas **(Fase 1)** passam a aparecer quando os logs com classificação de erro e o `diag` completo forem implementados). Até lá, use o teste com o notebook no mesmo ponto IT (passo 2).
+As falhas do `/sync` saem como `falha no sync com a nuvem: a coleta continua e os dados ficam no buffer`, com `classe=` (`dns`, `tls`, `proxy`, `timeout`, `conexao`, `http_4xx`, `http_5xx`, `outro`) e o `erro`. A mesma falha volta no máximo a cada 10 min (`falha no sync com a nuvem persiste`); na volta, `sync com a nuvem recuperado`. O `diag` ainda não testa TLS e proxy até a nuvem (Fase 1): para isso, use o teste com o notebook no mesmo ponto IT (passo 2).
 
 ## 5. Correção
 
@@ -123,7 +126,8 @@ Hoje o agente registra no log só a recusa do token (401). Os erros de rede e TL
 
 | Situação | Para quem | Urgência |
 |---|---|---|
-| Vários gateways de clientes diferentes offline | **N3** (incidente de plataforma) e N2 | Imediata |
+| Vários gateways de clientes diferentes offline | **N3** (incidente de plataforma) e N2. Conferir também a proteção de deploy e o redirecionamento do endereço de produção na Vercel (seção 3, item 7) | Imediata |
+| Log com `redirecionamento para ...` | **N2**: tirar o redirecionamento do endereço que os gateways usam; a troca de domínio segue o [docs/16 §4](../../16-projeto-do-gateway.md#4-caminhos-usuários-e-identidade-canônico) | Imediata |
 | 401 sem explicação na auditoria (suspeita de credencial vazada ou clonagem) | **N2**; revogar o token e seguir o runbook de rotação de token (a escrever) | Imediata |
 | 401 que exige registrar o gateway de novo em campo | **N2** (lacuna do `enroll --force`, seção 5) | Mesmo dia |
 | Erro de disco, banco ou eMMC; agente em laço de reinício | **N2** | Mesmo dia |

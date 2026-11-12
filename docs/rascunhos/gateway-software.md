@@ -1,5 +1,7 @@
 > **Consolidado:** as definições canônicas estão no [`docs/16`](../16-projeto-do-gateway.md); onde este rascunho divergir, vale o docs/16 (ex.: **ETH0 = OT** e **ETH1 = IT**; página local no `oee-localui`, porta 443, só na OT e no endereço de serviço). Implementação em `gateway/` e `deploy/`.
 
+> **Endereço (D28, 12/11/2026):** por enquanto só o domínio da Vercel, `engemase-oee.vercel.app`, para o produto e para os gateways. Os exemplos com `oee.engemase.com.br` e `gw.oee.engemase.com.br` foram trocados por ele; o domínio próprio (e um host só dos gateways) fica para depois. Troca futura: [`docs/16` §4](../16-projeto-do-gateway.md#4-caminhos-usuários-e-identidade-canônico).
+
 > **Rascunho** gerado pela análise do projeto do gateway (interrompida em 11/11/2026). Ainda não revisado nem consolidado no `docs/16`.
 
 # Gateway: projeto do software (proposta para documentação técnica)
@@ -121,7 +123,7 @@ m oee systemd-journal  # ler o journal para logs.upload
 ```ini
 [Unit]
 Description=Engemase OEE - agente de coleta do gateway
-Documentation=https://oee.engemase.com.br/ajuda/gateway
+Documentation=https://engemase-oee.vercel.app/ajuda/gateway
 After=network.target
 # Não espera internet nem NTP: a coleta começa mesmo offline.
 StartLimitIntervalSec=0
@@ -873,7 +875,7 @@ O `acked_seq` **não** precisa de `fsync` imediato. Ele vai junto no próximo co
 schema: 1
 
 cloud:
-  url: https://oee.engemase.com.br     # o caminho /api/gateway/v1 é fixo no agente
+  url: https://engemase-oee.vercel.app     # o caminho /api/gateway/v1 é fixo no agente
   proxy: ""                            # vazio = HTTPS_PROXY/NO_PROXY de /etc/default/oee-gateway
   extra_ca_dir: /etc/oee-gateway/ca.d  # CAs corporativas (PEM), somadas às do sistema
   timeout_s: 30
@@ -908,7 +910,7 @@ log:
 
   ```json
   { "gateway_id": "gw_01JD2X...", "token": "gw_live_...", "org": "acme",
-    "cloud_url": "https://oee.engemase.com.br", "enrolled_at": "2026-11-11T13:00:00Z" }
+    "cloud_url": "https://engemase-oee.vercel.app", "enrolled_at": "2026-11-11T13:00:00Z" }
   ```
 
 - `/etc/oee-gateway/remote-access.json` (F2):

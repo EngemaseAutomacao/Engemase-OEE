@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/config"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/testutil"
 )
@@ -154,6 +156,61 @@ log:
 	}
 	if err := config.ValidateCloudURL("http://127.0.0.1:8080"); err != nil {
 		t.Fatalf("http em localhost deveria passar: %v", err)
+	}
+}
+
+// O host padrão tem um só ponto de definição no código (config.DefaultCloudURL).
+// Os YAML que repetem o valor não podem divergir dele: o cloud.url do exemplo e
+// do conffile do pacote (o pacote o grava em cada gateway instalado, docs/16 §4)
+// e o homepage dos dois nfpm*.yaml (só metadado do .deb). Fora do monorepo, os
+// arquivos de deploy/ são pulados.
+func TestDefaultCloudURLMatchesShippedYAML(t *testing.T) {
+	if err := config.ValidateCloudURL(config.DefaultCloudURL); err != nil {
+		t.Fatalf("DefaultCloudURL inválida: %v", err)
+	}
+	if strings.HasSuffix(config.DefaultCloudURL, "/") {
+		t.Fatalf("DefaultCloudURL com barra no fim: %q", config.DefaultCloudURL)
+	}
+	deploy := filepath.Join("..", "..", "..", "deploy", "gateway")
+	files := []struct {
+		path     string
+		required bool   // false: só existe no monorepo
+		field    string // "cloud.url" (config local) ou "homepage" (nfpm)
+	}{
+		{filepath.Join("..", "..", "examples", "gateway.yaml"), true, "cloud.url"},
+		{filepath.Join(deploy, "etc", "gateway.yaml"), false, "cloud.url"},
+		{filepath.Join(deploy, "nfpm.yaml"), false, "homepage"},
+		{filepath.Join(deploy, "nfpm-updater.yaml"), false, "homepage"},
+	}
+	for _, f := range files {
+		b, err := os.ReadFile(f.path)
+		if errors.Is(err, os.ErrNotExist) && !f.required {
+			t.Logf("%s ausente (fora do monorepo): pulado", f.path)
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got string
+		switch f.field {
+		case "cloud.url":
+			l, err := config.ParseLocal(b)
+			if err != nil {
+				t.Fatalf("%s: %v", f.path, err)
+			}
+			got = l.Cloud.URL
+		case "homepage":
+			var pkg struct {
+				Homepage string `yaml:"homepage"`
+			}
+			if err := yaml.Unmarshal(b, &pkg); err != nil {
+				t.Fatalf("%s: %v", f.path, err)
+			}
+			got = pkg.Homepage
+		}
+		if got != config.DefaultCloudURL {
+			t.Errorf("%s: %s %q, mas config.DefaultCloudURL é %q", f.path, f.field, got, config.DefaultCloudURL)
+		}
 	}
 }
 

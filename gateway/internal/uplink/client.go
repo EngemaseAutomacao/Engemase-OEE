@@ -189,14 +189,15 @@ func ActionFor(err error) Action {
 
 // Options configura o cliente.
 type Options struct {
-	BaseURL      string        // ex.: https://oee.engemase.com.br
+	BaseURL      string        // cloud.url do gateway.yaml (padrão: config.DefaultCloudURL)
 	Token        string        // Bearer (vazio no enroll)
 	AgentVersion string        // para o User-Agent
 	Timeout      time.Duration // limite total de cada requisição (padrão 30 s)
 	ExtraCAFile  string        // PEM com CAs corporativas, somadas às do sistema
 	// HTTPClient substitui o cliente montado aqui (testes). Se o transporte for um
 	// *http.Transport, o New usa uma cópia dele com a recusa do CONNECT tipada
-	// (ProxyConnectError), como no cliente montado aqui.
+	// (ProxyConnectError), como no cliente montado aqui. Nos dois casos o cliente
+	// não segue redirecionamento (refuseRedirect).
 	HTTPClient *http.Client
 }
 
@@ -258,8 +259,20 @@ func New(o Options) (*Client, error) {
 		}
 		c.http = &http.Client{Transport: tr, Timeout: o.Timeout}
 	}
+	// Cópia: o cliente dado em Options.HTTPClient não muda.
+	hc := *c.http
+	hc.CheckRedirect = refuseRedirect
+	c.http = &hc
 	return c, nil
 }
+
+// refuseRedirect faz o cliente não seguir redirecionamento: a resposta 3xx volta
+// como HTTPError (parseError), com o destino na mensagem. Seguir mandaria o lote
+// para outro endereço e, num host diferente, o Go tira o Authorization: a nuvem
+// responderia 401 e o agente marcaria a credencial como recusada. É o que
+// aconteceria se, na troca para o domínio próprio (D28), o endereço antigo fosse
+// redirecionado para o novo pelo painel da Vercel (docs/16 §4).
+func refuseRedirect(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 
 // SetToken troca o token (rotação ou novo enroll).
 func (c *Client) SetToken(token string) {
@@ -436,6 +449,13 @@ func parseError(res *http.Response, body []byte) error {
 		if er.Error.RetryAfterS != nil {
 			he.RetryAfter = time.Duration(*er.Error.RetryAfterS) * time.Second
 		}
+	}
+	if res.StatusCode >= 300 && res.StatusCode < 400 && he.Message == "" {
+		he.Message = "redirecionamento"
+		if loc := res.Header.Get("Location"); loc != "" {
+			he.Message += " para " + loc
+		}
+		he.Message += " (o agente não segue redirecionamento: confira o cloud.url do gateway.yaml)"
 	}
 	if ra := res.Header.Get("Retry-After"); ra != "" {
 		if s, err := strconv.Atoi(strings.TrimSpace(ra)); err == nil && s >= 0 {

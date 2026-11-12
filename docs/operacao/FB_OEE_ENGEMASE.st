@@ -55,7 +55,40 @@
    HR base+4 = 34464 (16#86A0) e HR base+5 = 1. Depois volte o valor
    (o gateway ainda não está coletando, então nada é afetado).
 
-   Versão do arquivo: 1.0 (bloco v1). Engemase Automação.
+   NOTAS DE PORTABILIDADE (marcas prioritárias, D26)
+   A lógica é a mesma em todas as marcas. Detalhes e fontes na seção 10 de
+   docs/operacao/adaptacoes-por-fabricante.md. Importe só as POUs: o exemplo
+   e as notas do fim do arquivo ficam dentro de um comentário.
+   - TIA Portal (SCL), S7-1200/S7-1500: importe como fonte externa .scl e
+     gere os blocos; acrescente BEGIN entre as declarações e o código de cada
+     FUNCTION e FUNCTION_BLOCK; declare tonHeartbeat e tonCiclo como TON_TIME
+     (ou IEC_TIMER). VAR RETAIN vale em bloco otimizado. Para não zerar os
+     contadores num download, use "carregar sem reinicialização".
+   - TIA Portal / STEP 7 Classic, S7-300/S7-400: não há UDINT nem UINT. Use
+     DWORD para os contadores e WORD para as words; word baixa =
+     DWORD_TO_WORD(dw), word alta = DWORD_TO_WORD(SHR(IN := dw, N := 16));
+     temporizador TON (SFB 4) com instância.
+   - Studio 5000 (CompactLogix/ControlLogix): não há FUNCTION; o FB vira AOI
+     com aBloco como InOut INT[32] e as funções viram código dentro dela. Em
+     ST use TONR (tag FBD_TIMER, PRE e ACC em ms) no lugar de TON e
+     TIME_TO_DINT. Tipos sem sinal só a partir da v32 nos 5380/5480/5580:
+     o caminho portável é cada contador em duas DINT (baixa e alta, 0-65535)
+     com "vai um". INT vai até 32767: words maiores viram o padrão de bits
+     (valor - 65536). Um download completo sobrescreve os valores das tags.
+   - Machine Expert (M241/M251/M262) e Automation Builder V3 (AC500 V3 e
+     AC500-eCo V3), base CODESYS V3: importa quase sem mudança. VAR RETAIN
+     no FB põe a instância inteira na memória retentiva, mas RETAIN se perde
+     num download; para manter os contadores, use PERSISTENT.
+   - Automation Builder V2 (AC500 V2 e AC500-eCo V2), base CODESYS 2.3:
+     endereço com segmento (AT %MW0.1000); se o compilador recusar o literal
+     UDINT#16#FFFFFFFF, use 16#FFFFFFFF.
+   - Control Expert (M340/M580): as funções viram DFB ou código na seção.
+   - Rockwell Micro800 (CCW): tem ST e TON; confirmar como declarar as
+     variáveis do FB como retidas.
+   - Machine Expert - Basic (M221): não tem ST; traduza para Ladder.
+
+   Versão do arquivo: 1.1 (bloco v1). 1.1 muda só comentários (notas de
+   portabilidade das marcas prioritárias). Engemase Automação.
    =========================================================================== *)
 
 
@@ -352,10 +385,10 @@ END_FUNCTION_BLOCK
    EXEMPLO DE CHAMADA (genérico)
 
    VAR_GLOBAL
-       aMbInjetora03 : ARRAY[0..31] OF WORD;   (* ligado ao HR 1000-1031, ver notas *)
+       aMbInjetora03 : ARRAY[0..31] OF WORD;   // ligado ao HR 1000-1031, ver notas
    END_VAR
    VAR
-       fbOeeInjetora03 : FB_OEE_ENGEMASE;      (* instância em área retentiva *)
+       fbOeeInjetora03 : FB_OEE_ENGEMASE;      // instância em área retentiva
    END_VAR
 
    fbOeeInjetora03(
@@ -368,8 +401,8 @@ END_FUNCTION_BLOCK
        xParadaPlanejada := xInjParadaProgramada,
        xPulsoBoa        := xInjFimDeCiclo,
        xPulsoRefugo     := xInjPecaRefugada,
-       xModoCiclo       := TRUE,               (* sinal de fim de ciclo + sinal de refugo *)
-       uiPecasPorPulso  := UINT#4,             (* molde de 4 cavidades *)
+       xModoCiclo       := TRUE,               // sinal de fim de ciclo + sinal de refugo
+       uiPecasPorPulso  := UINT#4,             // molde de 4 cavidades
        uiProduto        := uiInjReceitaAtual,
        uiVelocidade     := uiInjCiclosPorHora,
        xAutomatico      := xInjModoAutomatico,
@@ -383,35 +416,64 @@ END_FUNCTION_BLOCK
 
 
    NOTAS DE MAPEAMENTO NA ÁREA DO SERVIDOR MODBUS
-   (detalhes, licenças e endereços em docs/operacao/adaptacoes-por-fabricante.md;
-    tudo marcado "confirmar" deve ser conferido no manual do fabricante)
+   (detalhes, licenças, endereços e fontes em
+    docs/operacao/adaptacoes-por-fabricante.md; tudo marcado "confirmar" deve
+    ser conferido no manual do fabricante e na bancada)
 
    - Regra geral: a word aBloco[i] precisa aparecer no holding register
      (base + i). Copie as 32 words a cada ciclo. Não copie os contadores como
      DINT/UDINT nativos: isso troca a ordem para a do CLP.
 
-   - Siemens S7-1200/S7-1500 (TIA Portal, SCL): aBloco = array de 32 Word num
-     DB apontado pelo MB_HOLD_REG da instrução MB_SERVER (Modbus TCP) ou do
-     Modbus_Slave (RTU, com CM/CB 1241). HR 0 = primeira word da área; para o
-     bloco ficar no HR 1000, use o HR_Start_Offset da instância (se a versão da
-     instrução tiver) ou um array maior. Ao importar como fonte externa .scl,
-     acrescente BEGIN antes do código de cada FC/FB e declare os temporizadores
-     como TON_TIME (ou IEC_TIMER). Confirmar retenção (VAR RETAIN) no FB.
+   MARCAS PRIORITÁRIAS (D26)
 
-   - Schneider M241/M251 e outros CODESYS V3 (Machine Expert, WEG PLC500,
-     Altus Nexto): servidor nativo com HR n = %MWn (M241/M251):
+   - Siemens S7-1200/S7-1500 (TIA Portal): aBloco = array de 32 Word num DB
+     global sem acesso otimizado, apontado pelo MB_HOLD_REG do MB_SERVER
+     (Modbus TCP; uma instância e um CONNECT_ID por cliente) ou do
+     Modbus_Slave (RTU, com CM/CB 1241 no S7-1200 ou CM PtP RS422/485 HF no
+     S7-1500). Sem deslocamento, a primeira word é o HR 0; para o bloco ficar
+     no HR 1000, escreva HR_Start_Offset := 1000 no DB de instância antes da
+     chamada, ou use um array maior. S7-300/S7-400: biblioteca Modbus/TCP da
+     Siemens com licença por CPU (confirmar).
+
+   - Schneider M221 (Machine Expert - Basic): marque "Modbus server enabled"
+     na ETH1; unit id 255. Sem ST: mesma lógica em Ladder, escrevendo direto
+     em %MW1000-%MW1031 (HR n = %MWn).
+
+   - Schneider M241/M251/M262 (Machine Expert): servidor embarcado
+     (desativado de fábrica; unit id 255; HR n = %MWn):
          aMbInjetora03 AT %MW1000 : ARRAY[0..31] OF WORD;
-     No "Modbus TCP Slave Device" do CODESYS, ligue o array às saídas (%QW) do
-     dispositivo escravo e confira se o mestre lê essa área como holding
-     (opção de sobreposição) ou como input registers (FC04): confirmar.
-
-   - Schneider M221 (Machine Expert - Basic): não tem ST. Implemente a mesma
-     lógica em Ladder com blocos de operação e escreva direto em %MW1000-%MW1031
-     (HR n = %MWn).
+     Esse servidor só garante consistência de 1 word. Para ler os 32 bits
+     dos contadores de forma consistente, use o "Modbus TCP Slave Device":
+     ligue o array às %QW (só leitura, registradores n a n+m-1, onde n é a
+     quantidade de %IW) e use a base n e o unit id do dispositivo (1-247).
+     M340/M580 (Control Expert): HR n = %MWn; no M580, autorize o IP do
+     gateway no controle de acesso.
 
    - Rockwell Micro800 (CCW): ST disponível. Ligue cada word a uma variável
-     global e cadastre-as na tabela "Modbus Mapping" (endereços 401001-401032
-     para a base 1000). Confirmar se a versão do CCW aceita elementos de array.
+     global e cadastre as 32 na tabela "Modbus Mapping", sem lacunas
+     (endereços 401001-401032 para a base 1000). Confirmar se a versão do
+     CCW aceita elementos de array.
+
+   - Rockwell CompactLogix/ControlLogix (Studio 5000): sem servidor Modbus
+     TCP nativo. O FB vira AOI com aBloco como INT[32]; o array vai para a
+     AOI de servidor Modbus TCP da Rockwell (sockets), para um gateway de
+     protocolo EtherNet/IP-Modbus TCP ou, no futuro, para o driver
+     EtherNet/IP do gateway Engemase. Passe só words, nunca DINT.
+
+   - ABB AC500 V3 e AC500-eCo V3 (Automation Builder): objeto "Modbus TCP/IP
+     Server" na interface ETH (eCo a partir do firmware 3.4.1); HR n = %MWn:
+         aMbInjetora03 AT %MW1000 : ARRAY[0..31] OF WORD;
+     Mantenha a ordem de bytes do servidor em big endian (padrão) e bloqueie
+     a escrita em %MB2000-%MB2063. No PM5012, só %MW0-%MW2047 são acessíveis.
+     AC500 V2 e AC500-eCo V2: HR n = %MW0.n (AT %MW0.1000). Confirmar.
+
+   OUTRAS MARCAS (sob demanda)
+
+   - WEG PLC500 e Altus Nexto (base CODESYS): no "Modbus TCP Slave Device",
+     ligue o array às saídas (%QW) do dispositivo escravo e confira se o
+     mestre lê essa área como holding (opção de sobreposição) ou como input
+     registers (FC04). Altus Nexto: servidor Modbus Ethernet com mapeamento
+     de variáveis para endereços Modbus. Confirmar.
 
    - Delta DVP (ISPSoft): D(n) = HR 4096 + n. Com o bloco em D1000-D1031, o
      endereço base no template é 5096. Contadores em faixa retentiva (latched):
@@ -424,7 +486,4 @@ END_FUNCTION_BLOCK
 
    - Omron NJ/NX (Sysmac Studio): sem servidor Modbus TCP nativo; depende de FB
      sobre sockets. TIME tem resolução de ns: ajuste a seção 4. Confirmar.
-
-   - Altus Nexto (MasterTool IEC XE): servidor Modbus Ethernet com mapeamento
-     de variáveis para endereços Modbus. Confirmar.
    =========================================================================== *)

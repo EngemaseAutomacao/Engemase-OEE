@@ -1,6 +1,6 @@
 # Operação — runbooks, fichas e bloco OEE
 
-Documentação de operação da plataforma Engemase OEE e do gateway (Seeed reComputer R1000): o que fazer quando algo dá errado, o que enviar ao TI do cliente, como conferir um gateway novo na bancada e como programar o bloco OEE padrão nos CLPs.
+Documentação de operação da plataforma Engemase OEE e do gateway (Seeed reComputer R1000): o que fazer quando algo dá errado, o que enviar ao TI do cliente, como conferir um gateway novo na bancada e como programar o bloco OEE padrão nos CLPs. Marcas de CLP prioritárias (D26): **Siemens, Schneider, Rockwell e ABB**.
 
 **Para quem:** suporte e engenharia de campo da Engemase, equipe de automação (bloco OEE) e TI do cliente (ficha técnica).
 
@@ -16,11 +16,15 @@ Documentação de operação da plataforma Engemase OEE e do gateway (Seeed reCo
 | [runbooks/04-relogio-fora-de-sincronia.md](runbooks/04-relogio-fora-de-sincronia.md) | Diferença de relógio, NTP, RTC e efeitos nos dados | Suporte, TI do cliente |
 | [runbooks/05-atualizacao-falhou-rollback.md](runbooks/05-atualizacao-falhou-rollback.md) | Atualização do agente que falhou ou voltou à versão anterior (OTA mínimo, Fase 1) | Engenharia |
 | [runbooks/06-acesso-remoto-nao-conecta.md](runbooks/06-acesso-remoto-nao-conecta.md) | VPN de manutenção que não conecta (Fase 2) | Suporte, engenharia, TI do cliente |
+| [runbooks/07-contagem-divergente.md](runbooks/07-contagem-divergente.md) | CLP mostra um número de peças e a plataforma outro: leitura (tag, tipo, ordem das words), eventos do contador, período, refugo | Suporte, campo, automação |
+| [runbooks/08-restauracao-banco-pitr.md](runbooks/08-restauracao-banco-pitr.md) | Restauração do banco na Neon (PITR): quando, como, o que se perde e como recuperar o período que os gateways não reenviam | Engenharia, direção técnica |
+| [runbooks/09-rotacao-token-gateway.md](runbooks/09-rotacao-token-gateway.md) | Bloquear o token de um gateway e registrar de novo com código novo (sem `--force`, pelo marcador `auth-blocked`) | Engenharia, campo |
+| [runbooks/10-troca-hardware-gateway.md](runbooks/10-troca-hardware-gateway.md) | Troca da unidade com defeito: fila da antiga, gravação com a rede do cliente, registro no mesmo gateway e conferência | Engenharia, bancada, campo |
 | [ficha-tecnica-ti-cliente.md](ficha-tecnica-ti-cliente.md) | Ficha de uma página para o TI do cliente: portas, saídas, DNS/NTP, proxy, VPN, dados, checklist | TI do cliente, comercial |
-| [verificacao-bancada-r1000.md](verificacao-bancada-r1000.md) | Roteiro de verificação de cada R1000 novo antes de expedir | Bancada, engenharia |
-| [bloco-oee-v1.md](bloco-oee-v1.md) | Especificação formal v1 do bloco OEE padrão Engemase e template de tags do gateway | Automação, engenharia, campo |
-| [FB_OEE_ENGEMASE.st](FB_OEE_ENGEMASE.st) | Bloco de função IEC 61131-3 (ST) que monta o bloco OEE no CLP | Automação |
-| [adaptacoes-por-fabricante.md](adaptacoes-por-fabricante.md) | Como expor o bloco por Modbus TCP/RTU em cada marca de CLP | Automação, campo |
+| [verificacao-bancada-r1000.md](verificacao-bancada-r1000.md) | Roteiro de verificação de cada R1000 novo antes de expedir (Partes A e B) e bancada de CLPs das 4 marcas prioritárias, com a matriz de testes por marca (Parte C) | Bancada, engenharia, automação |
+| [bloco-oee-v1.md](bloco-oee-v1.md) | Especificação formal v1 do bloco OEE padrão Engemase (mantida pela D26) e template de tags do gateway | Automação, engenharia, campo |
+| [FB_OEE_ENGEMASE.st](FB_OEE_ENGEMASE.st) | Bloco de função IEC 61131-3 (ST) que monta o bloco OEE no CLP, com notas de portabilidade (TIA Portal, Studio 5000, Machine Expert, Automation Builder) | Automação |
+| [adaptacoes-por-fabricante.md](adaptacoes-por-fabricante.md) | Como expor o bloco por Modbus TCP/RTU em cada marca de CLP: Siemens, Schneider, Rockwell e ABB primeiro, com fontes oficiais; depois as outras marcas | Automação, campo |
 
 ## 2. Marcações usadas
 
@@ -30,7 +34,7 @@ Documentação de operação da plataforma Engemase OEE e do gateway (Seeed reCo
 | **(Fase 2)** | Depois do piloto (ex.: VPN de manutenção) |
 | **CONFIRMAR NA BANCADA** | Fato do hardware R1000 que ainda não foi verificado ([docs/16 §9](../16-projeto-do-gateway.md#9-prazo-e-riscos)) |
 | **confirmar no manual do fabricante** | Informação de CLP que precisa ser conferida no manual do modelo e testada antes de ir ao cliente |
-| D7, D26, D28... | Decisões pendentes do dono do produto ([docs/17 §3](../17-backlog-e-pendencias.md#3-decisões-pendentes-do-dono-do-produto)) |
+| D7, D26, D28... | Decisões do dono do produto, tomadas ou pendentes ([docs/17 §3](../17-backlog-e-pendencias.md#3-decisões)) |
 
 Comandos **sem marcação** existem hoje no agente (`gateway/`): `oee-gateway run`, `version`, `enroll`, `diag`, `modbus read` e `config validate`. Os comandos `systemctl` e `journalctl` do serviço `oee-gateway` dependem do pacote `.deb` com a unit systemd, ainda pendente **(Fase 1)**: até lá, na bancada, o agente roda com `oee-gateway run`.
 
@@ -99,12 +103,10 @@ Um relógio muito errado pode derrubar o TLS e deixar o gateway offline: se o RB
 
 ## 7. Pendentes
 
-Runbooks e lacunas ainda em aberto. Os quatro últimos estão listados no [docs/08](../08-seguranca-e-operacao.md#operação-e-suporte-runbooks-a-escrever) e ainda não têm arquivo nesta pasta.
+Os quatro runbooks que faltavam (lacuna L15, lista do [docs/08](../08-seguranca-e-operacao.md#operação-e-suporte-runbooks-a-escrever)) estão no índice: RB-07 a RB-10. Registrar de novo um gateway com token recusado (401) deixou de ser lacuna: o marcador `auth-blocked` do agente permite o `enroll --code` sem `--force` ([RB-09](runbooks/09-rotacao-token-gateway.md)). Continuam em aberto:
 
-| Runbook | Observação |
+| Item | Observação |
 |---|---|
-| Registrar de novo um gateway com token revogado (401) | **Lacuna:** com credencial existente o `enroll` exige `--force`, que o `sudo` do `tecnico` recusa, e não há root. Ver [RB-01 §5](runbooks/01-gateway-offline.md#5-correção) |
-| Contagem divergente do CLP | Conferir tag, tipo, ordem de words e eventos `counter_reset`/`counter_jump`/`counter_rebaseline` |
-| Restaurar banco (PITR) e reprocessar turnos | Depois de restaurar, os dados já confirmados **não voltam** dos gateways (L14) |
-| Rotacionar o token de um gateway comprometido | `token.rotate` é da F2; no MVP, revogar e registrar de novo com código do mesmo gateway (depende da lacuna da primeira linha) |
-| Trocar o hardware de um gateway | Registro no mesmo gateway lógico, contadores com marca de troca, recuperação do buffer ([docs/16 §7](../16-projeto-do-gateway.md#7-preparação-na-engemase-e-ciclo-de-vida)) |
+| Bloquear o token e gerar código de ativação pela plataforma | **Fase 1.** Até lá, SQL no [RB-09 §5.1](runbooks/09-rotacao-token-gateway.md#51-bloquear-o-token-e-gerar-o-código-equipe-engemase) |
+| Recuperar a fila de uma unidade que não fala com a nuvem | Sem ferramenta no MVP ([RB-10 §5.2](runbooks/10-troca-hardware-gateway.md#52-fila-da-unidade-antiga)) |
+| Cópia de dados entre ramos da Neon na restauração | Script `db:migrate` contra a Neon e papel com `BYPASSRLS` a confirmar ([RB-08 §5.4](runbooks/08-restauracao-banco-pitr.md#54-recuperar-o-período-entre-t0-e-t1-l14)) |

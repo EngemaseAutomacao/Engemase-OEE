@@ -14,7 +14,6 @@ import {
   PowerIcon,
   RefreshCwIcon,
   RouterIcon,
-  ShieldCheckIcon,
   TagsIcon,
   TerminalSquareIcon,
 } from "lucide-react"
@@ -23,6 +22,7 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { IconCircle } from "@/components/dashboard/icon-circle"
 import { StatCard } from "@/components/dashboard/stat-card"
+import { EngemaseManagedNote, EngemaseOnlyChip, useCanEdit } from "@/components/config/engemase-managed"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -72,6 +72,7 @@ export function GatewayDetailView({ data, nowLabel }: { data: GatewayDetail; now
   const [reloading, setReloading] = useState(false)
   const [restarting, setRestarting] = useState(false)
   const [tab, setTab] = useState("conexoes")
+  const canEdit = useCanEdit()
 
   const reload = async (target: number) => {
     setReloading(true)
@@ -136,6 +137,7 @@ export function GatewayDetailView({ data, nowLabel }: { data: GatewayDetail; now
         <ArrowLeftIcon className="size-3.5" />
         Gateways
       </Link>
+      <EngemaseManagedNote clientSlug={data.clientSlug} subject="Gateway, conexões com os CLPs, tags e publicação de configuração" />
 
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex min-w-0 items-center gap-4">
@@ -151,14 +153,9 @@ export function GatewayDetailView({ data, nowLabel }: { data: GatewayDetail; now
             </p>
           </div>
         </div>
-        {!pending && (
+        {!pending && canEdit && (
           <div className="flex flex-wrap items-center gap-2">
-            {data.managed && (
-              <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs font-medium text-muted-foreground">
-                <ShieldCheckIcon className="size-3.5 text-[#0e9384]" />
-                Gerenciado pela Engemase
-              </span>
-            )}
+            <EngemaseOnlyChip className="h-8 px-2.5" />
             <Button variant="outline" size="sm" onClick={() => reload(published)} disabled={reloading}>
               {reloading ? <Spinner /> : <RefreshCwIcon />}
               Recarregar configuração
@@ -187,7 +184,15 @@ export function GatewayDetailView({ data, nowLabel }: { data: GatewayDetail; now
         )}
       </div>
 
-      {pending && data.activation ? (
+      {pending && data.activation && !canEdit ? (
+        <section className="rounded-2xl border border-dashed bg-card px-5 py-6 text-sm">
+          <h2 className="text-[15px] font-semibold">Aguardando ativação pela Engemase</h2>
+          <p className="mt-1 text-muted-foreground">
+            A equipe Engemase instala o gateway no quadro da planta e faz a ativação. Depois disso, a saúde, as conexões e as tags aparecem aqui.
+            {data.machines.length > 0 && ` Máquinas previstas: ${data.machines.map((m) => m.name).join(", ")}.`}
+          </p>
+        </section>
+      ) : pending && data.activation ? (
         <ActivationPanel
           name={data.name}
           activation={data.activation}

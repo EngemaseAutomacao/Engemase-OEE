@@ -57,7 +57,7 @@ Exemplos do algoritmo: um azul `#0055A4` é mantido; um amarelo `#FACC15` vira o
 
 ### Editor de identidade visual
 
-Em `/[cliente]/config/aparencia` (admin do cliente com autogestão) e numa aba do cliente no console Engemase:
+Em `/[cliente]/config/aparencia` e numa aba do cliente no console Engemase. **Só a equipe Engemase altera a aparência (D12, 12/11/2026);** o admin do cliente vê a tela só como leitura e pede mudanças pelo suporte ([15](15-multi-cliente-e-acesso.md)):
 - grade de paletas + cor personalizada (seletor e campo hex);
 - **prévia lado a lado em claro e escuro** (botão, link, badge, menu, barra de progresso e um card de máquina com os estados);
 - selos de contraste "AA ok" / "ajustado" e a explicação quando houver ajuste ou bloqueio;
@@ -74,10 +74,12 @@ Tabela `client_branding` (uma linha por cliente): nome exibido, nome curto, pale
 
 ### App instalável (PWA) por cliente
 
-O manifest do app pode ser gerado por cliente (nome, ícone, cor). Vários PWAs no mesmo domínio separados só por caminho é prática desencorajada; o **subdomínio por cliente** (`cliente.oee.engemase.com.br`) resolve isso e prepara o **white label** com domínio próprio do cliente (fase 3, via domínios da Vercel). Isso pesa para o **push no iPhone**, que exige o app instalado ([13](13-notificacoes-e-alertas.md)).
+O manifest do app pode ser gerado por cliente (nome, ícone, cor). Vários PWAs no mesmo domínio separados só por caminho é prática desencorajada; o **subdomínio por cliente** (ex.: `cliente.<domínio próprio>`) resolve isso e prepara o **white label** com domínio próprio do cliente (fase 3, via domínios da Vercel). Isso pesa para o **push no iPhone**, que exige o app instalado ([13](13-notificacoes-e-alertas.md)).
+
+**Hoje (D28, 12/11/2026):** só o domínio da Vercel, `engemase-oee.vercel.app`, o mesmo para todos os clientes. O domínio próprio fica para depois, e o subdomínio por cliente depende dele (F3, D34). Trocar de endereço também troca a origem do app instalado: sessões, app instalado e inscrições de push são por endereço e precisam ser refeitos no novo.
 
 ## Fases
 
 - **MVP:** identidade Engemase aplicada, seletor Claro/Escuro/Automático com padrão Automático, tema próprio da TV/Andon.
 - **F2:** cores e logotipos por cliente (editor + algoritmo + Blob), manifest por cliente.
-- **F3:** subdomínio por cliente e domínio próprio (white label).
+- **F3:** subdomínio por cliente e domínio próprio (white label). Os dois dependem do domínio próprio da Engemase (D28).

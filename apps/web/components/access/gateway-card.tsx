@@ -17,6 +17,7 @@ import {
 import type { GatewayStatus } from "@/lib/mock/types"
 import { cn } from "@/lib/utils"
 import { IconCircle, type IconTone } from "@/components/dashboard/icon-circle"
+import { EditOnly } from "@/components/config/engemase-managed"
 import { ActivationDialog } from "./activation-dialog"
 import type { GatewayIssue, GatewayRow, IssueKind } from "./gateway-view"
 import { LATEST_AGENT, isOlderVersion, plural } from "./labels"
@@ -137,14 +138,16 @@ export function GatewayCard({ row, href, freshExpiresLabel }: { row: GatewayRow;
               </div>
             </div>
             {row.enrollmentCode && (
-              <ActivationDialog
-                gatewayName={row.name}
-                code={row.enrollmentCode}
-                expired={row.codeExpired}
-                expiresLabel={row.codeExpiresLabel}
-                freshExpiresLabel={freshExpiresLabel}
-                triggerVariant="default"
-              />
+              <EditOnly fallback={<span className="text-xs text-muted-foreground">A equipe Engemase instala e ativa este gateway.</span>}>
+                <ActivationDialog
+                  gatewayName={row.name}
+                  code={row.enrollmentCode}
+                  expired={row.codeExpired}
+                  expiresLabel={row.codeExpiresLabel}
+                  freshExpiresLabel={freshExpiresLabel}
+                  triggerVariant="default"
+                />
+              </EditOnly>
             )}
           </div>
         ) : (
