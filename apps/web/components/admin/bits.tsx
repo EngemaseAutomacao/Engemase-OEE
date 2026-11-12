@@ -1,10 +1,10 @@
 import Link from "next/link"
 import type { LucideIcon } from "lucide-react"
 
-import type { ClientManagement, ClientPlan, GatewayStatus } from "@/lib/mock/types"
+import type { ClientPlan, GatewayStatus } from "@/lib/mock/types"
 import { GATEWAY_STATUS_LABEL, PLAN_LABEL } from "@/lib/roles"
 import { cn } from "@/lib/utils"
-import { MANAGEMENT_LABEL, MANAGEMENT_SHORT, PLAN_TONE, STATUS_LABEL, STATUS_TONE, type AdminClientStatus, type SoftTone } from "./labels"
+import { PLAN_TONE, STATUS_LABEL, STATUS_TONE, type AdminClientStatus, type SoftTone } from "./labels"
 
 export const SOFT_TONES: Record<SoftTone, string> = {
   blue: "bg-primary/10 text-primary",
@@ -65,8 +65,9 @@ export function PlanBadge({ plan }: { plan: ClientPlan }) {
   return <SoftBadge tone={PLAN_TONE[plan]}>{PLAN_LABEL[plan]}</SoftBadge>
 }
 
-export function ManagementBadge({ management, short = false }: { management: ClientManagement; short?: boolean }) {
-  return <SoftBadge tone={management === "engemase" ? "teal" : "navy"}>{short ? MANAGEMENT_SHORT[management] : MANAGEMENT_LABEL[management]}</SoftBadge>
+/** Máquinas contratadas: a assinatura é cobrada por máquina (D1). */
+export function MachinesContractedBadge({ machines }: { machines: number }) {
+  return <SoftBadge tone="teal">{machines === 1 ? "1 máquina contratada" : `${machines.toLocaleString("pt-BR")} máquinas contratadas`}</SoftBadge>
 }
 
 export const GATEWAY_TONE: Record<GatewayStatus, SoftTone> = { online: "green", degraded: "amber", offline: "red", pending: "slate" }

@@ -203,6 +203,72 @@ describe("CHECKs do banco", () => {
     await attempt("UPDATE machine_live SET speed = 1234.5 WHERE machine_id = $1", [a.machineId])
   })
 
+  it("member_access: escopo 'machines' aceito (D11); escopo desconhecido e admin fora de 'all' recusados", async () => {
+    const scope = (id: string, value: string) => attempt("UPDATE member_access SET scope = $2 WHERE id = $1", [id, value])
+    for (const value of ["all", "units", "machines"]) await scope(a.memberAccessId, value)
+    for (const value of ["lines", "", "MACHINES"]) {
+      await expectDbError(scope(a.memberAccessId, value), /member_access_scope_chk/)
+    }
+    // O admin do cliente tem sempre o cliente inteiro: nem por unidades, nem por máquinas.
+    await expectDbError(
+      attempt("UPDATE member_access SET role = 'client_admin' WHERE id = $1", [a.machineAccessId]),
+      /member_access_admin_scope_chk/,
+    )
+    await attempt("UPDATE member_access SET role = 'client_admin', scope = 'all' WHERE id = $1", [a.machineAccessId])
+  })
+
+  it("support_access_grant: nasce 'active', sem estados nem colunas de aprovação do cliente (D5)", async () => {
+    const created = await t.client.transaction(async (tx) => {
+      const r = await tx.query<{ status: string }>(
+        `INSERT INTO support_access_grant (organization_id, user_id, reason, starts_at, ends_at)
+         SELECT organization_id, user_id, 'Chamado', now(), now() + interval '1 hour'
+         FROM support_access_grant WHERE organization_id = $1 RETURNING status`,
+        [a.organizationId],
+      )
+      await tx.rollback()
+      return r.rows
+    })
+    expect(created).toEqual([{ status: "active" }])
+    for (const status of ["requested", "denied"]) {
+      await expectDbError(
+        attempt("UPDATE support_access_grant SET status = $2 WHERE organization_id = $1", [a.organizationId, status]),
+        /support_access_grant_status_chk/,
+      )
+    }
+    const approval = await t.client.query<{ name: string }>(`
+      SELECT column_name AS name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'support_access_grant' AND column_name LIKE 'approved%'`)
+    expect(approval.rows).toEqual([])
+  })
+
+  it("client_account: gerenciado pela Engemase por padrão (D13); limites são inteiros >= 0 (D1)", async () => {
+    // O seed não informa managed_by_engemase: vale o padrão.
+    const managed = await t.client.query<{ managed: boolean }>(
+      "SELECT managed_by_engemase AS managed FROM client_account WHERE organization_id = $1",
+      [a.organizationId],
+    )
+    expect(managed.rows).toEqual([{ managed: true }])
+
+    const limits = (value: string) =>
+      attempt("UPDATE client_account SET limits = $2::jsonb WHERE organization_id = $1", [a.organizationId, value])
+    for (const ok of ["{}", '{"machines": 0}', '{"machines": 50, "gateways": 4, "users": 30, "retentionMonths": 24}']) {
+      await limits(ok)
+    }
+    for (const bad of [
+      "[]",
+      "50",
+      '{"machines": -1}',
+      '{"machines": 2.5}',
+      '{"machines": "50"}',
+      '{"machines": null}',
+      '{"machines": [50]}',
+      '{"machines": {"max": 50}}',
+      '{"machines": 50, "users": -2}',
+    ]) {
+      await expectDbError(limits(bad), /client_account_limits_chk/)
+    }
+  })
+
   it("recusam valores fora da lista e regras quebradas", async () => {
     await expectDbError(
       attempt(

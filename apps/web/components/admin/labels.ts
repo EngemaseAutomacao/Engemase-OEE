@@ -2,7 +2,8 @@
  * Rótulos, tons e regras do console de clientes (área "console-clientes").
  * Funções puras: podem ser usadas em componentes de servidor e de cliente.
  */
-import type { ClientManagement, ClientPlan, ClientStatus } from "@/lib/mock/types"
+import type { ClientPlan, ClientStatus } from "@/lib/mock/types"
+import { PLATFORM_HOST } from "@/lib/site"
 
 /** No protótipo, "encerrar" vira um estado local de tela (não existe nos dados simulados). */
 export type AdminClientStatus = ClientStatus | "closed"
@@ -34,20 +35,12 @@ export const LIFECYCLE_ORDER: AdminClientStatus[] = ["onboarding", "active", "su
 
 export const PLAN_TONE: Record<ClientPlan, SoftTone> = { starter: "slate", pro: "blue", enterprise: "navy" }
 
-export const MANAGEMENT_LABEL: Record<ClientManagement, string> = {
-  engemase: "Gerenciado pela Engemase",
-  self: "Autogestão",
-}
+/** Modelo comercial (D1): a Engemase vende o software como assinatura, cobrada por máquina. Preços ainda não definidos. */
+export const BILLING_NOTE = "Assinatura do software cobrada por máquina contratada. Preços ainda não definidos."
 
-export const MANAGEMENT_SHORT: Record<ClientManagement, string> = {
-  engemase: "Engemase",
-  self: "Autogestão",
-}
-
-export const MANAGEMENT_HINT: Record<ClientManagement, string> = {
-  engemase: "Gateways, conexões, tags e publicação de configuração ficam só leitura para o cliente; a Engemase configura como serviço.",
-  self: "O cliente configura gateways, CLPs e tags com os próprios engenheiros.",
-}
+/** Quem configura (D12/D13): sempre a equipe Engemase; o admin do cliente gerencia só os usuários. */
+export const ENGEMASE_CONFIG_NOTE =
+  "A equipe Engemase configura unidades, linhas, máquinas, gateways, tags, terminais, turnos, produtos, motivos e aparência. O admin do cliente gerencia os usuários do cliente."
 
 export interface PlanLimits {
   machines: number
@@ -56,15 +49,18 @@ export interface PlanLimits {
   retentionMonths: number
 }
 
-/** Limites sugeridos por plano (editáveis pelo super admin na criação). */
+/**
+ * Sugestões por plano (editáveis pelo super admin na criação). A cobrança é por máquina contratada (D1);
+ * a retenção segue a decisão D6 (dados por minuto por 2 anos).
+ */
 export const PLAN_DEFAULTS: Record<ClientPlan, PlanLimits & { summary: string }> = {
-  starter: { machines: 10, gateways: 2, users: 15, retentionMonths: 12, summary: "Uma planta pequena, até 10 máquinas" },
+  starter: { machines: 10, gateways: 2, users: 15, retentionMonths: 24, summary: "Uma planta pequena, poucas linhas" },
   pro: { machines: 20, gateways: 4, users: 30, retentionMonths: 24, summary: "Várias linhas, relatórios e alertas completos" },
-  enterprise: { machines: 60, gateways: 12, users: 100, retentionMonths: 36, summary: "Várias plantas, retenção estendida e suporte prioritário" },
+  enterprise: { machines: 60, gateways: 12, users: 100, retentionMonths: 24, summary: "Várias plantas e suporte prioritário" },
 }
 
-/** Domínio canônico da plataforma (docs/08, D28). */
-export const PLATFORM_HOST = "oee.engemase.com.br"
+/** Endereço da plataforma (D28): definido num só lugar, em `@/lib/site`. */
+export { PLATFORM_HOST }
 
 /** Identificadores reservados (docs/15 §6): nunca viram slug de cliente. */
 export const RESERVED_SLUGS = [

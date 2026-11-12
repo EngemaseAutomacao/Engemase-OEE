@@ -170,6 +170,37 @@ describe("RLS por cliente", () => {
     ).rejects.toThrow(RLS_ERROR)
   })
 
+  it("member_machine (escopo por máquina, D11): o cliente A só vê e só grava os próprios vínculos", async () => {
+    const insert = "INSERT INTO member_machine (organization_id, member_access_id, machine_id) VALUES ($1, $2, $3)"
+    const visible = await asTenant(t.client, a.organizationId, async (tx) => {
+      const r = await tx.query<{ member_access_id: string; machine_id: string }>(
+        "SELECT member_access_id, machine_id FROM member_machine",
+      )
+      return r.rows
+    })
+    expect(visible).toEqual([{ member_access_id: a.machineAccessId, machine_id: a.machineId }])
+    // Pedindo o vínculo de B pelo id: nada.
+    await asTenant(t.client, a.organizationId, async (tx) => {
+      expect(await count(tx, "SELECT 1 FROM member_machine WHERE member_access_id = $1", [b.machineAccessId])).toBe(0)
+    })
+    // Gravar um vínculo do cliente B (ids válidos em B) com app.org_id = A: bloqueado pela RLS.
+    await expect(
+      asTenant(t.client, a.organizationId, (tx) =>
+        tx.query(insert, [b.organizationId, b.machineAccessId, b.unlinkedMachineId]),
+      ),
+    ).rejects.toThrow(RLS_ERROR)
+    // Apagar os de B não atinge nada; incluir máquina no escopo do próprio cliente funciona.
+    const result = await asTenant(t.client, a.organizationId, async (tx) => {
+      const del = await tx.query("DELETE FROM member_machine WHERE organization_id = $1", [b.organizationId])
+      await tx.query(insert, [a.organizationId, a.machineAccessId, a.unlinkedMachineId])
+      return { deleted: del.affectedRows ?? 0, own: await count(tx, "SELECT 1 FROM member_machine") }
+    })
+    expect(result).toEqual({ deleted: 0, own: 2 })
+    expect(await count(t.client, "SELECT 1 FROM member_machine WHERE organization_id = $1", [b.organizationId])).toBe(1)
+    // Sem cliente definido: nada (fail-closed).
+    expect(await asTenant(t.client, null, (tx) => count(tx, "SELECT 1 FROM member_machine"))).toBe(0)
+  })
+
   it("não dá para trocar de cliente no meio da transação", async () => {
     await expect(
       asTenant(t.client, a.organizationId, (tx) => tx.query("SELECT app.set_tenant($1::uuid)", [b.organizationId])),
@@ -239,7 +270,7 @@ describe("RLS por cliente", () => {
       const r = await tx.query<{ email: string }>('SELECT email FROM "user" ORDER BY email')
       return r.rows.map((row) => row.email)
     })
-    expect(emails).toEqual(["admin@alfa.example"])
+    expect(emails).toEqual(["admin@alfa.example", "operador@alfa.example"])
     // Sem cliente, ninguém.
     expect(await asTenant(t.client, null, (tx) => count(tx, 'SELECT 1 FROM "user"'))).toBe(0)
   })
@@ -277,7 +308,7 @@ describe("RLS por cliente", () => {
 
   it("auth_service (Better Auth) vê vínculos de todos os clientes, mas nada de produção", async () => {
     const members = await asRole(t.client, "auth_service", null, (tx) => count(tx, "SELECT 1 FROM member"))
-    expect(members).toBe(2)
+    expect(members).toBe(4)
     // Clientes: lista todos e cria (a política dele em organization não depende de app.org_id).
     expect(await asRole(t.client, "auth_service", null, (tx) => count(tx, "SELECT 1 FROM organization"))).toBe(2)
     const created = await asRole(t.client, "auth_service", null, async (tx) => {

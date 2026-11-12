@@ -240,9 +240,13 @@ function Success({ data, onAnother }: { data: WizardData; onAnother: () => void 
       href: "/admin/gateways",
       cta: "Provisionar",
     },
-    { icon: FactoryIcon, title: "Cadastrar máquinas e tags Modbus", text: `Até ${data.limits.machines} máquinas no plano. Use o bloco OEE padrão Engemase sempre que possível.` },
+    {
+      icon: FactoryIcon,
+      title: "Cadastrar máquinas e tags Modbus",
+      text: `Até ${data.limits.machines} máquinas contratadas (a assinatura é cobrada por máquina). Use o bloco OEE padrão Engemase sempre que possível.`,
+    },
     { icon: MonitorSmartphoneIcon, title: "Parear TV e tablets", text: "Cada TV Andon e tablet de operador é um terminal pareado por código, sem conta compartilhada." },
-    { icon: UsersIcon, title: "Admin do cliente adiciona a equipe", text: `${data.adminName.split(" ")[0]} entra pelo e-mail e convida supervisores, engenheiros e operadores.` },
+    { icon: UsersIcon, title: "Admin do cliente adiciona a equipe", text: `${data.adminName.split(" ")[0]} entra pelo e-mail e convida supervisores, engenheiros e operadores. O resto da configuração é da Engemase.` },
     { icon: RocketIcon, title: "Concluir implantação", text: "Com dados chegando e a equipe treinada, mude o cliente para Ativo no detalhe do cliente." },
   ]
   return (
@@ -251,7 +255,9 @@ function Success({ data, onAnother }: { data: WizardData; onAnother: () => void 
         <IconCircle icon={CircleCheckBigIcon} tone="green" size="lg" />
         <div>
           <h2 className="text-lg font-bold">{data.tradeName} foi criado</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">Estado: Implantação · {data.managed ? "gerenciado pela Engemase" : "autogestão"}</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Estado: Implantação · {data.limits.machines} máquinas contratadas · configurado pela Engemase
+          </p>
         </div>
         <dl className="grid w-full gap-2 rounded-xl bg-muted/60 p-3 text-left text-sm">
           <div className="flex justify-between gap-3">

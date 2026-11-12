@@ -8,7 +8,7 @@ import { ArchiveXIcon, ChevronLeftIcon, CopyIcon, MoreHorizontalIcon, PauseCircl
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { ClientStatusBadge, ManagementBadge, PlanBadge } from "./bits"
+import { ClientStatusBadge, MachinesContractedBadge, PlanBadge } from "./bits"
 import { useClientDetail } from "./client-detail-context"
 import { ClientEditSheet } from "./client-edit-sheet"
 import { EnterClientButton } from "./enter-client"
@@ -71,7 +71,7 @@ export function ClientDetailHeader({
               <h1 className="text-2xl font-bold tracking-tight">{info.name}</h1>
               <ClientStatusBadge status={status} />
               <PlanBadge plan={info.plan} />
-              <ManagementBadge management={info.management} />
+              <MachinesContractedBadge machines={info.limits.machines} />
             </div>
             <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
               <span className="truncate">{info.legalName}</span>

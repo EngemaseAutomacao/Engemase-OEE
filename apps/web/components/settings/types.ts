@@ -2,11 +2,20 @@
  * Tipos serializáveis que as páginas de Configurações (usuários, terminais, aparência e auditoria)
  * montam no servidor a partir de `@/lib/mock` e entregam aos componentes de cliente.
  */
-import type { ClientRole, UserStatus } from "@/lib/mock"
+import type { ClientRole, MemberScope, UserStatus } from "@/lib/mock"
 
 export interface SettingsUnit {
   id: string
   name: string
+}
+
+/** Máquina oferecida no escopo por máquina (D11). */
+export interface SettingsMachine {
+  id: string
+  name: string
+  code: string
+  unitId: string
+  lineName: string
 }
 
 // ---------------------------------------------------------------------------
@@ -18,7 +27,8 @@ export interface ClientUserRow {
   email: string | null
   username: string | null
   role: ClientRole
-  unitScope: "all" | string[]
+  /** Todo o cliente, unidades ou máquinas (D11). */
+  scope: MemberScope
   status: UserStatus
   twoFactor: boolean
   /** "há 2h 10min", "nunca" */

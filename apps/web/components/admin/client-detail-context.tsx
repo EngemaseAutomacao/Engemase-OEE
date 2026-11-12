@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState } from "react"
 
-import type { ClientManagement, ClientPlan } from "@/lib/mock/types"
+import type { ClientPlan } from "@/lib/mock/types"
 import type { AdminClientStatus, PlanLimits } from "./labels"
 
 export interface EditableClient {
@@ -11,7 +11,6 @@ export interface EditableClient {
   contactName: string
   contactEmail: string
   plan: ClientPlan
-  management: ClientManagement
   limits: PlanLimits
 }
 

@@ -55,6 +55,7 @@ import {
   seconds,
   serialSummary,
 } from "@/components/config/labels"
+import { useCanEdit } from "@/components/config/engemase-managed"
 
 export interface ConnInfo {
   protocol: Protocol
@@ -125,6 +126,7 @@ export function MachineRegistry({
   machineLimit: number
 }) {
   const [rows, setRows] = useState(initialRows)
+  const canEdit = useCanEdit()
   const [query, setQuery] = useState("")
   const [unitId, setUnitId] = useState("all")
   const [proto, setProto] = useState<ProtoFilter>("all")
@@ -184,7 +186,7 @@ export function MachineRegistry({
 
   const duplicate = (row: MachineRow) => {
     if (rows.length >= machineLimit) {
-      toast.error("Limite de máquinas do plano atingido", { description: `O plano permite ${machineLimit} máquinas. Fale com a Engemase para ampliar.` })
+      toast.error("Todas as máquinas contratadas estão em uso", { description: `O contrato cobre ${machineLimit} máquinas (cobrança por máquina). Para mais, amplie o contrato.` })
       return
     }
     const copy: MachineRow = {
@@ -209,7 +211,7 @@ export function MachineRegistry({
     if (!toggling) return
     const next = !toggling.active
     if (next && activeCount >= machineLimit) {
-      toast.error("Limite de máquinas ativas atingido", { description: `O plano permite ${machineLimit} máquinas ativas.` })
+      toast.error("Todas as máquinas contratadas estão ativas", { description: `O contrato cobre ${machineLimit} máquinas ativas (cobrança por máquina).` })
       setToggling(null)
       return
     }
@@ -231,14 +233,14 @@ export function MachineRegistry({
         <StatCard
           icon={FactoryIcon}
           tone="blue"
-          label="Máquinas ativas no plano"
+          label="Máquinas ativas / contratadas"
           value={
             <>
               {activeCount}
               <span className="text-base font-semibold text-muted-foreground"> / {machineLimit}</span>
             </>
           }
-          hint={usage >= 1 ? "Limite atingido" : usage >= 0.8 ? "Perto do limite do plano" : `${counts.inactive} ${counts.inactive === 1 ? "inativa" : "inativas"}`}
+          hint={usage >= 1 ? "Todas as contratadas em uso" : usage >= 0.8 ? "Perto do total contratado" : `${counts.inactive} ${counts.inactive === 1 ? "inativa" : "inativas"}`}
           aside={<Ring value={usage} size={52} stroke={6} color={usageColor} />}
         />
         <StatCard icon={NetworkIcon} tone="teal" label="Modbus TCP" value={counts.tcp} hint="CLPs na rede Ethernet" />
@@ -332,14 +334,16 @@ export function MachineRegistry({
               <EmptyTitle>Nenhuma máquina cadastrada</EmptyTitle>
               <EmptyDescription>Use o assistente para cadastrar a primeira máquina, conectar o CLP via Modbus e mapear os sinais.</EmptyDescription>
             </EmptyHeader>
-            <EmptyContent>
-              <Button asChild>
-                <Link href={`/${clientSlug}/config/maquinas/nova`}>
-                  <PlusIcon />
-                  Nova máquina
-                </Link>
-              </Button>
-            </EmptyContent>
+            {canEdit && (
+              <EmptyContent>
+                <Button asChild>
+                  <Link href={`/${clientSlug}/config/maquinas/nova`}>
+                    <PlusIcon />
+                    Nova máquina
+                  </Link>
+                </Button>
+              </EmptyContent>
+            )}
           </Empty>
         ) : filtered.length === 0 ? (
           <Empty className="mx-5 mb-5 rounded-xl border border-dashed">
@@ -379,9 +383,13 @@ export function MachineRegistry({
                   return (
                     <TableRow key={m.id} className={cn(!m.active && "text-muted-foreground")}>
                       <TableCell className="pl-5">
-                        <button type="button" onClick={() => openEdit(m)} className="text-left font-medium text-foreground hover:text-primary hover:underline">
-                          {m.name}
-                        </button>
+                        {canEdit ? (
+                          <button type="button" onClick={() => openEdit(m)} className="text-left font-medium text-foreground hover:text-primary hover:underline">
+                            {m.name}
+                          </button>
+                        ) : (
+                          <span className="font-medium text-foreground">{m.name}</span>
+                        )}
                         <div className="font-mono text-xs text-muted-foreground">{m.code}</div>
                       </TableCell>
                       <TableCell>{m.type}</TableCell>
@@ -429,12 +437,16 @@ export function MachineRegistry({
                       </TableCell>
                       <TableCell className="pr-5">
                         <div className="flex items-center justify-end gap-1.5">
-                          <SoftIconButton label={`Editar ${m.name}`} onClick={() => openEdit(m)}>
-                            <PencilIcon />
-                          </SoftIconButton>
-                          <SoftIconButton label={`Duplicar ${m.name}`} tone="slate" onClick={() => duplicate(m)}>
-                            <CopyIcon />
-                          </SoftIconButton>
+                          {canEdit && (
+                            <>
+                              <SoftIconButton label={`Editar ${m.name}`} onClick={() => openEdit(m)}>
+                                <PencilIcon />
+                              </SoftIconButton>
+                              <SoftIconButton label={`Duplicar ${m.name}`} tone="slate" onClick={() => duplicate(m)}>
+                                <CopyIcon />
+                              </SoftIconButton>
+                            </>
+                          )}
                           {m.id.startsWith("mch_copy_") ? (
                             <SoftIconButton label="Ver ao vivo (disponível após salvar e ativar)" tone="teal" disabled>
                               <ActivityIcon />
@@ -444,15 +456,16 @@ export function MachineRegistry({
                               <ActivityIcon />
                             </SoftIconLink>
                           )}
-                          {m.active ? (
-                            <SoftIconButton label={`Desativar ${m.name}`} tone="red" onClick={() => setToggling(m)}>
-                              <PowerOffIcon />
-                            </SoftIconButton>
-                          ) : (
-                            <SoftIconButton label={`Reativar ${m.name}`} tone="teal" onClick={() => setToggling(m)}>
-                              <PowerIcon />
-                            </SoftIconButton>
-                          )}
+                          {canEdit &&
+                            (m.active ? (
+                              <SoftIconButton label={`Desativar ${m.name}`} tone="red" onClick={() => setToggling(m)}>
+                                <PowerOffIcon />
+                              </SoftIconButton>
+                            ) : (
+                              <SoftIconButton label={`Reativar ${m.name}`} tone="teal" onClick={() => setToggling(m)}>
+                                <PowerIcon />
+                              </SoftIconButton>
+                            ))}
                         </div>
                       </TableCell>
                     </TableRow>

@@ -15,7 +15,6 @@ export interface WizardData {
   slugEdited: boolean
   plan: ClientPlan
   limits: PlanLimits
-  managed: boolean
   // 2. Primeira unidade
   unitName: string
   unitCity: string
@@ -50,7 +49,6 @@ export const INITIAL_DATA: WizardData = {
   slugEdited: false,
   plan: "pro",
   limits: { machines: PLAN_DEFAULTS.pro.machines, gateways: PLAN_DEFAULTS.pro.gateways, users: PLAN_DEFAULTS.pro.users, retentionMonths: PLAN_DEFAULTS.pro.retentionMonths },
-  managed: true,
   unitName: "",
   unitCity: "",
   unitUf: "",

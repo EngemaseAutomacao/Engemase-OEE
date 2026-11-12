@@ -17,7 +17,7 @@ import {
   type AlertType,
 } from "@/lib/mock"
 import { ago, date, dateTime } from "@/lib/format"
-import { CLIENT_ROLE_LABEL, CLIENT_STATUS_LABEL, PLAN_LABEL, PLATFORM_ROLE_LABEL } from "@/lib/roles"
+import { CLIENT_ROLE_LABEL, CLIENT_STATUS_LABEL, PLAN_LABEL, PLATFORM_ROLE_LABEL, scopeSummary } from "@/lib/roles"
 
 import { getMyPushDevices, getMySessions, type DeviceKind } from "./account-fixtures"
 import type { AlertStatus } from "./labels"
@@ -207,11 +207,6 @@ export function buildAccessibleClients(): AccessibleClientVM[] {
   return getAccessibleClients().map((c) => {
     const s = getClientSummary(c.id)
     const membership = me.memberships.find((m) => m.clientId === c.id)
-    const unitNames = (ids: string[]) =>
-      ids
-        .map((id) => getUnit(id)?.name)
-        .filter(Boolean)
-        .join(", ")
     return {
       id: c.id,
       slug: c.slug,
@@ -224,9 +219,12 @@ export function buildAccessibleClients(): AccessibleClientVM[] {
       scope: me.platformRole
         ? "Todas as unidades · acesso auditado"
         : membership
-          ? membership.unitScope === "all"
-            ? "Todas as unidades"
-            : unitNames(membership.unitScope)
+          ? membership.scope.kind === "units"
+            ? membership.scope.unitIds
+                .map((id) => getUnit(id)?.name)
+                .filter(Boolean)
+                .join(", ") || "Nenhuma unidade"
+            : scopeSummary(membership.scope)
           : "—",
       units: s.units,
       machines: s.machines,

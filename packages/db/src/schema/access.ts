@@ -1,6 +1,12 @@
 /**
  * Plataforma multi-cliente: conta do cliente, papéis e escopo, acesso da Engemase, terminais,
  * tokens próprios e auditoria (docs/15, seções 2, 3, 6 e 9).
+ *
+ * Quem grava o quê (D12 e D13, 12/11/2026): o admin do cliente gerencia só os usuários do próprio
+ * cliente (`member`, `member_access`, `member_unit`, `member_machine`). Toda a outra configuração
+ * (unidades, linhas, máquinas, gateways, tags, terminais, turnos, produtos, motivos, políticas) é
+ * da equipe Engemase. O banco isola por cliente; quem pode o quê dentro do cliente é regra da
+ * camada de acesso a dados.
  */
 import { sql } from "drizzle-orm"
 import {
@@ -19,7 +25,7 @@ import {
 import { createdAt, isSha256Hex, oneOf, pk, tstz, updatedAt } from "./_columns"
 import { organizationId } from "./_tenant"
 import { member, organization, user } from "./auth"
-import { unit } from "./assets"
+import { machine, unit } from "./assets"
 import {
   ACCESS_SCOPES,
   ACCOUNT_TOKEN_PURPOSES,
@@ -30,9 +36,15 @@ import {
   TERMINAL_KINDS,
 } from "./enums"
 
-/** Limites do plano (docs/15, P5). */
+/**
+ * Limites do contrato (docs/15, P5), gravados só pela plataforma. A Engemase vende o software como
+ * assinatura COBRADA POR MÁQUINA, com planos (D1, 12/11/2026): `machines` é a base da cobrança.
+ * Preços e regras de cada plano ficam fora do banco (ainda não definidos); não há tabela de
+ * faturamento. Todo valor é um inteiro >= 0 (`client_account_limits_chk`).
+ */
 export interface ClientLimits {
   readonly units?: number
+  /** Número de máquinas contratadas (cobrança por máquina, D1). */
   readonly machines?: number
   readonly gateways?: number
   readonly users?: number
@@ -50,10 +62,16 @@ export const clientAccount = pgTable(
     id: pk(),
     organizationId: organizationId().unique("client_account_org_uq"),
     status: text("status", { enum: CLIENT_STATUSES }).notNull().default("onboarding"),
+    /** Plano da assinatura (o protótipo usa starter, pro e enterprise). Nomes e preços ainda abertos (D1). */
     plan: text("plan"),
     limits: jsonb("limits").$type<ClientLimits>().notNull().default({}),
-    /** Ligado: gateways, conexões, tags e publicação de config ficam só leitura para o cliente. */
-    managedByEngemase: boolean("managed_by_engemase").notNull().default(false),
+    /**
+     * Ligado: gateways, conexões, tags e publicação de config são só da equipe Engemase; para o
+     * cliente, leitura técnica (D13). No MVP TODO cliente é gerenciado pela Engemase: padrão `true`
+     * (a 0005 ligou as linhas que já existiam). A coluna fica para o caso de um dia existir cliente
+     * com autogestão técnica.
+     */
+    managedByEngemase: boolean("managed_by_engemase").notNull().default(true),
     /** Slugs anteriores (slug nunca é reaproveitado). */
     slugHistory: text("slug_history")
       .array()
@@ -64,12 +82,22 @@ export const clientAccount = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [check("client_account_status_chk", oneOf(t.status, CLIENT_STATUSES))],
+  (t) => [
+    check("client_account_status_chk", oneOf(t.status, CLIENT_STATUSES)),
+    // `limits` é um objeto e todo valor é inteiro >= 0 (`strict`: um valor em lista não passa).
+    // O `true` do fim (silent) troca erro por NULL, e aí o `jsonb_typeof` decide.
+    check(
+      "client_account_limits_chk",
+      sql`jsonb_typeof(${t.limits}) = 'object' AND NOT jsonb_path_exists(${t.limits}, 'strict $.* ? (@.type() != "number" || @ < 0 || @ != @.floor())', '{}', true)`,
+    ),
+  ],
 )
 
 /**
  * Papel e escopo do vínculo (`member`). Fail-closed (docs/15, seção 2): vínculo sem registro aqui
- * = vínculo inativo; escopo `units` sem nenhuma linha em `member_unit` = nenhum acesso.
+ * = vínculo inativo; escopo `units` sem nenhuma linha em `member_unit` = nenhum acesso; escopo
+ * `machines` sem nenhuma linha em `member_machine` = nenhum acesso. Gravado pelo admin do cliente
+ * (D12). O papel `engineer` é leitura técnica (D13): vê saúde de gateways, conexões e tags, sem editar.
  */
 export const memberAccess = pgTable(
   "member_access",
@@ -99,7 +127,7 @@ export const memberAccess = pgTable(
   ],
 )
 
-/** Unidades do vínculo quando o escopo é `units`. */
+/** Unidades do vínculo quando o escopo é `units` (nenhuma unidade listada = nenhum acesso). */
 export const memberUnit = pgTable(
   "member_unit",
   {
@@ -119,6 +147,37 @@ export const memberUnit = pgTable(
       name: "member_unit_unit_fk",
       columns: [t.unitId, t.organizationId],
       foreignColumns: [unit.id, unit.organizationId],
+    }).onDelete("cascade"),
+  ],
+)
+
+/**
+ * Máquinas do vínculo quando o escopo é `machines` (D11, 12/11/2026). Mesmo padrão de `member_unit`.
+ *
+ * Regra fail-closed: escopo `machines` sem nenhuma linha aqui = nenhum acesso. As linhas só valem
+ * com `member_access.scope = 'machines'` (com outro escopo, a camada de acesso a dados as ignora).
+ * Agregados (OEE de linha e de unidade, relatórios, exportações) somam só as máquinas listadas.
+ * Máquina nova não entra sozinha neste escopo: o admin do cliente precisa incluí-la.
+ */
+export const memberMachine = pgTable(
+  "member_machine",
+  {
+    organizationId: organizationId(),
+    memberAccessId: uuid("member_access_id").notNull(),
+    machineId: uuid("machine_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ name: "member_machine_pk", columns: [t.memberAccessId, t.machineId] }),
+    foreignKey({
+      name: "member_machine_member_access_fk",
+      columns: [t.memberAccessId, t.organizationId],
+      foreignColumns: [memberAccess.id, memberAccess.organizationId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "member_machine_machine_fk",
+      columns: [t.machineId, t.organizationId],
+      foreignColumns: [machine.id, machine.organizationId],
     }).onDelete("cascade"),
   ],
 )
@@ -174,7 +233,10 @@ export const platformAssignmentUnit = pgTable(
 
 /**
  * Concessão de suporte: usuário de plataforma × cliente, com motivo, chamado e prazo de até 4 h
- * (docs/15, seção 3). Visível ao cliente na auditoria.
+ * (docs/15, seção 3). Aberta pela própria Engemase e ativa na hora, SEM aprovação do cliente: o
+ * acesso da Engemase é sempre liberado com registro (D5, 12/11/2026). Visível ao cliente na
+ * auditoria e com faixa na tela. (A aprovação de sessões de acesso remoto ao gateway é outra
+ * coisa e continua em `remote_access_*`, docs/12.)
  */
 export const supportAccessGrant = pgTable(
   "support_access_grant",
@@ -186,12 +248,9 @@ export const supportAccessGrant = pgTable(
       .references(() => user.id),
     reason: text("reason").notNull(),
     ticket: text("ticket"),
-    status: text("status", { enum: SUPPORT_GRANT_STATUSES }).notNull(),
+    status: text("status", { enum: SUPPORT_GRANT_STATUSES }).notNull().default("active"),
     startsAt: tstz("starts_at").notNull(),
     endsAt: tstz("ends_at").notNull(),
-    /** Preenchido quando a política do cliente exige aprovação. */
-    approvedBy: uuid("approved_by"),
-    approvedAt: tstz("approved_at"),
     endedAt: tstz("ended_at"),
     endedBy: uuid("ended_by"),
     createdAt: createdAt(),

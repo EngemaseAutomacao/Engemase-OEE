@@ -26,7 +26,6 @@ import {
   nowMs,
   type AuditEntry,
   type Client,
-  type ClientManagement,
   type ClientPlan,
   type ClientRole,
   type ClientStatus,
@@ -37,6 +36,7 @@ import {
   type UserStatus,
 } from "@/lib/mock"
 import { ago, date, dateTime, dec, num, shortDate, time } from "@/lib/format"
+import { scopeSummary } from "@/lib/roles"
 import { PLATFORM_HOST, plural, timezoneLabel } from "./labels"
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -53,7 +53,6 @@ export interface ClientRow {
   city: string
   state: string
   plan: ClientPlan
-  management: ClientManagement
   status: ClientStatus
   units: number
   machines: number
@@ -85,7 +84,6 @@ export function clientRow(c: Client): ClientRow {
     city: c.city,
     state: c.state,
     plan: c.plan,
-    management: c.management,
     status: c.status,
     units: s.units,
     machines: s.machines,
@@ -508,7 +506,7 @@ export function buildClientDetail(clientId: string) {
       login: u.email ?? u.username ?? "—",
       isUsername: !u.email,
       role: m.role,
-      scope: m.unitScope === "all" ? "Todas as unidades" : m.unitScope.map(unitName).join(", ") || "Nenhuma unidade",
+      scope: m.scope.kind === "units" ? m.scope.unitIds.map(unitName).join(", ") || "Nenhuma unidade" : scopeSummary(m.scope),
       status: u.status,
       twoFactor: u.twoFactor,
       lastLogin: u.lastLoginAt ? ago(u.lastLoginAt) : "nunca entrou",
@@ -548,24 +546,22 @@ export function buildClientDetail(clientId: string) {
   ]
 
   const fieldEngineers = platform.filter((u) => u.platformRole === "field_engineer")
-  const assignments: Assignment[] =
-    c.management === "engemase"
-      ? fieldEngineers
-          .filter((u) => sessions.some((s) => s.requestedBy === u.name) || audit.some((a) => a.actorName === u.name))
-          .map((u) => {
-            const startMs = Date.parse(c.createdAt)
-            const endMs = startMs + 365 * DAY_MS
-            return {
-              id: `asg-${u.id}-${c.id}`,
-              userName: u.name,
-              units: "Todas as unidades",
-              start: date(c.createdAt),
-              end: date(new Date(endMs).toISOString()),
-              reason: "Comissionamento e configuração como serviço",
-              status: endMs > now ? ("active" as const) : ("expired" as const),
-            }
-          })
-      : []
+  // Todo cliente é configurado pela Engemase (D12/D13): o engenheiro de campo que atuou no cliente tem atribuição.
+  const assignments: Assignment[] = fieldEngineers
+    .filter((u) => sessions.some((s) => s.requestedBy === u.name) || audit.some((a) => a.actorName === u.name))
+    .map((u) => {
+      const startMs = Date.parse(c.createdAt)
+      const endMs = startMs + 365 * DAY_MS
+      return {
+        id: `asg-${u.id}-${c.id}`,
+        userName: u.name,
+        units: "Todas as unidades",
+        start: date(c.createdAt),
+        end: date(new Date(endMs).toISOString()),
+        reason: "Configuração do cliente: gateways, máquinas, tags e cadastros",
+        status: endMs > now ? ("active" as const) : ("expired" as const),
+      }
+    })
 
   const remoteSessions: RemoteSessionRow[] = sessions.slice(0, 5).map((s) => ({
     id: s.id,
@@ -591,7 +587,7 @@ export function buildClientDetail(clientId: string) {
       id: "created",
       action: "client.create",
       title: "Cliente criado",
-      subtitle: `Plano ${c.plan === "starter" ? "Starter" : c.plan === "pro" ? "Pro" : "Enterprise"} · ${c.management === "engemase" ? "gerenciado pela Engemase" : "autogestão"}`,
+      subtitle: `Plano ${c.plan === "starter" ? "Starter" : c.plan === "pro" ? "Pro" : "Enterprise"} · ${plural(c.limits.machines, "máquina contratada", "máquinas contratadas")}`,
       at: `${date(c.createdAt)} ${time(c.createdAt)}`,
     })
   }
@@ -621,7 +617,6 @@ export function buildClientDetail(clientId: string) {
       state: c.state,
       status: c.status,
       plan: c.plan,
-      management: c.management,
       limits: c.limits,
       contactName: c.contactName,
       contactEmail: c.contactEmail,

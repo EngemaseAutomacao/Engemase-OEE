@@ -3,8 +3,8 @@
 import { useState } from "react"
 import { InfoIcon, LockIcon, MailCheckIcon, ShieldAlertIcon, TriangleAlertIcon } from "lucide-react"
 
-import type { ClientRole } from "@/lib/mock/types"
-import { CLIENT_ROLE_DESCRIPTION, CLIENT_ROLE_LABEL } from "@/lib/roles"
+import type { ClientRole, MemberScope, MemberScopeKind } from "@/lib/mock/types"
+import { CLIENT_ROLE_DESCRIPTION, CLIENT_ROLE_LABEL, SCOPE_KIND_LABEL } from "@/lib/roles"
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -13,13 +13,15 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import type { ClientUserRow, SettingsUnit } from "@/components/settings/types"
+import type { ClientUserRow, SettingsMachine, SettingsUnit } from "@/components/settings/types"
 
 export const ROLE_ORDER: ClientRole[] = ["client_admin", "engineer", "supervisor", "operator", "viewer"]
 
 /** Observações de docs/15 que complementam a descrição curta de cada papel. */
 const ROLE_NOTE: Partial<Record<ClientRole, string>> = {
-  client_admin: "Sempre com o cliente inteiro. Só o admin concede papéis.",
+  client_admin: "Sempre com o cliente inteiro. Só o admin concede papéis. Unidades, máquinas, turnos e demais cadastros são configurados pela Engemase.",
+  engineer: "Não edita gateways, conexões nem tags: quem configura é a equipe Engemase.",
+  supervisor: "Turnos, produtos e motivos de parada são cadastrados pela Engemase; peça pelo suporte.",
   operator: "Para quem aponta no próprio aparelho (ex.: líder de linha). Operadores do chão usam o tablet pareado e não precisam de conta.",
   viewer: "TV e Andon não usam conta de pessoa: pareie um terminal em Configurações › Terminais.",
 }
@@ -28,8 +30,14 @@ export interface UserFormValue {
   name: string
   email: string
   role: ClientRole
-  unitScope: "all" | string[]
+  scope: MemberScope
 }
+
+const SCOPE_OPTIONS: { v: MemberScopeKind; hint: string }[] = [
+  { v: "all", hint: "Todas as unidades e máquinas, inclusive as criadas no futuro" },
+  { v: "units", hint: "Só as unidades escolhidas" },
+  { v: "machines", hint: "Só as máquinas escolhidas" },
+]
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
@@ -38,6 +46,7 @@ export function UserDialog({
   onOpenChange,
   editing,
   units,
+  machines,
   existingEmails,
   isLastAdmin,
   seatsLeft,
@@ -49,6 +58,7 @@ export function UserDialog({
   /** Usuário em edição; `null` = adicionar. */
   editing: ClientUserRow | null
   units: SettingsUnit[]
+  machines: SettingsMachine[]
   existingEmails: string[]
   isLastAdmin: boolean
   seatsLeft: number
@@ -63,6 +73,7 @@ export function UserDialog({
             key={editing?.id ?? "new"}
             editing={editing}
             units={units}
+            machines={machines}
             existingEmails={existingEmails}
             isLastAdmin={isLastAdmin}
             seatsLeft={seatsLeft}
@@ -79,6 +90,7 @@ export function UserDialog({
 function UserForm({
   editing,
   units,
+  machines,
   existingEmails,
   isLastAdmin,
   seatsLeft,
@@ -88,6 +100,7 @@ function UserForm({
 }: {
   editing: ClientUserRow | null
   units: SettingsUnit[]
+  machines: SettingsMachine[]
   existingEmails: string[]
   isLastAdmin: boolean
   seatsLeft: number
@@ -98,14 +111,26 @@ function UserForm({
   const [name, setName] = useState(editing?.name ?? "")
   const [email, setEmail] = useState(editing?.email ?? "")
   const [role, setRole] = useState<ClientRole>(editing?.role ?? "supervisor")
-  const [scopeMode, setScopeMode] = useState<"all" | "units">(editing && editing.unitScope !== "all" ? "units" : "all")
-  const [selected, setSelected] = useState<string[]>(editing && editing.unitScope !== "all" ? editing.unitScope : [])
+  const [scopeMode, setScopeMode] = useState<MemberScopeKind>(editing?.scope.kind ?? "all")
+  const [selectedUnits, setSelectedUnits] = useState<string[]>(editing?.scope.kind === "units" ? editing.scope.unitIds : [])
+  const [selectedMachines, setSelectedMachines] = useState<string[]>(editing?.scope.kind === "machines" ? editing.scope.machineIds : [])
   const [touched, setTouched] = useState(false)
 
   const isEdit = editing !== null
   const forcedAll = role === "client_admin"
-  const effectiveScope: "all" | string[] = forcedAll || scopeMode === "all" ? "all" : selected
+  const effectiveScope: MemberScope =
+    forcedAll || scopeMode === "all"
+      ? { kind: "all" }
+      : scopeMode === "units"
+        ? { kind: "units", unitIds: selectedUnits }
+        : { kind: "machines", machineIds: selectedMachines }
   const emailNorm = email.trim().toLowerCase()
+  const scopeError =
+    effectiveScope.kind === "units" && effectiveScope.unitIds.length === 0
+      ? "Selecione ao menos uma unidade. Nenhuma unidade = nenhum acesso."
+      : effectiveScope.kind === "machines" && effectiveScope.machineIds.length === 0
+        ? "Selecione ao menos uma máquina. Nenhuma máquina = nenhum acesso."
+        : null
 
   const errors = {
     name: !isEdit && name.trim().length < 3 ? "Informe o nome completo." : null,
@@ -116,7 +141,7 @@ function UserForm({
         : existingEmails.includes(emailNorm)
           ? "Já existe uma pessoa com esse e-mail neste cliente."
           : null,
-    scope: effectiveScope !== "all" && effectiveScope.length === 0 ? "Selecione ao menos uma unidade. Nenhuma unidade = nenhum acesso." : null,
+    scope: scopeError,
     seats: !isEdit && seatsLeft <= 0 ? "Limite de usuários do plano atingido." : null,
   }
   const valid = !errors.name && !errors.email && !errors.scope && !errors.seats
@@ -125,17 +150,20 @@ function UserForm({
     e.preventDefault()
     setTouched(true)
     if (!valid) return
-    onSubmit({ name: name.trim(), email: emailNorm, role, unitScope: effectiveScope })
+    onSubmit({ name: name.trim(), email: emailNorm, role, scope: effectiveScope })
   }
 
-  const toggleUnit = (id: string, on: boolean) => setSelected((s) => (on ? [...new Set([...s, id])] : s.filter((x) => x !== id)))
+  const toggle = (list: string[], id: string, on: boolean) => (on ? [...new Set([...list, id])] : list.filter((x) => x !== id))
+  const toggleUnit = (id: string, on: boolean) => setSelectedUnits((s) => toggle(s, id, on))
+  const toggleMachine = (id: string, on: boolean) => setSelectedMachines((s) => toggle(s, id, on))
+  const machineGroups = units.map((u) => ({ unit: u, machines: machines.filter((m) => m.unitId === u.id) })).filter((g) => g.machines.length > 0)
 
   return (
     <form onSubmit={submit} className="grid gap-5" noValidate>
       <DialogHeader>
-        <DialogTitle>{isEdit ? `Alterar papel e unidades · ${editing.name}` : "Adicionar usuário"}</DialogTitle>
+        <DialogTitle>{isEdit ? `Alterar papel e escopo · ${editing.name}` : "Adicionar usuário"}</DialogTitle>
         <DialogDescription>
-          {isEdit ? "A mudança vale no próximo carregamento de página da pessoa e fica registrada na auditoria." : `A pessoa passa a acessar ${clientName} com o papel e as unidades escolhidos.`}
+          {isEdit ? "A mudança vale no próximo carregamento de página da pessoa e fica registrada na auditoria." : `A pessoa passa a acessar ${clientName} com o papel e o escopo escolhidos.`}
         </DialogDescription>
       </DialogHeader>
 
@@ -204,19 +232,17 @@ function UserForm({
       </fieldset>
 
       <fieldset className="grid gap-2">
-        <legend className="mb-2 text-sm font-medium">Unidades que a pessoa vê</legend>
+        <legend className="mb-2 text-sm font-medium">O que a pessoa vê (escopo)</legend>
         {forcedAll ? (
           <p className="flex items-center gap-2 rounded-xl border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
             <LockIcon className="size-3.5 shrink-0" />
-            Admin do cliente sempre tem acesso a todas as unidades ({units.length}).
+            Admin do cliente sempre tem acesso ao cliente inteiro ({units.length} {units.length === 1 ? "unidade" : "unidades"}, {machines.length}{" "}
+            {machines.length === 1 ? "máquina" : "máquinas"}).
           </p>
         ) : (
           <>
-            <RadioGroup value={scopeMode} onValueChange={(v) => setScopeMode(v as "all" | "units")} className="grid gap-2 sm:grid-cols-2">
-              {[
-                { v: "all", title: "Todas as unidades", hint: "Inclui unidades criadas no futuro" },
-                { v: "units", title: "Somente algumas unidades", hint: "Relatórios e totais mostram só essas unidades" },
-              ].map((o) => (
+            <RadioGroup value={scopeMode} onValueChange={(v) => setScopeMode(v as MemberScopeKind)} className="grid gap-2 sm:grid-cols-3">
+              {SCOPE_OPTIONS.map((o) => (
                 <Label
                   key={o.v}
                   htmlFor={`scope-${o.v}`}
@@ -227,7 +253,7 @@ function UserForm({
                 >
                   <RadioGroupItem id={`scope-${o.v}`} value={o.v} className="mt-0.5" />
                   <span className="grid gap-0.5">
-                    <span className="text-sm font-semibold">{o.title}</span>
+                    <span className="text-sm font-semibold">{SCOPE_KIND_LABEL[o.v]}</span>
                     <span className="text-xs text-muted-foreground">{o.hint}</span>
                   </span>
                 </Label>
@@ -237,13 +263,39 @@ function UserForm({
               <div className="grid gap-2 rounded-xl bg-muted/50 p-3 sm:grid-cols-2">
                 {units.map((u) => (
                   <Label key={u.id} htmlFor={`unit-${u.id}`} className="flex cursor-pointer items-center gap-2.5 rounded-lg bg-card px-3 py-2 font-normal">
-                    <Checkbox id={`unit-${u.id}`} checked={selected.includes(u.id)} onCheckedChange={(c) => toggleUnit(u.id, c === true)} />
+                    <Checkbox id={`unit-${u.id}`} checked={selectedUnits.includes(u.id)} onCheckedChange={(c) => toggleUnit(u.id, c === true)} />
                     <span className="text-sm">{u.name}</span>
                   </Label>
                 ))}
               </div>
             )}
-            {errors.scope && (touched || scopeMode === "units") && (
+            {scopeMode === "machines" && (
+              <div className="grid gap-3 rounded-xl bg-muted/50 p-3">
+                <p className="text-xs text-muted-foreground">
+                  {selectedMachines.length} de {machines.length} {machines.length === 1 ? "máquina selecionada" : "máquinas selecionadas"}. OEE de linha e de unidade,
+                  relatórios e exportações somam só as máquinas escolhidas. Máquinas novas não entram sozinhas.
+                </p>
+                {machineGroups.map((g) => (
+                  <div key={g.unit.id} className="grid gap-1.5">
+                    <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{g.unit.name}</span>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {g.machines.map((m) => (
+                        <Label key={m.id} htmlFor={`machine-${m.id}`} className="flex cursor-pointer items-center gap-2.5 rounded-lg bg-card px-3 py-2 font-normal">
+                          <Checkbox id={`machine-${m.id}`} checked={selectedMachines.includes(m.id)} onCheckedChange={(c) => toggleMachine(m.id, c === true)} />
+                          <span className="grid min-w-0 leading-tight">
+                            <span className="truncate text-sm">{m.name}</span>
+                            <span className="truncate text-[11px] text-muted-foreground">
+                              {m.code} · {m.lineName}
+                            </span>
+                          </span>
+                        </Label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {errors.scope && (touched || scopeMode !== "all") && (
               <p className="flex items-center gap-1.5 text-xs text-destructive">
                 <TriangleAlertIcon className="size-3.5" />
                 {errors.scope}
@@ -275,7 +327,7 @@ function UserForm({
       {isEdit && (
         <p className="flex items-start gap-2 text-xs text-muted-foreground">
           <InfoIcon className="mt-0.5 size-3.5 shrink-0" />
-          Reduzir as unidades remove imediatamente o acesso a dashboards, relatórios e exportações das unidades retiradas.
+          Reduzir o escopo remove imediatamente o acesso a dashboards, relatórios e exportações das unidades ou máquinas retiradas.
         </p>
       )}
 

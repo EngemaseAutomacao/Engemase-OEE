@@ -2,7 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { PlusIcon } from "lucide-react"
 
-import { getClientBySlug, getDevice, getGateways, getLines, getMachines, getTags, getUnits } from "@/lib/mock"
+import { getClientBySlug, getConfigAccess, getDevice, getGateways, getLines, getMachines, getTags, getUnits } from "@/lib/mock"
 import { Button } from "@/components/ui/button"
 import {
   MachineRegistry,
@@ -12,6 +12,7 @@ import {
   type RegistryLine,
   type RegistryUnit,
 } from "@/components/config/machine-registry"
+import { ConfigAccessProvider, EngemaseManagedNote, EngemaseOnlyChip } from "@/components/config/engemase-managed"
 import { serialPortsFor } from "@/components/config/labels"
 import { PageTitle } from "@/components/refresh/page-title"
 
@@ -53,18 +54,27 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/maqu
     }
   })
 
+  const access = getConfigAccess(client.id)
+
   return (
+    <ConfigAccessProvider canEdit={access.canConfigure}>
     <div className="flex flex-col gap-5 p-4 md:p-6">
+      <EngemaseManagedNote clientSlug={client.slug} subject="Máquinas, conexões com os CLPs e sinais" />
       <PageTitle
         title="Cadastro de máquinas"
         description="Identificação, conexão Modbus com o CLP, modo de estado e ciclo ideal de cada máquina."
         actions={
-          <Button asChild>
-            <Link href={`/${client.slug}/config/maquinas/nova`}>
-              <PlusIcon />
-              Nova máquina
-            </Link>
-          </Button>
+          access.canConfigure && (
+            <>
+              <EngemaseOnlyChip />
+              <Button asChild>
+                <Link href={`/${client.slug}/config/maquinas/nova`}>
+                  <PlusIcon />
+                  Nova máquina
+                </Link>
+              </Button>
+            </>
+          )
         }
       />
       <MachineRegistry
@@ -76,5 +86,6 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/maqu
         machineLimit={client.limits.machines}
       />
     </div>
+    </ConfigAccessProvider>
   )
 }

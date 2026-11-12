@@ -109,7 +109,6 @@ const COMMISSIONING = [
 export function NewMachineWizard({
   clientSlug,
   clientName,
-  managedByEngemase,
   units,
   lines,
   gateways,
@@ -122,7 +121,6 @@ export function NewMachineWizard({
 }: {
   clientSlug: string
   clientName: string
-  managedByEngemase: boolean
   units: WizardUnit[]
   lines: WizardLine[]
   gateways: WizardGateway[]
@@ -367,8 +365,10 @@ export function NewMachineWizard({
     },
     {
       id: "plan",
-      label: "Limite do plano",
-      detail: atLimit ? `${machineCount} de ${machineLimit} máquinas: limite atingido.` : `Ficará com ${machineCount + 1} de ${machineLimit} máquinas.`,
+      label: "Máquinas contratadas",
+      detail: atLimit
+        ? `${machineCount} de ${machineLimit} máquinas contratadas: todas em uso.`
+        : `Ficará com ${machineCount + 1} de ${machineLimit} máquinas contratadas (cobrança por máquina).`,
       status: atLimit ? "error" : "ok",
     },
   ]
@@ -540,9 +540,10 @@ export function NewMachineWizard({
                 {atLimit && (
                   <Alert variant="destructive">
                     <ClipboardListIcon />
-                    <AlertTitle>Limite do plano atingido</AlertTitle>
+                    <AlertTitle>Todas as máquinas contratadas estão em uso</AlertTitle>
                     <AlertDescription>
-                      {clientName} já usa {machineCount} de {machineLimit} máquinas. Desative uma máquina ou fale com a Engemase para ampliar o plano.
+                      {clientName} já usa {machineCount} de {machineLimit} máquinas contratadas. Desative uma máquina ou amplie o contrato (a assinatura é cobrada por
+                      máquina).
                     </AlertDescription>
                   </Alert>
                 )}
@@ -596,7 +597,7 @@ export function NewMachineWizard({
 
       {/* Lateral: resumo e checklist de comissionamento */}
       <aside className="grid gap-4 md:grid-cols-2 xl:sticky xl:top-20 xl:grid-cols-1">
-        <SectionCard title="Resumo" description={managedByEngemase ? "Cliente gerenciado pela Engemase" : "Autogestão pelo cliente"}>
+        <SectionCard title="Resumo" description="Cadastro feito pela equipe Engemase">
           <dl className="grid gap-2.5 text-xs">
             {[
               { k: "Máquina", v: ident.name.trim() ? `${ident.name.trim()}${ident.code ? ` · ${ident.code.toUpperCase()}` : ""}` : "—" },
@@ -616,7 +617,7 @@ export function NewMachineWizard({
             ))}
           </dl>
           <div className="mt-4 border-t pt-4">
-            <UsageMeter item={{ label: "Máquinas do plano", used: machineCount, limit: machineLimit, icon: FactoryIcon }} />
+            <UsageMeter item={{ label: "Máquinas em uso / contratadas", used: machineCount, limit: machineLimit, icon: FactoryIcon }} />
           </div>
         </SectionCard>
 

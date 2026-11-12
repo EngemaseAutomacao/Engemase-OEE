@@ -1,20 +1,20 @@
 "use client"
 
 import { useState } from "react"
+import { InfoIcon } from "lucide-react"
 import { toast } from "sonner"
 
-import type { ClientManagement, ClientPlan } from "@/lib/mock/types"
+import type { ClientPlan } from "@/lib/mock/types"
 import { PLAN_LABEL } from "@/lib/roles"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { Switch } from "@/components/ui/switch"
 import { useClientDetail, type EditableClient } from "./client-detail-context"
-import { MANAGEMENT_HINT, PLATFORM_HOST, isEmail, type PlanLimits } from "./labels"
+import { BILLING_NOTE, ENGEMASE_CONFIG_NOTE, PLATFORM_HOST, isEmail, type PlanLimits } from "./labels"
 
-/** Edição dos dados do cliente que só a plataforma grava (nome, contato, plano, limites, gestão). */
+/** Edição dos dados do cliente que só a plataforma grava (nome, contato, plano e máquinas contratadas, limites). */
 export function ClientEditSheet({
   open,
   formKey,
@@ -55,8 +55,8 @@ function EditForm({ slug, cnpj, onDone }: { slug: string; cnpj: string; onDone: 
     if (form.limits.machines < 1 || form.limits.gateways < 1 || form.limits.users < 1 || form.limits.retentionMonths < 6) return setError("Revise os limites do plano.")
     const changes: string[] = []
     if (form.plan !== info.plan) changes.push(`plano ${PLAN_LABEL[info.plan]} → ${PLAN_LABEL[form.plan]}`)
-    if (JSON.stringify(form.limits) !== JSON.stringify(info.limits)) changes.push("limites")
-    if (form.management !== info.management) changes.push(form.management === "engemase" ? "passou a ser gerenciado pela Engemase" : "passou para autogestão")
+    if (form.limits.machines !== info.limits.machines) changes.push(`máquinas contratadas ${info.limits.machines} → ${form.limits.machines}`)
+    else if (JSON.stringify(form.limits) !== JSON.stringify(info.limits)) changes.push("limites")
     if (form.name !== info.name || form.legalName !== info.legalName) changes.push("dados cadastrais")
     if (form.contactName !== info.contactName || form.contactEmail !== info.contactEmail) changes.push("contato")
     setInfo({ ...form, name: form.name.trim(), legalName: form.legalName.trim() })
@@ -104,7 +104,7 @@ function EditForm({ slug, cnpj, onDone }: { slug: string; cnpj: string; onDone: 
         </div>
 
         <div className="grid gap-3">
-          <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Plano e limites</h3>
+          <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Plano e máquinas contratadas</h3>
           <div className="grid gap-1.5">
             <Label htmlFor="ed-plan">Plano</Label>
             <Select value={form.plan} onValueChange={(v) => set({ plan: v as ClientPlan })}>
@@ -123,7 +123,7 @@ function EditForm({ slug, cnpj, onDone }: { slug: string; cnpj: string; onDone: 
           <div className="grid grid-cols-2 gap-3">
             {(
               [
-                ["machines", "Máquinas"],
+                ["machines", "Máquinas contratadas"],
                 ["gateways", "Gateways"],
                 ["users", "Usuários"],
                 ["retentionMonths", "Retenção (meses)"],
@@ -135,15 +135,16 @@ function EditForm({ slug, cnpj, onDone }: { slug: string; cnpj: string; onDone: 
               </div>
             ))}
           </div>
+          <p className="text-xs text-muted-foreground">{BILLING_NOTE}</p>
         </div>
 
-        <label htmlFor="ed-managed" className="flex cursor-pointer items-start justify-between gap-4 rounded-xl border p-3">
+        <div className="flex items-start gap-3 rounded-xl border p-3">
+          <InfoIcon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
           <span className="min-w-0">
-            <span className="block text-sm font-semibold">Gerenciado pela Engemase</span>
-            <span className="mt-0.5 block text-xs text-muted-foreground">{MANAGEMENT_HINT[form.management]}</span>
+            <span className="block text-sm font-semibold">Configurado pela Engemase</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">{ENGEMASE_CONFIG_NOTE}</span>
           </span>
-          <Switch id="ed-managed" checked={form.management === "engemase"} onCheckedChange={(v) => set({ management: (v ? "engemase" : "self") as ClientManagement })} />
-        </label>
+        </div>
 
         {error && <p className="text-sm font-medium text-destructive">{error}</p>}
       </div>

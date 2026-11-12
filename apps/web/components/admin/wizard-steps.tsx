@@ -10,10 +10,10 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
 import { SoftBadge } from "./bits"
 import {
-  MANAGEMENT_HINT,
+  BILLING_NOTE,
+  ENGEMASE_CONFIG_NOTE,
   PLAN_DEFAULTS,
   PLATFORM_HOST,
   RESERVED_SLUGS,
@@ -194,7 +194,7 @@ export function StepCompany({ data, errors, patch, ctx }: { data: WizardData; er
 
       {/* Plano */}
       <div className="grid gap-3">
-        <SectionLabel>Plano e limites</SectionLabel>
+        <SectionLabel>Plano e máquinas contratadas</SectionLabel>
         <div role="radiogroup" aria-label="Plano" className="grid gap-2 sm:grid-cols-3">
           {(Object.keys(PLAN_DEFAULTS) as ClientPlan[]).map((p) => {
             const active = data.plan === p
@@ -217,7 +217,7 @@ export function StepCompany({ data, errors, patch, ctx }: { data: WizardData; er
                 </span>
                 <span className="text-xs text-muted-foreground">{d.summary}</span>
                 <span className="text-[11px] font-medium text-muted-foreground tabular-nums">
-                  {d.machines} máquinas · {d.gateways} gateways · {d.users} usuários
+                  Sugestão: {d.machines} máquinas · {d.gateways} gateways · {d.users} usuários
                 </span>
               </button>
             )
@@ -226,7 +226,7 @@ export function StepCompany({ data, errors, patch, ctx }: { data: WizardData; er
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {(
             [
-              ["machines", "Máquinas"],
+              ["machines", "Máquinas contratadas"],
               ["gateways", "Gateways"],
               ["users", "Usuários"],
               ["retentionMonths", "Retenção (meses)"],
@@ -246,17 +246,19 @@ export function StepCompany({ data, errors, patch, ctx }: { data: WizardData; er
             </FormField>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground">Os limites bloqueiam a criação de máquinas, gateways e usuários além do contratado. Só a plataforma altera plano e limites.</p>
+        <p className="text-xs text-muted-foreground">
+          {BILLING_NOTE} Os limites bloqueiam a criação de máquinas, gateways e usuários além do contratado. Só a plataforma altera plano e limites.
+        </p>
       </div>
 
-      {/* Gestão */}
-      <label htmlFor="managed" className="flex cursor-pointer items-start justify-between gap-4 rounded-xl border p-4">
+      {/* Quem configura (D12/D13) */}
+      <div className="flex items-start gap-3 rounded-xl border p-4">
+        <InfoIcon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
         <span className="min-w-0">
-          <span className="block text-sm font-semibold">Gerenciado pela Engemase</span>
-          <span className="mt-0.5 block text-xs text-muted-foreground">{data.managed ? MANAGEMENT_HINT.engemase : MANAGEMENT_HINT.self}</span>
+          <span className="block text-sm font-semibold">Configurado pela Engemase</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">{ENGEMASE_CONFIG_NOTE}</span>
         </span>
-        <Switch id="managed" checked={data.managed} onCheckedChange={(v) => patch({ managed: v })} />
-      </label>
+      </div>
     </div>
   )
 }
@@ -459,9 +461,10 @@ export function StepReview({ data, goTo }: { data: WizardData; goTo: (step: numb
           </span>
         </Item>
         <Item label="Plano">
-          {PLAN_LABEL[data.plan]} · {data.limits.machines} máquinas · {data.limits.gateways} gateways · {data.limits.users} usuários · {data.limits.retentionMonths} meses
+          {PLAN_LABEL[data.plan]} · {data.limits.machines} máquinas contratadas (cobrança por máquina) · {data.limits.gateways} gateways · {data.limits.users} usuários ·{" "}
+          {data.limits.retentionMonths} meses
         </Item>
-        <Item label="Gestão">{data.managed ? "Gerenciado pela Engemase" : "Autogestão"}</Item>
+        <Item label="Configuração">Equipe Engemase (o admin do cliente gerencia os usuários)</Item>
       </ReviewBlock>
 
       <ReviewBlock title="Primeira unidade" onEdit={() => goTo(1)}>

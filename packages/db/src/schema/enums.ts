@@ -78,11 +78,19 @@ export type ClientRole = (typeof CLIENT_ROLES)[number]
 export const PLATFORM_ROLES = ["super_admin", "support", "field_engineer"] as const
 export type PlatformRole = (typeof PLATFORM_ROLES)[number]
 
-/** Escopo do vínculo: cliente inteiro ou lista de unidades ("fail-closed"). */
-export const ACCESS_SCOPES = ["all", "units"] as const
+/**
+ * Escopo do vínculo (docs/15, seção 2): cliente inteiro, lista de unidades ou lista de máquinas
+ * (D11, 12/11/2026). "Fail-closed": `units` ou `machines` sem nenhuma linha em `member_unit` /
+ * `member_machine` = nenhum acesso.
+ */
+export const ACCESS_SCOPES = ["all", "units", "machines"] as const
 export type AccessScope = (typeof ACCESS_SCOPES)[number]
 
-export const SUPPORT_GRANT_STATUSES = ["requested", "active", "denied", "ended", "expired"] as const
+/**
+ * Estados da concessão de suporte. Sem "pedida" nem "recusada": o acesso da Engemase aos dados do
+ * cliente é sempre liberado com registro (D5, 12/11/2026), então a concessão já nasce `active`.
+ */
+export const SUPPORT_GRANT_STATUSES = ["active", "ended", "expired"] as const
 export type SupportGrantStatus = (typeof SUPPORT_GRANT_STATUSES)[number]
 
 export const TERMINAL_KINDS = ["tv", "tablet"] as const

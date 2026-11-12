@@ -49,7 +49,6 @@ export default async function Page({ params }: PageProps<"/admin/clientes/[clien
         contactName: c.contactName,
         contactEmail: c.contactEmail,
         plan: c.plan,
-        management: c.management,
         limits: c.limits,
       }}
     >

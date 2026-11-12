@@ -20,8 +20,8 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
-import type { ClientRole, UserStatus } from "@/lib/mock/types"
-import { CLIENT_ROLE_LABEL, USER_STATUS_LABEL } from "@/lib/roles"
+import type { ClientRole, MemberScope, UserStatus } from "@/lib/mock/types"
+import { CLIENT_ROLE_LABEL, USER_STATUS_LABEL, scopeSummary } from "@/lib/roles"
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -41,7 +41,7 @@ import { Ring } from "@/components/dashboard/ring"
 import { SectionCard } from "@/components/dashboard/section-card"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { ConfirmAction, InitialsAvatar, SettingsTitle, SoftBadge, plural, type SoftTone } from "@/components/settings/bits"
-import type { ClientUserRow, SettingsUnit } from "@/components/settings/types"
+import type { ClientUserRow, SettingsMachine, SettingsUnit } from "@/components/settings/types"
 import { ROLE_ORDER, UserDialog, type UserFormValue } from "@/components/settings/user-dialog"
 
 const ROLE_TONE: Record<ClientRole, SoftTone> = {
@@ -59,13 +59,18 @@ export function UsersManager({
   clientSlug,
   seatLimit,
   units,
+  machines,
   initialUsers,
+  canManage,
 }: {
   clientName: string
   clientSlug: string
   seatLimit: number
   units: SettingsUnit[]
+  machines: SettingsMachine[]
   initialUsers: ClientUserRow[]
+  /** Admin do cliente (ou super admin da Engemase) gerencia os usuários; os demais só veem (D12). */
+  canManage: boolean
 }) {
   const [users, setUsers] = useState(initialUsers)
   const [query, setQuery] = useState("")
@@ -75,6 +80,9 @@ export function UsersManager({
   const [deactivating, setDeactivating] = useState<ClientUserRow | null>(null)
 
   const unitName = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units])
+  const machineCode = useMemo(() => new Map(machines.map((m) => [m.id, m.code])), [machines])
+  const scopeText = (scope: MemberScope) =>
+    scope.kind === "units" && scope.unitIds.length > 0 ? scope.unitIds.map((id) => unitName.get(id) ?? id).join(", ") : scopeSummary(scope).toLowerCase()
   const admins = users.filter((u) => u.role === "client_admin" && u.status !== "disabled")
   const isLastAdmin = (u: ClientUserRow) => u.role === "client_admin" && u.status !== "disabled" && admins.length <= 1
 
@@ -94,9 +102,8 @@ export function UsersManager({
   const submit = (v: UserFormValue) => {
     const editing = dialog?.editing
     if (editing) {
-      setUsers((list) => list.map((u) => (u.id === editing.id ? { ...u, role: v.role, unitScope: v.unitScope } : u)))
-      const scope = v.unitScope === "all" ? "todas as unidades" : v.unitScope.map((id) => unitName.get(id)).join(", ")
-      toast.success(`Acesso de ${editing.name} atualizado`, { description: `${CLIENT_ROLE_LABEL[v.role]} · ${scope}. Registrado na auditoria.` })
+      setUsers((list) => list.map((u) => (u.id === editing.id ? { ...u, role: v.role, scope: v.scope } : u)))
+      toast.success(`Acesso de ${editing.name} atualizado`, { description: `${CLIENT_ROLE_LABEL[v.role]} · ${scopeText(v.scope)}. Registrado na auditoria.` })
     } else {
       const row: ClientUserRow = {
         id: `usr_new_${users.length + 1}`,
@@ -104,7 +111,7 @@ export function UsersManager({
         email: v.email,
         username: null,
         role: v.role,
-        unitScope: v.unitScope,
+        scope: v.scope,
         status: "invited",
         twoFactor: false,
         lastLogin: "nunca",
@@ -137,7 +144,7 @@ export function UsersManager({
     <>
       <SettingsTitle
         title="Usuários"
-        description={`Quem acessa ${clientName}, com qual papel e em quais unidades. Terminais (TV e tablets) ficam em uma tela própria.`}
+        description={`Quem acessa ${clientName}, com qual papel e escopo (todo o cliente, unidades ou máquinas). O admin do cliente gerencia os usuários; terminais (TV e tablets) ficam em uma tela própria.`}
         actions={
           <>
             <Button variant="outline" asChild>
@@ -146,10 +153,12 @@ export function UsersManager({
                 Terminais
               </Link>
             </Button>
-            <Button onClick={() => setDialog({ editing: null })}>
-              <UserPlusIcon />
-              Adicionar usuário
-            </Button>
+            {canManage && (
+              <Button onClick={() => setDialog({ editing: null })}>
+                <UserPlusIcon />
+                Adicionar usuário
+              </Button>
+            )}
           </>
         }
       />
@@ -182,8 +191,18 @@ export function UsersManager({
           hint="Opcional para o cliente; obrigatório na Engemase"
           aside={<Ring value={active.length ? withTwoFactor / active.length : 0} size={52} stroke={6} color="#0e9384" />}
         />
-        <StatCard icon={CrownIcon} tone="navy" label="Admins do cliente" value={admins.length} hint={admins.length <= 1 ? "Recomendado: ao menos 2" : "Gerenciam usuários e políticas"} />
+        <StatCard icon={CrownIcon} tone="navy" label="Admins do cliente" value={admins.length} hint={admins.length <= 1 ? "Recomendado: ao menos 2" : "Gerenciam os usuários do cliente"} />
       </div>
+
+      {!canManage && (
+        <Alert>
+          <ShieldCheckIcon />
+          <AlertTitle>Só leitura</AlertTitle>
+          <AlertDescription>
+            <p>Quem convida pessoas, muda papéis e escopos ou desativa acessos é o admin do cliente. Fale com ele para pedir uma mudança.</p>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {sharedAccounts.length > 0 && (
         <Alert className="border-[#e96549]/30 bg-[#e96549]/5">
@@ -231,7 +250,7 @@ export function UsersManager({
                 <tr className="border-y bg-muted/40 text-left text-xs text-muted-foreground">
                   <th className="py-2.5 pr-3 pl-5 font-medium">Pessoa</th>
                   <th className="px-3 py-2.5 font-medium">Papel</th>
-                  <th className="px-3 py-2.5 font-medium">Unidades</th>
+                  <th className="px-3 py-2.5 font-medium">Escopo</th>
                   <th className="px-3 py-2.5 font-medium">Situação</th>
                   <th className="px-3 py-2.5 font-medium">2FA</th>
                   <th className="px-3 py-2.5 font-medium">Último acesso</th>
@@ -269,15 +288,22 @@ export function UsersManager({
                         <SoftBadge tone={ROLE_TONE[u.role]}>{CLIENT_ROLE_LABEL[u.role]}</SoftBadge>
                       </td>
                       <td className="px-3 py-3">
-                        {u.unitScope === "all" ? (
-                          <span className="text-xs font-medium">Todas</span>
-                        ) : (
+                        {u.scope.kind === "all" ? (
+                          <span className="text-xs font-medium">Todo o cliente</span>
+                        ) : u.scope.kind === "units" ? (
                           <div className="flex max-w-[220px] flex-wrap gap-1">
-                            {u.unitScope.map((id) => (
+                            {u.scope.unitIds.map((id) => (
                               <span key={id} className="rounded-md border bg-card px-1.5 py-0.5 text-[11px] whitespace-nowrap">
                                 {unitName.get(id) ?? id}
                               </span>
                             ))}
+                          </div>
+                        ) : (
+                          <div className="grid max-w-[220px] gap-0.5 leading-tight">
+                            <span className="text-xs font-medium">{scopeSummary(u.scope)}</span>
+                            <span className="truncate text-[11px] text-muted-foreground" title={u.scope.machineIds.map((id) => machineCode.get(id) ?? id).join(", ")}>
+                              {u.scope.machineIds.map((id) => machineCode.get(id) ?? id).join(", ")}
+                            </span>
                           </div>
                         )}
                       </td>
@@ -302,6 +328,7 @@ export function UsersManager({
                         {u.status === "invited" ? "Aguardando senha" : u.lastLogin}
                       </td>
                       <td className="py-3 pr-5 pl-3 text-right">
+                        {canManage && (
                         <UserMenu
                           user={u}
                           lastAdmin={lastAdmin}
@@ -312,6 +339,7 @@ export function UsersManager({
                           onReactivate={() => setStatus(u, "active")}
                           terminalsHref={`/${clientSlug}/config/terminais`}
                         />
+                        )}
                       </td>
                     </tr>
                   )
@@ -327,6 +355,7 @@ export function UsersManager({
         onOpenChange={(o) => !o && setDialog(null)}
         editing={dialog?.editing ?? null}
         units={units}
+        machines={machines}
         existingEmails={users.map((u) => (u.email ?? "").toLowerCase()).filter(Boolean)}
         isLastAdmin={dialog?.editing ? isLastAdmin(dialog.editing) : false}
         seatsLeft={seatLimit - seatsUsed}
@@ -441,7 +470,7 @@ function UserMenu({
         <DropdownMenuLabel className="truncate text-xs text-muted-foreground">{user.name}</DropdownMenuLabel>
         <DropdownMenuItem onSelect={onEdit} disabled={user.status === "disabled"}>
           <PencilIcon />
-          Alterar papel e unidades
+          Alterar papel e escopo
         </DropdownMenuItem>
         {user.status === "invited" && user.email && (
           <DropdownMenuItem onSelect={onResend}>

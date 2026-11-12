@@ -194,17 +194,51 @@ describe("FKs compostas entre tabelas de cliente", () => {
       ),
       FK_ERROR,
     )
-    const access = await t.client.query<{ id: string }>("SELECT id FROM member_access WHERE organization_id = $1", [
-      a.organizationId,
-    ])
     await expectDbError(
       asOwner("INSERT INTO member_unit (organization_id, member_access_id, unit_id) VALUES ($1, $2, $3)", [
         a.organizationId,
-        access.rows[0]?.id,
+        a.memberAccessId,
         b.unitId,
       ]),
       FK_ERROR,
     )
+  })
+
+  describe("escopo por máquina (member_machine, D11)", () => {
+    const linkMemberMachine =
+      "INSERT INTO member_machine (organization_id, member_access_id, machine_id) VALUES ($1, $2, $3)"
+
+    it("não liga o vínculo de A a uma máquina de B (nem declarando o cliente A, nem o B)", async () => {
+      // Declarando A: a máquina de B não existe como (id, A).
+      await expectDbError(
+        asOwner(linkMemberMachine, [a.organizationId, a.machineAccessId, b.machineId]),
+        /member_machine_machine_fk/,
+      )
+      // Declarando B: o vínculo de A não existe como (id, B).
+      await expectDbError(
+        asOwner(linkMemberMachine, [b.organizationId, a.machineAccessId, b.machineId]),
+        /member_machine_member_access_fk/,
+      )
+    })
+
+    it("também não liga pelo papel da aplicação dentro do cliente A (a FK vale mesmo com RLS)", async () => {
+      await expectDbError(
+        asTenant(t.client, a.organizationId, (tx) =>
+          tx.query(linkMemberMachine, [a.organizationId, a.machineAccessId, b.unlinkedMachineId]),
+        ),
+        /member_machine_machine_fk/,
+      )
+    })
+
+    it("máquina inexistente é recusada; a do próprio cliente funciona", async () => {
+      await expectDbError(
+        asOwner(linkMemberMachine, [a.organizationId, a.machineAccessId, randomUUID()]),
+        /member_machine_machine_fk/,
+      )
+      await asTenant(t.client, a.organizationId, (tx) =>
+        tx.query(linkMemberMachine, [a.organizationId, a.machineAccessId, a.unlinkedMachineId]),
+      )
+    })
   })
 
   it("acesso remoto: encaminhamento só para dispositivo cadastrado no gateway da sessão", async () => {

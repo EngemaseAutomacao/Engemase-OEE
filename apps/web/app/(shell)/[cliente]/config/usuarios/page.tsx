@@ -1,20 +1,32 @@
 import { notFound } from "next/navigation"
 
-import { getAuditLog, getClientBySlug, getClientUsers, getPlatformUsers, getRemoteAccessSessions, getUnits, nowMs, type Client } from "@/lib/mock"
+import {
+  getAuditLog,
+  getClientBySlug,
+  getClientUsers,
+  getConfigAccess,
+  getLines,
+  getMachines,
+  getPlatformUsers,
+  getRemoteAccessSessions,
+  getUnits,
+  nowMs,
+  type Client,
+} from "@/lib/mock"
 import { ago, date, dateTime, duration } from "@/lib/format"
 import { PLATFORM_ROLE_LABEL } from "@/lib/roles"
 import { EngemaseAccess } from "@/components/settings/engemase-access"
 import { RoleMatrix } from "@/components/settings/role-matrix"
-import type { ClientUserRow, EngemaseAccessRow } from "@/components/settings/types"
+import type { ClientUserRow, EngemaseAccessRow, SettingsMachine } from "@/components/settings/types"
 import { UsersManager } from "@/components/settings/users-manager"
 
 const HOUR = 3_600_000
 const iso = (ms: number) => new Date(ms).toISOString()
 
 /**
- * Acessos da Engemase visíveis ao cliente (docs/15 §3). No protótipo são derivados dos registros simulados:
- * super admin (sempre auditado), concessões de suporte (atendimentos do suporte neste cliente, prazo de até 4 h)
- * e atribuição do engenheiro de campo (clientes gerenciados pela Engemase).
+ * Acessos da Engemase visíveis ao cliente (docs/15 §3; decisão D5: sempre liberado, sempre registrado).
+ * No protótipo são derivados dos registros simulados: super admin (sempre auditado), atendimentos do
+ * suporte neste cliente (com chamado e prazo) e atribuição do engenheiro de campo (todo cliente, D13).
  * Na implementação real vêm de `support_access_grant` e `platform_assignment`.
  */
 function engemaseAccessFor(client: Client): EngemaseAccessRow[] {
@@ -70,14 +82,14 @@ function engemaseAccessFor(client: Client): EngemaseAccessRow[] {
       }
     }
 
-    if (role === "field_engineer" && client.management === "engemase") {
+    if (role === "field_engineer") {
       const start = Date.parse(client.createdAt)
       const end = start + 365 * 24 * HOUR
       rows.push({
         ...base,
         id: `ea_${p.id}_assign`,
         kind: "assignment",
-        reason: "Comissionamento: gateways, conexões Modbus, máquinas e tags",
+        reason: "Configuração do cliente: gateways, conexões Modbus, máquinas, tags e cadastros",
         ticket: null,
         ...period(start, end),
         startLabel: date(client.createdAt),
@@ -97,6 +109,14 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/usua
   if (!client) notFound()
 
   const units = getUnits(client.id).map((u) => ({ id: u.id, name: u.name }))
+  const lines = getLines(client.id)
+  const machines: SettingsMachine[] = getMachines(client.id).map((m) => ({
+    id: m.id,
+    name: m.name,
+    code: m.code,
+    unitId: m.unitId,
+    lineName: lines.find((l) => l.id === m.lineId)?.name ?? "—",
+  }))
   const users: ClientUserRow[] = getClientUsers(client.id).map((u) => {
     const m = u.memberships.find((x) => x.clientId === client.id)!
     return {
@@ -105,7 +125,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/usua
       email: u.email,
       username: u.username,
       role: m.role,
-      unitScope: m.unitScope,
+      scope: m.scope,
       status: u.status,
       twoFactor: u.twoFactor,
       lastLogin: ago(u.lastLoginAt),
@@ -114,14 +134,22 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/usua
     }
   })
 
-  const managed = client.management === "engemase"
+  const access = getConfigAccess(client.id)
 
   return (
     <div className="flex flex-col gap-5 p-4 md:p-6">
-      <UsersManager clientName={client.name} clientSlug={client.slug} seatLimit={client.limits.users} units={units} initialUsers={users} />
+      <UsersManager
+        clientName={client.name}
+        clientSlug={client.slug}
+        seatLimit={client.limits.users}
+        units={units}
+        machines={machines}
+        initialUsers={users}
+        canManage={access.canManageUsers}
+      />
       <div className="grid items-start gap-4 xl:grid-cols-2">
-        <EngemaseAccess clientSlug={client.slug} managedByEngemase={managed} initialPolicy="logged" initialRows={engemaseAccessFor(client)} />
-        <RoleMatrix managedByEngemase={managed} />
+        <EngemaseAccess clientSlug={client.slug} rows={engemaseAccessFor(client)} />
+        <RoleMatrix />
       </div>
     </div>
   )

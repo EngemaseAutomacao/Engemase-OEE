@@ -88,14 +88,15 @@ erDiagram
 | Tabela | Campos principais |
 |---|---|
 | `organization` | id, slug, nome, criado_em (tabela do Better Auth) |
-| `client_account` | organização (1:1), status, plano, limites, `managed_by_engemase` — só a plataforma grava ([15](15-multi-cliente-e-acesso.md#9-modelo-de-dados-acréscimos)) |
+| `client_account` | organização (1:1), status, plano, limites (`limits.machines` = máquinas contratadas: a cobrança é **por máquina**, D1), `managed_by_engemase` (ligado em todo cliente, D13) — só a plataforma grava ([15](15-multi-cliente-e-acesso.md#9-modelo-de-dados-acréscimos)) |
 | `user` | id, nome, e-mail, 2FA... |
 | `session` · `account` · `verification` | Tabelas padrão do Better Auth: sessões, credenciais (hash da senha) e verificações |
 | `member` | organization_id, user_id (tabela do Better Auth) |
-| `member_access` / `member_unit` | papel e escopo de unidades do vínculo (fail-closed) |
+| `member_access` | papel e escopo do vínculo: `all` (cliente inteiro), `units` ou `machines` (D11) |
+| `member_unit` / `member_machine` | unidades ou máquinas listadas no vínculo. **Fail-closed:** nenhuma listada = nenhum acesso |
 | `account_token` | tokens próprios de uso único (definir senha, verificar e-mail, pareamento), só hash |
 | `platform_assignment` / `platform_assignment_unit` | pessoa da Engemase designada a um cliente (motivo, validade, revogação) e as unidades do escopo ([15](15-multi-cliente-e-acesso.md)) |
-| `support_access_grant` | concessão temporária de acesso de suporte: motivo, chamado, início/fim, aprovado por |
+| `support_access_grant` | concessão temporária de acesso de suporte, aberta pela própria Engemase e ativa na hora, **sem aprovação do cliente** (D5): motivo, chamado, início/fim, encerrado por |
 
 **2. Ativos**
 
@@ -187,9 +188,9 @@ erDiagram
 
 - Modelo **"banco compartilhado, schema compartilhado"**, com `organization_id` em **todas** as tabelas de cliente, **inclusive as séries temporais** (desnormalizado a partir da máquina).
 - **RLS já no MVP, no nível do cliente:** `FORCE ROW LEVEL SECURITY` e política restritiva por `current_setting('app.org_id')`, definido com `set_config(..., true)` no início de cada transação; papel de banco da aplicação sem `BYPASSRLS`. Exige driver com transação interativa (`pg` com pool ou driver serverless via WebSocket).
-  - **Limite:** a RLS protege contra **bug do app** (consulta sem filtro, contexto de cliente esquecido), **não contra SQL arbitrário rodando com o papel da aplicação** (injeção de SQL): `app.org_id` é um parâmetro de sessão comum, que qualquer papel troca com `set_config`. Por isso todo SQL do app é parametrizado (Drizzle). Isolamento mais forte, se for preciso: cliente amarrado a um valor que o papel da aplicação não forja (assinado pelo servidor) ou papéis por cliente. Detalhes no README de `packages/db`.
+  - **Limite (aceito pelo dono do produto em 12/11/2026, D38):** a RLS protege contra **bug do app** (consulta sem filtro, contexto de cliente esquecido), **não contra SQL arbitrário rodando com o papel da aplicação** (injeção de SQL): `app.org_id` é um parâmetro de sessão comum, que qualquer papel troca com `set_config`. Por isso todo SQL do app é parametrizado (Drizzle). Isolamento mais forte, se for preciso: cliente amarrado a um valor que o papel da aplicação não forja (assinado pelo servidor) ou papéis por cliente. Detalhes no README de `packages/db`.
 - **Chaves estrangeiras compostas** `(id, organization_id)` entre tabelas filhas e vínculo explícito `gateway_machine`.
-- O escopo por unidade é aplicado na camada de acesso a dados (RLS por unidade avaliada depois).
+- O escopo por unidade ou por máquina (D11) é aplicado na camada de acesso a dados, inclusive nos agregados: OEE de linha e de unidade, relatórios e exportações somam só as máquinas permitidas (RLS por unidade avaliada depois).
 - Clientes grandes que exijam isolamento físico podem ganhar um **projeto Neon dedicado** no futuro, com o mesmo schema.
 - Detalhes e testes de isolamento: [15](15-multi-cliente-e-acesso.md#4-isolamento-de-dados-defesa-em-camadas).
 
@@ -197,15 +198,15 @@ erDiagram
 
 Estimativa para **100 máquinas**:
 
-| Tabela | Volume | Partição | Retenção sugerida |
+| Tabela | Volume | Partição | Retenção |
 |---|---|---|---|
-| `production_minute` | ~144 mil linhas/dia, ~52 milhões/ano, **~5 GB/ano** | Mensal (pg_partman) | 2 anos no detalhe por minuto. Depois disso, manter só `oee_hour`/`oee_shift` (ou arquivar em Parquet) |
+| `production_minute` | ~144 mil linhas/dia, ~52 milhões/ano, **~5 GB/ano** | Mensal (pg_partman) | **2 anos** no detalhe por minuto (D6). Depois disso, manter só `oee_hour`/`oee_shift` (ou arquivar em Parquet) |
 | `machine_state_event` | ~10–50 mil/dia | Mensal | Indefinida (pequena) |
 | `tag_sample` | Depende da config (deadband) | Diária ou semanal | 30–90 dias |
 | `oee_shift` | ~300/dia | — | Indefinida |
-| `audit_log` | Baixo | Anual | 5 anos |
+| `audit_log` | Baixo | Anual | **5 anos** (D6) |
 
-A retenção é configurável por organização e pode virar diferencial de plano.
+**Retenção decidida (D6, 12/11/2026):** dados por minuto por 2 anos e auditoria por 5 anos. As demais linhas da tabela continuam como sugestão. Retenção diferente por cliente ou por plano não foi decidida.
 
 ## Ambientes e migrações
 
@@ -214,6 +215,8 @@ A retenção é configurável por organização e pode virar diferencial de plan
 | Local | Postgres em Docker **ou** branch `dev` da Neon |
 | Preview (PR) | Branch Neon `preview/<branch>` criado automaticamente pela integração da Vercel, **a partir de um branch-semente com dados sintéticos** (nunca cópia da produção) |
 | Produção | Branch `main` da Neon |
+
+**Região (D7):** projeto Neon em AWS `sa-east-1` (São Paulo), junto das Functions da Vercel em `gru1`.
 
 - Migrações geradas pelo `drizzle-kit generate`, em **SQL versionado no repositório**.
 - O CI aplica as migrações no branch de preview a cada PR. No merge para `main`, o pipeline aplica em produção **antes** de promover o deploy.

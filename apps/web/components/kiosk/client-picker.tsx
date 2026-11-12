@@ -19,7 +19,7 @@ import {
 import { cn } from "@/lib/utils"
 import { pct } from "@/lib/format"
 import { CLIENT_STATUS_LABEL, PLAN_LABEL } from "@/lib/roles"
-import type { ClientManagement, ClientPlan, ClientStatus } from "@/lib/mock"
+import type { ClientPlan, ClientStatus } from "@/lib/mock"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
@@ -39,7 +39,8 @@ export interface ClientPickerItem {
   state: string
   status: ClientStatus
   plan: ClientPlan
-  management: ClientManagement
+  /** Máquinas contratadas (a assinatura é cobrada por máquina, D1). */
+  machinesContracted: number
   unitNames: string[]
   machines: number
   running: number
@@ -219,7 +220,7 @@ function ClientCard({ item }: { item: ClientPickerItem }) {
             <span aria-hidden>·</span>
             <span>Plano {PLAN_LABEL[item.plan]}</span>
             <span aria-hidden>·</span>
-            <span>{item.management === "engemase" ? "Gerenciado pela Engemase" : "Autogestão"}</span>
+            <span>{item.machinesContracted} máquinas contratadas</span>
           </div>
         </div>
         <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", STATUS_BADGE[item.status])}>

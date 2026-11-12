@@ -55,7 +55,7 @@ export default function Page() {
       state: c.state,
       status: c.status,
       plan: c.plan,
-      management: c.management,
+      machinesContracted: c.limits.machines,
       unitNames: getUnits(c.id).map((u) => u.name),
       machines: summary.machines,
       running: summary.running,

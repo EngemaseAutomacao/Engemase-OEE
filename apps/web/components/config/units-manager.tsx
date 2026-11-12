@@ -39,6 +39,7 @@ import { IconCircle } from "@/components/dashboard/icon-circle"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { PageTitle } from "@/components/refresh/page-title"
 import { SOFT_TONES, SoftIconButton } from "@/components/refresh/soft-action"
+import { EngemaseOnlyChip, useCanEdit } from "@/components/config/engemase-managed"
 import { GATEWAY_STATUS_DOT, TIMEZONES, UFS, norm, plural, timezoneShort } from "@/components/config/labels"
 
 export interface UnitNode {
@@ -96,6 +97,7 @@ export function UnitsManager({
   const [lines, setLines] = useState(initialLines)
   const [dialog, setDialog] = useState<DialogState | null>(null)
   const [open, setOpen] = useState(false)
+  const canEdit = useCanEdit()
 
   const openDialog = (d: DialogState) => {
     setDialog(d)
@@ -146,10 +148,15 @@ export function UnitsManager({
         title={title}
         description={description}
         actions={
-          <Button onClick={() => openDialog({ kind: "unit" })}>
-            <PlusIcon />
-            Nova unidade
-          </Button>
+          canEdit && (
+            <>
+              <EngemaseOnlyChip />
+              <Button onClick={() => openDialog({ kind: "unit" })}>
+                <PlusIcon />
+                Nova unidade
+              </Button>
+            </>
+          )
         }
       />
 
@@ -179,7 +186,7 @@ export function UnitsManager({
               <span className="text-base font-semibold text-muted-foreground"> / {machineLimit}</span>
             </>
           }
-          hint="Cadastradas · limite do plano"
+          hint="Em uso · máquinas contratadas"
         />
       </div>
 
@@ -196,12 +203,14 @@ export function UnitsManager({
               A unidade é a planta física (endereço e fuso horário). Dentro dela ficam as áreas, as linhas e as máquinas.
             </EmptyDescription>
           </EmptyHeader>
-          <EmptyContent>
-            <Button onClick={() => openDialog({ kind: "unit" })}>
-              <PlusIcon />
-              Cadastrar unidade
-            </Button>
-          </EmptyContent>
+          {canEdit && (
+            <EmptyContent>
+              <Button onClick={() => openDialog({ kind: "unit" })}>
+                <PlusIcon />
+                Cadastrar unidade
+              </Button>
+            </EmptyContent>
+          )}
         </Empty>
       ) : (
         <div className="flex flex-col gap-4">
@@ -279,6 +288,7 @@ function UnitCard({
 }) {
   const [expanded, setExpanded] = useState(true)
   const machines = lines.reduce((s, l) => s + l.machineCount, 0)
+  const canEdit = useCanEdit()
 
   return (
     <Collapsible open={expanded} onOpenChange={setExpanded} asChild>
@@ -334,6 +344,7 @@ function UnitCard({
               )}
             </div>
           </div>
+          {canEdit && (
           <div className="flex shrink-0 items-center gap-1.5">
             <button
               type="button"
@@ -380,6 +391,7 @@ function UnitCard({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+          )}
         </div>
 
         <CollapsibleContent>
@@ -390,12 +402,14 @@ function UnitCard({
                   <EmptyTitle className="text-sm">Nenhuma área nesta unidade</EmptyTitle>
                   <EmptyDescription>Áreas agrupam as linhas por setor (ex.: Injeção, Sopro, Envase).</EmptyDescription>
                 </EmptyHeader>
-                <EmptyContent>
-                  <Button size="sm" variant="outline" onClick={onAddArea}>
-                    <PlusIcon />
-                    Nova área
-                  </Button>
-                </EmptyContent>
+                {canEdit && (
+                  <EmptyContent>
+                    <Button size="sm" variant="outline" onClick={onAddArea}>
+                      <PlusIcon />
+                      Nova área
+                    </Button>
+                  </EmptyContent>
+                )}
               </Empty>
             ) : (
               areas.map((area) => (
@@ -409,7 +423,7 @@ function UnitCard({
                 />
               ))
             )}
-            {areas.length > 0 && (
+            {canEdit && areas.length > 0 && (
               <Button variant="ghost" size="sm" className="self-start text-muted-foreground" onClick={onAddArea}>
                 <PlusIcon />
                 Nova área em {unit.name}
@@ -436,6 +450,7 @@ function AreaBlock({
   onEditLine: (l: LineNode) => void
 }) {
   const machines = lines.reduce((s, l) => s + l.machineCount, 0)
+  const canEdit = useCanEdit()
   return (
     <div className="overflow-hidden rounded-xl border bg-card">
       <div className="flex items-center gap-2.5 px-3 py-2.5">
@@ -446,19 +461,25 @@ function AreaBlock({
             Área · {plural(lines.length, "linha", "linhas")} · {plural(machines, "máquina", "máquinas")}
           </span>
         </div>
-        <SoftIconButton label={`Editar área ${area.name}`} tone="slate" onClick={onEdit}>
-          <PencilIcon />
-        </SoftIconButton>
-        <SoftIconButton label={`Nova linha em ${area.name}`} onClick={onAddLine}>
-          <PlusIcon />
-        </SoftIconButton>
+        {canEdit && (
+          <>
+            <SoftIconButton label={`Editar área ${area.name}`} tone="slate" onClick={onEdit}>
+              <PencilIcon />
+            </SoftIconButton>
+            <SoftIconButton label={`Nova linha em ${area.name}`} onClick={onAddLine}>
+              <PlusIcon />
+            </SoftIconButton>
+          </>
+        )}
       </div>
       {lines.length === 0 ? (
         <div className="flex items-center justify-between gap-2 border-t px-3 py-2.5 pl-12 text-xs text-muted-foreground">
           <span>Nenhuma linha nesta área.</span>
-          <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={onAddLine}>
-            Cadastrar linha
-          </Button>
+          {canEdit && (
+            <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={onAddLine}>
+              Cadastrar linha
+            </Button>
+          )}
         </div>
       ) : (
         <ul>
@@ -479,9 +500,11 @@ function AreaBlock({
                 {line.machineCount}
                 <span className="hidden text-muted-foreground sm:inline">{line.machineCount === 1 ? "máquina" : "máquinas"}</span>
               </span>
-              <SoftIconButton label={`Editar ${line.name}`} tone="slate" onClick={() => onEditLine(line)}>
-                <PencilIcon />
-              </SoftIconButton>
+              {canEdit && (
+                <SoftIconButton label={`Editar ${line.name}`} tone="slate" onClick={() => onEditLine(line)}>
+                  <PencilIcon />
+                </SoftIconButton>
+              )}
             </li>
           ))}
         </ul>

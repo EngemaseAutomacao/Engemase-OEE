@@ -26,7 +26,6 @@ import { IconCircle, type IconTone } from "@/components/dashboard/icon-circle"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import type { ActivityItem, AttentionItem, AttentionKind, ClientRow } from "./admin-data"
 import { ClientStatusBadge, SquareLink, TD, TH } from "./bits"
-import { MANAGEMENT_SHORT } from "./labels"
 
 const ATTENTION: Record<AttentionKind, { icon: LucideIcon; tone: IconTone; label: string }> = {
   gateway_offline: { icon: WifiOffIcon, tone: "red", label: "Gateway" },
@@ -111,7 +110,7 @@ export function OverviewClientsTable({ rows }: { rows: ClientRow[] }) {
                   <Link href={`/admin/clientes/${r.id}`} className="group block min-w-0 leading-tight">
                     <span className="block truncate font-semibold group-hover:text-primary">{r.name}</span>
                     <span className="block max-w-52 truncate text-xs text-muted-foreground">
-                      {r.city}/{r.state} · {PLAN_LABEL[r.plan]} · {MANAGEMENT_SHORT[r.management]}
+                      {r.city}/{r.state} · {PLAN_LABEL[r.plan]} · {r.machinesLimit} máq. contratadas
                     </span>
                   </Link>
                 </td>

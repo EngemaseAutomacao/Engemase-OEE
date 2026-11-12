@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Building2Icon, EyeIcon, LogInIcon, MoreHorizontalIcon, SearchIcon, XIcon } from "lucide-react"
 
-import type { ClientManagement, ClientPlan } from "@/lib/mock/types"
+import type { ClientPlan } from "@/lib/mock/types"
 import { num } from "@/lib/format"
 import { PLAN_LABEL } from "@/lib/roles"
 import { cn } from "@/lib/utils"
@@ -23,10 +23,10 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { ClientRow } from "./admin-data"
-import { ClientStatusBadge, ManagementBadge, PlanBadge, SoftBadge, TD, TH, UsageBar, squareClass } from "./bits"
+import { ClientStatusBadge, PlanBadge, SoftBadge, TD, TH, UsageBar, squareClass } from "./bits"
 import { useEnterClient } from "./enter-client"
 import { ACTION_META, ACTION_RESULT, LifecycleDialog, actionsFor, lifecycleToast, type LifecycleAction } from "./lifecycle-dialogs"
-import { MANAGEMENT_LABEL, STATUS_LABEL, onlyDigits, type AdminClientStatus } from "./labels"
+import { STATUS_LABEL, onlyDigits, type AdminClientStatus } from "./labels"
 
 type StatusFilter = "all" | AdminClientStatus
 
@@ -44,7 +44,6 @@ export function ClientsTable({ rows }: { rows: ClientRow[] }) {
   const [query, setQuery] = useState("")
   const [status, setStatus] = useState<StatusFilter>("all")
   const [plan, setPlan] = useState<"all" | ClientPlan>("all")
-  const [management, setManagement] = useState<"all" | ClientManagement>("all")
   const [dialog, setDialog] = useState<{ action: LifecycleAction; row: ClientRow; nonce: number } | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
 
@@ -63,19 +62,17 @@ export function ClientsTable({ rows }: { rows: ClientRow[] }) {
       const st = overrides[r.id] ?? r.status
       if (status !== "all" && st !== status) return false
       if (plan !== "all" && r.plan !== plan) return false
-      if (management !== "all" && r.management !== management) return false
       if (!q) return true
       const hay = normalize(`${r.name} ${r.legalName} ${r.city} ${r.state} ${r.slug}`)
       return hay.includes(q) || (qDigits.length >= 3 && onlyDigits(r.cnpj).includes(qDigits))
     })
-  }, [rows, overrides, query, status, plan, management])
+  }, [rows, overrides, query, status, plan])
 
-  const hasFilters = query !== "" || status !== "all" || plan !== "all" || management !== "all"
+  const hasFilters = query !== "" || status !== "all" || plan !== "all"
   const clear = () => {
     setQuery("")
     setStatus("all")
     setPlan("all")
-    setManagement("all")
   }
 
   const confirm = (action: LifecycleAction) => {
@@ -115,7 +112,7 @@ export function ClientsTable({ rows }: { rows: ClientRow[] }) {
               className="pl-8"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:flex">
+          <div className="flex gap-2">
             <Select value={plan} onValueChange={(v) => setPlan(v as "all" | ClientPlan)}>
               <SelectTrigger className="w-full sm:w-40" aria-label="Filtrar por plano">
                 <SelectValue />
@@ -127,16 +124,6 @@ export function ClientsTable({ rows }: { rows: ClientRow[] }) {
                     Plano {PLAN_LABEL[p]}
                   </SelectItem>
                 ))}
-              </SelectContent>
-            </Select>
-            <Select value={management} onValueChange={(v) => setManagement(v as "all" | ClientManagement)}>
-              <SelectTrigger className="w-full sm:w-52" aria-label="Filtrar por modo de gestão">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toda gestão</SelectItem>
-                <SelectItem value="engemase">{MANAGEMENT_LABEL.engemase}</SelectItem>
-                <SelectItem value="self">{MANAGEMENT_LABEL.self}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -196,12 +183,14 @@ export function ClientsTable({ rows }: { rows: ClientRow[] }) {
               <tr>
                 <th className={TH}>Cliente</th>
                 <th className={TH}>CNPJ · cidade/UF</th>
-                <th className={TH}>Plano · gestão</th>
+                <th className={TH}>Plano</th>
                 <th className={TH}>Status</th>
                 <th className={cn(TH, "text-right")}>
                   <abbr title="Unidades" className="no-underline">Unid.</abbr>
                 </th>
-                <th className={TH}>Máquinas</th>
+                <th className={TH}>
+                  <span title="Assinatura cobrada por máquina: em uso de contratadas">Máquinas</span>
+                </th>
                 <th className={TH}>Gateways</th>
                 <th className={TH}>Usuários</th>
                 <th className={TH}>Criado</th>
@@ -231,7 +220,7 @@ export function ClientsTable({ rows }: { rows: ClientRow[] }) {
                     <td className={TD}>
                       <div className="flex flex-col gap-1">
                         <PlanBadge plan={r.plan} />
-                        <ManagementBadge management={r.management} short />
+                        <span className="text-[11px] whitespace-nowrap text-muted-foreground">cobrança por máquina</span>
                       </div>
                     </td>
                     <td className={TD}>
@@ -239,12 +228,13 @@ export function ClientsTable({ rows }: { rows: ClientRow[] }) {
                     </td>
                     <td className={cn(TD, "text-right tabular-nums")}>{r.units}</td>
                     <td className={TD}>
-                      <div className="w-20">
-                        <span className="text-xs tabular-nums">
+                      <div className="w-28" title={`${num(r.machines)} em uso de ${num(r.machinesLimit)} contratadas`}>
+                        <span className="text-xs whitespace-nowrap tabular-nums">
                           <span className="font-semibold">{num(r.machines)}</span>
-                          <span className="text-muted-foreground"> / {num(r.machinesLimit)}</span>
+                          <span className="text-muted-foreground"> em uso / {num(r.machinesLimit)}</span>
                         </span>
                         <UsageBar used={r.machines} limit={r.machinesLimit} className="mt-1" />
+                        <span className="mt-0.5 block text-[11px] text-muted-foreground">contratadas</span>
                       </div>
                     </td>
                     <td className={TD}>

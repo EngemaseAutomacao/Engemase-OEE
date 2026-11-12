@@ -6,7 +6,7 @@ import { initials } from "@/lib/format"
 import { SectionCard } from "@/components/dashboard/section-card"
 import { InfoRow, SoftBadge } from "./bits"
 import { useClientDetail } from "./client-detail-context"
-import { MANAGEMENT_HINT, MANAGEMENT_LABEL, PLATFORM_HOST } from "./labels"
+import { ENGEMASE_CONFIG_NOTE, PLATFORM_HOST } from "./labels"
 
 function Person({ name, detail, badge }: { name: string; detail: React.ReactNode; badge?: React.ReactNode }) {
   return (
@@ -113,9 +113,9 @@ export function RegistryCard({ slug, cnpj, city, state, createdAt }: { slug: str
             {PLATFORM_HOST}/{slug}
           </span>
         </InfoRow>
-        <InfoRow label="Gestão">
-          <span className="block">{MANAGEMENT_LABEL[info.management]}</span>
-          <span className="block text-xs font-normal text-muted-foreground">{MANAGEMENT_HINT[info.management]}</span>
+        <InfoRow label="Configuração">
+          <span className="block">Equipe Engemase</span>
+          <span className="block text-xs font-normal text-muted-foreground">{ENGEMASE_CONFIG_NOTE}</span>
         </InfoRow>
         <InfoRow label="Criado em">{createdAt}</InfoRow>
       </dl>

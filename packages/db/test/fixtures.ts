@@ -12,6 +12,11 @@ export interface SeededTenant {
   readonly slug: string
   readonly userId: string
   readonly memberId: string
+  /** Vínculo da pessoa principal: supervisor com escopo `units` (Planta 1). */
+  readonly memberAccessId: string
+  /** Segunda pessoa: operador com escopo `machines` (só a Injetora 03), D11. */
+  readonly operatorUserId: string
+  readonly machineAccessId: string
   readonly unitId: string
   readonly otherUnitId: string
   readonly areaId: string
@@ -79,6 +84,20 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
       .values({ organizationId, memberId: mem.id, role: "supervisor", scope: "units" })
       .returning(),
   )
+  // Escopo por máquina (D11): um operador que só vê a Injetora 03 (member_machine, mais abaixo).
+  const operator = first(
+    await db
+      .insert(s.user)
+      .values({ name: `Operador ${slug}`, email: `operador@${slug}.example` })
+      .returning(),
+  )
+  const operatorMember = first(await db.insert(s.member).values({ organizationId, userId: operator.id }).returning())
+  const machineAccess = first(
+    await db
+      .insert(s.memberAccess)
+      .values({ organizationId, memberId: operatorMember.id, role: "operator", scope: "machines" })
+      .returning(),
+  )
 
   const unitRow = first(await db.insert(s.unit).values({ organizationId, name: "Planta 1" }).returning())
   const otherUnit = first(await db.insert(s.unit).values({ organizationId, name: "Planta 2" }).returning())
@@ -107,6 +126,9 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
       })
       .returning(),
   )
+  await db
+    .insert(s.memberMachine)
+    .values({ organizationId, memberAccessId: machineAccess.id, machineId: machineRow.id })
   const unlinkedMachine = first(
     await db
       .insert(s.machine)
@@ -455,6 +477,9 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
     slug,
     userId: person.id,
     memberId: mem.id,
+    memberAccessId: access.id,
+    operatorUserId: operator.id,
+    machineAccessId: machineAccess.id,
     unitId: unitRow.id,
     otherUnitId: otherUnit.id,
     areaId: areaRow.id,

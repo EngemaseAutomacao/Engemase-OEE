@@ -16,6 +16,7 @@ import {
   getTimeline,
   getUnit,
   nowMs,
+  scopeAllowsMachine,
 } from "@/lib/mock"
 import { ago, initials } from "@/lib/format"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -118,7 +119,7 @@ export async function OperatorScreen({
   const operatorUser =
     getClientUsers(client.id).find((u) =>
       u.memberships.some(
-        (m) => m.clientId === client.id && m.role === "operator" && (m.unitScope === "all" || m.unitScope.includes(machine.unitId)),
+        (m) => m.clientId === client.id && m.role === "operator" && scopeAllowsMachine(m.scope, machine),
       ),
     ) ?? getCurrentUser()
 

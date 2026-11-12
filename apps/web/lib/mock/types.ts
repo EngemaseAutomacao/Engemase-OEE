@@ -17,8 +17,6 @@ export type ClientRole = "client_admin" | "engineer" | "supervisor" | "operator"
 
 export type ClientStatus = "active" | "onboarding" | "suspended"
 export type ClientPlan = "starter" | "pro" | "enterprise"
-/** "engemase": a Engemase configura gateways/máquinas como serviço; "self": autogestão completa pelo cliente. */
-export type ClientManagement = "engemase" | "self"
 
 export interface Client {
   id: string
@@ -29,8 +27,8 @@ export interface Client {
   city: string
   state: string
   status: ClientStatus
+  /** Assinatura do software cobrada por máquina (D1); `limits.machines` = máquinas contratadas. */
   plan: ClientPlan
-  management: ClientManagement
   limits: { machines: number; gateways: number; users: number; retentionMonths: number }
   contactName: string
   contactEmail: string
