@@ -4,6 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { ExternalLinkIcon, InfoIcon } from "lucide-react"
 
+import { isNetworkProtocol } from "@/lib/mock/types"
 import { cn } from "@/lib/utils"
 import type { Protocol, StateMode } from "@/lib/mock/types"
 import { GATEWAY_STATUS_LABEL } from "@/lib/roles"
@@ -114,7 +115,7 @@ function EditForm({
   const cycleNum = Number(cycle.replace(",", "."))
   const portNum = Number(port)
   const slaveNum = Number(slaveId)
-  const isTcp = protocol === "modbus-tcp"
+  const isTcp = isNetworkProtocol(protocol)
 
   const errors = {
     name: name.trim().length < 3 ? "Informe o nome." : null,

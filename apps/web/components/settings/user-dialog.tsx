@@ -260,7 +260,7 @@ function UserForm({
           <AlertDescription>
             <p>
               Ela recebe um e-mail para <strong>definir a senha</strong>. O link é de uso único, vale por 72 h e também confirma o e-mail. Até lá, aparece aqui como
-              “Convite pendente”. Ninguém cria ou envia senha por esta tela.
+              “Aguardando definir senha”. Ninguém cria ou envia senha por esta tela.
             </p>
           </AlertDescription>
         </Alert>

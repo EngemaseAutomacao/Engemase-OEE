@@ -3,6 +3,7 @@
 import Link from "next/link"
 import {
   CableIcon,
+  NetworkIcon,
   CheckCircle2Icon,
   EthernetPortIcon,
   InfoIcon,
@@ -12,7 +13,7 @@ import {
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import type { Protocol } from "@/lib/mock/types"
+import { isNetworkProtocol, type Protocol } from "@/lib/mock/types"
 import { GATEWAY_STATUS_LABEL } from "@/lib/roles"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -62,7 +63,7 @@ export function ConnectionStep({
   onTest: () => void
 }) {
   const err = (k: string) => (show ? (errors[k] ?? null) : null)
-  const isTcp = draft.protocol === "modbus-tcp"
+  const isTcp = isNetworkProtocol(draft.protocol)
   const canTest = !!gateway && (gateway.status === "online" || gateway.status === "degraded")
   const fieldsOk = Object.values(errors).every((e) => !e)
 
@@ -122,7 +123,7 @@ export function ConnectionStep({
             <RadioGroup
               value={draft.protocol}
               onValueChange={(v) => onChange({ protocol: v as Protocol })}
-              className="grid gap-3 sm:grid-cols-2"
+              className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
             >
               <FieldLabel htmlFor="wz-proto-tcp">
                 <Field orientation="horizontal">
@@ -148,13 +149,23 @@ export function ConnectionStep({
                   <RadioGroupItem value="modbus-rtu" id="wz-proto-rtu" disabled={gateway.serialPorts.length === 0} />
                 </Field>
               </FieldLabel>
+              <FieldLabel htmlFor="wz-proto-rtutcp">
+                <Field orientation="horizontal">
+                  <NetworkIcon className="mt-0.5 size-5 text-muted-foreground" />
+                  <FieldContent>
+                    <FieldTitle>Modbus RTU sobre TCP</FieldTitle>
+                    <FieldDescription className="text-xs">Escravo RS-485 atrás de um conversor serial↔Ethernet que repassa o quadro RTU sem traduzir.</FieldDescription>
+                  </FieldContent>
+                  <RadioGroupItem value="modbus-rtu-over-tcp" id="wz-proto-rtutcp" />
+                </Field>
+              </FieldLabel>
             </RadioGroup>
           </Field>
 
           {isTcp ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1fr)]">
               <Field data-invalid={!!err("host")}>
-                <FieldLabel htmlFor="wz-host">IP do CLP</FieldLabel>
+                <FieldLabel htmlFor="wz-host">{draft.protocol === "modbus-rtu-over-tcp" ? "IP do conversor" : "IP do CLP"}</FieldLabel>
                 <Input
                   id="wz-host"
                   value={draft.host}
@@ -172,7 +183,7 @@ export function ConnectionStep({
                 <FieldError>{err("port")}</FieldError>
               </Field>
               <Field data-invalid={!!err("tcpUnitId")}>
-                <FieldLabel htmlFor="wz-tcp-uid">Unit ID</FieldLabel>
+                <FieldLabel htmlFor="wz-tcp-uid">{draft.protocol === "modbus-rtu-over-tcp" ? "Endereço do escravo" : "Unit ID"}</FieldLabel>
                 <Input id="wz-tcp-uid" value={draft.tcpUnitId} onChange={(e) => onChange({ tcpUnitId: e.target.value })} inputMode="numeric" className="font-mono" aria-invalid={!!err("tcpUnitId")} />
                 <FieldError>{err("tcpUnitId")}</FieldError>
               </Field>
@@ -253,20 +264,10 @@ export function ConnectionStep({
                 </Field>
                 <Field>
                   <FieldLabel>Data bits</FieldLabel>
-                  <ToggleGroup
-                    type="single"
-                    variant="outline"
-                    value={String(draft.dataBits)}
-                    onValueChange={(v) => v && onChange({ dataBits: Number(v) as 7 | 8 })}
-                    className="w-full"
-                  >
-                    <ToggleGroupItem value="7" className="flex-1">
-                      7
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="8" className="flex-1">
-                      8
-                    </ToggleGroupItem>
-                  </ToggleGroup>
+                  {/* Modbus RTU exige 8 bits de dados (o contrato só aceita 8). */}
+                  <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground" title="O Modbus RTU usa sempre 8 bits de dados">
+                    8 <span className="ml-1 text-xs">(fixo no Modbus RTU)</span>
+                  </div>
                 </Field>
                 <Field>
                   <FieldLabel>Stop bits</FieldLabel>

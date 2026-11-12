@@ -4,6 +4,7 @@
  * Gerados a partir dos cadastros do mock com `seededRandom` e `MOCK_NOW` (seguro em servidor).
  * Quando a camada real existir, isto vira consulta a `config_version`, `gateway_command` e `gateway_health`.
  */
+import { isNetworkProtocol } from "@/lib/mock/types"
 import { MOCK_NOW, nowMs, seededRandom, type Device, type Gateway, type Machine, type Tag } from "@/lib/mock"
 import { COMMAND_TYPE_LABEL, type CommandStatus, type CommandType, formatTagValue, modbusRef, pollLabel } from "./labels"
 
@@ -97,7 +98,7 @@ export function configHistory(
     },
     () => {
       const d = pick(devices)
-      return d.protocol === "modbus-tcp"
+      return isNetworkProtocol(d.protocol)
         ? { kind: "add", text: `Conexão "${d.name}" (${d.params.host}:${d.params.port}, unit id ${d.params.unitId})` }
         : { kind: "add", text: `Escravo "${d.name}" no barramento ${d.params.serialPort} (unit id ${d.params.unitId})` }
     },

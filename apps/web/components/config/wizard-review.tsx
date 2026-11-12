@@ -15,6 +15,7 @@ import {
 
 import { cn } from "@/lib/utils"
 import { STATE_META } from "@/lib/states"
+import { isNetworkProtocol } from "@/lib/mock/types"
 import { Button } from "@/components/ui/button"
 import { StateDot } from "@/components/oee/state-badge"
 import { IconCircle, type IconTone } from "@/components/dashboard/icon-circle"
@@ -67,7 +68,7 @@ export function ReviewStep({
   nextVersion: number | null
   onEdit: (step: number) => void
 }) {
-  const isTcp = conn.protocol === "modbus-tcp"
+  const isTcp = isNetworkProtocol(conn.protocol)
   const cycle = toNum(rules.idealCycleS)
   const read = tags.filter((t) => t.lastValue !== null).length
 

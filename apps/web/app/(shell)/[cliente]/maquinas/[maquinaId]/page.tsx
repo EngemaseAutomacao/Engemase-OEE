@@ -23,6 +23,7 @@ import {
   nowMs,
   type Tag,
 } from "@/lib/mock"
+import { isNetworkProtocol } from "@/lib/mock/types"
 import { ago, dateTime, num, pct, shortDate, since, time } from "@/lib/format"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -116,7 +117,13 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
             <BreadcrumbSeparator />
             <BreadcrumbItem className="hidden sm:inline-flex">{unit?.name}</BreadcrumbItem>
             <BreadcrumbSeparator className="hidden sm:block" />
-            <BreadcrumbItem>{line?.name}</BreadcrumbItem>
+            <BreadcrumbItem>
+              {line ? (
+                <BreadcrumbLink asChild>
+                  <Link href={`/${slug}/linhas/${line.id}`}>{line.name}</Link>
+                </BreadcrumbLink>
+              ) : null}
+            </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
               <BreadcrumbPage>{machine.name}</BreadcrumbPage>
@@ -284,7 +291,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
           <AlertDescription>
             {gateway ? `O ${gateway.name} está ${gateway.status === "online" ? "online" : "com alertas"}, mas ` : ""}
             {device
-              ? `${device.name} (${device.protocol === "modbus-tcp" ? `${device.params.host}:${device.params.port}` : `${device.params.serialPort}, escravo ${device.params.unitId}`}) não responde: ${device.lastError ?? "sem resposta Modbus"}.`
+              ? `${device.name} (${isNetworkProtocol(device.protocol) ? `${device.params.host}:${device.params.port}` : `${device.params.serialPort}, escravo ${device.params.unitId}`}) não responde: ${device.lastError ?? "sem resposta Modbus"}.`
               : "o CLP não responde."}{" "}
             O tempo sem comunicação conta como parada não planejada com o motivo &quot;Sem comunicação&quot;.
           </AlertDescription>

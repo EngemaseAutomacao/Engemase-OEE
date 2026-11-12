@@ -26,7 +26,8 @@ import { Button } from "@/components/ui/button"
 import { IconCircle, type IconTone } from "@/components/dashboard/icon-circle"
 import { SectionCard } from "@/components/dashboard/section-card"
 import { UsageMeter } from "@/components/config/plan-usage"
-import { PROTOCOL_SHORT, ROLE_DEFAULTS, STATE_MODE_LABEL, seconds } from "@/components/config/labels"
+import { isNetworkProtocol } from "@/lib/mock/types"
+import { PROTOCOL_LABEL, PROTOCOL_SHORT, ROLE_DEFAULTS, STATE_MODE_LABEL, seconds } from "@/components/config/labels"
 import { ConnectionStep, type ConnTest } from "@/components/config/wizard-connection"
 import { IdentStep, RulesStep } from "@/components/config/wizard-steps"
 import { ReviewStep, type ReviewCheck } from "@/components/config/wizard-review"
@@ -212,7 +213,7 @@ export function NewMachineWizard({
       setTest({ status: "ok", latencyMs, signature })
       toast.success("Conexão OK", {
         description:
-          conn.protocol === "modbus-tcp"
+          isNetworkProtocol(conn.protocol)
             ? `${gateway.name} leu o CLP em ${conn.host}:${conn.port} (unit ID ${conn.tcpUnitId}) em ${latencyMs} ms.`
             : `${gateway.name} leu o escravo ${conn.rtuUnitId} em ${conn.serialPort} em ${latencyMs} ms.`,
       })
@@ -376,7 +377,7 @@ export function NewMachineWizard({
   const stepSub = [
     ident.code ? ident.code.toUpperCase() : STEPS[0].hint,
     gateway && valid[1]
-      ? conn.protocol === "modbus-tcp"
+      ? isNetworkProtocol(conn.protocol)
         ? `${PROTOCOL_SHORT[conn.protocol]} ${conn.host}`
         : `${PROTOCOL_SHORT[conn.protocol]} ${conn.serialPort.replace("/dev/", "")} · ID ${conn.rtuUnitId}`
       : STEPS[1].hint,
@@ -603,7 +604,7 @@ export function NewMachineWizard({
               { k: "Gateway", v: gateway ? gateway.name : "—" },
               {
                 k: "Conexão",
-                v: gateway && valid[1] ? (conn.protocol === "modbus-tcp" ? `Modbus TCP · ${conn.host}:${conn.port}` : `Modbus RTU · ${conn.serialPort}`) : "—",
+                v: gateway && valid[1] ? (isNetworkProtocol(conn.protocol) ? `${PROTOCOL_LABEL[conn.protocol]} · ${conn.host}:${conn.port}` : `Modbus RTU · ${conn.serialPort}`) : "—",
               },
               { k: "Sinais", v: tags.length ? `${tags.length} mapeados · ${readCount} lidos` : "—" },
               { k: "Ciclo ideal", v: toNum(rules.idealCycleS) > 0 ? seconds(toNum(rules.idealCycleS)) : "—" },

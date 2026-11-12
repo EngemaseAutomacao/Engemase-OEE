@@ -54,8 +54,14 @@ const seconds = (s: number) => `${Number.isInteger(s) ? num(s) : dec(s)} s`
 
 const pieces = (n: number) => `${num(n)} ${n === 1 ? "peça" : "peças"}`
 
+/** Terminal pareado: mostra o nome do aparelho e, se ele cobre várias máquinas, o atalho para trocar. */
+export interface TerminalMode {
+  name: string
+  switchHref?: string
+}
+
 /** Tela do operador (tablet/celular): estado ao vivo, paradas a classificar, refugo e troca de produto. */
-export function OperatorConsole({ data, panelHref }: { data: OperatorData; panelHref: string }) {
+export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorData; panelHref: string; terminal?: TerminalMode }) {
   const { machine, live, shift, reasons, products, operator, timeZone } = data
   const { now, read } = useMockClock(10_000)
   const seq = useRef(0)
@@ -235,22 +241,37 @@ export function OperatorConsole({ data, panelHref }: { data: OperatorData; panel
             </div>
           </div>
 
-          <Link
-            href={panelHref}
-            aria-label="Abrir o painel da máquina"
-            className="hidden size-12 shrink-0 items-center justify-center rounded-xl border bg-card transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none md:inline-flex"
-          >
-            <LayoutDashboardIcon className="size-5" />
-          </Link>
+          {!terminal && (
+            <Link
+              href={panelHref}
+              aria-label="Abrir o painel da máquina"
+              className="hidden size-12 shrink-0 items-center justify-center rounded-xl border bg-card transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none md:inline-flex"
+            >
+              <LayoutDashboardIcon className="size-5" />
+            </Link>
+          )}
           <KioskThemeToggle />
-          <Link
-            href="/login"
-            className="inline-flex h-12 shrink-0 items-center gap-2 rounded-xl border bg-card px-3 font-medium transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none sm:px-4"
-          >
-            <LogOutIcon className="size-5" />
-            <span className="hidden sm:inline">Sair</span>
-            <span className="sr-only sm:hidden">Sair</span>
-          </Link>
+          {terminal ? (
+            terminal.switchHref && (
+              <Link
+                href={terminal.switchHref}
+                className="inline-flex h-12 shrink-0 items-center gap-2 rounded-xl border bg-card px-3 font-medium transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none sm:px-4"
+              >
+                <LayoutDashboardIcon className="size-5" />
+                <span className="hidden sm:inline">Máquinas</span>
+                <span className="sr-only sm:hidden">Trocar de máquina</span>
+              </Link>
+            )
+          ) : (
+            <Link
+              href="/login"
+              className="inline-flex h-12 shrink-0 items-center gap-2 rounded-xl border bg-card px-3 font-medium transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none sm:px-4"
+            >
+              <LogOutIcon className="size-5" />
+              <span className="hidden sm:inline">Sair</span>
+              <span className="sr-only sm:hidden">Sair</span>
+            </Link>
+          )}
         </div>
 
         {/* Faixa de estado ao vivo */}

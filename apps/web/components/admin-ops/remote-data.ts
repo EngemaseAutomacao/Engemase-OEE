@@ -16,6 +16,7 @@ import {
   getUnit,
   nowMs,
   type GatewayStatus,
+  type Protocol,
   type RemoteAccessPolicy,
   type RemoteAccessSession,
 } from "@/lib/mock"
@@ -82,7 +83,7 @@ export interface RequestTarget {
     hostname: string
     status: GatewayStatus
     unitName: string
-    devices: { id: string; name: string; protocol: "modbus-tcp" | "modbus-rtu"; host: string | null }[]
+    devices: { id: string; name: string; protocol: Protocol; host: string | null }[]
   }[]
 }
 

@@ -81,11 +81,13 @@ export const GATEWAY_STATUS_DOT: Record<GatewayStatus, string> = {
 export const PROTOCOL_LABEL: Record<Protocol, string> = {
   "modbus-tcp": "Modbus TCP/IP",
   "modbus-rtu": "Modbus RTU · RS-485",
+  "modbus-rtu-over-tcp": "Modbus RTU sobre TCP",
 }
 
 export const PROTOCOL_SHORT: Record<Protocol, string> = {
   "modbus-tcp": "TCP",
   "modbus-rtu": "RTU",
+  "modbus-rtu-over-tcp": "RTU/TCP",
 }
 
 export const BAUD_RATES = [9600, 19200, 38400, 57600, 115200] as const

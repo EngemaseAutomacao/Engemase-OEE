@@ -21,6 +21,7 @@ import {
   getUnit,
   nowMs,
 } from "@/lib/mock"
+import { isNetworkProtocol } from "@/lib/mock/types"
 import { ago, dateTime, duration, time } from "@/lib/format"
 import { PLATFORM_ROLE_LABEL } from "@/lib/roles"
 import { type ConfigChange, type GatewayCommand, commandHistory, configHistory, healthSeries, type HealthSeries } from "./gateway-data"
@@ -245,7 +246,7 @@ export function buildGatewayDetail(client: Client, g: Gateway): GatewayDetail {
     name: d.name,
     protocol: d.protocol,
     status: d.status,
-    endpoint: d.protocol === "modbus-tcp" ? `${d.params.host}:${d.params.port}` : `Escravo ${d.params.unitId}`,
+    endpoint: isNetworkProtocol(d.protocol) ? `${d.params.host}:${d.params.port}` : `Escravo ${d.params.unitId}`,
     host: d.params.host ?? null,
     port: d.params.port ?? null,
     serialPort: d.params.serialPort ?? null,

@@ -85,7 +85,11 @@ export function MachineGroups({ units, clientSlug }: { units: UnitGroup[]; clien
           {unit.lines.map((line) => (
             <div key={line.id} className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                <h3 className="text-sm font-medium">{line.name}</h3>
+                <h3 className="text-sm font-medium">
+                  <Link href={`/${clientSlug}/linhas/${line.id}`} className="hover:text-primary hover:underline">
+                    {line.name}
+                  </Link>
+                </h3>
                 <Badge variant="outline" className="font-mono text-[11px]">
                   {line.code}
                 </Badge>

@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { CableIcon, CpuIcon, RouterIcon, Settings2Icon, TagsIcon, TriangleAlertIcon } from "lucide-react"
 
+import { isNetworkProtocol } from "@/lib/mock/types"
 import { cn } from "@/lib/utils"
 import { ago, num } from "@/lib/format"
 import { GATEWAY_STATUS_LABEL } from "@/lib/roles"
@@ -158,7 +159,7 @@ export function ConnectionCard({
             <Fields
               items={[
                 ["Protocolo", PROTOCOL_LABEL[device.protocol]],
-                ...(device.protocol === "modbus-tcp"
+                ...(isNetworkProtocol(device.protocol)
                   ? ([
                       ["Endereço", `${device.params.host}:${device.params.port}`],
                       ["Unit ID", String(device.params.unitId)],

@@ -9,7 +9,7 @@ import { SoftIconButton } from "@/components/refresh/soft-action"
 type Quality = "good" | "bad" | "stale"
 
 interface ReadContext {
-  /** Gateway sem conexão: o comando fica na fila. */
+  /** Gateway sem conexão: o comando fica na fila e expira em 2 min (docs/04). */
   gatewayOffline: boolean
   deviceError?: string
   latencyMs: number | null
@@ -18,7 +18,7 @@ interface ReadContext {
 function notifyRead(tagName: string, value: string, quality: Quality, ctx: ReadContext) {
   if (ctx.gatewayOffline || quality === "stale") {
     toast.warning("Gateway sem conexão", {
-      description: `A leitura de "${tagName}" foi enfileirada e será executada quando o gateway voltar a se conectar.`,
+      description: `A leitura de "${tagName}" ficou na fila. Se o gateway não sincronizar em 2 min, ela expira e não é executada.`,
     })
     return
   }
@@ -51,7 +51,7 @@ export function ReadAllTagsButton({
 } & ReadContext) {
   const run = () => {
     if (ctx.gatewayOffline) {
-      toast.warning("Gateway sem conexão", { description: `Leitura de ${total} tags enfileirada; será executada quando o gateway voltar.` })
+      toast.warning("Gateway sem conexão", { description: `Leitura de ${total} tags na fila. Expira em 2 min se o gateway não sincronizar.` })
       return
     }
     const id = toast.loading(`Lendo ${total} tags no CLP…`)

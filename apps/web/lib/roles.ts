@@ -39,6 +39,6 @@ export const GATEWAY_STATUS_LABEL: Record<GatewayStatus, string> = {
 
 export const USER_STATUS_LABEL: Record<UserStatus, string> = {
   active: "Ativo",
-  invited: "Convite pendente",
+  invited: "Aguardando definir senha",
   disabled: "Desativado",
 }

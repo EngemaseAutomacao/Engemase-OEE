@@ -2,7 +2,7 @@
  * Modelo do assistente "Nova máquina": tipos dos rascunhos, templates de sinais e validações.
  * Funções puras (sem relógio e sem aleatoriedade), seguras em servidor e cliente.
  */
-import type { ByteOrder, DataType, GatewayStatus, MachineState, ModbusArea, Protocol, StateMode, TagRole } from "@/lib/mock/types"
+import { isNetworkProtocol, type ByteOrder, type DataType, type GatewayStatus, type MachineState, type ModbusArea, type Protocol, type StateMode, type TagRole } from "@/lib/mock/types"
 import {
   DEFAULT_STATE_MAP,
   IPV4_RE,
@@ -50,7 +50,7 @@ export interface WizardDevice {
   serialPort?: string
   baudRate?: number
   parity?: "N" | "E" | "O"
-  dataBits?: 7 | 8
+  dataBits?: 8
   stopBits?: 1 | 2
   unitId: number
 }
@@ -96,7 +96,7 @@ export interface ConnDraft {
   serialPort: string
   baudRate: number
   parity: "N" | "E" | "O"
-  dataBits: 7 | 8
+  dataBits: 8
   stopBits: 1 | 2
   rtuUnitId: string
   rtuTimeout: string
@@ -270,11 +270,19 @@ export function validateIdent(d: IdentDraft, existingCodes: string[]): Errors {
 
 export function validateConn(c: ConnDraft, gateway: WizardGateway | undefined, busDevices: WizardDevice[]): Errors {
   if (!gateway) return { gatewayId: "Escolha o gateway da unidade." }
-  if (c.protocol === "modbus-tcp") {
+  if (isNetworkProtocol(c.protocol)) {
+    const rtuOverTcp = c.protocol === "modbus-rtu-over-tcp"
     return {
       host: !IPV4_RE.test(c.host.trim()) ? "Informe um IPv4 válido (ex.: 192.168.10.25)." : null,
       port: !isInt(c.port, 1, 65535) ? "Porta de 1 a 65535 (padrão 502)." : null,
-      tcpUnitId: !isInt(c.tcpUnitId, 0, 255) ? "Unit ID de 0 a 255." : null,
+      // No RTU sobre TCP o unit ID é o endereço do escravo no barramento atrás do conversor.
+      tcpUnitId: rtuOverTcp
+        ? !isInt(c.tcpUnitId, 1, 247)
+          ? "Endereço do escravo de 1 a 247."
+          : null
+        : !isInt(c.tcpUnitId, 0, 255)
+          ? "Unit ID de 0 a 255."
+          : null,
       tcpTimeout: !isInt(c.tcpTimeout, 100, 10000) ? "Timeout de 100 a 10.000 ms." : null,
     }
   }
@@ -296,8 +304,8 @@ export function connWarnings(c: ConnDraft, gateway: WizardGateway | undefined, g
   if (!gateway) return out
   if (gateway.status === "offline") out.push(`${gateway.name} está offline: a configuração fica pendente e o teste de conexão não está disponível.`)
   if (gateway.status === "pending") out.push(`${gateway.name} ainda não foi ativado: a configuração será aplicada quando ele se conectar pela primeira vez.`)
-  if (c.protocol === "modbus-tcp") {
-    const same = gwDevices.find((d) => d.protocol === "modbus-tcp" && d.host === c.host.trim() && String(d.unitId) === c.tcpUnitId.trim())
+  if (isNetworkProtocol(c.protocol)) {
+    const same = gwDevices.find((d) => d.protocol === c.protocol && d.host === c.host.trim() && String(d.unitId) === c.tcpUnitId.trim())
     if (same) out.push(`O IP ${c.host} (unit ID ${c.tcpUnitId}) já é lido para "${same.name}". Confirme se é o mesmo CLP atendendo duas máquinas.`)
     if (gateway.ipOt && IPV4_RE.test(c.host.trim())) {
       const net = gateway.ipOt.split(".").slice(0, 3).join(".")
@@ -314,7 +322,7 @@ export function connWarnings(c: ConnDraft, gateway: WizardGateway | undefined, g
 
 /** Assinatura da conexão: o teste vale só para os parâmetros testados. */
 export function connSignature(c: ConnDraft): string {
-  return c.protocol === "modbus-tcp"
+  return isNetworkProtocol(c.protocol)
     ? [c.gatewayId, c.protocol, c.host.trim(), c.port, c.tcpUnitId].join("|")
     : [c.gatewayId, c.protocol, c.serialPort, c.baudRate, c.parity, c.dataBits, c.stopBits, c.rtuUnitId].join("|")
 }
@@ -412,7 +420,7 @@ function hash(s: string): number {
 /** Latência simulada de uma transação Modbus (RTU é mais lento que TCP). */
 export function simulatedLatency(protocol: Protocol, seed: string): number {
   const h = hash(seed)
-  return protocol === "modbus-tcp" ? 8 + (h % 18) : 28 + (h % 26)
+  return protocol === "modbus-tcp" ? 8 + (h % 18) : protocol === "modbus-rtu-over-tcp" ? 22 + (h % 20) : 28 + (h % 26)
 }
 
 /**

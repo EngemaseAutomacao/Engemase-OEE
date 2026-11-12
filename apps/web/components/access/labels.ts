@@ -51,6 +51,7 @@ export function configLabel(published: number, applied: number | null): { text: 
 export const PROTOCOL_LABEL: Record<Protocol, string> = {
   "modbus-tcp": "Modbus TCP/IP",
   "modbus-rtu": "Modbus RTU · RS-485",
+  "modbus-rtu-over-tcp": "Modbus RTU sobre TCP",
 }
 
 export const DEVICE_STATUS_LABEL: Record<DeviceStatus, string> = {

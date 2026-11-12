@@ -19,7 +19,7 @@ import {
 } from "@/lib/mock"
 import { ago, initials } from "@/lib/format"
 import { Skeleton } from "@/components/ui/skeleton"
-import { OperatorConsole } from "@/components/kiosk/operator-console"
+import { OperatorConsole, type TerminalMode } from "@/components/kiosk/operator-console"
 import type { OperatorData, PendingStop } from "@/components/kiosk/operator-types"
 import { currentShift } from "@/components/kiosk/shift-info"
 
@@ -48,7 +48,14 @@ export function OperatorSkeleton() {
 }
 
 /** Monta os dados da tela do operador (lê os params dentro do <Suspense> da página). */
-export async function OperatorScreen({ params }: { params: Promise<{ cliente: string; maquinaId: string }> }) {
+/** `terminal`: aberto por um terminal pareado (/terminal), sem sessão de pessoa nem link para o painel. */
+export async function OperatorScreen({
+  params,
+  terminal,
+}: {
+  params: Promise<{ cliente: string; maquinaId: string }>
+  terminal?: TerminalMode
+}) {
   const { cliente, maquinaId } = await params
   const client = getClientBySlug(cliente)
   const machine = getMachine(maquinaId)
@@ -160,5 +167,5 @@ export async function OperatorScreen({ params }: { params: Promise<{ cliente: st
     timeZone: tz,
   }
 
-  return <OperatorConsole data={data} panelHref={`/${client.slug}/maquinas/${machine.id}`} />
+  return <OperatorConsole data={data} panelHref={`/${client.slug}/maquinas/${machine.id}`} terminal={terminal} />
 }

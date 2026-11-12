@@ -213,6 +213,12 @@ export const getRemoteAccessSessions = (filter: { clientId?: string; gatewayId?:
   )
 export const getRemoteAccessPolicy = (clientId: string) => remoteAccessPolicies.find((p) => p.clientId === clientId)
 export const getTerminals = (clientId: string) => terminals.filter((t) => t.clientId === clientId)
+export const getTerminal = (id: string) => terminals.find((t) => t.id === id)
+/** Todos os terminais (os pendentes entram para o protótipo simular a tela logo após o pareamento). */
+export const terminalParams = () => terminals.map((t) => ({ terminalId: t.id }))
+/** Códigos de pareamento válidos (simulação do POST /api/terminal/pair). */
+export const getPendingPairings = () =>
+  terminals.filter((t) => t.status === "pending" && t.pairingCode).map((t) => ({ terminalId: t.id, name: t.name, code: t.pairingCode!.replace(/\D/g, "") }))
 export const getHelpArticles = () => helpArticles
 export const getHelpArticle = (slug: string) => helpArticles.find((a) => a.slug === slug)
 /** Identidade do cliente; `undefined` = padrão Engemase. */

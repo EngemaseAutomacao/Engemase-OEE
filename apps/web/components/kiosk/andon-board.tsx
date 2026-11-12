@@ -84,7 +84,8 @@ function commDetail(m: MachineWithLive): string {
 }
 
 /** Conteúdo do Andon de uma linha (lê os params dentro do <Suspense> da página). */
-export async function AndonBoard({ params }: { params: Promise<{ cliente: string; linhaId: string }> }) {
+/** `terminal`: aberto por uma TV pareada (/terminal); some o "Sair do modo TV" (não há sessão de pessoa). */
+export async function AndonBoard({ params, terminal }: { params: Promise<{ cliente: string; linhaId: string }>; terminal?: { name: string } }) {
   const { cliente, linhaId } = await params
   const client = getClientBySlug(cliente)
   const line = getLine(linhaId)
@@ -275,13 +276,17 @@ export async function AndonBoard({ params }: { params: Promise<{ cliente: string
             <span className="hidden 2xl:inline">Marcador na barra = ritmo esperado para a meta</span>
             <Brand className="hidden text-foreground md:flex" />
             <FullscreenButton />
-            <Link
-              href={`/${client.slug}`}
-              className="inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <LogOutIcon className="size-4" />
-              Sair do modo TV
-            </Link>
+            {terminal ? (
+              <span className="inline-flex h-10 items-center rounded-lg border px-3 text-sm font-medium">{terminal.name}</span>
+            ) : (
+              <Link
+                href={`/${client.slug}`}
+                className="inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <LogOutIcon className="size-4" />
+                Sair do modo TV
+              </Link>
+            )}
           </div>
         </footer>
     </AndonFrame>

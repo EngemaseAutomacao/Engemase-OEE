@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { isNetworkProtocol } from "@/lib/mock/types"
 import { cn } from "@/lib/utils"
 import type { GatewayStatus, Protocol, StateMode } from "@/lib/mock/types"
 import { GATEWAY_STATUS_LABEL } from "@/lib/roles"
@@ -62,7 +63,7 @@ export interface ConnInfo {
   serialPort?: string
   baudRate?: number
   parity?: "N" | "E" | "O"
-  dataBits?: 7 | 8
+  dataBits?: 8
   stopBits?: 1 | 2
   unitId: number
   timeoutMs: number
@@ -507,7 +508,7 @@ export function MachineRegistry({
 
 function ConnCell({ conn }: { conn: ConnInfo | null }) {
   if (!conn) return <span className="text-xs text-muted-foreground">Não configurada</span>
-  const tcp = conn.protocol === "modbus-tcp"
+  const tcp = isNetworkProtocol(conn.protocol)
   return (
     <div className="flex items-start gap-2">
       <Badge

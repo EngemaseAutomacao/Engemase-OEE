@@ -5,6 +5,7 @@ import Link from "next/link"
 import { CableIcon, CircuitBoardIcon, NetworkIcon, PlugZapIcon, PlusIcon, RouterIcon, TriangleAlertIcon, WifiOffIcon } from "lucide-react"
 import { toast } from "sonner"
 
+import { isNetworkProtocol } from "@/lib/mock/types"
 import { cn } from "@/lib/utils"
 import { IconCircle, type IconTone } from "@/components/dashboard/icon-circle"
 import { SectionCard } from "@/components/dashboard/section-card"
@@ -35,7 +36,7 @@ function DeviceRow({ d, offline, onTest }: { d: DeviceVM; offline: boolean; onTe
     await onTest(d)
     setTesting(false)
   }
-  const tcp = d.protocol === "modbus-tcp"
+  const tcp = isNetworkProtocol(d.protocol)
   return (
     <li className="grid gap-3 py-3.5 first:pt-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
       <div className="flex min-w-0 items-start gap-3">
@@ -126,7 +127,7 @@ export function ConnectionsTab({
   const rtuCount = buses.reduce((s, b) => s + b.devices.length, 0)
 
   const onTest = async (d: DeviceVM) => {
-    const target = d.protocol === "modbus-tcp" ? `${d.name} · ${d.endpoint}` : `${d.name} · ${d.serialPort} #${d.unitId}`
+    const target = isNetworkProtocol(d.protocol) ? `${d.name} · ${d.endpoint}` : `${d.name} · ${d.serialPort} #${d.unitId}`
     const out = await run("device.test", target, () => {
       if (d.status === "error") return { ok: false, result: d.lastError ?? "Falha de comunicação", durationMs: d.timeoutMs }
       if (d.status === "disabled") return { ok: false, result: "Conexão desativada na configuração", durationMs: 4 }
@@ -169,7 +170,7 @@ export function ConnectionsTab({
           <WifiOffIcon />
           <AlertTitle>Gateway offline</AlertTitle>
           <AlertDescription>
-            Estado das conexões conforme o último contato ({lastSeenAgo}). Testes ficam na fila até o gateway voltar a sincronizar.
+            Estado das conexões conforme o último contato ({lastSeenAgo}). Testes ficam na fila e expiram em 2 min se o gateway não sincronizar.
           </AlertDescription>
         </Alert>
       )}

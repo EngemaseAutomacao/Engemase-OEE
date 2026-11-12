@@ -62,7 +62,11 @@ export interface Line {
   code: string
 }
 
-export type Protocol = "modbus-tcp" | "modbus-rtu"
+/** "modbus-rtu-over-tcp": quadro RTU (com CRC) dentro de TCP, típico de conversores serial↔Ethernet. */
+export type Protocol = "modbus-tcp" | "modbus-rtu" | "modbus-rtu-over-tcp"
+
+/** Protocolos que usam endereço de rede (IP e porta) em vez de porta serial. */
+export const isNetworkProtocol = (p: Protocol) => p !== "modbus-rtu"
 export type StateMode = "signals" | "state_code" | "count_derived"
 
 export interface Machine {
@@ -148,7 +152,7 @@ export interface Device {
     serialPort?: string
     baudRate?: number
     parity?: "N" | "E" | "O"
-    dataBits?: 7 | 8
+    dataBits?: 8
     stopBits?: 1 | 2
     unitId: number
     timeoutMs: number
