@@ -73,3 +73,16 @@ pnpm --filter web lint
 ```bash
 pnpm --filter web build
 ```
+
+```bash
+pnpm --filter web test       # API dos gateways (Vitest + PGlite, sem servidor)
+pnpm --filter web test:e2e   # plc-sim → agente Go → API → banco (precisa do Go 1.24; ~1 min)
+```
+
+## API dos gateways (`/api/gateway/v1`)
+
+Primeiro código real de servidor: `enroll`, `sync` e `config` ([docs/04](../../docs/04-protocolo-gateway-nuvem.md), contrato em `@engemase/contracts`).
+
+- Lógica em `lib/server/gateway/` (sem Next.js: recebe `Request` e um banco do Drizzle e devolve `Response`); os `app/api/gateway/v1/*/route.ts` só repassam.
+- Banco: `DATABASE_URL` (Neon com pooler; usuário membro de `app_user`) e, opcional, `DATABASE_POOL_MAX` (padrão 5). Sem `DATABASE_URL`, as rotas respondem 503 e o build não conecta em nada.
+- Toda leitura/escrita de um gateway roda em `withTenant()` (`app_user` + `app.org_id` do gateway autenticado, sob RLS); o token é buscado pelo hash antes (`app.resolve_gateway_token`).

@@ -9,7 +9,7 @@
     "dev": "pnpm --filter web dev",
     "build": "pnpm --filter web build",
     "lint": "pnpm --filter web lint",
-    "test": "pnpm -r --filter \"./packages/*\" test",
+    "test": "pnpm -r --filter \"./packages/*\" --filter web test",
     "typecheck": "pnpm -r --filter \"./packages/*\" --filter web typecheck",
     "typecheck:packages": "pnpm -r --filter \"./packages/*\" typecheck",
     "test:go": "cd gateway && GOTOOLCHAIN=local go test ./... && cd ../tools/plc-sim && GOTOOLCHAIN=local go test ./...",

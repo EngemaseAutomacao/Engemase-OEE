@@ -199,7 +199,7 @@ Se o CLP entregar outra ordem, o certo é corrigir o programa (usar o FB). Em ú
 ## 8. Como o gateway lê o bloco
 
 - **Uma leitura FC03 de 14 registradores** a partir do endereço base, por máquina e por ciclo de leitura. É uma transação só; cabe com folga no limite de 125 registradores.
-- **Intervalo:** 500 ms em Modbus TCP. Em RTU, 500 ms com poucos escravos e 1.000 ms com barramento cheio (o mínimo do contrato em RTU é 200 ms). A 19200 bps, a leitura leva ~25–40 ms por máquina ([docs/11](../11-integracao-modbus.md#quanto-cabe-num-barramento)).
+- **Intervalo:** 500 ms em Modbus TCP. Em RTU, 500 ms com poucos escravos e 1.000 ms com barramento cheio (o mínimo do contrato em RTU é 200 ms). A 19200 bps, a leitura dos 14 registradores leva ~30–45 ms por máquina, contando o tempo de resposta do CLP ([docs/11](../11-integracao-modbus.md#quanto-cabe-num-barramento)).
 - **Decodificação:** feita pelo próprio agente (`gateway/internal/modbus`), com as quatro ordens de 32 bits.
 - **Estado:** modo `state_code` com o mapa da §5.3. Falha de leitura por mais de `comm_loss_after_s` (padrão 10 s) ou heartbeat parado por mais de `heartbeat_timeout_s` (template 5 s) → `NO_COMM`.
 - **Contadores:** deltas por minuto, com os tratamentos da §5.5.
@@ -290,7 +290,7 @@ Regras do contrato que este template já respeita:
 
 ## 11. Verificação no comissionamento
 
-Leitura com a CLI do gateway (lê direto, sem a fila do agente; em RS-485, só com o agente parado):
+Leitura com a CLI `oee-gateway` (lê direto, sem a fila do agente). Use na bancada ou num notebook Linux com o binário amd64. Num gateway de campo, o firewall só libera a rede OT para o próprio agente: lá, use o `modbus oee-block --device` ou a página local **(Fase 1)**. Em RS-485, nunca leia com outro mestre ativo no barramento.
 
 ```bash
 oee-gateway modbus read --target tcp://192.168.10.23:502 --unit 1 --offset 1000 --count 14 --oee-block
@@ -309,7 +309,7 @@ Com o comando `modbus oee-block` **(Fase 1)**, a mesma conferência sai pronta, 
 | 5 | Contagem | 10 peças → `contador_total` +10; uma peça refugada → `contador_refugo` +1 |
 | 6 | Produto | Trocar a receita → `produto` muda e a plataforma registra a troca |
 | 7 | Retenção | Desligar e religar o CLP: os contadores mantêm o valor |
-| 8 | CLP em STOP | Em até 5 s a máquina aparece como "sem comunicação" (heartbeat parado) |
+| 8 | CLP em STOP | Depois de 5 s com o heartbeat parado, o gateway marca a máquina como `NO_COMM`; na tela ao vivo aparece em até ~10 s como "sem comunicação" |
 
 **Erros comuns:**
 

@@ -27,6 +27,7 @@ const (
 	tProduct  = "01a159ab-0000-7000-8000-000000000007"
 	tHB       = "01a159ab-0000-7000-8000-000000000008"
 	tTotal16  = "01a159ab-0000-7000-8000-000000000009"
+	tSpeed    = "01a159ab-0000-7000-8000-00000000000a"
 )
 
 var t0 = time.Date(2026, 11, 11, 13, 0, 0, 0, time.UTC)
@@ -44,6 +45,7 @@ var allTags = map[string]string{
 	tProduct: `{"id":"%s","address":{"area":"holding_register","offset":10},"type":"uint16","role":"product.code","machine_id":"%s"}`,
 	tHB:      `{"id":"%s","address":{"area":"holding_register","offset":1},"type":"uint16","role":"plc.heartbeat","machine_id":"%s"}`,
 	tTotal16: `{"id":"%s","address":{"area":"holding_register","offset":12},"type":"uint16","role":"count.total","machine_id":"%s"}`,
+	tSpeed:   `{"id":"%s","address":{"area":"holding_register","offset":14},"type":"float32","word_order":"ABCD","role":"speed.actual","machine_id":"%s"}`,
 }
 
 func buildConfig(t *testing.T, stateRules string, tagIDs ...string) *config.GatewayConfig {
@@ -77,6 +79,12 @@ func boolV(b bool) modbus.Value { return modbus.BoolValue(b) }
 
 func u16(v uint16) modbus.Value {
 	x, _ := modbus.DecodeRegisters([]uint16{v}, modbus.Uint16, modbus.WordOrderNone, -1)
+	return x
+}
+
+// f32 decodifica dois registradores ABCD como float32 (permite NaN e ±Inf do CLP).
+func f32(hi, lo uint16) modbus.Value {
+	x, _ := modbus.DecodeRegisters([]uint16{hi, lo}, modbus.Float32, modbus.ABCD, -1)
 	return x
 }
 
@@ -286,6 +294,57 @@ func TestNoCommOnReadFailures(t *testing.T) {
 	checkMinute(t, s.minutes()[0], 40, 0, 0, 0, 20, 0, 0)
 }
 
+// Lacuna de observação maior que comm_loss_after_s (relógio adiantado por NTP,
+// processo congelado) em que a primeira leitura depois dela é processada antes do
+// próximo Tick: o tempo não observado é no_comm (docs/03, docs/16), nunca do último
+// estado confirmado.
+func TestGapBeforeFirstReadIsNoComm(t *testing.T) {
+	cfg := buildConfig(t, `{"mode":"signals","comm_loss_after_s":10}`, tRunning)
+	s := &sim{e: newEngine(t, cfg, t0)}
+	running := func(now float64) ([]engine.Sample, bool) {
+		return []engine.Sample{{TagID: tRunning, Value: boolV(true)}}, true
+	}
+	s.runUntil(60, 1, running)
+	// Uma hora sem leitura nem Tick; no passo seguinte o sim lê antes do Tick.
+	s.now = 3659
+	s.runUntil(3720, 1, running)
+
+	checkStates(t, s.stateEvents(), []wantEv{
+		{"2026-11-11T13:00:01.000Z", "RUNNING", "", -1},
+		{"2026-11-11T13:01:00.000Z", "NO_COMM", "RUNNING", -1},
+		{"2026-11-11T14:01:00.000Z", "RUNNING", "NO_COMM", -1},
+	})
+	mins := s.minutes()
+	if len(mins) != 62 {
+		t.Fatalf("minutos fechados: %d, quer 62", len(mins))
+	}
+	checkMinute(t, mins[0], 59, 0, 0, 0, 1, 0, 0)
+	for _, m := range mins[1:61] {
+		checkMinute(t, m, 0, 0, 0, 0, 60, 0, 0)
+	}
+	checkMinute(t, mins[61], 60, 0, 0, 0, 0, 0, 0)
+}
+
+// Mesma lacuna, mas o primeiro resultado depois dela é uma falha de leitura: o
+// tempo não observado continua no_comm desde a última leitura boa.
+func TestGapBeforeFirstFailureIsNoComm(t *testing.T) {
+	cfg := buildConfig(t, `{"mode":"signals","comm_loss_after_s":10}`, tRunning)
+	s := &sim{e: newEngine(t, cfg, t0)}
+	s.runUntil(60, 1, func(now float64) ([]engine.Sample, bool) {
+		return []engine.Sample{{TagID: tRunning, Value: boolV(true)}}, true
+	})
+	s.now = 3659
+	s.runUntil(3720, 1, func(now float64) ([]engine.Sample, bool) { return nil, false })
+
+	checkStates(t, s.stateEvents(), []wantEv{
+		{"2026-11-11T13:00:01.000Z", "RUNNING", "", -1},
+		{"2026-11-11T13:01:00.000Z", "NO_COMM", "RUNNING", -1},
+	})
+	for _, m := range s.minutes()[1:] {
+		checkMinute(t, m, 0, 0, 0, 0, 60, 0, 0)
+	}
+}
+
 // Sem nenhuma leitura desde o boot: NO_COMM desde o início.
 func TestNoCommFromStart(t *testing.T) {
 	cfg := buildConfig(t, `{"mode":"signals"}`, tRunning)
@@ -361,6 +420,33 @@ func TestCounterEventsInEngine(t *testing.T) {
 	jumps := s.eventsOfType(contracts.EventCounterJump)
 	if len(jumps) != 1 || *jumps[0].DiscardedDelta != 3_000_040-12 || jumps[0].At != "2026-11-11T13:00:40.000Z" {
 		t.Fatalf("counter_jump: %+v", jumps)
+	}
+}
+
+// CLP religado (contador de 16 bits não retentivo volta a ~0) enquanto o gateway
+// ficou 90 s fora: com a taxa padrão (1000/s) a janela de plausibilidade cobre a
+// faixa inteira de 16 bits e qualquer queda caberia como overflow. A queda é reset
+// (counter_reset, delta = valor atual), não um overflow que inventaria 53541 peças.
+func TestU16CounterDropAfterLongGapIsReset(t *testing.T) {
+	cfg := buildConfig(t, `{"mode":"signals"}`, tRunning, tTotal16)
+	e := newEngine(t, cfg, t0)
+	tag := cfg.Devices[0].Tags[1]
+	e.RestoreCounters([]engine.CounterState{{
+		TagID: tTotal16, MachineID: machineID, Role: "count.total", Bits: 16, AddrKey: tag.AddrKey(),
+		LastRaw: 12000, LastAt: t0.Add(-90 * time.Second),
+	}})
+	s := &sim{e: e}
+	s.runUntil(61, 1, func(now float64) ([]engine.Sample, bool) {
+		return []engine.Sample{{TagID: tRunning, Value: boolV(true)}, {TagID: tTotal16, Value: u16(5 + uint16(now/10))}}, true
+	})
+	// 5 (reset em 1 s) + 5 (de 5 para 10 até 59 s).
+	if m := s.minutes()[0]; m.Total != 10 {
+		t.Fatalf("peças no minuto = %d, quer 10", m.Total)
+	}
+	resets := s.eventsOfType(contracts.EventCounterReset)
+	if len(resets) != 1 || resets[0].PreviousRaw == nil || *resets[0].PreviousRaw != 12000 || resets[0].Raw != 5 ||
+		resets[0].At != "2026-11-11T13:00:01.000Z" || resets[0].TagID != tTotal16 {
+		t.Fatalf("counter_reset: %+v", resets)
 	}
 }
 
@@ -448,6 +534,68 @@ func TestMinuteWaitsForPendingCandidate(t *testing.T) {
 	}
 	// Primeira leitura em 1 s; RUNNING confirmado em 11 s com início em 1 s.
 	checkMinute(t, s.minutes()[0], 54, 5, 0, 0, 1, 0, 0)
+}
+
+// speed.actual float32 com NaN ou ±Inf (ou escala que estoura o float64) não pode
+// chegar ao Live: json.Marshal falharia e nenhum /sync seria mais montado. A
+// velocidade anterior também não fica: sem valor finito, o Live vai sem speed.
+func TestNonFiniteSpeedIsDroppedFromLive(t *testing.T) {
+	type step struct {
+		v    modbus.Value
+		want *float64
+	}
+	cases := []struct {
+		name  string
+		mul   float64
+		steps []step
+	}{
+		{"sem escala", 1, []step{
+			{f32(0x42C8, 0x0000), ptr(100.0)},
+			{f32(0x7FC0, 0x0000), nil}, // NaN
+			{f32(0x42C8, 0x0000), ptr(100.0)},
+			{f32(0x7F80, 0x0000), nil}, // +Inf
+			{f32(0xFF80, 0x0000), nil}, // -Inf
+		}},
+		{"escala que estoura", 1e300, []step{
+			{f32(0x3F80, 0x0000), ptr(1e300)},
+			{f32(0x7F7F, 0xFFFF), nil}, // máx. float32 × 1e300 = +Inf
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := buildConfig(t, `{"mode":"signals"}`, tRunning, tSpeed)
+			cfg.Devices[0].Tags[1].Scale = &config.Scale{Mul: ptr(c.mul)}
+			e := newEngine(t, cfg, t0)
+			for i := 1; i <= 3; i++ { // confirma RUNNING (o Live só tem máquina com estado)
+				e.OnRead(at(float64(i)), []engine.Sample{{TagID: tRunning, Value: boolV(true)}})
+				e.Tick(at(float64(i)))
+			}
+			for i, st := range c.steps {
+				now := at(float64(4 + i))
+				e.OnRead(now, []engine.Sample{{TagID: tRunning, Value: boolV(true)}, {TagID: tSpeed, Value: st.v}})
+				e.Tick(now)
+				live := e.Live(now)
+				if len(live) != 1 {
+					t.Fatalf("passo %d: live = %+v", i, live)
+				}
+				got := live[0].Speed
+				if (got == nil) != (st.want == nil) || (got != nil && *got != *st.want) {
+					t.Fatalf("passo %d: speed = %s, quer %s", i, fmtPtr(got), fmtPtr(st.want))
+				}
+				req := contracts.SyncRequest{Batch: contracts.Batch{SentAt: contracts.FormatTime(now)}, Live: live}
+				if _, err := json.Marshal(req); err != nil {
+					t.Fatalf("passo %d: /sync não serializa: %v", i, err)
+				}
+			}
+		})
+	}
+}
+
+func fmtPtr(p *float64) string {
+	if p == nil {
+		return "nil"
+	}
+	return fmt.Sprint(*p)
 }
 
 // Contrato: o que o motor produz, montado num /sync, valida no JSON Schema estrito.

@@ -47,6 +47,32 @@ func TestCounterTracker(t *testing.T) {
 			steps: []step{{30000, 0, 0, CounterFirst}, {5, 1, 5, CounterReset}},
 		},
 		{
+			// CLP religado (contador não retentivo 12000 → 5) depois de 90 s sem gateway:
+			// a janela 1000 × 90 + 10 cobre a faixa inteira de 16 bits, então qualquer
+			// queda caberia como overflow. Ambíguo → reset, sem inventar 53541 peças.
+			name: "uint16: queda depois de lacuna longa é reset, não overflow", bits: 16, maxRate: 1000,
+			restored: &CounterState{AddrKey: "k", Bits: 16, LastRaw: 12000, LastAt: t0.Add(-90 * time.Second)},
+			steps:    []step{{5, 0, 5, CounterReset}, {8, 1, 3, CounterNormal}},
+		},
+		{
+			name: "uint16: janela exatamente do tamanho da faixa também é ambígua", bits: 16, maxRate: 65525,
+			steps: []step{{65535, 0, 0, CounterFirst}, {0, 1, 0, CounterReset}},
+		},
+		{
+			name: "uint16: overflow com taxa alta e Δt curto continua overflow", bits: 16, maxRate: 1000,
+			steps: []step{{65000, 0, 0, CounterFirst}, {100, 1, 636, CounterOverflow}},
+		},
+		{
+			name: "uint32: overflow depois de lacuna longa continua overflow", bits: 32, maxRate: 1000,
+			restored: &CounterState{AddrKey: "k", Bits: 32, LastRaw: 4294967000, LastAt: t0.Add(-90 * time.Second)},
+			steps:    []step{{5, 0, 301, CounterOverflow}},
+		},
+		{
+			name: "uint32: reset depois de lacuna longa continua reset", bits: 32, maxRate: 1000,
+			restored: &CounterState{AddrKey: "k", Bits: 32, LastRaw: 12000, LastAt: t0.Add(-90 * time.Second)},
+			steps:    []step{{5, 0, 5, CounterReset}},
+		},
+		{
 			name: "salto absurdo descartado e nova base", bits: 32, maxRate: 2,
 			steps: []step{{1000, 0, 0, CounterFirst}, {1_001_000, 1, 0, CounterJump}, {1_001_002, 2, 2, CounterNormal}},
 		},

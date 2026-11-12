@@ -36,7 +36,7 @@ export interface GatewayApiDeps {
   readonly logError?: (message: string, error: unknown) => void
 }
 
-type Handler = (request: Request, db: GatewayDb, requestId: string) => Promise<Response>
+type Handler = (request: Request, db: GatewayDb) => Promise<Response>
 
 async function run(request: Request, deps: GatewayApiDeps, route: string, handler: Handler): Promise<Response> {
   const requestId = (request.headers.get("x-vercel-id") ?? randomUUID()).slice(0, 128)
@@ -44,7 +44,7 @@ async function run(request: Request, deps: GatewayApiDeps, route: string, handle
     if (deps.db === null) {
       throw new GatewayApiError("service_unavailable", "Banco de dados não configurado.", { retryAfterS: 30 })
     }
-    return await handler(request, deps.db, requestId)
+    return await handler(request, deps.db)
   } catch (error) {
     if (error instanceof GatewayApiError) return errorResponse(error, requestId)
     const log = deps.logError ?? ((message: string, err: unknown) => console.error(message, err))

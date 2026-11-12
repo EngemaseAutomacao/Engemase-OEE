@@ -15,8 +15,16 @@ import (
 )
 
 // ErrBlocked indica que o envio está parado por 401 (token inválido ou revogado).
-// A coleta continua e o buffer é mantido até um token novo (Unblock).
+// A coleta continua e o buffer é mantido até um token novo (Unblock) ou até a sonda
+// periódica ver o mesmo token aceito de novo.
 var ErrBlocked = errors.New("uplink: envio bloqueado (401); aguardando novo registro")
+
+// DefaultProbeEvery é o intervalo da sonda enquanto o envio está parado por 401: um
+// /sync só de saúde (sem itens) com o MESMO token. Um 401 passageiro do servidor
+// (deploy, falha no banco de tokens) não pode parar a frota inteira até um novo
+// enroll no local; e 15 min é raro o bastante para não insistir num token de fato
+// revogado.
+const DefaultProbeEvery = 15 * time.Minute
 
 // Queue é a parte da outbox usada pelo sincronizador (buffer.Store implementa).
 type Queue interface {
@@ -64,14 +72,17 @@ type Syncer struct {
 	OnResponse func(*contracts.SyncResponse)
 	// OnConfigOutdated é chamado no 409.
 	OnConfigOutdated func()
-	// OnBlocked é chamado no 401 (alarme local).
+	// OnBlocked é chamado no 401 (alarme local), inclusive a cada sonda recusada.
 	OnBlocked func(error)
+	// ProbeEvery é o intervalo da sonda enquanto bloqueado por 401 (padrão DefaultProbeEvery).
+	ProbeEvery time.Duration
 
 	kick chan struct{}
 
 	mu        sync.Mutex
 	blocked   bool
-	offsets   []int64 // últimas diferenças de relógio (ms)
+	blockedAt time.Time // último 401 (envio ou sonda): a próxima sonda conta daqui
+	offsets   []int64   // últimas diferenças de relógio (ms)
 	lastOK    time.Time
 	lastErr   error
 	lastStart time.Time
@@ -97,6 +108,9 @@ func (s *Syncer) init() {
 	}
 	if s.Interval <= 0 {
 		s.Interval = 10 * time.Second
+	}
+	if s.ProbeEvery <= 0 {
+		s.ProbeEvery = DefaultProbeEvery
 	}
 }
 
@@ -173,6 +187,7 @@ func (s *Syncer) SyncOnce(ctx context.Context) (Result, error) {
 	case ActionStopSending:
 		s.mu.Lock()
 		s.blocked = true
+		s.blockedAt = s.Now()
 		s.mu.Unlock()
 		if s.OnBlocked != nil {
 			s.OnBlocked(err)
@@ -309,7 +324,13 @@ func (s *Syncer) Run(ctx context.Context) error {
 // cycle faz um ciclo e devolve quanto esperar até o próximo.
 func (s *Syncer) cycle(ctx context.Context) (time.Duration, bool) {
 	if s.Blocked() {
-		return time.Minute, true // Unblock acorda pelo kick
+		if wait := s.probeWait(); wait > 0 {
+			return wait, true // Unblock (token novo) acorda pelo kick
+		}
+		if !s.probe(ctx) {
+			return s.ProbeEvery, true
+		}
+		// O mesmo token voltou a ser aceito: segue com o envio normal.
 	}
 	res, err := s.SyncOnce(ctx)
 	switch ActionFor(err) {
@@ -324,7 +345,7 @@ func (s *Syncer) cycle(ctx context.Context) (time.Duration, bool) {
 		}
 		return s.Interval, true
 	case ActionStopSending:
-		return time.Minute, true
+		return s.ProbeEvery, true // Unblock acorda pelo kick; senão, a sonda
 	case ActionRetryAfter:
 		var he *HTTPError
 		if errors.As(err, &he) && he.RetryAfter > 0 {
@@ -333,6 +354,41 @@ func (s *Syncer) cycle(ctx context.Context) (time.Duration, bool) {
 		}
 	}
 	return s.Backoff.Next(), false
+}
+
+// probeWait diz quanto falta para a próxima sonda (<= 0: já é hora).
+func (s *Syncer) probeWait() time.Duration {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return min(s.blockedAt.Add(s.ProbeEvery).Sub(s.Now()), s.ProbeEvery)
+}
+
+// probe testa o token atual com um /sync só de saúde: sem itens, o buffer fica
+// intacto. Devolve true (e desbloqueia) se o servidor voltou a aceitar o token.
+// Um novo 401 mantém o bloqueio e repete o alarme local; outro erro (rede, 5xx)
+// não testou o token e só adia a sonda.
+func (s *Syncer) probe(ctx context.Context) bool {
+	s.mu.Lock()
+	s.lastStart = s.Now()
+	s.mu.Unlock()
+
+	var res Result
+	err := s.send(ctx, nil, &res)
+
+	s.mu.Lock()
+	s.lastErr = err
+	if err == nil {
+		s.lastOK = s.Now()
+		s.blocked = false
+		s.mu.Unlock()
+		return true
+	}
+	s.blockedAt = s.Now()
+	s.mu.Unlock()
+	if ActionFor(err) == ActionStopSending && s.OnBlocked != nil {
+		s.OnBlocked(err)
+	}
+	return false
 }
 
 func (s *Syncer) wait(ctx context.Context, d time.Duration, honorKick bool) error {

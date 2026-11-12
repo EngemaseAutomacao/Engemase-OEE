@@ -17,6 +17,7 @@ package engine
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"time"
@@ -170,6 +171,12 @@ func (e *Engine) OnRead(at time.Time, samples []Sample) {
 		if b == nil {
 			continue
 		}
+		if !touched[b.machine] {
+			// Avalia com os sinais antigos antes que a leitura nova esconda o silêncio:
+			// se a lacuna até aqui passou de comm_loss_after_s sem Tick no meio, ela
+			// vira NO_COMM (tempo não observado), não tempo do último estado.
+			b.machine.evaluate(at)
+		}
 		b.machine.apply(b, s.Value, at)
 		touched[b.machine] = true
 	}
@@ -184,6 +191,9 @@ func (e *Engine) OnRead(at time.Time, samples []Sample) {
 func (e *Engine) OnFailure(deviceID string, at time.Time) {
 	at = at.UTC()
 	for _, m := range e.devices[deviceID] {
+		// Como em OnRead: uma lacuna sem Tick maior que comm_loss_after_s é NO_COMM
+		// desde a última leitura boa, não desde esta falha.
+		m.evaluate(at)
 		if m.firstFail.IsZero() || !m.firstFail.After(m.lastGood) {
 			m.firstFail = at
 		}
@@ -399,8 +409,13 @@ func (m *machine) apply(b *binding, v modbus.Value, at time.Time) {
 		m.product = p
 		m.acc(at).product = p
 	case config.RoleSpeedActual:
-		s := v.Scaled(b.mul, b.add)
-		m.speed = &s
+		// float32 do CLP pode vir NaN/±Inf (ou a escala estourar): isso no Live faria
+		// o json.Marshal do /sync inteiro falhar. Sem valor finito, sem velocidade.
+		if s := v.Scaled(b.mul, b.add); math.IsNaN(s) || math.IsInf(s, 0) {
+			m.speed = nil
+		} else {
+			m.speed = &s
+		}
 	case config.RoleHeartbeat:
 		hb := v.Int64()
 		if !m.hbValue.ok || m.hbValue.v != hb {

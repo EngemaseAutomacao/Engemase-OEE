@@ -245,7 +245,14 @@ func Open(t Target) (Reader, error) {
 		h.Timeout = c.target.Timeout
 		h.IdleTimeout = -1 // conexão persistente, nunca expira
 		h.LinkRecoveryTimeout = 0
-		h.ProtocolRecoveryTimeout = 0
+		// Resposta que chega depois do timeout fica no socket. Com a janela de
+		// recuperação de protocolo, a biblioteca a reconhece pelo id de transação, a
+		// descarta e continua esperando a resposta certa dentro do mesmo Timeout; com
+		// zero, a repetição lia o quadro atrasado, acusava "response stream out of
+		// sync" e derrubava a conexão. O prazo conta do início do Send e só é
+		// consultado enquanto a leitura não expira, então qualquer valor >= Timeout
+		// cobre a tentativa inteira; 4× dá folga para o tempo de conexão.
+		h.ProtocolRecoveryTimeout = 4 * c.target.Timeout
 		c.handler, c.conn, c.mbc = h, h, mb.NewClient(h)
 	case TransportRTUOverTCP:
 		if t.Timeout <= 0 {
@@ -332,7 +339,9 @@ func (c *client) readOnce(ctx context.Context, unit uint8, s Span) (Raw, error) 
 		b, err = c.mbc.ReadHoldingRegisters(ctx, s.Start, s.Count)
 	}
 	if err != nil {
-		return Raw{}, Classify(err)
+		err = Classify(err)
+		c.dropAfterError(err)
+		return Raw{}, err
 	}
 	raw := Raw{Span: s}
 	if s.Area.IsBit() {
@@ -344,7 +353,42 @@ func (c *client) readOnce(ctx context.Context, unit uint8, s Span) (Raw, error) 
 		}
 	}
 	if err != nil {
+		c.dropAfterError(err) // quadro que não é desta requisição: fluxo desalinhado
 		return Raw{}, err
 	}
 	return raw, nil
+}
+
+// dropAfterError fecha o socket (RTU sobre TCP) ou a porta serial (RTU) depois de uma
+// leitura que falhou sem ser exceção Modbus. A próxima leitura reconecta ou reabre a
+// porta sozinha: o Send da grid-x chama connect, que disca/abre quando não há conexão.
+//
+// Quadro RTU não tem id de transação: a grid-x aceita como resposta o primeiro quadro
+// com o mesmo unit id e função (e, no RTU sobre TCP, o tamanho esperado). Depois de um
+// timeout, a resposta atrasada ficaria no caminho e seria lida como resposta da
+// PRÓXIMA requisição, com o valor de outro endereço. Fechar descarta esses bytes. No
+// RTU sobre TCP é também o que recupera o link quando o conversor serial↔Ethernet
+// reinicia: a biblioteca não fecha o socket em erro nesse transporte e usamos
+// IdleTimeout=-1, então o socket morto devolveria "broken pipe" para sempre.
+//
+// Na porta serial o Close é o "flush" possível: a grid-x não expõe o descritor (não
+// dá para chamar tcflush), mas o último close de uma UART descarta o buffer de entrada
+// e, com a porta fechada, nada é recebido; a reabertura começa vazia. Sobra uma
+// janela que nenhum lado do mestre fecha: um quadro que chegue depois de a próxima
+// requisição já ter sido escrita. Escravo que responde depois do timeout está fora do
+// tempo do barramento; a correção ali é aumentar timeout_ms.
+//
+// Exceção Modbus é um quadro completo que responde a esta requisição: o fluxo segue
+// alinhado e a conexão fica. No Modbus TCP a própria biblioteca casa o id de
+// transação, descarta respostas atrasadas (ProtocolRecoveryTimeout) e fecha o socket
+// quando perde o alinhamento; ali não mexemos.
+func (c *client) dropAfterError(err error) {
+	if c.target.Transport == TransportTCP {
+		return
+	}
+	var exc *ExceptionError
+	if errors.As(err, &exc) {
+		return
+	}
+	_ = c.conn.Close()
 }

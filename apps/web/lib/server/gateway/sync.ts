@@ -184,9 +184,10 @@ async function lockGateway(tx: GatewayTx, gatewayId: string): Promise<LockedGate
       status: gateway.status,
       deletedAt: gateway.deletedAt,
       configVersionLatest: gateway.configVersionLatest,
+      // Colunas qualificadas à mão: dentro de um campo `sql`, o Drizzle as escreve sem a tabela.
       syncInterval: sql<string | null>`(
         SELECT v.snapshot -> 'uplink' ->> 'sync_interval_s' FROM gateway_config_version v
-        WHERE v.gateway_id = ${gateway.id} AND v.version = ${gateway.configVersionLatest}
+        WHERE v.gateway_id = gateway.id AND v.version = gateway.config_version_latest
       )`,
     })
     .from(gateway)
@@ -630,7 +631,7 @@ async function saveLive(w: Writer, live: readonly Live[]): Promise<void> {
         at: sql`excluded.at`,
         updatedAt: sql`excluded.updated_at`,
       },
-      setWhere: sql`${machineLive.at} < excluded.at`,
+      setWhere: sql`machine_live.at < excluded.at`,
     })
 }
 

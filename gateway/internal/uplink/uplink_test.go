@@ -339,6 +339,81 @@ func TestUnauthorizedBlocksAndKeepsBuffer(t *testing.T) {
 	}
 }
 
+// Um 401 passageiro do servidor não pode parar o envio até um novo enroll: enquanto
+// bloqueado, o agente sonda com o MESMO token (/sync só de saúde, buffer intacto) a
+// cada ProbeEvery e, quando a sonda passa, volta a enviar a fila.
+func TestUnauthorizedProbesSameTokenAndResumes(t *testing.T) {
+	var mu sync.Mutex
+	refusals := 2 // o envio e a primeira sonda levam 401; a segunda sonda passa
+	fc := newCloud(t, func(req contracts.SyncRequest) (int, any, http.Header) {
+		mu.Lock()
+		defer mu.Unlock()
+		if refusals > 0 {
+			refusals--
+			return apiErr(401, "token_revoked", nil)
+		}
+		return ok(req, 10)
+	})
+	store, _ := newStore(t, 3, 0)
+	sy := newSyncer(t, fc, store)
+	clock := t0
+	sy.Now = func() time.Time { return clock } // Now e Sleep rodam na goroutine do Run
+	alarms := 0
+	sy.OnBlocked = func(error) { alarms++ }
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var waits []time.Duration
+	sy.Sleep = func(ctx context.Context, d time.Duration) error {
+		waits = append(waits, d)
+		if len(waits) <= 2 {
+			if st := pending(t, store); st.Pending != 3 {
+				t.Errorf("buffer deveria ficar intacto enquanto bloqueado: %+v", st)
+			}
+		}
+		clock = clock.Add(d)
+		if len(waits) == 3 {
+			cancel()
+			return ctx.Err()
+		}
+		return nil
+	}
+	if err := sy.Run(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run: %v", err)
+	}
+
+	want := []time.Duration{uplink.DefaultProbeEvery, uplink.DefaultProbeEvery, 10 * time.Second}
+	if len(waits) != len(want) {
+		t.Fatalf("esperas = %v, quer %v", waits, want)
+	}
+	for i := range want {
+		if waits[i] != want[i] {
+			t.Fatalf("esperas = %v, quer %v", waits, want)
+		}
+	}
+	reqs := fc.requests()
+	if len(reqs) != 4 {
+		t.Fatalf("quer envio + 2 sondas + envio, teve %d requisições", len(reqs))
+	}
+	for i, r := range reqs[1:3] {
+		if r.Batch.SeqFrom != nil || len(r.Events) != 0 || len(r.Minutes) != 0 {
+			t.Fatalf("sonda %d deveria ser só de saúde: %+v", i+1, r.Batch)
+		}
+	}
+	if len(reqs[3].Events) != 3 {
+		t.Fatalf("depois da sonda aceita, a fila deveria ir: %d eventos", len(reqs[3].Events))
+	}
+	if alarms != 2 {
+		t.Fatalf("alarme local deveria repetir a cada sonda recusada: %d", alarms)
+	}
+	if sy.Blocked() {
+		t.Fatal("deveria ter desbloqueado")
+	}
+	if st := pending(t, store); st.Pending != 0 {
+		t.Fatalf("fila: %+v", st)
+	}
+}
+
 func TestConflictRefreshesConfig(t *testing.T) {
 	fc := newCloud(t, func(req contracts.SyncRequest) (int, any, http.Header) { return apiErr(409, "config_outdated", nil) })
 	store, _ := newStore(t, 1, 0)

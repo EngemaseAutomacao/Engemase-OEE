@@ -134,6 +134,8 @@ export interface SeedOptions {
   readonly config?: GatewayConfig
   /** Sessões de acesso remoto a criar com estes ids. */
   readonly remoteSessionIds?: readonly string[]
+  /** Cria o gateway (e suas máquinas) dentro do cliente, unidade e linha de outro seed. */
+  readonly into?: SeededClient
 }
 
 /**
@@ -143,16 +145,24 @@ export interface SeedOptions {
  */
 export async function seedClient(db: GatewayDb, options: SeedOptions): Promise<SeededClient> {
   const config = options.config ?? EXAMPLE_CONFIG
-  const org = first(await db.insert(s.organization).values({ name: `Cliente ${options.slug}`, slug: options.slug }).returning())
-  const organizationId = org.id
-  const person = first(
-    await db
-      .insert(s.user)
-      .values({ name: `Técnico ${options.slug}`, email: `tecnico-${options.slug}-${randomUUID()}@example.com` })
-      .returning(),
-  )
-  const unitRow = first(await db.insert(s.unit).values({ organizationId, name: "Planta 1" }).returning())
-  const lineRow = first(await db.insert(s.line).values({ organizationId, unitId: unitRow.id, name: "Linha A" }).returning())
+  const { into } = options
+  const organizationId =
+    into?.organizationId ??
+    first(await db.insert(s.organization).values({ name: `Cliente ${options.slug}`, slug: options.slug }).returning()).id
+  const person =
+    into !== undefined
+      ? { id: into.userId }
+      : first(
+          await db
+            .insert(s.user)
+            .values({ name: `Técnico ${options.slug}`, email: `tecnico-${options.slug}-${randomUUID()}@example.com` })
+            .returning(),
+        )
+  const unitRow = into !== undefined ? { id: into.unitId } : first(await db.insert(s.unit).values({ organizationId, name: "Planta 1" }).returning())
+  const lineRow =
+    into !== undefined
+      ? { id: into.lineId }
+      : first(await db.insert(s.line).values({ organizationId, unitId: unitRow.id, name: "Linha A" }).returning())
 
   for (const m of config.machines) {
     await db.insert(s.machine).values({
@@ -248,7 +258,7 @@ export async function seedClient(db: GatewayDb, options: SeedOptions): Promise<S
 
   return {
     organizationId,
-    slug: options.slug,
+    slug: into?.slug ?? options.slug,
     userId: person.id,
     unitId: unitRow.id,
     lineId: lineRow.id,

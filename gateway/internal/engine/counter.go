@@ -61,6 +61,11 @@ func (c *counterTracker) maxValue() uint64 {
 //   - cur ≥ prev: delta = cur − prev; acima do limite é salto (descarta e redefine a base);
 //   - cur < prev: wrap = (máx − prev) + cur + 1; se wrap ≤ limite é overflow (delta = wrap);
 //     senão é reset (delta = cur, se plausível).
+//
+// Se o limite cobre a faixa inteira do tipo (lacuna longa, contador de 16 bits),
+// qualquer queda caberia como overflow: overflow e reset ficam indistinguíveis e a
+// queda é tratada como reset, para nunca inventar peças (ex.: CLP religado com
+// contador não retentivo 12000 → 5 depois de 90 s sem gateway não vira +53541).
 func (c *counterTracker) update(cur uint32, at time.Time) CounterResult {
 	if !c.valid {
 		r := c.restored
@@ -95,7 +100,7 @@ func (c *counterTracker) update(cur uint32, at time.Time) CounterResult {
 		}
 	default:
 		wrap := (c.maxValue() - uint64(prev)) + uint64(cur) + 1
-		if float64(wrap) <= limit {
+		if float64(wrap) <= limit && limit < float64(c.maxValue()) {
 			res.Kind, res.Delta = CounterOverflow, int64(wrap)
 		} else {
 			res.Kind = CounterReset

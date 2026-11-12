@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +39,27 @@ type Options struct {
 	CredentialsPollEvery time.Duration
 }
 
+// maxUnsentItems limita a saída do motor guardada em memória enquanto o buffer não
+// grava (disco cheio, erro de E/S): 10 000 itens são ~8 h de minutos de 20 máquinas
+// (~7 MB). Acima disso saem os itens mais antigos e um evento data_loss registra a
+// perda: ela nunca é silenciosa.
+const maxUnsentItems = 10_000
+
+// commitErrLogEvery espaça o log de falha de gravação (a regravação é a cada tick).
+const commitErrLogEvery = time.Minute
+
+// clockJumpMin é a menor diferença, entre dois ticks, do avanço do relógio de parede
+// para o do monotônico que conta como salto do relógio (passo do NTP ou do RTC).
+// Abaixo disso é ruído (slew do NTP, atraso do tick).
+const clockJumpMin = 2 * time.Second
+
+// Meta (tabela meta do buffer) da última config recusada: depois de reiniciar, o
+// agente não baixa nem recusa de novo a mesma versão.
+const (
+	metaRejectedVersion = "config_rejected_version"
+	metaRejectedError   = "config_rejected_error"
+)
+
 type agent struct {
 	local   *config.Local
 	store   *buffer.Store
@@ -50,16 +73,26 @@ type agent struct {
 	reconfigure chan *config.GatewayConfig
 	fetchConfig chan struct{}
 
-	mu        sync.Mutex
-	cfg       *config.GatewayConfig
-	cfgStatus *contracts.ConfigStatus
-	etag      string
-	live      []contracts.Live
-	devices   []contracts.DeviceHealth
-	lastTick  time.Time
-	client    *uplink.Client
-	syncer    *uplink.Syncer
-	credToken string
+	// Só a rotina de coleta (tick e collectWith) mexe nestes.
+	unsent      buffer.Write                      // saída do motor que o buffer ainda não gravou (ver flush)
+	lost        *unsentLoss                       // o que saiu de unsent pelo limite, ainda sem data_loss gravado
+	commitLogAt time.Time                         // último log de falha de gravação (zero: gravando)
+	clock       func() (time.Time, time.Duration) // parede e monotônico (nil = relógio do sistema)
+	clockWall   time.Time                         // parede no tick anterior, sem leitura monotônica
+	clockMono   time.Duration                     // monotônico no tick anterior
+
+	mu              sync.Mutex
+	cfg             *config.GatewayConfig
+	cfgStatus       *contracts.ConfigStatus
+	etag            string
+	rejectedVersion int    // última config_version recusada (0: nenhuma)
+	rejectedETag    string // ETag do corpo recusado (If-None-Match evita baixá-lo de novo)
+	live            []contracts.Live
+	devices         []contracts.DeviceHealth
+	lastTick        time.Time
+	client          *uplink.Client
+	syncer          *uplink.Syncer
+	credToken       string
 }
 
 // Run executa o agente até o contexto acabar (SIGTERM).
@@ -145,6 +178,13 @@ func NewLogger(level string) *slog.Logger {
 // ---------------------------------------------------------------------------
 
 func (a *agent) loadSavedConfig(ctx context.Context) error {
+	if err := a.loadAppliedConfig(ctx); err != nil {
+		return err
+	}
+	return a.loadRejected(ctx)
+}
+
+func (a *agent) loadAppliedConfig(ctx context.Context) error {
 	_, body, err := a.store.LoadConfig(ctx, "current")
 	if errors.Is(err, buffer.ErrNoConfig) {
 		a.log.Warn("sem config salva: aguardando a nuvem (nada é coletado até lá)")
@@ -165,6 +205,29 @@ func (a *agent) loadSavedConfig(ctx context.Context) error {
 		}
 	}
 	a.setConfig(cfg, "applied", "")
+	return nil
+}
+
+// loadRejected lê a última config_version recusada (gravada junto com o
+// config_rejected). Se ela é mais nova que a aplicada, a recusa continua valendo: a
+// saúde segue informando, e a versão não é baixada de novo.
+func (a *agent) loadRejected(ctx context.Context) error {
+	v, err := a.store.Meta(ctx, metaRejectedVersion)
+	if err != nil || v == "" {
+		return err
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= a.configVersion() {
+		return nil // meta estranha ou recusa superada: no pior caso, baixa e recusa uma vez de novo
+	}
+	msg, err := a.store.Meta(ctx, metaRejectedError)
+	if err != nil {
+		return err
+	}
+	a.mu.Lock()
+	a.rejectedVersion = n
+	a.mu.Unlock()
+	a.setConfig(nil, "rejected", msg)
 	return nil
 }
 
@@ -194,6 +257,17 @@ func (a *agent) configVersion() int {
 	return 0
 }
 
+// wantsConfig diz se vale baixar a config que a nuvem anuncia: só versão mais nova
+// que a aplicada e diferente da que este agente já recusou. A nuvem repete a mesma
+// latest_version em todo /sync; sem lembrar a recusa, cada sync baixaria a config,
+// recusaria de novo e enfileiraria outro config_rejected.
+func (a *agent) wantsConfig(latest int) bool {
+	a.mu.Lock()
+	rejected := a.rejectedVersion
+	a.mu.Unlock()
+	return latest > a.configVersion() && latest != rejected
+}
+
 // configLoop baixa e aplica a config quando a nuvem avisa versão nova (ou 409).
 func (a *agent) configLoop(ctx context.Context) error {
 	for {
@@ -204,6 +278,10 @@ func (a *agent) configLoop(ctx context.Context) error {
 		}
 		a.mu.Lock()
 		client, etag := a.client, a.etag
+		if a.rejectedETag != "" && a.rejectedETag != etag {
+			// If-None-Match aceita lista: 304 também se a última ainda é a recusada (409).
+			etag = strings.TrimPrefix(etag+", "+a.rejectedETag, ", ")
+		}
 		a.mu.Unlock()
 		if client == nil {
 			continue
@@ -227,16 +305,29 @@ func (a *agent) applyConfig(ctx context.Context, body []byte, etag string) {
 	prev := a.configVersion()
 	cfg, err := config.ParseRemote(body)
 	if err != nil {
-		a.log.Error("config recusada; a coleta segue com a atual", "erro", err)
-		if v := peekVersion(body); v >= 1 {
+		msg := truncate(err.Error(), 2000)
+		v := peekVersion(body)
+		a.mu.Lock()
+		again := v >= 1 && v == a.rejectedVersion
+		if v >= 1 {
+			a.rejectedVersion = v
+		}
+		a.rejectedETag = etag
+		a.mu.Unlock()
+		a.setConfig(nil, "rejected", msg)
+		if again {
+			return // já recusada e registrada: um config_rejected por versão
+		}
+		a.log.Error("config recusada; a coleta segue com a atual", "versao", v, "erro", err)
+		if v >= 1 {
 			ev := contracts.ConfigRejectedEvent{ID: a.ids.New(now), Type: contracts.EventConfigRejected, At: contracts.FormatTime(now),
-				Version: v, Error: truncate(err.Error(), 2000)}
+				Version: v, Error: msg}
 			if prev > 0 {
 				ev.RevertedTo = &prev
 			}
-			a.enqueueEvent(ctx, ev, now)
+			// Evento e versão recusada na mesma transação (vale depois de reiniciar).
+			a.enqueueEventMeta(ctx, ev, now, map[string]string{metaRejectedVersion: strconv.Itoa(v), metaRejectedError: msg})
 		}
-		a.setConfig(nil, "rejected", truncate(err.Error(), 2000))
 		return
 	}
 	if cfg.ConfigVersion == prev {
@@ -304,7 +395,10 @@ func (a *agent) collectWith(ctx context.Context, cfg *config.GatewayConfig) erro
 	if err != nil {
 		return err
 	}
-	eng.RestoreCounters(counters)
+	// Contadores que o motor anterior já usou e o buffer ainda não gravou (falha de
+	// Commit) valem mais que os do disco: partir dos do disco contaria de novo as
+	// peças dos minutos que ainda estão em unsent.
+	eng.RestoreCounters(mergeCounters(counters, a.unsent.Counters))
 
 	pollers, err := poller.Build(cfg, a.local)
 	if err != nil {
@@ -365,21 +459,21 @@ func (a *agent) collectWith(ctx context.Context, cfg *config.GatewayConfig) erro
 }
 
 func (a *agent) tick(ctx context.Context, eng *engine.Engine, pollers []*poller.Poller) {
-	now := time.Now()
+	now, mono := a.readClock()
+	a.checkClock(now, mono)
 	out := eng.Tick(now)
 	if !out.Empty() {
 		w, err := buffer.FromEngine(out)
-		if err == nil {
-			_, err = a.store.Commit(context.WithoutCancel(ctx), w)
-		}
 		if err != nil {
-			a.log.Error("falha ao gravar no buffer", "erro", err)
+			a.log.Error("falha ao serializar a saída do motor", "erro", err)
 		}
-		for _, r := range out.Records {
-			if ev, ok := r.Payload.(contracts.StateEvent); ok {
-				a.log.Debug("estado", "maquina", ev.MachineID, "estado", ev.State, "desde", ev.At)
-				a.kick()
-			}
+		a.addUnsent(w)
+	}
+	a.flush(ctx, now)
+	for _, r := range out.Records {
+		if ev, ok := r.Payload.(contracts.StateEvent); ok {
+			a.log.Debug("estado", "maquina", ev.MachineID, "estado", ev.State, "desde", ev.At)
+			a.kick()
 		}
 	}
 	var devs []contracts.DeviceHealth
@@ -389,6 +483,163 @@ func (a *agent) tick(ctx context.Context, eng *engine.Engine, pollers []*poller.
 	a.mu.Lock()
 	a.live, a.devices, a.lastTick = eng.Live(now), devs, now
 	a.mu.Unlock()
+}
+
+// processStart é a referência do relógio monotônico do agente.
+var processStart = time.Now()
+
+// readClock devolve o relógio de parede (com a leitura monotônica, como time.Now) e o
+// tempo monotônico desde o início do processo, imune a acertos de NTP/RTC.
+func (a *agent) readClock() (time.Time, time.Duration) {
+	if a.clock != nil {
+		return a.clock()
+	}
+	now := time.Now()
+	return now, now.Sub(processStart)
+}
+
+// checkClock compara, entre dois ticks, o avanço do relógio de parede com o do
+// monotônico. Uma diferença de clockJumpMin ou mais é um passo do relógio (NTP/RTC
+// acertando a hora) e vira um evento clock_jump. Os dados usam o relógio de parede:
+// num passo para trás, o motor não conta tempo (estado e fechamento de minuto) até o
+// relógio alcançar a hora em que estava (pendência: tratar no motor).
+func (a *agent) checkClock(wall time.Time, mono time.Duration) {
+	wall = wall.Round(0) // sem a leitura monotônica, Sub compara o tempo de parede
+	prevWall, prevMono := a.clockWall, a.clockMono
+	a.clockWall, a.clockMono = wall, mono
+	if prevWall.IsZero() {
+		return
+	}
+	jump := wall.Sub(prevWall) - (mono - prevMono)
+	if jump.Abs() < clockJumpMin {
+		return
+	}
+	if jump < 0 {
+		a.log.Warn("relógio de parede voltou: a contagem de tempo das máquinas fica parada até ele alcançar a hora anterior",
+			"salto_ms", jump.Milliseconds(), "antes", prevWall, "agora", wall)
+	} else {
+		a.log.Warn("relógio de parede saltou para frente", "salto_ms", jump.Milliseconds(), "antes", prevWall, "agora", wall)
+	}
+	ev := clockJumpEvent{ID: a.ids.New(wall), Type: eventClockJump, At: contracts.FormatTime(wall), JumpMS: jump.Milliseconds()}
+	b, err := jsonMarshal(ev)
+	if err != nil {
+		return
+	}
+	a.addUnsent(buffer.Write{Items: []buffer.Item{{Kind: buffer.KindEvent, ItemID: ev.ID, At: wall, Payload: b}}})
+}
+
+// addUnsent junta uma saída nova ao que falta gravar. Contadores ficam um por tag
+// (o mais recente): é o mesmo efeito dos upserts em ordem, e RestoreCounters usa o
+// primeiro que encontra.
+func (a *agent) addUnsent(w buffer.Write) {
+	a.unsent.Items = append(a.unsent.Items, w.Items...)
+	a.unsent.Counters = mergeCounters(a.unsent.Counters, w.Counters)
+}
+
+// mergeCounters sobrepõe newer a base (por tag) e devolve base.
+func mergeCounters(base, newer []engine.CounterState) []engine.CounterState {
+	for _, c := range newer {
+		if i := slices.IndexFunc(base, func(x engine.CounterState) bool { return x.TagID == c.TagID }); i >= 0 {
+			base[i] = c
+		} else {
+			base = append(base, c)
+		}
+	}
+	return base
+}
+
+// flush grava unsent numa transação. O motor não devolve o que já entregou (minutos
+// fechados saem da memória dele, contadores avançam), então uma falha de Commit
+// (disco cheio, erro de E/S) não pode descartar a saída: ela fica para o próximo
+// tick. Regravar é idempotente: itens repetidos são ignorados por kind + item_id e
+// os contadores são upserts.
+func (a *agent) flush(ctx context.Context, now time.Time) {
+	if len(a.unsent.Items) == 0 && len(a.unsent.Counters) == 0 {
+		return
+	}
+	ctx = context.WithoutCancel(ctx) // o tick da parada também grava
+	a.trimUnsent(now)
+	w := a.unsent
+	if a.lost != nil {
+		item, err := a.dataLossItem(ctx)
+		if err != nil {
+			a.commitFailed(now, err)
+			return
+		}
+		w.Items = append([]buffer.Item{item}, a.unsent.Items...)
+	}
+	if _, err := a.store.Commit(ctx, w); err != nil {
+		a.commitFailed(now, err)
+		return
+	}
+	if !a.commitLogAt.IsZero() {
+		a.log.Info("buffer voltou a gravar; saída pendente gravada", "itens", len(w.Items))
+	}
+	a.unsent, a.lost, a.commitLogAt = buffer.Write{}, nil, time.Time{}
+}
+
+func (a *agent) commitFailed(now time.Time, err error) {
+	if d := now.Sub(a.commitLogAt); a.commitLogAt.IsZero() || d >= commitErrLogEvery || d < 0 {
+		a.log.Error("falha ao gravar no buffer; a saída do motor fica em memória e é regravada a cada tick",
+			"erro", err, "itens_pendentes", len(a.unsent.Items), "limite", maxUnsentItems)
+		a.commitLogAt = now
+	}
+}
+
+// unsentLoss acumula o que saiu de unsent pelo limite. Vira UM evento data_loss, com
+// o mesmo id em todas as tentativas de gravação.
+type unsentLoss struct {
+	id       string
+	at       time.Time
+	items    int
+	from, to time.Time
+}
+
+// trimUnsent aplica maxUnsentItems: descarta os itens mais antigos e acumula a perda.
+// Os contadores ficam: o motor já contou a partir deles, e gravar os antigos faria a
+// próxima partida contar peças duas vezes.
+func (a *agent) trimUnsent(now time.Time) {
+	n := len(a.unsent.Items) - maxUnsentItems
+	if n <= 0 {
+		return
+	}
+	if a.lost == nil {
+		a.lost = &unsentLoss{id: a.ids.New(now), at: now}
+	}
+	l := a.lost
+	for _, it := range a.unsent.Items[:n] {
+		if l.items == 0 || it.At.Before(l.from) {
+			l.from = it.At
+		}
+		if l.items == 0 || it.At.After(l.to) {
+			l.to = it.At
+		}
+		l.items++
+	}
+	a.unsent.Items = append([]buffer.Item(nil), a.unsent.Items[n:]...)
+	a.log.Error("buffer sem gravar há muito tempo: itens mais antigos descartados (data_loss)",
+		"descartados", n, "total_perdido", l.items, "limite", maxUnsentItems)
+}
+
+// dataLossItem monta o data_loss do que saiu de unsent pelo limite (reason
+// retention_limit, o limite de retenção em memória). Esses itens nunca chegaram à
+// outbox e não têm seq; o contrato exige a faixa, então lost_seq_from/to marcam a
+// posição da lacuna: o próximo seq, que este evento ocupa ao ser gravado à frente
+// do restante.
+func (a *agent) dataLossItem(ctx context.Context) (buffer.Item, error) {
+	st, err := a.store.Stats(ctx)
+	if err != nil {
+		return buffer.Item{}, err
+	}
+	l := a.lost
+	pos := st.LastSeq + 1
+	ev := dataLossEvent{ID: l.id, Type: eventDataLoss, At: contracts.FormatTime(l.at), Reason: "retention_limit",
+		LostSeqFrom: pos, LostSeqTo: pos, Items: l.items, PeriodFrom: contracts.FormatTime(l.from), PeriodTo: contracts.FormatTime(l.to)}
+	b, err := jsonMarshal(ev)
+	if err != nil {
+		return buffer.Item{}, err
+	}
+	return buffer.Item{Kind: buffer.KindEvent, ItemID: ev.ID, At: l.at, Payload: b}, nil
 }
 
 func (a *agent) kick() {
@@ -461,13 +712,14 @@ func (a *agent) startSync(ctx context.Context, creds *config.Credentials, cancel
 		OnResponse: func(resp *contracts.SyncResponse) {
 			a.cmds.Confirm()
 			a.cmds.Handle(resp.Commands, time.Now())
-			if resp.Config.LatestVersion > a.configVersion() {
+			if a.wantsConfig(resp.Config.LatestVersion) {
 				a.requestConfig()
 			}
 		},
 		OnConfigOutdated: a.requestConfig,
 		OnBlocked: func(err error) {
-			a.log.Error("nuvem recusou o token: envio parado, buffer mantido (refaça o enroll)", "erro", err)
+			a.log.Error("nuvem recusou o token: envio parado, buffer mantido; o mesmo token é testado de novo a cada "+
+				uplink.DefaultProbeEvery.String()+" (se persistir, refaça o enroll)", "erro", err)
 		},
 	}
 	if c := a.currentConfig(); c != nil {
@@ -564,12 +816,19 @@ func (a *agent) recordStop() {
 }
 
 func (a *agent) enqueueEvent(ctx context.Context, ev any, at time.Time) {
+	a.enqueueEventMeta(ctx, ev, at, nil)
+}
+
+// enqueueEventMeta grava o evento e os metadados na mesma transação.
+func (a *agent) enqueueEventMeta(ctx context.Context, ev any, at time.Time, meta map[string]string) {
 	b, err := jsonMarshal(ev)
 	if err != nil {
 		return
 	}
 	id := eventID(b)
-	if _, err := a.store.Enqueue(context.WithoutCancel(ctx), buffer.Item{Kind: buffer.KindEvent, ItemID: id, At: at, Payload: b}); err != nil {
+	if _, err := a.store.Commit(context.WithoutCancel(ctx), buffer.Write{
+		Items: []buffer.Item{{Kind: buffer.KindEvent, ItemID: id, At: at, Payload: b}}, Meta: meta,
+	}); err != nil {
 		a.log.Error("falha ao gravar evento", "erro", err)
 	}
 	a.kick()
@@ -621,6 +880,32 @@ func (a *agent) statusLine() string {
 		}
 	}
 	return fmt.Sprintf("coletando %d/%d dispositivos · %s", connected, len(a.devices), cloud)
+}
+
+// Eventos do contrato (packages/contracts/src/sync.ts) que só o app emite; espelham
+// DataLossEventSchema e ClockJumpEventSchema (sem seq: injetado no envio).
+const (
+	eventDataLoss  = "data_loss"
+	eventClockJump = "clock_jump"
+)
+
+type dataLossEvent struct {
+	ID          string `json:"id"`
+	Type        string `json:"type"`
+	At          string `json:"at"`
+	Reason      string `json:"reason"` // retention_limit | buffer_corrupted | quarantine_expired
+	LostSeqFrom int64  `json:"lost_seq_from"`
+	LostSeqTo   int64  `json:"lost_seq_to"`
+	Items       int    `json:"items"`
+	PeriodFrom  string `json:"period_from"`
+	PeriodTo    string `json:"period_to"`
+}
+
+type clockJumpEvent struct {
+	ID     string `json:"id"`
+	Type   string `json:"type"`
+	At     string `json:"at"`
+	JumpMS int64  `json:"jump_ms"` // positivo = para frente
 }
 
 func truncate(s string, n int) string {
