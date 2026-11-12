@@ -21,7 +21,20 @@
 #   --device /dev/sdX  disco do eMMC já exposto (pula o rpiboot)
 #   --gadget-dir DIR   diretório mass-storage-gadget64 do usbboot (padrão:
 #                      procura em /usr/share/rpiboot e /usr/local/share/rpiboot)
-#   --log ARQ          registro CSV das gravações (padrão: ./egw-gravacoes.csv)
+#   --log ARQ          registro CSV das gravações, a planilha de inventário do
+#                      MVP (padrão: /var/lib/egw-estacao/gravacoes.csv)
+#
+# Rede da ficha de TI (opcional; sem nada: IT em DHCP e OT só com o endereço
+# de serviço 169.254.x.y). Na Fase 0 é o único jeito de a unidade sair da
+# bancada com a rede do cliente: não há root na unidade e o oee-helper
+# (net set) é da Fase 1. O factory init confere e recusa valor errado.
+#   --ot-address IP/N  IP fixo da OT (ETH0), ex.: 192.168.10.250/24 (sem gateway)
+#   --it-address IP/N  IP fixo da IT (ETH1); exige --it-gateway e --it-dns
+#   --it-gateway IP    gateway da IT
+#   --it-dns IP[,IP]   DNS da IT (até 4)
+#   --ntp IP[,IP]      NTP do cliente (até 4); sem ele: NTP do DHCP + pool.ntp.br
+#   --proxy URL        proxy HTTP CONNECT, ex.: http://10.20.0.5:3128 (com
+#                      usuário:senha só letras, números e . _ -)
 #   --yes              não pede confirmação antes de apagar o disco
 #   --dry-run          mostra o que faria, sem gravar nada
 #   --allow-non-usb    SÓ PARA TESTE (dispositivo loop): aceita disco não USB
@@ -31,14 +44,15 @@
 set -Eeuo pipefail
 umask 022
 
-usage() { sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,43p' "$0" | sed 's/^# \{0,1\}//'; }
 die() { printf 'flash: ERRO: %s\n' "$*" >&2; exit 1; }
 bad() { printf 'flash: %s (veja --help)\n' "$*" >&2; exit 2; }
 log() { printf 'flash: %s\n' "$*"; }
 run() { if [[ $dry == 1 ]]; then printf 'flash: [dry-run] %s\n' "$*"; else "$@"; fi; }
 
-image="" bmap="" serial="" operator="" station="" device="" gadget_dir="" logf=./egw-gravacoes.csv
+image="" bmap="" serial="" operator="" station="" device="" gadget_dir="" logf=/var/lib/egw-estacao/gravacoes.csv
 yes=0 dry=0 allow_non_usb=0
+ot_address="" it_address="" it_gateway="" it_dns="" ntp="" proxy=""
 while (( $# )); do
 	case $1 in
 		--image) image=${2:?}; shift 2 ;;
@@ -49,6 +63,12 @@ while (( $# )); do
 		--device) device=${2:?}; shift 2 ;;
 		--gadget-dir) gadget_dir=${2:?}; shift 2 ;;
 		--log) logf=${2:?}; shift 2 ;;
+		--ot-address) ot_address=${2:?}; shift 2 ;;
+		--it-address) it_address=${2:?}; shift 2 ;;
+		--it-gateway) it_gateway=${2:?}; shift 2 ;;
+		--it-dns) it_dns=${2:?}; shift 2 ;;
+		--ntp) ntp=${2:?}; shift 2 ;;
+		--proxy) proxy=${2:?}; shift 2 ;;
 		--yes) yes=1; shift ;;
 		--dry-run) dry=1; shift ;;
 		--allow-non-usb) allow_non_usb=1; shift ;;
@@ -69,6 +89,22 @@ station=${station:-$(hostname -s 2>/dev/null || echo estacao)}
 safe_re='^[A-Za-z0-9 ._:/@+,=-]{0,200}$'   # o mesmo filtro do factory init (egw_read_kv)
 [[ $operator =~ $safe_re ]] || bad "--operator com caracteres não aceitos (sem acentos)"
 [[ $station =~ $safe_re ]] || bad "--station com caracteres não aceitos"
+# Rede: mesma regra do factory init (net_from_seed), para errar aqui e não no 1º boot.
+re_ip='^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$'
+cidr_ok() { [[ $1 == */* && ${1%/*} =~ $re_ip && ${1#*/} =~ ^([89]|[12][0-9]|30)$ ]]; }
+list_ok() { local x; local -a xs; IFS=, read -r -a xs <<< "$1"; (( ${#xs[@]} >= 1 && ${#xs[@]} <= 4 )) || return 1; for x in "${xs[@]}"; do [[ $x =~ $re_ip ]] || return 1; done; }
+[[ -z $ot_address ]] || { cidr_ok "$ot_address" && [[ $ot_address != 169.254.* ]]; } || bad "--ot-address inválido (ex.: 192.168.10.250/24; 169.254/16 é do endereço de serviço)"
+if [[ -n $it_address ]]; then
+	cidr_ok "$it_address" || bad "--it-address inválido (ex.: 10.20.0.50/24)"
+	[[ $it_gateway =~ $re_ip ]] || bad "--it-address exige --it-gateway IP"
+	list_ok "$it_dns" || bad "--it-address exige --it-dns IP[,IP] (até 4)"
+elif [[ -n $it_gateway || -n $it_dns ]]; then
+	bad "--it-gateway/--it-dns só com --it-address (sem ele a IT usa DHCP)"
+fi
+[[ -z $ntp ]] || list_ok "$ntp" || bad "--ntp inválido (IP[,IP], até 4)"
+[[ -z $proxy || $proxy =~ ^https?://([A-Za-z0-9._-]+(:[A-Za-z0-9._-]+)?@)?[A-Za-z0-9.-]+:[0-9]{1,5}/?$ ]] ||
+	bad "--proxy inválido (ex.: http://10.20.0.5:3128)"
+
 for t in bmaptool lsblk blkid mount umount sha256sum; do
 	command -v "$t" >/dev/null 2>&1 || die "ferramenta ausente: $t"
 done
@@ -171,9 +207,17 @@ EGW_STATION=$station
 EGW_OPERATOR=$operator
 EOF
 )
+# Rede da ficha de TI (só o que foi informado).
+add_seed() { if [[ -n $2 ]]; then seed+=$'\n'"$1=$2"; fi; }
+add_seed EGW_OT_ADDRESS "$ot_address"
+add_seed EGW_IT_ADDRESS "$it_address"
+add_seed EGW_IT_GATEWAY "$it_gateway"
+add_seed EGW_IT_DNS "$it_dns"
+add_seed EGW_NTP_SERVERS "$ntp"
+add_seed EGW_HTTPS_PROXY "$proxy"
 if [[ $dry == 1 ]]; then
 	log "[dry-run] gravaria em $bootpart:/egw-seed.conf:"
-	printf '%s\n' "$seed"
+	printf '%s\n' "${seed//:\/\/*@/:\/\/***@}"
 else
 	if command -v partprobe >/dev/null 2>&1; then partprobe "$device" || true; else blockdev --rereadpt "$device" || true; fi
 	command -v udevadm >/dev/null 2>&1 && udevadm settle --timeout=30 || true
@@ -197,6 +241,7 @@ fi
 
 # --- Registro (planilha de inventário do MVP, docs/16 §7) ---------------------------------------
 if [[ $dry == 0 ]]; then
+	mkdir -p "$(dirname "$logf")"
 	[[ -s $logf ]] || echo "gravado_em,serie,imagem,sha256_arquivo,disco,estacao,operador" > "$logf"
 	model=$(lsblk -dno MODEL "$device" 2>/dev/null | tr -d ',' | xargs || true)
 	printf '%s,%s,%s,%s,%s,%s,%s\n' "$started" "$serial" "$img_version" "$img_sha" "${model:-?}" "$station" "$operator" >> "$logf"

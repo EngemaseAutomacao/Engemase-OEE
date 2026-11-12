@@ -14,7 +14,10 @@
 #      hash argon2id para a página local e exportação CIFRADA para o
 #      certificado da bancada (cartão lacrado + cofre). Nunca grava a senha em
 #      claro, nunca a escreve no log;
-#   6. rede de fábrica (network.json e perfis do NetworkManager pelo MAC);
+#   6. rede de fábrica (network.json e perfis do NetworkManager pelo MAC),
+#      com os valores da ficha de TI que vierem na semente (IP fixo da OT, IT
+#      fixa, DNS, NTP, proxy). Fase 0: sem o oee-helper, é o único jeito de a
+#      unidade sair da bancada com a rede do cliente (docs/16 §5 e §6);
 #   7. grava /data/identity/hw.json (identidade, somente leitura para o agente);
 #   8. roda os autotestes B0 e sinaliza nos LEDs: âmbar piscando = rodando,
 #      verde fixo = aprovado, vermelho piscando = reprovado;
@@ -38,10 +41,18 @@ EGW_LIB_DIR=${EGW_LIB_DIR:-/usr/lib/engemase/factory}
 VERSION=1
 HW_JSON=$EGW_IDENTITY_DIR/hw.json
 EXPORT_DIR=$EGW_IDENTITY_DIR/export
-NETWORK_JSON=/etc/oee-gateway/network.json
-NM_DIR=/etc/NetworkManager/system-connections
+NETWORK_JSON=${EGW_NETWORK_JSON:-/etc/oee-gateway/network.json}
+PROXY_ENV=${EGW_PROXY_ENV:-/etc/oee-gateway/proxy.env}
+NM_DIR=${EGW_NM_DIR:-/etc/NetworkManager/system-connections}
+CHRONY_SOURCES_DIR=${EGW_CHRONY_SOURCES_DIR:-/etc/chrony/sources.d}
+# Formatos aceitos na semente (rede da ficha de TI).
+RE_IP='^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$'
+RE_PREFIX='^([89]|[12][0-9]|30)$'
+RE_PROXY='^https?://([A-Za-z0-9._-]+(:[A-Za-z0-9._-]+)?@)?[A-Za-z0-9.-]+:[0-9]{1,5}/?$'
 USB_LABEL=EGWBANCADA
 
+# PLAT é preenchido por nome (egw_read_kv usa nameref); reservado para o hw.json.
+# shellcheck disable=SC2034
 declare -A SEED=() REL=() PLAT=()
 
 need_root() { [[ $(id -u) -eq 0 ]] || { egw_err "precisa de root"; exit 2; }; }
@@ -222,28 +233,108 @@ make_password() {
 }
 
 # --- 6. Rede de fábrica ------------------------------------------------------------------------------
-# /etc/oee-gateway/network.json é a fonte única da rede (docs/16 §4). Os perfis
-# do NetworkManager abaixo são o ponto de partida; o oee-helper os regenera.
+# /etc/oee-gateway/network.json é a fonte única da rede (docs/16 §4). Na Fase 0
+# o factory init gera dele os perfis do NetworkManager (amarrados pelo MAC), o
+# proxy.env e as fontes NTP; na Fase 1 o oee-helper passa a regenerá-los.
+# Valores opcionais da ficha de TI, vindos da semente (flash-emmc.sh):
+#   EGW_OT_ADDRESS   IP fixo da OT (ETH0), ex.: 192.168.10.250/24 (sem gateway:
+#                    a OT nunca tem rota padrão)
+#   EGW_IT_ADDRESS   IP fixo da IT (ETH1), ex.: 10.20.0.50/24; vazio = DHCP
+#   EGW_IT_GATEWAY   gateway da IT (obrigatório com EGW_IT_ADDRESS)
+#   EGW_IT_DNS       DNS da IT, até 4, separados por vírgula (obrigatório com IT fixa)
+#   EGW_NTP_SERVERS  NTP do cliente, até 4, separados por vírgula
+#   EGW_HTTPS_PROXY  proxy HTTP CONNECT, ex.: http://10.20.0.5:3128
+
+# ip_ok <ip>; cidr_ok <ip/prefixo>; list_ok <ip,ip,...> (1 a 4)
+ip_ok() { [[ ${1:-} =~ $RE_IP ]]; }
+cidr_ok() { [[ ${1:-} == */* ]] && ip_ok "${1%/*}" && [[ ${1#*/} =~ $RE_PREFIX ]]; }
+list_ok() {
+	local -a xs
+	local x
+	IFS=, read -r -a xs <<< "${1:-}"
+	(( ${#xs[@]} >= 1 && ${#xs[@]} <= 4 )) || return 1
+	for x in "${xs[@]}"; do ip_ok "$x" || return 1; done
+}
+# "a,b" -> ["a", "b"] (JSON); vazio -> []
+json_list() {
+	local -a xs
+	local x sep="" out="["
+	IFS=, read -r -a xs <<< "${1:-}"
+	for x in "${xs[@]}"; do out+="$sep$(egw_json_str "$x")"; sep=", "; done
+	printf '%s]' "$out"
+}
+
+# Lê e confere a rede da semente. Rede errada = unidade inacessível no campo:
+# é erro (LED vermelho), não aviso.
+net_from_seed() {
+	NET_OT_ADDR=${SEED[EGW_OT_ADDRESS]:-}
+	NET_IT_ADDR=${SEED[EGW_IT_ADDRESS]:-}
+	NET_IT_GW=${SEED[EGW_IT_GATEWAY]:-}
+	NET_IT_DNS=${SEED[EGW_IT_DNS]:-}
+	NET_NTP=${SEED[EGW_NTP_SERVERS]:-}
+	NET_PROXY=${SEED[EGW_HTTPS_PROXY]:-}
+	local -a bad=()
+	[[ -z $NET_OT_ADDR ]] || cidr_ok "$NET_OT_ADDR" || bad+=(EGW_OT_ADDRESS)
+	[[ $NET_OT_ADDR != 169.254.* ]] || bad+=("EGW_OT_ADDRESS em 169.254/16 (reservado ao endereço de serviço)")
+	if [[ -n $NET_IT_ADDR ]]; then
+		cidr_ok "$NET_IT_ADDR" || bad+=(EGW_IT_ADDRESS)
+		ip_ok "$NET_IT_GW" || bad+=(EGW_IT_GATEWAY)
+		list_ok "$NET_IT_DNS" || bad+=(EGW_IT_DNS)
+	elif [[ -n $NET_IT_GW || -n $NET_IT_DNS ]]; then
+		bad+=("EGW_IT_GATEWAY/EGW_IT_DNS sem EGW_IT_ADDRESS (IT em DHCP)")
+	fi
+	[[ -z $NET_NTP ]] || list_ok "$NET_NTP" || bad+=(EGW_NTP_SERVERS)
+	[[ -z $NET_PROXY || $NET_PROXY =~ $RE_PROXY ]] || bad+=(EGW_HTTPS_PROXY)
+	if (( ${#bad[@]} )); then
+		egw_err "rede inválida na semente: ${bad[*]} (regrave com flash-emmc.sh)"
+		return 1
+	fi
+}
+
 write_network() {
-	install -d -m 0755 /etc/oee-gateway
+	local etc_dir it_mode it_json ot_json proxy_json
+	etc_dir=$(dirname "$NETWORK_JSON")
+	install -d -m 0755 "$etc_dir"
+	if [[ -n $NET_IT_ADDR ]]; then it_mode=static; else it_mode=dhcp; fi
+	it_json="\"mode\": \"$it_mode\", \"addresses\": $(json_list "$NET_IT_ADDR"), \"gateway\": $(egw_json_val "$NET_IT_GW"), \"dns\": $(json_list "$NET_IT_DNS")"
+	ot_json="\"addresses\": $(json_list "$NET_OT_ADDR")"
+	if [[ -n $NET_PROXY ]]; then proxy_json="{ \"url\": $(egw_json_str "$NET_PROXY") }"; else proxy_json=null; fi
 	if [[ ! -s $NETWORK_JSON ]]; then
 		cat <<-EOF | egw_atomic_write "$NETWORK_JSON" 0640 root:oee
 		{
 		  "network_version": 0,
 		  "origin": "factory",
 		  "hostname": $(egw_json_str "$HOSTNAME_NEW"),
-		  "it": { "mac": $(egw_json_str "$EGW_ETH1_MAC"), "mode": "dhcp", "ipv6": "disabled", "allow_ping": false },
-		  "ot": { "mac": $(egw_json_str "$EGW_ETH0_MAC"), "mode": "static", "addresses": [], "routes": [],
+		  "it": { "mac": $(egw_json_str "$EGW_ETH1_MAC"), $it_json, "ipv6": "disabled", "allow_ping": false },
+		  "ot": { "mac": $(egw_json_str "$EGW_ETH0_MAC"), "mode": "static", $ot_json, "routes": [],
 		          "service_address": $(egw_json_str "$F_SERVICE_ADDR/16"), "local_ui": true },
-		  "proxy": null,
+		  "proxy": $proxy_json,
 		  "ca_bundle_pem": null,
-		  "ntp": { "servers": [], "use_dhcp": true, "public_fallback": true }
+		  "ntp": { "servers": $(json_list "$NET_NTP"), "use_dhcp": true, "public_fallback": true }
 		}
 		EOF
 	fi
+
+	local it_ipv4 ot_addrs
+	if [[ $it_mode == static ]]; then
+		it_ipv4="method=manual
+address1=$NET_IT_ADDR,$NET_IT_GW
+dns=${NET_IT_DNS//,/;};
+ignore-auto-dns=true"
+	else
+		it_ipv4="method=auto
+dhcp-hostname=$HOSTNAME_NEW
+dhcp-send-hostname=true"
+	fi
+	if [[ -n $NET_OT_ADDR ]]; then
+		ot_addrs="address1=$NET_OT_ADDR
+address2=$F_SERVICE_ADDR/16"
+	else
+		ot_addrs="address1=$F_SERVICE_ADDR/16"
+	fi
 	install -d -m 0700 "$NM_DIR"
 	cat <<-EOF | egw_atomic_write "$NM_DIR/oee-it.nmconnection" 0600
-	# Gerado pelo factory init (rede de fábrica). O oee-helper regenera.
+	# Gerado pelo factory init a partir do network.json (rede da IT, ETH1).
 	[connection]
 	id=oee-it
 	uuid=$(cat /proc/sys/kernel/random/uuid)
@@ -254,17 +345,15 @@ write_network() {
 	mac-address=$EGW_ETH1_MAC
 
 	[ipv4]
-	method=auto
-	dhcp-hostname=$HOSTNAME_NEW
-	dhcp-send-hostname=true
+	$it_ipv4
 	route-metric=100
 
 	[ipv6]
 	method=disabled
 	EOF
 	cat <<-EOF | egw_atomic_write "$NM_DIR/oee-ot.nmconnection" 0600
-	# Gerado pelo factory init (rede de fábrica). O oee-helper regenera.
-	# OT sem IP principal até a ficha de TI; endereço de serviço sempre ativo.
+	# Gerado pelo factory init a partir do network.json (rede da OT, ETH0).
+	# Endereço de serviço sempre ativo; OT sem rota padrão e sem DNS.
 	[connection]
 	id=oee-ot
 	uuid=$(cat /proc/sys/kernel/random/uuid)
@@ -276,7 +365,7 @@ write_network() {
 
 	[ipv4]
 	method=manual
-	address1=$F_SERVICE_ADDR/16
+	$ot_addrs
 	never-default=true
 	ignore-auto-dns=true
 	dad-timeout=3000
@@ -284,6 +373,21 @@ write_network() {
 	[ipv6]
 	method=disabled
 	EOF
+
+	# Proxy (lido pelo agente: EnvironmentFile= do oee-gateway.service).
+	if [[ -n $NET_PROXY ]]; then
+		printf '# Gerado pelo factory init a partir do network.json (proxy da ficha de TI).\nHTTPS_PROXY=%s\nNO_PROXY=localhost,127.0.0.1\n' "$NET_PROXY" |
+			egw_atomic_write "$PROXY_ENV" 0640 root:oee
+	fi
+	# NTP do cliente (o chrony.conf da imagem lê sourcedir /etc/chrony/sources.d).
+	if [[ -n $NET_NTP ]]; then
+		local -a ntps
+		local n
+		IFS=, read -r -a ntps <<< "$NET_NTP"
+		install -d -m 0755 "$CHRONY_SOURCES_DIR"
+		for n in "${ntps[@]}"; do printf 'server %s iburst\n' "$n"; done |
+			egw_atomic_write "$CHRONY_SOURCES_DIR/egw-ficha-ti.sources" 0644
+	fi
 }
 
 # --- 7. hw.json --------------------------------------------------------------------------------------
@@ -332,7 +436,7 @@ write_hw_json() {
 # (cartão impresso e cofre atualizado), apaga a exportação local.
 cmd_export_usb() {
 	need_root
-	local dev=${1:-} mnt dst ack serial export_id
+	local dev=${1:-} mnt serial export_id
 	[[ -s $HW_JSON ]] || { egw_err "unidade ainda sem identidade"; return 3; }
 	if [[ -z $dev ]]; then
 		dev=$(blkid -t LABEL="$USB_LABEL" -o device 2>/dev/null | head -n1 || true)
@@ -400,13 +504,17 @@ cmd_run() {
 	egw_log "série $SERIAL, hostname $HOSTNAME_NEW"
 
 	collect_facts || { egw_leds blink red; return 3; }
+	net_from_seed || { egw_leds blink red; return 3; }
 	set_hostname
 	make_keys
 	make_password
 	write_network
 	write_hw_json
 	# Semente consumida: sai da partição de boot e fica no prontuário.
-	mv -f "$EGW_SEED_FILE" "$EGW_IDENTITY_DIR/flash-seed.conf" 2>/dev/null || true
+	# Pode ter credencial de proxy: só root lê.
+	if mv -f "$EGW_SEED_FILE" "$EGW_IDENTITY_DIR/flash-seed.conf" 2>/dev/null; then
+		chmod 0600 "$EGW_IDENTITY_DIR/flash-seed.conf"
+	fi
 	sync
 
 	banner "autotestes B0"
@@ -420,8 +528,10 @@ cmd_run() {
 	cmd_export_usb || true
 
 	banner "resumo"
-	printf 'Série        %s\nHostname     %s\nETH0 (OT)    %s  serviço %s\nETH1 (IT)    %s\n' \
-		"$SERIAL" "$HOSTNAME_NEW" "$EGW_ETH0_MAC" "$F_SERVICE_ADDR" "$EGW_ETH1_MAC"
+	printf 'Série        %s\nHostname     %s\nETH0 (OT)    %s  serviço %s  IP %s\nETH1 (IT)    %s  %s\n' \
+		"$SERIAL" "$HOSTNAME_NEW" "$EGW_ETH0_MAC" "$F_SERVICE_ADDR" "${NET_OT_ADDR:-nenhum}" \
+		"$EGW_ETH1_MAC" "${NET_IT_ADDR:-DHCP}"
+	printf 'Proxy        %s\nNTP          %s\n' "$([[ -n $NET_PROXY ]] && echo sim || echo nenhum)" "${NET_NTP:-DHCP + pool.ntp.br}"
 	printf 'Imagem       %s  kernel %s\nCID do eMMC  %s\nSenha local  %s\n' \
 		"${REL[EGW_IMAGE_VERSION]:-?}" "$F_KERNEL" "${F_EMMC_CID:-?}" \
 		"$([[ $F_EXPORT_STATE == pending ]] && echo "exportada cifrada (pendrive $USB_LABEL)" || echo 'NÃO gerada')"
@@ -460,6 +570,9 @@ cmd_status() {
 		echo "unidade sem identidade (factory init pendente)"
 	fi
 }
+
+# Carregado com "source" (testes do deploy/image/validate.sh): só as funções.
+[[ ${BASH_SOURCE[0]} == "$0" ]] || return 0
 
 case ${1:-run} in
 	run) cmd_run ;;

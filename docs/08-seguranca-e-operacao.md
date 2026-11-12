@@ -28,7 +28,7 @@ flowchart LR
 | Controle | Como |
 |---|---|
 | Separação OT/IT | Duas interfaces de rede, `net.ipv4.ip_forward=0`. O gateway **não roteia** entre as redes |
-| Firewall local | nftables: entrada bloqueada (sem exceção para SSH), saída permitida só para 443 e para as portas industriais da sub-rede OT |
+| Firewall local | nftables: entrada bloqueada (sem exceção para SSH), saída IT só para 443, DNS e NTP; saída OT só para os IP:porta cadastrados na config ([16](16-projeto-do-gateway.md#5-rede-e-instalação)). Na Fase 0, até existir o `oee-helper` que regenera as regras, uma regra provisória deixa só o agente abrir TCP para faixas privadas e link-local |
 | SSH | OpenSSH escuta **só em 127.0.0.1**. Acesso só por uma **sessão de acesso remoto aprovada** pelo cliente, com **certificados SSH de curta duração** (válidos só na janela da sessão). Ver [12](12-acesso-remoto-vpn.md) |
 | Somente leitura | O v1 não implementa escrita em nenhum driver. A futura escrita (F3+) exigirá allowlist por tag, papel específico, confirmação e auditoria |
 | Processo | Usuário `oee` sem privilégios. Hardening do systemd (`NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, `ReadWritePaths=/var/lib/oee-gateway`) |

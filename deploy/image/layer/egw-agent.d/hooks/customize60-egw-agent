@@ -2,8 +2,8 @@
 # Engemase - camada egw-agent, fase customize (roda no host, alvo em $1).
 #
 # 1. instala os .deb do gateway (oee-gateway e companheiros) de <debdir>;
-# 2. instala o factory init (deploy/image/factory) e habilita a unidade de
-#    execução única;
+# 2. instala o factory init (deploy/image/factory), habilita a unidade de
+#    execução única e a exportação para o pendrive de bancada (udev);
 # 3. copia o certificado PÚBLICO da bancada (exportação da senha local);
 # 4. grava /etc/engemase-release.
 set -euo pipefail
@@ -57,6 +57,9 @@ install -m 0755 "$factory_src/egw-selftest"       "$root$dst/egw-selftest"
 install -m 0755 "$factory_src/egw-data-fallback"  "$root$dst/egw-data-fallback"
 install -m 0644 "$factory_src/egw-common.sh"      "$root$dst/egw-common.sh"
 install -m 0644 "$factory_src/egw-factory-init.service" "$root/etc/systemd/system/egw-factory-init.service"
+# Pendrive de bancada (EGWBANCADA) espetado depois do 1º boot: udev -> serviço.
+install -m 0644 "$factory_src/egw-factory-export@.service" "$root/etc/systemd/system/egw-factory-export@.service"
+install -D -m 0644 "$factory_src/90-egw-bench-usb.rules" "$root/etc/udev/rules.d/90-egw-bench-usb.rules"
 ln -sf "$dst/egw-factory-init" "$root/usr/sbin/egw-factory-init"
 ln -sf "$dst/egw-selftest" "$root/usr/sbin/egw-selftest"
 in_root systemctl enable egw-factory-init.service

@@ -38,7 +38,7 @@ set -euo pipefail
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo=$(cd -- "$here/../.." && pwd)
 
-usage() { sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; }
 die() { printf 'build: ERRO: %s\n' "$*" >&2; exit 1; }
 warn() { printf 'build: AVISO: %s\n' "$*" >&2; }
 log() { printf 'build: %s\n' "$*"; }

@@ -72,6 +72,7 @@ manifest=/usr/share/engemase/image-files.sha256
 	# Só arquivos que nada muda em operação (o nftables.conf, por exemplo, é
 	# regenerado pelo oee-helper e por isso fica de fora).
 	find usr/lib/engemase usr/share/engemase etc/systemd/system/egw-factory-init.service \
+		etc/systemd/system/egw-factory-export@.service etc/udev/rules.d/90-egw-bench-usb.rules \
 		etc/engemase-release \
 		-type f ! -path "${manifest#/}" -print0 \
 		| sort -z | xargs -0 sha256sum | sed 's|  |  /|'
@@ -94,6 +95,7 @@ check "journald com limite" grep -q '^SystemMaxUse=' "$root/etc/systemd/journald
 check "watchdog do SoC" grep -q '^RuntimeWatchdogSec=10s' "$root/etc/systemd/system.conf.d/40-egw-watchdog.conf"
 check "definição da partição data" test -f "$root/etc/repart.d/50-egw-data.conf"
 check "factory init habilitado" is_enabled egw-factory-init.service
+check "exportação para o pendrive de bancada" test -f "$root/etc/udev/rules.d/90-egw-bench-usb.rules"
 check "/etc/engemase-release" test -s "$root/etc/engemase-release"
 check "sudo do tecnico restrito (sem ALL)" bash -c "! grep -rqsE '^[^#]*ALL *= *\\(ALL' '$root/etc/sudoers.d'"
 check "sudoers válido (visudo -c)" in_root visudo -c -q

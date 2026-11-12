@@ -95,19 +95,15 @@ Quando o barramento RS-485 estiver longe do painel do gateway, ou para aceitar h
   - definições canônicas de caminhos, usuários e processos: [16 §4](16-projeto-do-gateway.md#4-caminhos-usuários-e-identidade-canônico)
   - logs: journald
 
-Fluxo de instalação no cliente:
+Fluxo de instalação. O gateway sai da bancada com a imagem gravada e o pacote já instalado ([16](16-projeto-do-gateway.md#7-preparação-na-engemase-e-ciclo-de-vida)); no cliente, o técnico só ativa:
 
 ```bash
-sudo apt install ./oee-gateway_1.0.0_arm64.deb
+sudo -u oee oee-gateway enroll --code ABCD-1234
 ```
 
-```bash
-sudo oee-gateway enroll --url https://oee.engemase.com.br --code ABCD-1234
-```
-
-```bash
-sudo systemctl enable --now oee-gateway
-```
+- A URL da plataforma vem do `gateway.yaml` gravado na bancada. O técnico **não** informa URL (o sudo do `tecnico` recusa `--url`, `--config` e `--force`).
+- O `enroll` roda como o usuário `oee`, dono das credenciais (`credentials.json`, 0600). Rodado como root, o arquivo ficaria ilegível para o agente.
+- Instalação manual do pacote (só na bancada ou em laboratório): `sudo apt install ./oee-gateway_<versão>_arm64.deb` e depois `sudo systemctl enable --now oee-gateway`. O passo a passo completo está em `deploy/gateway/README.md`.
 
 ## Por que Go
 

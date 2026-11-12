@@ -34,7 +34,7 @@ Projeto executável do gateway de OEE: o que ele faz, como é o software, a rede
 
 | Processo | Usuário | Quando roda | Fase |
 |---|---|---|---|
-| `oee-gateway run` (agente de coleta) | `oee` | Sempre (systemd, com `WatchdogSec` e verificação real de saúde) | MVP |
+| `oee-gateway run` (agente de coleta) | `oee` | Sempre (systemd, `Type=notify` com `WatchdogSec=30s` e verificação real de saúde: ciclo do motor, leitores e gravação no SQLite) | MVP |
 | `oee-localui` (página local) | `oee-ui` | Ativado pelo socket na porta 443, só na interface OT e no endereço de serviço | MVP (reduzida) |
 | `oee-helper` (ajudante privilegiado) | root | Ativado por socket local, com operações fechadas: aplicar rede com checkpoint, ajustar relógio, reset de fábrica, ler pendrive de diagnóstico | MVP |
 | `oee-updater` (atualizador) | root | Só durante uma atualização e na verificação pós-boot | M4b (OTA mínimo) |
@@ -81,7 +81,7 @@ O esqueleto já está em `gateway/` (Fase 0).
 | Número de série | `EGW-00042` (sequencial Engemase) |
 | Hostname | `egw-00042` |
 | Usuários | `oee` (agente), `oee-ui` (página local), `oee-ra` (VPN, F2), `tecnico` (só console local, sem SSH) |
-| Sudo do `tecnico` | Só subcomandos explícitos: `oee-gateway status`, `diag`, `net show/set/confirm/rollback`, `enroll --code`. **Sem** reset de fábrica, URL personalizada ou acesso remoto |
+| Sudo do `tecnico` | Só subcomandos explícitos, executados como o usuário `oee`: `oee-gateway diag` e `enroll --code` (Fase 0); `status` e `net show/set/confirm/rollback` entram com a CLI da Fase 1. **Sem** reset de fábrica, URL personalizada, `--config`, `--force` ou acesso remoto |
 | Domínio dos gateways | `gw.oee.engemase.com.br` (proposta, decisão D28) |
 
 ## 5. Rede e instalação
@@ -97,10 +97,13 @@ O esqueleto já está em `gateway/` (Fase 0).
 - `ip_forward=0`: o gateway nunca roteia entre as redes.
 - **Saída IT:** só 443 para os domínios da plataforma, DNS e NTP. Os conjuntos de DNS e NTP são regenerados quando o DHCP muda os servidores.
 - **Saída OT:** só para os **IP:porta cadastrados** na config. `device.test` libera temporariamente (5 min) um IP da sub-rede OT ainda não cadastrado, com limite de taxa e auditoria.
+- **Exceção da Fase 0:** enquanto o `oee-helper` (que regenera as regras a partir da config) não existe, uma regra provisória deixa **só o processo do agente** abrir TCP para faixas privadas e link-local. É mais larga que a regra final e sai quando o helper entrar.
 - **Entrada:** só a página local na OT e no endereço de serviço.
 
+**Rede do cliente na bancada (Fase 0):** IP estático da OT, IP/gateway/DNS da IT, NTP e proxy vêm da ficha de TI e entram **na gravação** (`deploy/image/flash/flash-emmc.sh --ot-address --it-address --it-gateway --it-dns --ntp --proxy`). A inicialização de fábrica valida os valores (valor inválido acende o LED vermelho) e gera os perfis do NetworkManager, o `proxy.env` e as fontes do chrony.
+
 **Mudança de rede:**
-- Só no local, pela CLI ou pela página local.
+- Só no local, pela CLI ou pela página local (Fase 1, com o `oee-helper`).
 - Usa o **checkpoint do NetworkManager**: se a mudança não for confirmada em 120 s, ou se a nuvem não for alcançada em 300 s, volta sozinha.
 - Pendrive `OEE/net-reset` como último recurso.
 - A mudança pela nuvem (`net.apply`) fica para a F2 (D31).
@@ -140,7 +143,7 @@ O esqueleto já está em `gateway/` (Fase 0).
 - Também guardada no cofre da plataforma, com exibição auditada e aviso ao admin do cliente.
 - Pode ver a senha: a equipe Engemase com atribuição ao cliente (D-g2).
 
-**CLI de campo:**
+**CLI de campo** (hoje existem `run`, `version`, `diag`, `enroll`, `modbus read` e `config validate`; o resto é Fase 1):
 - `oee-gateway status`, `diag`, `enroll --code`
 - `modbus read`, `modbus scan` (local), `modbus oee-block`
 - `config show`, `buffer stats`, `logs`

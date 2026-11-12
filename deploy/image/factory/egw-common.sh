@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2034 # biblioteca: as variáveis EGW_* são usadas por quem a carrega
 # Engemase OEE gateway - funções comuns do factory init e do autoteste B0.
 # Carregado com "source"; não executa nada sozinho.
 #

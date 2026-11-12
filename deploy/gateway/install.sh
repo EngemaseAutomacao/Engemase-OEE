@@ -30,7 +30,7 @@
 #   -h, --help
 set -eu
 
-usage() { sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; }
 die() {
 	echo "install: ERRO: $*" >&2
 	exit 1

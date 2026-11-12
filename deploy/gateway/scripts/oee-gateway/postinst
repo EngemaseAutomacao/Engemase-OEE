@@ -68,7 +68,7 @@ migrate_state_to_data() {
 	if mountpoint -q "$STATE_DIR"; then return 0; fi
 	[ -d "$STATE_DIR" ] || return 0
 	[ -n "$(ls -A "$STATE_DIR" 2>/dev/null)" ] || return 0
-	mkdir -p -m 0750 /data/oee
+	install -d -m 0750 /data/oee
 	if [ -n "$(ls -A /data/oee 2>/dev/null)" ]; then
 		warn "$STATE_DIR (na raiz) e /data/oee têm dados; nada foi copiado. O bind vai esconder $STATE_DIR: confira e migre à mão (README)."
 		return 0
