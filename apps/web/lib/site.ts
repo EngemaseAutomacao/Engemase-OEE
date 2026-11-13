@@ -15,3 +15,9 @@ export const GATEWAY_URL = PLATFORM_URL
 
 /** Endereço de pareamento mostrado nas TVs e tablets. */
 export const PAIRING_HOST = `${PLATFORM_HOST}/terminal`
+
+/**
+ * Contato comercial mostrado na página de apresentação (/produto).
+ * A CONFIRMAR com a Engemase antes de divulgar a página.
+ */
+export const SALES_EMAIL = "comercial@engemase.com.br"
