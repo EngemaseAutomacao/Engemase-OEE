@@ -4,6 +4,13 @@ Documentos de negócio da plataforma Engemase OEE: o que se assina com o cliente
 
 Cada área tem uma seção abaixo, com a lacuna correspondente do [docs/17 §4](../17-backlog-e-pendencias.md#4-lacunas-de-especificação).
 
+## Proposta do projeto
+
+| Documento | O que é |
+|---|---|
+| [Proposta atualizada](proposta/proposta-atualizada.md) | Versão em vigor (13/11/2026): o que o sistema entrega, arquitetura, investimento, modelo comercial, cronograma, riscos e o que mudou desde a original |
+| [Proposta original](proposta/2025-10-08-proposta-original.md) ([PDF](proposta/2025-10-08-proposta-original.pdf)) | Registro histórico de 08/10/2025 |
+
 ## Jurídico e LGPD (L7)
 
 > **Minutas para revisão por advogado; não usar sem revisão.**
