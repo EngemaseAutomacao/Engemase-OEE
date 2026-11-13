@@ -13,11 +13,11 @@
 | Item | Como cobra | Seção |
 |---|---|---|
 | **Assinatura do software** | Por máquina contratada, por mês, conforme o plano (Starter, Pro, Enterprise) | 2 e 3 |
-| **Taxa de implantação** | Uma vez: valor fixo por cliente + valor por máquina | 5 |
+| **Taxa de implantação** | Uma vez: valor fixo por cliente + valor por máquina + (no comodato) valor por gateway instalado | 5 |
 | **Serviços avulsos** | Por item: bloco OEE no CLP (por marca), máquina nova, visita, treinamento | 6 |
 | **Hardware do gateway** | Conforme a D2 (aberta): comodato, venda ou locação. **Por gateway**, não por máquina | 7 |
 
-**Por que o hardware é por gateway e o software por máquina:** um gateway atende de 1 a dezenas de máquinas. Se o hardware entrasse no preço por máquina, um cliente com poucas máquinas por painel daria prejuízo, e um com muitas pagaria demais.
+**Por que o hardware é por gateway e o software por máquina:** um gateway atende de 1 a dezenas de máquinas. Se o hardware entrasse no preço por máquina, um cliente com poucas máquinas por painel daria prejuízo, e um com muitas pagaria demais. Por isso o piso do preço por máquina (seção 10) não leva o hardware; a parte do kit que a taxa de implantação não cobre aparece à parte, por gateway (seção 8.3).
 
 ## 2. Planos
 
@@ -33,6 +33,8 @@ Legenda de fase: **(MVP)** já no piloto · **(F2)** e **(F3)** depois ([docs/09
 | Máquinas | 5 a 20 | 10 ou mais | 40 ou mais |
 | Mínimo de máquinas no Pedido | **5** | **10** | **40** |
 | Unidades (plantas) | 1 | Até 3 | Sem limite |
+
+O limite de unidades ainda **não existe no console** (seção 2.3): até existir, vale só no Pedido.
 | Prazo mínimo do contrato | 12 meses | 12 meses | 12 meses (24 ou 36 com desconto) |
 
 O mínimo de 5 máquinas segue o mercado (a FourJaw exige 5 em todos os planos) e dilui o custo fixo de cada cliente (implantação, suporte, conta). O prazo de 12 meses acompanha o comodato provisório da D2.
@@ -66,7 +68,7 @@ O mínimo de 5 máquinas segue o mercado (a FourJaw exige 5 em todos os planos) 
 | Dados por minuto: 2 anos (D6) | ✓ | ✓ | ✓ |
 | Consolidados por hora e turno: enquanto durar o contrato | ✓ | ✓ | ✓ |
 | Auditoria: 5 anos (D6) | ✓ | ✓ | ✓ |
-| Retenção estendida ou arquivo frio (F3) | — | — | Sob consulta |
+| Retenção por plano ou arquivo frio (F3, [docs/09](../09-roadmap.md#fase-3-escala-e-integrações-10-semanas)) | — | — | Quando existir; não se vende antes |
 | **Operação e suporte** ([SLA](sla-e-suporte.md)) | | | |
 | Disponibilidade mensal | Meta de 99,0% (sem crédito) | 99,5% com crédito | 99,5% com crédito maior |
 | Atendimento | Seg. a sex., 7h30–18h | + plantão para crítico, seg. a sáb., 6h–22h | + plantão 24×7 para crítico |
@@ -83,7 +85,7 @@ O mínimo de 5 máquinas segue o mercado (a FourJaw exige 5 em todos os planos) 
 
 **Fica igual em todos os planos, de propósito:**
 - **Segurança e isolamento** (RLS, 2FA, escopo por máquina, auditoria): não se vende segurança como opcional.
-- **Histórico (D6):** o contrato diz que não há retenção diferente por plano ([contrato, cl. 11.2](juridico/01-contrato-de-assinatura.md)).
+- **Histórico (D6):** igual em todos os planos **nesta versão**. Retenção por plano é F3 ([docs/09](../09-roadmap.md#fase-3-escala-e-integrações-10-semanas)) e só entra no contrato quando existir. **Resposta ao [contrato, cl. 11.2](juridico/01-contrato-de-assinatura.md) ("[CONFIRMAR com L9]"): confirmado**, não há retenção diferente por plano ou por cliente nesta versão.
 - **Exportação CSV:** os dados são do cliente (contrato, cl. 8.1).
 - **Acesso remoto:** reduz visitas, que são custo da Engemase. É opcional por segurança: o cliente escolhe se quer e aprova cada sessão.
 
@@ -96,7 +98,8 @@ O assistente "Novo cliente" já sugere limites por plano (`PLAN_DEFAULTS` em `ap
 | `machines` (máquinas contratadas) | 10 | 20 | 60 | **Base da cobrança.** No Pedido vale o número negociado, respeitado o mínimo da seção 2.1 |
 | `gateways` | 2 | 4 | 12 | Controle de frota; o hardware é cobrado pela D2 |
 | `users` | 15 | 30 | 100 | Mais usuários: R$ ___ por bloco de 10 **[PROPOSTA]** |
-| `retentionMonths` | 24 | 24 | 24 | Fixo pela D6 |
+| `retentionMonths` | 24 | 24 | 24 | **Fixo em 24 pela D6** e pelo contrato, cl. 11.2. **Pedido para o produto:** hoje o assistente e a edição do cliente no console deixam o super admin mudar este valor (mínimo 6): travar em 24 ou tirar o campo |
+| `units` (unidades) **a criar** | 1 | 3 | Sem a chave (sem limite) | **Pedido para o produto:** acrescentar `units` em `PlanLimits` e `PLAN_DEFAULTS` e bloquear a criação de unidade além do limite. O banco já aceita a chave (`limits` é JSON de inteiros; chave ausente = sem limite, [docs/15 §7](../15-multi-cliente-e-acesso.md#7-console-engemase-e-autogestão)), mas nada a aplica hoje |
 
 **Bloqueio ou aviso:** a plataforma bloqueia o cadastro de máquina além das contratadas ([docs/15 §10, P5](../15-multi-cliente-e-acesso.md#10-perguntas-para-o-dono-do-produto)). Máquina nova exige pedido comercial antes.
 
@@ -118,13 +121,14 @@ O assistente "Novo cliente" já sugere limites por plano (`PLAN_DEFAULTS` em `ap
 | Gateway sem máquina | **Não** (hardware segue a D2) |
 | Máquinas da Engemase Lab e de demonstração | **Não** |
 
-**Ajuste no contrato:** a cláusula 1 define "Máquina Contratada" como "cada máquina cadastrada e ativa". Com a regra acima, a definição passa a ser "cada vaga de máquina do Pedido". **[ADVOGADO]**
+Coerente com o [contrato, cl. 1](juridico/01-contrato-de-assinatura.md): "Máquina Contratada" é cada máquina contratada no Pedido, e a quantidade é o limite e a base da cobrança.
 
 ### 3.2 Início, aumento, redução e troca de plano
 
 | Evento | Regra |
 |---|---|
-| **Início da mensalidade** | Na data em que o cliente passa a **Ativo** ([onboarding, §8](onboarding-comercial.md#8-critérios-para-o-cliente-passar-a-ativo)) **ou 30 dias depois da instalação do primeiro gateway**, o que vier antes. O prazo evita um cliente parado em "Implantação" sem pagar |
+| **Início da mensalidade** | Na data em que o cliente passa a **Ativo** ([onboarding, §8](onboarding-comercial.md#8-critérios-para-o-cliente-passar-a-ativo)) **ou 30 dias depois do marco de início**, o que vier antes. **Marco:** a instalação do primeiro gateway feita **depois da assinatura do Pedido** (ou a data combinada para ela, se atrasar por causa do cliente). Se não houver gateway novo a instalar (cliente vindo do piloto, só com o gateway do piloto), o marco é a assinatura do Pedido. O prazo evita um cliente parado em "Implantação" sem pagar |
+| **Depois de um piloto** | Nenhuma mensalidade antes do Pedido: o período do piloto é pago só pelo preço fixo do piloto ([onboarding, §6.1](onboarding-comercial.md#61-escopo-e-condições-proposta)), mesmo com o gateway já instalado |
 | **Aumento** de máquinas | Por aditivo ou novo Pedido. Cobrança **proporcional aos dias**, a partir da ativação da máquina, ou 30 dias depois do aditivo, o que vier antes ([contrato, cl. 3.3](juridico/01-contrato-de-assinatura.md)) |
 | **Redução** de máquinas | Vale no mês seguinte ao pedido, respeitado o mínimo do Pedido (contrato, cl. 3.4) |
 | **Subir de plano** | Na data do aditivo, proporcional aos dias |
@@ -148,6 +152,11 @@ O assistente "Novo cliente" já sugere limites por plano (`PLAN_DEFAULTS` em `ap
 | Contrato de 36 meses | ___% (hipótese: 10%) |
 | Pagamento anual antecipado | ___% (hipótese: 5%) |
 
+**Regras dos descontos [PROPOSTA]:**
+- Os descontos se somam, com **teto de 20% no total**.
+- **O preço líquido por máquina nunca fica abaixo do piso com hardware do plano** (seção 10). Se a soma passar do piso, o desconto para no piso.
+- Volume conta o total de máquinas do Pedido. Pedido com 200 máquinas ou mais: recalcular o piso com o custo desse cenário (seção 8.2), que é menor por máquina.
+
 ### 3.4 Inadimplência **[PADRÃO PROPOSTO — D3 aberta]**
 
 Segue a escolha provisória da [docs/17 §3](../17-backlog-e-pendencias.md#3-decisões) e o [contrato, cl. 14](juridico/01-contrato-de-assinatura.md).
@@ -158,7 +167,7 @@ Segue a escolha provisória da [docs/17 §3](../17-backlog-e-pendencias.md#3-dec
 | 5 | Aviso ao contato de cobrança e ao admin do cliente |
 | 15 | Segundo aviso, com a data da suspensão |
 | 30 | **Suspenso:** usuários não entram (mensagem clara); **os gateways continuam enviando** e os dados ficam guardados; a Engemase continua com acesso, com registro. Suporte só para regularizar e para segurança. Sem máquinas novas |
-| 90 | A Engemase pode rescindir e seguir o encerramento (contrato, cl. 16, D4) |
+| 120 (90 dias de suspensão) | A Engemase pode rescindir e seguir o encerramento ([contrato, cl. 14.5 e 16](juridico/01-contrato-de-assinatura.md), D4) |
 | Depois do pagamento | Acesso volta em até 1 dia útil |
 
 Multa de **[PREENCHER: 2]%**, juros de **[PREENCHER: 1]%** ao mês e correção pelo IPCA. **[ADVOGADO]**
@@ -171,7 +180,7 @@ Valores a definir pelo dono do produto. As faixas saem da base de custo (seção
 
 | Item | Starter | Pro | Enterprise | Faixa sugerida **[HIPÓTESE]** |
 |---|---|---|---|---|
-| Mensalidade por máquina | R$ ___ | R$ ___ | R$ ___ | Starter R$ 190–260 · Pro R$ 280–380 · Enterprise R$ 360–480 (antes do desconto por volume) |
+| Mensalidade por máquina | R$ ___ | R$ ___ | R$ ___ | Starter R$ 200–260 · Pro R$ 280–380 · Enterprise R$ 360–480 (antes dos descontos). Todas começam no piso com hardware da seção 10 ou acima dele |
 | Terminal adicional, por mês | R$ ___ | R$ ___ | R$ ___ | R$ 40–80 (seção 8.2: a TV é o maior custo de nuvem) |
 | Bloco de 10 usuários a mais, por mês | R$ ___ | R$ ___ | R$ ___ | R$ 50–100 |
 | WhatsApp, por mês (F2b) | — | R$ ___ | Incluído até ___ | Custo da Meta ~R$ 0,035 por mensagem de utilidade ([docs/13](../13-notificacoes-e-alertas.md#canais)) |
@@ -182,14 +191,16 @@ Valores a definir pelo dono do produto. As faixas saem da base de custo (seção
 
 ## 5. Taxa de implantação **[PROPOSTA]**
 
-Cobrada uma vez. **Fórmula:** valor fixo por cliente + valor por máquina + (no comodato) parte do hardware por gateway.
+Cobrada uma vez. **Fórmula:** valor fixo por cliente + valor por máquina + (no comodato) valor por gateway instalado.
 
 | Parcela | Valor | Faixa **[HIPÓTESE]** |
 |---|---|---|
 | Fixo por cliente (primeira unidade) | R$ ___ | R$ 4.000–8.000 |
 | Por unidade adicional | R$ ___ | R$ 2.000–4.000 |
 | Por máquina | R$ ___ | R$ 300–700 |
-| Por gateway, no comodato (parte do hardware) | R$ ___ | R$ 1.500–2.500 (cerca de 50% do kit, seção 8.3) |
+| Por gateway instalado, no comodato **[ADVOGADO]** | R$ ___ | R$ 1.500–2.500 (conta interna: cerca de 50% do kit, seção 8.3) |
+
+**[ADVOGADO]: o comodato é gratuito** (Código Civil, art. 579; [Anexo H, A.2](juridico/01-anexo-h-hardware.md)). Cobrar pelo equipamento na taxa pode descaracterizá-lo. Por isso, no Pedido, a parcela por gateway é **serviço de implantação por gateway instalado** (preparação, teste de bancada, instalação e ativação), nunca pagamento pelo equipamento. A relação com o custo do kit é só conta interna da Engemase.
 
 **Inclui:**
 - diagnóstico e **uma** visita técnica ([onboarding, §4](onboarding-comercial.md#4-visita-técnica));
@@ -245,14 +256,14 @@ A equipe técnica propôs o **comodato** como escolha provisória ([docs/17 §3]
 | | Comodato **[PADRÃO PROPOSTO]** | Venda | Locação |
 |---|---|---|---|
 | Dono do hardware | Engemase | Cliente, depois de pago | Engemase |
-| Quanto o cliente paga | Parte do kit na taxa de implantação (seção 5) | Preço de venda: R$ ___ por gateway | Aluguel: R$ ___ por gateway por mês |
-| Faixa **[HIPÓTESE]** | R$ 1.500–2.500 por gateway na implantação | R$ 5.000–6.500 por gateway | R$ 150–220 por gateway por mês |
-| Investimento da Engemase | Alto: o kit inteiro, recuperado em ~36 meses | Nenhum (capital de giro até receber) | Alto, recuperado pelo aluguel |
+| Quanto o cliente paga | **Nada pelo equipamento.** A taxa de implantação tem uma parcela de serviço por gateway instalado (seção 5) **[ADVOGADO: Anexo H, A.2]** | Preço de venda: R$ ___ por gateway | Aluguel: R$ ___ por gateway por mês |
+| Faixa **[HIPÓTESE]** | R$ 1.500–2.500 por gateway instalado, como serviço na implantação | R$ 5.000–6.500 por gateway | R$ 150–220 por gateway por mês |
+| Investimento da Engemase | Alto: o kit inteiro. Cerca de metade volta com a parcela por gateway da implantação; o resto sai da margem da assinatura em ~36 meses (seção 8.3) | Nenhum (capital de giro até receber) | Alto, recuperado pelo aluguel |
 | Troca por defeito | Engemase, sem custo, no prazo do [SLA](sla-e-suporte.md#11-troca-de-hardware-em-campo) | Garantia de ___ meses; depois, paga | Engemase, sem custo, no prazo do SLA |
 | Fim do contrato | Devolve em 30 dias; não devolvido = valor de reposição R$ ___ | Fica com o cliente, sem coleta | Devolve em 30 dias |
 | Prazo mínimo | 12 meses (o kit precisa se pagar) | Nenhum para o hardware | 12 meses |
 | Multa de saída antecipada | Proporcional ao kit não amortizado **[ADVOGADO]** | — | Aluguéis restantes ou proporcional **[ADVOGADO]** |
-| Nota fiscal **[CONTADOR]** | Remessa em comodato, sem venda | **Venda de mercadoria**: ICMS e, como a Engemase importa, possivelmente IPI (importador equiparado a industrial). Exige inscrição estadual | Locação de bem móvel: **sem ISS** (STF, Súmula Vinculante 31). Fatura separada da assinatura |
+| Nota fiscal **[CONTADOR]** | Remessa em comodato, sem venda. A parcela por gateway sai na nota de serviço da implantação **[ADVOGADO: Anexo H, A.2]** | **Venda de mercadoria**: ICMS e, como a Engemase importa, possivelmente IPI (importador equiparado a industrial). Exige inscrição estadual | Locação de bem móvel: **sem ISS** (STF, Súmula Vinculante 31). Fatura separada da assinatura |
 | Bom para | Frota padronizada sob controle da Engemase (D13, OTA, troca rápida); menor barreira de entrada | Cliente que exige ter o ativo (normalmente Enterprise) | Cliente que não quer pagar implantação alta, mas aceita mensalidade maior |
 
 **Em todas as opções:** o software do gateway é licenciado, nunca vendido; só a Engemase configura e atualiza (D13); sem assinatura ativa, o gateway não envia dados.
@@ -272,7 +283,7 @@ A equipe técnica propôs o **comodato** como escolha provisória ([docs/17 §3]
 | **Sentry** | Team | ~US$ 26/mês (anual) ou ~US$ 29/mês (mensal), 50 mil erros/mês | 1 conta | [8] |
 | **Resend** | Pro | US$ 20/mês para 50 mil e-mails; US$ 0,90 por mil a mais | Gratuito no MVP; Pro quando entrarem os e-mails de alerta (F2a) | [9] |
 | **Tailscale** | Standard | **US$ 8 por usuário/mês**; dispositivos marcados (gateways) além de 50 por ~US$ 1/mês cada [CONFIRMAR] | Técnicos da Engemase (F2, só se houver acesso remoto) | [10] |
-| Página de status | Better Stack gratuito ou Instatus | US$ 0 a ~20/mês | Ver [SLA, §8](sla-e-suporte.md#8-página-de-status) | [SLA] |
+| Monitor externo e página de status | Better Stack: gratuito no piloto; **pago** a partir do primeiro contrato com crédito | Gratuito: verificação a cada **3 min**. Pago: até 30 s, ~US$ 29–34/mês [CONFIRMAR] | Pago: o SLA mede de minuto em minuto. Ver [SLA, §3.2 e §8](sla-e-suporte.md#8-página-de-status) | [SLA] |
 | Ferramenta de chamados | Jira Service Management Free | US$ 0 até 3 agentes; ~US$ 20–24 por agente depois | Ver [SLA, §7](sla-e-suporte.md#7-ferramenta-de-chamados) | [SLA] |
 
 **Impostos na compra:** pagamento em dólar no cartão tem IOF de compra internacional; remessa como importação de serviço pode ter IRRF, CIDE, PIS/COFINS-Importação e ISS. **[CONTADOR: alíquotas e a melhor forma de pagar cada fornecedor.]**
@@ -291,13 +302,13 @@ Premissas (de [docs/02](../02-arquitetura.md#números-de-referência) e [docs/05
 | Requisições por mês | ~5 milhões | ~39 milhões | ~195 milhões |
 | Vercel (plataforma + assento + uso) | US$ 20–40 | US$ 170–200 | US$ 950–1.050 |
 | Neon Scale (compute 24/7 + armazenamento + histórico) | US$ 40–50 (0,25 CU) | US$ 50–175 (0,25–1 CU) | US$ 185–375 (1–2 CU) |
-| Sentry, Resend, status, chamados, cópia externa, Tailscale (F2) | US$ 25–35 | US$ 30–145 | US$ 100–300 |
-| **Total por mês** | **US$ 85–125 ≈ R$ 470–690** | **US$ 250–520 ≈ R$ 1.380–2.860** | **US$ 1.240–1.730 ≈ R$ 6.800–9.500** |
-| **Por máquina por mês** | **R$ 47–69** | **R$ 14–29** | **R$ 14–19** |
+| Sentry, Resend, monitor e status, chamados, cópia externa, Tailscale (F2) | US$ 25–35 (monitor gratuito) | US$ 60–175 (monitor pago) | US$ 130–330 (monitor pago) |
+| **Total por mês** | **US$ 85–125 ≈ R$ 470–690** | **US$ 280–550 ≈ R$ 1.540–3.030** | **US$ 1.265–1.755 ≈ R$ 6.960–9.650** |
+| **Por máquina por mês** | **R$ 47–69** | **R$ 15–30** | **R$ 14–19** |
 
 **O que esta conta mostra:**
 - **A TV é o maior custo variável.** Uma TV ligada 24 h custa ~US$ 6 por mês (~R$ 33) na Vercel em São Paulo, quase todo em Edge Requests. Um gateway custa ~US$ 1,20 por mês. Na meta de 500 máquinas, as 100 TVs são ~60% da conta da Vercel. Por isso o plano limita os terminais incluídos e cobra o adicional.
-- **No começo, o custo fixo pesa.** Com só o piloto na plataforma, cada máquina custa R$ 50–70 de nuvem. A partir de ~100 máquinas fica abaixo de R$ 30.
+- **No começo, o custo fixo pesa.** Com só o piloto na plataforma, cada máquina custa R$ 50–70 de nuvem. A partir de ~100 máquinas fica em R$ 30 ou menos, já com o monitor pago do SLA.
 - **A nuvem é pequena perto das pessoas** (8.4).
 
 ### 8.3 Hardware por gateway (comodato e locação) **[HIPÓTESE, exceto o R1000]**
@@ -310,7 +321,11 @@ Premissas (de [docs/02](../02-arquitetura.md#números-de-referência) e [docs/05
 | Frete até o cliente | R$ ___ (hipótese R$ 50–150) | A cotar |
 | **Total por gateway** | **R$ 3.250–4.450** | — |
 | Estoque de reserva para trocas | +10% da frota (mínimo 2 unidades) | [SLA, §11](sla-e-suporte.md#11-troca-de-hardware-em-campo) |
-| **Custo mensal no comodato (36 meses + reserva)** | **~R$ 100–140 por gateway** | Com ~5 máquinas por gateway: R$ 20–28 por máquina |
+| Custo mensal do kit inteiro no comodato (36 meses + reserva) | ~R$ 100–140 por gateway | (3.250 a 4.450) × 1,1 ÷ 36 |
+| Parcela por gateway da taxa de implantação (seção 5) | − R$ 1.500–2.500, uma vez | Cerca de 50% do kit |
+| **Parte não coberta pela taxa (36 meses + reserva)** | **~R$ 53–60 por gateway por mês** | (1.750 a 1.950) × 1,1 ÷ 36. Com 5 máquinas por gateway (padrão do console, seção 2.3): **R$ 11–12 por máquina** |
+
+**O hardware é por gateway, não por máquina (seção 1).** O custo por máquina da seção 8.4 não o inclui. A parte não coberta pela taxa entra só no "piso com hardware" da seção 10, como conferência. Se um cliente tiver bem menos de 5 máquinas por gateway, a conta muda (com 2, são R$ 27–30 por máquina): nesse caso, ajustar a parcela por gateway da implantação, não o preço por máquina.
 
 A importação formal (frota) deve baixar o custo do R1000. Até lá, vale o courier.
 
@@ -318,12 +333,12 @@ A importação formal (frota) deve baixar o custo do R1000. Até lá, vale o cou
 
 | Parcela | R$ por máquina por mês | Como chegar ao número |
 |---|---|---|
-| Nuvem | 15–28 | Seção 8.2 |
-| Hardware em comodato (se a D2 ficar assim) | 20–28 | Seção 8.3 |
+| Nuvem | 15–30 | Seção 8.2 |
 | Suporte N1 e N2 | ___ (hipótese 40–80) | Custo total de cada analista ÷ máquinas que ele atende (hipótese: 1 analista para 300–500 máquinas) |
-| Plantão (Pro e Enterprise) | ___ | Sobreaviso: 1/3 da hora normal por hora de escala (CLT, art. 244, § 2º; TST, Súmula 428) + horas acionadas |
+| Sobreaviso de segurança 24×7 (todos os planos) | ___ | Exigido pelo [plano de resposta a incidentes](juridico/06-plano-de-resposta-a-incidentes.md#4-severidade) para qualquer cliente ([SLA, §6.2](sla-e-suporte.md#62-horários-proposta)). Custo fixo, dividido por todas as máquinas |
+| Plantão de P1 (Pro e Enterprise) | ___ | Usa a mesma escala do sobreaviso de segurança; acrescenta as horas acionadas. Sobreaviso: 1/3 da hora normal por hora de escala (CLT, art. 244, § 2º; TST, Súmula 428) |
 | Pedidos de configuração (D12) | ___ | Horas por mês por cliente × custo da hora |
-| **Custo direto total** | **~R$ 80–140** | Sem desenvolvimento, comercial e administração |
+| **Custo direto total do software** | **~R$ 55–110** | Sem hardware (seção 8.3), desenvolvimento, comercial e administração |
 
 ## 9. Referência de mercado
 
@@ -349,14 +364,17 @@ Preços **públicos** de soluções de OEE e monitoramento de máquinas. Quase t
 Três contas, e o preço fica onde as três concordam.
 
 1. **Piso pelo custo:** `preço mínimo = custo direto ÷ (1 − impostos − margem)`.
-   - Custo direto da seção 8.4. Impostos sobre a receita **[CONTADOR]** (hipótese: 15%). Margem de contribuição desejada **[DECIDIR]** (hipótese: 45%; SaaS maduro costuma ter margem bruta acima de 70%).
-   - O custo muda por plano, porque o atendimento muda ([SLA](sla-e-suporte.md)):
+   - Custo direto do software da seção 8.4 (sem hardware). Impostos sobre a receita **[CONTADOR]** (hipótese: 15%). Margem de contribuição desejada **[DECIDIR]** (hipótese: 45%; SaaS maduro costuma ter margem bruta acima de 70%).
+   - O custo muda por plano, porque o atendimento muda ([SLA](sla-e-suporte.md)).
+   - **Duas colunas de piso:** sem hardware (o preço por máquina, seção 1) e com a parte do kit que a taxa de implantação não cobre (comodato, 5 máquinas por gateway, seção 8.3). **A faixa da seção 4 e o preço líquido depois dos descontos (seção 3.3) ficam no piso com hardware ou acima dele.**
 
-| Plano | Custo direto **[HIPÓTESE]** | Piso: custo ÷ (1 − 0,15 − 0,45) |
-|---|---|---|
-| Starter (sem plantão, prazos maiores) | R$ 80 | **R$ 200** |
-| Pro (plantão seg. a sáb.) | R$ 110 | **R$ 275** |
-| Enterprise (plantão 24×7, reunião mensal) | R$ 140 | **R$ 350** |
+| Plano | Custo direto do software **[HIPÓTESE]** | Piso sem hardware: custo ÷ (1 − 0,15 − 0,45) | Hardware não coberto (comodato) | **Piso com hardware** |
+|---|---|---|---|---|
+| Starter (sobreaviso de segurança, sem plantão de P1, prazos maiores) | R$ 60 | R$ 150 | + R$ 12 | **R$ 180** |
+| Pro (plantão seg. a sáb.) | R$ 85 | R$ 215 | + R$ 12 | **R$ 245** |
+| Enterprise (plantão 24×7, reunião mensal) | R$ 115 | R$ 290 | + R$ 12 | **R$ 320** |
+
+Na venda ou na locação do hardware (D2), vale o piso sem hardware: o equipamento é pago à parte.
 2. **Teto pelo mercado:** seção 9. A Engemase compete com soluções estrangeiras de R$ 275 a R$ 2.000 por máquina e com planilha (custo zero, mas sem dado confiável).
 3. **Valor para o cliente:** seção 9, ganho por ponto de OEE. A mensalidade deve ser menos de 1/5 do ganho esperado.
 
@@ -375,11 +393,12 @@ Três contas, e o preço fica onde as três concordam.
 | 4 | **D2 (hardware):** comodato, venda ou locação, e os valores | Comodato provisório (seção 7) |
 | 5 | Mínimo de máquinas por plano e prazo mínimo | 5 / 10 / 40 e 12 meses |
 | 6 | Terminais incluídos por plano e preço do adicional | 2 / 1 por linha até 10 / conforme Pedido |
-| 7 | Descontos por volume, prazo e pagamento anual | Seção 3.3 |
-| 8 | Início da cobrança: Ativo ou 30 dias depois do primeiro gateway | Seção 3.2 |
+| 7 | Descontos por volume, prazo e pagamento anual; teto da soma | Seção 3.3: teto de 20%, nunca abaixo do piso com hardware |
+| 8 | Início da cobrança | Ativo ou 30 dias depois do marco (primeiro gateway instalado depois do Pedido, ou o Pedido, se vier do piloto), o que vier antes (seção 3.2) |
 | 9 | Margem desejada | Hipótese de 45% (seção 10) |
 | 10 | Licença do software de CLP nos serviços: do cliente ou da Engemase | Seção 6.1 |
-| 11 | **D3:** prazos de inadimplência | Seção 3.4 |
+| 11 | **D3:** prazos de inadimplência | Seção 3.4 (rescisão com 120 dias de atraso, como o contrato, cl. 14.5) |
+| 12 | Limite de unidades por plano no console | Criar `limits.units` (seção 2.3) ou tirar o limite da seção 2.1 |
 
 ## Fontes
 
@@ -395,6 +414,7 @@ Consultadas em 12/11/2026 por busca na web. Conferir na página oficial antes de
 - [8] Sentry, preços: <https://sentry.io/pricing/> · <https://docs.sentry.io/pricing> · comparação de 2026: <https://www.activepieces.com/blog/sentry-pricing-2026-developer-team-business-plans>
 - [9] Resend, preços: <https://resend.com/pricing> · <https://resend.com/changelog/pay-as-you-go-pricing>
 - [10] Tailscale, preços: <https://tailscale.com/pricing> · resumo de 2026: <https://www.activepieces.com/blog/tailscale-pricing-plans-costs-and-features-2026>
+- Better Stack, intervalo de verificação (3 min no gratuito, até 30 s nos pagos): <https://betterstack.com/docs/uptime/check-frequency/> · preço pago (resumo de terceiros): <https://hyperping.com/blog/betterstack-pricing>
 - [11] Evocon, preços: <https://evocon.com/pricing> · guia: <https://www.fabrico.io/blog/evocon-pricing-guide-2026/>
 - [12] FourJaw, preços: <https://fourjaw.com/pricing>
 - [13] Digit, preços: <https://monitoring.digit-software.com/pricing>

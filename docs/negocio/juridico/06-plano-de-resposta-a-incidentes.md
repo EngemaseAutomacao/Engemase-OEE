@@ -12,7 +12,7 @@
 
 1.2. **Incidente de segurança com dados pessoais:** evento adverso **confirmado** que comprometa a confidencialidade, a integridade, a disponibilidade ou a autenticidade de dados pessoais (Resolução CD/ANPD nº 15/2024).
 
-1.3. Este plano também cobre incidentes **sem dados pessoais** que afetem clientes (ex.: dados de produção expostos, gateway comprometido, chave de assinatura vazada), porque o contrato obriga a Engemase a avisar o cliente.
+1.3. Este plano também cobre incidentes **sem dados pessoais** que afetem clientes (ex.: dados de produção expostos, gateway comprometido, chave de assinatura vazada), porque o contrato obriga a Engemase a avisar o cliente **em até 24 horas da confirmação**, pessoais ou não os dados ([contrato, cl. 6.4](01-contrato-de-assinatura.md#6-obrigações-da-engemase)).
 
 ## 2. Quem comunica o quê
 
@@ -21,6 +21,7 @@
 | Dados do cliente na plataforma (vínculos, papéis e escopos dos usuários, operadores de chão, apontamentos, auditoria, notificações) | **Operadora** | **O cliente**, em até 24 horas da confirmação ([DPA](02-acordo-de-tratamento-de-dados.md), cláusula 11) | **O cliente** (controlador) |
 | Dados da Engemase: **contas de acesso** (nome, e-mail, hash de senha, 2FA, sessões), registros de acesso, segurança, cobrança, contatos, equipe Engemase | **Controladora** | **A ANPD e os titulares**, se houver risco ou dano relevante (seção 6). E avisa os clientes cujos usuários foram afetados | **A Engemase** |
 | Os dois ao mesmo tempo (ex.: banco inteiro exposto) | Operadora e controladora | Clientes **e** ANPD e titulares, cada um na sua parte | Cada controlador na sua parte |
+| Dados do cliente **não pessoais** (dados de produção, configuração, credenciais de gateway) | Prestadora do serviço | **O cliente**, em até 24 horas da confirmação ([contrato, cl. 6.4](01-contrato-de-assinatura.md#6-obrigações-da-engemase)), com o mesmo roteiro de atualizações e relatório final do DPA, no que couber | Ninguém: não é incidente da LGPD. O cliente decide se avisa alguém |
 
 A LGPD (art. 48) e a Resolução 15/2024 põem a comunicação à ANPD no **controlador**. O dever da Engemase como operadora de avisar o cliente vem do contrato e do dever de segurança (LGPD, arts. 39 e 46).
 
@@ -55,13 +56,14 @@ Cada papel tem um **substituto** formalmente indicado. Contatos 24 horas: [PREEN
 | Abrir o registro do incidente e definir a severidade | Até 1 hora de T0 (S1 e S2) | Plano |
 | Primeira contenção (revogar sessões, tokens, acessos) | Até 4 horas de T0 (S1 e S2) | Plano |
 | Confirmar ou descartar que é incidente com dados pessoais | Até 24 horas de T0 | Plano |
-| **Avisar cada cliente afetado** | **Até 24 horas da confirmação** | DPA, cláusula 11 **[PROPOSTA]** |
+| **Avisar cada cliente afetado** (com ou sem dados pessoais) | **Até 24 horas da confirmação** | DPA, cláusula 11; contrato, cl. 6.4 **[PROPOSTA]** |
 | Atualizações ao cliente | A cada 24 horas, enquanto aberto | DPA |
 | Avaliar risco ou dano relevante (Engemase controladora) | Até 2 dias úteis do conhecimento | Plano |
 | **Comunicar a ANPD** (Engemase controladora, com risco relevante) | **Até 3 dias úteis** do conhecimento de que o incidente afetou dados pessoais | Resolução CD/ANPD nº 15/2024 |
 | **Comunicar os titulares** (idem) | **Até 3 dias úteis** do mesmo marco | Resolução CD/ANPD nº 15/2024 |
 | Complementar a comunicação à ANPD | Até 20 dias úteis da comunicação | Resolução CD/ANPD nº 15/2024 |
-| Relatório final ao cliente | Até 10 dias úteis do encerramento | DPA |
+| Relatório final ao cliente (incidente de segurança) | Até 10 dias úteis do encerramento | DPA, cláusula 11.3 |
+| Relatório pós-incidente de **indisponibilidade** sem dados pessoais | Até 5 dias úteis da resolução (Pro e Enterprise) | [SLA, seção 6.8](../sla-e-suporte.md) |
 | Revisão pós-incidente (lições aprendidas) | Até 10 dias úteis do encerramento | Plano |
 | Guardar o registro do incidente (inclusive os não comunicados) | Pelo menos 5 anos | Resolução CD/ANPD nº 15/2024 |
 
@@ -87,7 +89,7 @@ flowchart TD
   A["Detecção<br/>(alerta, cliente, fornecedor,<br/>pesquisador, equipe)"] --> B["Abrir registro<br/>severidade e coordenador"]
   B --> C["Conter<br/>(revogar sessões, tokens,<br/>acessos; isolar)"]
   C --> D{"Afetou dados<br/>pessoais?"}
-  D -->|"Não"| E["Avisar clientes afetados<br/>se houver impacto (contrato)"]
+  D -->|"Não"| E["Avisar cada cliente afetado<br/>em até 24 h da confirmação<br/>(contrato, cl. 6.4)"]
   D -->|"Sim"| F{"De quem<br/>são os dados?"}
   F -->|"Do cliente<br/>(Engemase operadora)"| G["Avisar o cliente<br/>em até 24 h da confirmação"]
   F -->|"Da Engemase<br/>(controladora)"| H{"Risco ou dano<br/>relevante?"}
@@ -107,12 +109,12 @@ flowchart TD
 | **Falha de isolamento entre clientes** (S1) | Desligar a rota ou a função afetada; descobrir desde quando; listar, pela auditoria e pelos logs, quem viu o quê; avisar **todos** os clientes envolvidos | [docs/15 §4](../../15-multi-cliente-e-acesso.md#4-isolamento-de-dados-defesa-em-camadas); limite conhecido da RLS (D38) |
 | **Conta da equipe Engemase comprometida** | Bloquear a conta e as sessões; reiniciar o 2FA; listar pela auditoria todos os clientes acessados no período; avisar esses clientes | Auditoria global no console |
 | **Conta de admin do cliente comprometida** | Avisar o cliente; bloquear sessões a pedido dele; revisar usuários e escopos alterados | Cliente é o controlador |
-| **Token de gateway roubado** | Revogar o token pela plataforma (o gateway para de enviar e a VPN cai); reativar com novo código | Runbook de rotação de token (a escrever, L15) |
+| **Token de gateway roubado** | Revogar o token pela plataforma (o gateway para de enviar e a VPN cai); reativar com novo código | [RB-09 — Rotação do token do gateway](../../operacao/runbooks/09-rotacao-token-gateway.md) |
 | **Chave de assinatura das atualizações ou CA SSH vazada** (S1) | Suspender publicação de atualizações; trocar a chave; publicar versão assinada com a chave nova; desligar o acesso remoto (kill switch global) | [docs/12](../../12-acesso-remoto-vpn.md); cofre de chaves (L14) |
-| **Incidente num fornecedor** (Vercel, Neon, Sentry, Resend, Tailscale) | Obter do fornecedor o alcance e o período; avaliar quais dados de quais clientes; seguir a seção 2 | [DPA, Apêndice 3](02-acordo-de-tratamento-de-dados.md#apêndice-3--suboperadores) |
+| **Incidente num fornecedor** (Vercel, Neon, Sentry, Resend, Tailscale, ferramenta de chamados, Better Stack) | Obter do fornecedor o alcance e o período; avaliar quais dados de quais clientes; seguir a seção 2 | [DPA, Apêndice 3](02-acordo-de-tratamento-de-dados.md#apêndice-3--suboperadores) |
 | **E-mail ou exportação para a pessoa errada** | Pedir ao destinatário que apague e confirme; invalidar o link; avisar o cliente | — |
-| **Perda ou corrupção de dados** (integridade ou disponibilidade) | Restaurar a um ponto no tempo (PITR); reprocessar turnos. **Depois de restaurar o banco, os dados já confirmados não voltam dos gateways** | Runbook de restauração (a escrever, L15); L14 |
-| **Gateway furtado ou perdido** | Revogar o token; pedir boletim de ocorrência ao cliente; avaliar dados no equipamento (até 30 dias de produção, configuração de rede do cliente) | [Anexo H](01-anexo-h-hardware.md), cláusula H.6 |
+| **Perda ou corrupção de dados** (integridade ou disponibilidade) | Restaurar a um ponto no tempo (PITR); reprocessar turnos; apagar de novo os dados de clientes já eliminados ([contrato, cl. 16.1](01-contrato-de-assinatura.md#16-encerramento-exportação-e-eliminação-dos-dados-padrão-proposto--d4-em-aberto)). **Depois de restaurar o banco, os dados já confirmados não voltam dos gateways** | [RB-08 — Restauração do banco (PITR)](../../operacao/runbooks/08-restauracao-banco-pitr.md); L14 |
+| **Gateway furtado ou perdido** | Bloquear o token; pedir boletim de ocorrência ao cliente; avaliar dados no equipamento (até 30 dias de produção, configuração de rede do cliente); instalar a unidade nova | [RB-09](../../operacao/runbooks/09-rotacao-token-gateway.md); [RB-10 — Troca do hardware](../../operacao/runbooks/10-troca-hardware-gateway.md); [Anexo H](01-anexo-h-hardware.md), cláusula H.6 |
 
 ## 9. Preservação de evidências
 

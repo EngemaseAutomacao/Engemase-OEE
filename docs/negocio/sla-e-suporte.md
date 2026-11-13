@@ -16,9 +16,10 @@
 | Atendimento | Seg. a sex., 7h30–18h | Seg. a sex., 7h30–18h | Seg. a sex., 7h30–18h |
 | Plantão para prioridade Crítica | — | Seg. a sáb., 6h–22h | **24×7** |
 | Primeira resposta, prioridade Crítica | 4 h úteis | 2 h (no plantão) | 1 h (24×7) |
+| Incidente de **segurança** (seção 6.3) | **24×7:** S1 imediato; S2 em até 1 h | Igual | Igual |
 | Mudança simples de configuração (D12) | 2 dias úteis | 1 dia útil | 4 h úteis |
 | Troca de gateway com defeito, região 1 | 3 dias úteis | 2 dias úteis | Próximo dia útil |
-| Relatório pós-incidente | — | Sim | Sim |
+| Relatório pós-incidente (seção 6.8) | Só de incidente de segurança | Sim | Sim |
 | Relatório mensal de disponibilidade | — | Sob pedido | Mensal |
 
 ## 2. O que o SLA cobre
@@ -53,6 +54,7 @@ Todos os clientes usam a **mesma infraestrutura**. A meta muda por plano no que 
 - **Minuto indisponível:** qualquer das duas verificações falha (sem resposta, erro de conexão ou HTTP 5xx) **nos 2 locais** no mesmo minuto.
 - **Disponibilidade do mês** = (minutos do mês − minutos excluídos − minutos indisponíveis) ÷ (minutos do mês − minutos excluídos) × 100. É a mesma fórmula do SLA da Vercel.
 - As duas rotas de saúde ainda **não existem** no código: precisam existir antes do primeiro cliente pagante.
+- **Verificar a cada 1 minuto exige o plano pago do monitor** (seção 8). O plano gratuito do Better Stack verifica a cada **3 minutos**: serve no piloto, que não tem crédito. Nesse caso, cada falha conta **3 minutos** indisponíveis.
 
 ### 3.3 Coerência com os fornecedores
 
@@ -66,10 +68,11 @@ A Engemase não pode prometer mais do que os fornecedores entregam, com margem.
 | Neon Launch | Sem SLA | Nenhum | [4] |
 
 **Conta de composição:** a plataforma precisa da Vercel **e** da Neon ao mesmo tempo. Com 99,99% × 99,95%, o teto teórico é **~99,94%**, antes de qualquer erro nosso. Por isso:
-- **99,5%** deixa ~3 h por mês para falhas da Vercel Pro (que não tem SLA), da Neon e do nosso próprio código. Terceiros que monitoram a Vercel registraram meses abaixo de 99,5% em 2026 [5]: a margem não é exagero.
-- **99,8%** só faz sentido com a Vercel Enterprise (custo bem acima do Pro, sob cotação) e com o histórico de 6 meses de operação mostrando que a meta é real.
+- **99,5%** deixa **3 h 36 min por mês para tudo:** falhas da Vercel Pro (que não tem SLA), da Neon e nossas, inclusive uma restauração completa do banco (seção 5: até 2 h fora do ar). **É uma aposta, não uma folga garantida.** Uma falha longa de fornecedor, ou uma restauração somada a outra falha no mesmo mês, gera crédito. O teto de crédito (seção 12) limita a perda.
+- **Não há número público confiável** da disponibilidade das funções da Vercel em `gru1`. As páginas de terceiros [5] listam incidentes de qualquer componente (builds, outras regiões, produtos que não usamos): não medem o que o nosso monitor mede. A base para rever a meta é o nosso monitor (seção 3.2) nos 6 primeiros meses.
+- **99,8%** (1 h 26 min por mês) só faz sentido com a Vercel Enterprise (custo bem acima do Pro, sob cotação), com o histórico de 6 meses mostrando que a meta é real **e** com a restauração completa do banco medida abaixo de 1 h (uma só restauração de 2 h já passa da meta).
 - **Não prometer 99,9%** nesta fase.
-- **Créditos são risco da Engemase.** A Vercel Pro não devolve nada, e a Neon devolve 10% da fatura **dela**. Um crédito de 10% para 100 máquinas a R$ 300 é R$ 3.000, mais do que toda a conta de nuvem do mês ([planos e preços, §8.2](planos-e-precos.md#82-custo-de-nuvem-por-cenário-estimativa)).
+- **Créditos são risco da Engemase.** A Vercel Pro não devolve nada, e a Neon devolve 10% da fatura **dela**. Um crédito de 10% para 100 máquinas a R$ 300 é R$ 3.000, quase toda a conta de nuvem do mês ([planos e preços, §8.2](planos-e-precos.md#82-custo-de-nuvem-por-cenário-estimativa)). **Conte com crédito** no mês de uma restauração completa ou de uma falha de fornecedor acima de 3 h 36 min.
 - **Neon Scale em produção é obrigatório** para este SLA: o Launch não tem SLA e restaura só até 7 dias.
 
 ### 3.4 O que fica fora da conta
@@ -103,19 +106,22 @@ Não contam como indisponibilidade ([contrato, cl. 7.2](juridico/01-contrato-de-
 |---|---|---|---|
 | Internet da planta ou plataforma fora do ar, gateway ligado | **Zero**, dentro de 30 dias ou 1 GB de fila | Automático quando a conexão volta | Buffer do gateway (seção 4) |
 | Falta de energia na planta | Zero do que já estava no buffer. Sem energia não há coleta: o período vira "sem comunicação" | Automático quando a energia volta | [docs/16 §5](../16-projeto-do-gateway.md#5-rede-e-instalação) |
-| Gateway com defeito | O que estava na fila e não foi enviado. Normal: menos de ~10 s. Se estava sem internet, desde a queda (recuperável se o armazenamento estiver bom). Nada é coletado até a troca | Prazo de troca (seção 11) | [docs/16 §7](../16-projeto-do-gateway.md#7-preparação-na-engemase-e-ciclo-de-vida) |
-| Falha de infraestrutura do banco (disco, zona) | ~Zero (o Neon guarda o log do banco de forma redundante) [CONFIRMAR] | O do fornecedor; meta nossa: 4 h | Neon |
-| **Erro lógico** (bug, migração ou exclusão por engano) | **15 min** | **4 h** para restaurar; **8 h** com o recálculo dos turnos | Restauração a um ponto no tempo (PITR) do Neon, de preferência num branch, copiando de volta só o que foi afetado. Runbook de restauração: a escrever (L15) |
+| Gateway com defeito | A fila não enviada da unidade com defeito. Normal: menos de ~10 s. Se ela estava sem internet antes do defeito, tudo desde a queda. Se a unidade ainda fala com a nuvem, a fila é esvaziada antes da troca. Se não fala, **no MVP essa fila se perde**: ainda não há ferramenta para recuperá-la ([RB-10 §5.2](../operacao/runbooks/10-troca-hardware-gateway.md#52-fila-da-unidade-antiga)). Mais o período da troca: nada é coletado até a unidade nova entrar | Prazo de troca (seção 11) | [RB-10](../operacao/runbooks/10-troca-hardware-gateway.md), [docs/16 §7](../16-projeto-do-gateway.md#7-preparação-na-engemase-e-ciclo-de-vida) |
+| Falha de infraestrutura do banco (disco, zona) | ~Zero (o Neon guarda o log do banco de forma redundante) [CONFIRMAR] | O do fornecedor; meta nossa: 4 h. Acima de 3 h 36 min no mês, gera crédito (seção 3.3) | Neon |
+| **Erro lógico**, dano limitado (um cliente, uma tabela, poucas linhas) | **15 min** | **Plataforma no ar** o tempo todo; dados afetados de volta em até **4 h** | Recuperação parcial a partir de um ramo temporário no ponto anterior ao dano ([RB-08 §5.2](../operacao/runbooks/08-restauracao-banco-pitr.md#52-recuperação-parcial-preferível)) |
+| **Erro lógico**, dano amplo (vários clientes, esquema) | **15 min** | **Até 2 h com a plataforma fora do ar** (meta, a medir no teste de restauração); período entre o ponto restaurado e a restauração copiado de volta e turnos recalculados em até **8 h**, com a plataforma no ar | Restauração do ramo de produção ([RB-08 §5.3 e §5.4](../operacao/runbooks/08-restauracao-banco-pitr.md#53-restauração-do-ramo-main-todos-os-clientes)). As horas fora do ar **contam no SLA** (não é manutenção programada) |
 | Perda do projeto no fornecedor (desastre) | Até a última cópia lógica externa: **7 dias** com a cópia semanal do docs/06; **24 h** se ela passar a diária | 2 dias úteis | Novo Postgres, restaurar a cópia, apontar a aplicação |
-| Região `gru1` da Vercel fora do ar por muito tempo | Zero (os dados estão no banco e nos gateways) | 1 h para mudar a região das funções por configuração | A latência até o banco em São Paulo aumenta; a transferência internacional já está no [DPA](juridico/02-acordo-de-tratamento-de-dados.md) |
+| Região `gru1` da Vercel fora do ar por muito tempo | Zero (os dados estão no banco e nos gateways) | **1 h** para rodar as funções na região de contingência, **só depois** de o advogado aprovar a contingência do contrato e do DPA. Até lá, o da Vercel. Falha ampla e regional é força maior (seção 3.4) | Contingência de região do [contrato, cl. 10.4](juridico/01-contrato-de-assinatura.md#10-proteção-de-dados-pessoais) e do [DPA, cl. 9.6](juridico/02-acordo-de-tratamento-de-dados.md#9-transferência-internacional) (as duas **[PROPOSTA]**): por tempo limitado, banco em São Paulo, aviso ao cliente em até 24 h e volta a `gru1` assim que possível. Região reserva **[DECIDIR]** (ex.: `iad1`, EUA). A plataforma fica mais lenta: cada consulta ao banco cruza o continente. Sem essas cláusulas, a aplicação não sai de `gru1` (contrato, cl. 10.3) |
 
-**Limite importante (L14):** quando o banco **inteiro** volta a um ponto anterior, o que chegou depois desse ponto se perde, porque **os gateways apagam o que já foi confirmado**. Por isso a restauração começa sempre num branch e copia só o que o erro atingiu. Proposta para a engenharia: o gateway guardar o que já foi confirmado por alguns dias e aceitar um pedido de reenvio. Com isso, o RPO do erro lógico cai para perto de zero.
+**Limite importante (L14):** quando o banco **inteiro** volta a um ponto anterior, o que chegou depois desse ponto sai do ramo de produção, porque **os gateways apagam o que já foi confirmado** e não reenviam. A única cópia desse período é o ramo de backup que a Neon cria na restauração, copiado de volta à mão ([RB-08 §5.4](../operacao/runbooks/08-restauracao-banco-pitr.md#54-recuperar-o-período-entre-t0-e-t1-l14)). Por isso a recuperação parcial vem sempre primeiro. Proposta para a engenharia: o gateway guardar o que já foi confirmado por alguns dias e aceitar um pedido de reenvio. Com isso, o RPO do erro lógico cai para perto de zero.
+
+**Restauração e disponibilidade:** com 99,5% (3 h 36 min por mês), uma restauração completa de 2 h usa mais da metade da margem do mês; somada a outra falha, gera crédito (seção 3.3). É risco aceito: restaurar o ramo de produção é o último recurso ([RB-08 §1](../operacao/runbooks/08-restauracao-banco-pitr.md#1-quando-restaurar)).
 
 **Configuração necessária no Neon:**
 - **Plano Scale** em produção (SLA de 99,95% e restauração até 30 dias).
 - **Janela de restauração de 14 dias**, ajustada à mão: o padrão do Neon nos planos pagos é **1 dia** [6]. O histórico custa US$ 0,20/GB-mês.
 - Este número entra no [contrato, cl. 16.1](juridico/01-contrato-de-assinatura.md) ("as cópias de segurança expiram em N dias").
-- **Teste de restauração a cada 3 meses**, com registro ([docs/17, L14](../17-backlog-e-pendencias.md#4-lacunas-de-especificação)).
+- **Teste de restauração a cada 3 meses**, com registro ([RB-08 §5.6](../operacao/runbooks/08-restauracao-banco-pitr.md#56-teste-de-restauração-a-cada-3-meses), [docs/17, L14](../17-backlog-e-pendencias.md#4-lacunas-de-especificação)). O teste mede o tempo da restauração completa e confere se cabe nas 2 h acima.
 
 ## 6. Atendimento
 
@@ -137,11 +143,13 @@ Toda entrada da Engemase nos dados do cliente fica na **auditoria visível ao cl
 |---|---|---|---|
 | Atendimento normal (todas as prioridades) | Seg. a sex., 7h30–18h | Seg. a sex., 7h30–18h | Seg. a sex., 7h30–18h |
 | Plantão para prioridade **Crítica** | — | **Seg. a sáb., 6h–22h** | **24×7**, inclusive feriados |
+| Incidente de **segurança** (seção 6.3) | **24×7** | **24×7** | **24×7** |
 
 - Horário de Brasília. Fora do atendimento: feriados nacionais e do município da sede da Engemase **[PREENCHER]**.
 - O horário normal é o que já aparece na central de ajuda do protótipo ("Seg. a sex., 7h30–18h · chamados críticos com plantão, conforme o contrato").
 - **"Hora útil"** = hora dentro do horário de atendimento normal. **"Hora"** sem adjetivo = hora corrida, dentro do plantão do plano. Chamado Crítico aberto fora do plantão (ex.: domingo, no Pro) conta a partir do início do próximo período de plantão.
-- **Custo do plantão:** sobreaviso por escala (CLT, art. 244, § 2º; TST, Súmula 428). Com uma equipe de até 5 pessoas (D17), 24×7 só se sustenta com **pelo menos 3 pessoas** na escala. **[DECIDIR]** se o Enterprise com 24×7 será vendido antes disso.
+- **Sobreaviso de segurança 24×7, para todos os clientes, já é obrigatório:** o [plano de resposta a incidentes](juridico/06-plano-de-resposta-a-incidentes.md#4-severidade) exige acionamento imediato no S1 e em até 1 h no S2, 24 horas por dia, com um "super admin de plantão" como coordenador. Essa escala existe desde o piloto, qualquer que seja o plano vendido.
+- **Custo do plantão:** sobreaviso por escala (CLT, art. 244, § 2º; TST, Súmula 428). Com uma equipe de até 5 pessoas (D17), a escala 24×7 de segurança precisa de **pelo menos 3 pessoas**. O plantão de P1 do Pro e o 24×7 do Enterprise **usam a mesma escala**: aumentam os acionamentos e as horas trabalhadas, não o número de pessoas de sobreaviso. **[DECIDIR]** quem forma a escala antes do piloto; sem ela, nem o plano de incidentes se cumpre. Custo em [planos e preços, §8.4](planos-e-precos.md#84-custo-direto-por-máquina-cenário-de-100-máquinas-hipótese).
 
 ### 6.3 Canais
 
@@ -151,8 +159,17 @@ Toda entrada da Engemase nos dados do cliente fica na **auditoria visível ao cl
 | E-mail do suporte **[PREENCHER]** | Quem não consegue entrar na plataforma | Vira chamado |
 | **Telefone** do suporte **[PREENCHER]** | **Prioridade Crítica**, sempre, inclusive no plantão | Registrar o chamado em seguida (o técnico pode abrir em nome do cliente) |
 | WhatsApp **[PREENCHER]** | Contato rápido, fotos do painel, avisos | Não substitui o chamado; dados do cliente não ficam no WhatsApp |
+| **Telefone de segurança 24×7** **[PREENCHER]** e e-mail de segurança **[PREENCHER]** | **Incidente de segurança**, em **qualquer plano**, a qualquer hora | Fora do sistema afetado (lista de contatos 24 horas do [plano de incidentes, §3](juridico/06-plano-de-resposta-a-incidentes.md#3-papéis)). Registrar o chamado em seguida |
 
-Incidente de **segurança** (ex.: suspeita de acesso indevido) é sempre prioridade Crítica e segue também o [plano de resposta a incidentes](juridico/06-plano-de-resposta-a-incidentes.md), que tem severidades próprias (S1 a S4).
+**Incidente de segurança** (ex.: suspeita de acesso indevido, conta comprometida, token de gateway roubado) segue o [plano de resposta a incidentes](juridico/06-plano-de-resposta-a-incidentes.md), com severidades próprias (S1 a S4) e **prazos próprios, iguais em todos os planos**:
+
+| Severidade do plano | Acionamento da Engemase | Vale para |
+|---|---|---|
+| **S1 Crítico** | Imediato, 24 horas por dia | Starter, Pro e Enterprise |
+| **S2 Alto** | Em até 1 hora, 24 horas por dia | Starter, Pro e Enterprise |
+| S3 e S4 | Horário de atendimento normal, como P2 a P4 (seção 6.5) | Todos |
+
+Esses prazos **não dependem** dos prazos de P1 por plano da seção 6.5: um cliente Starter com suspeita de vazamento no domingo é atendido no domingo. O chamado fica com prioridade Crítica (P1) para o registro.
 
 ### 6.4 Prioridades
 
@@ -213,9 +230,9 @@ Como **só a Engemase configura** (unidades, linhas, máquinas, gateways, tags, 
 | Até 30 min depois de confirmado um incidente P1 de plataforma | Aviso inicial | Página de status (seção 8) e faixa na plataforma |
 | A cada 1 h, enquanto durar | Atualização | Página de status |
 | Ao resolver | Aviso de resolução | Página de status e e-mail aos admins (Pro e Enterprise) |
-| Até 5 dias úteis depois | **Relatório pós-incidente**: o que houve, impacto, causa, correção e prevenção | E-mail aos admins (Pro e Enterprise) |
+| Até 10 dias úteis depois do encerramento | **Relatório pós-incidente**: o que houve, impacto, causa, correção e prevenção | E-mail aos admins (Pro e Enterprise) |
 
-Incidente com dados pessoais segue também os prazos do [DPA](juridico/02-acordo-de-tratamento-de-dados.md) e do [plano de resposta a incidentes](juridico/06-plano-de-resposta-a-incidentes.md).
+O prazo de 10 dias úteis é o mesmo do [plano de resposta a incidentes, §5](juridico/06-plano-de-resposta-a-incidentes.md#5-prazos) e do [RB-08 §7](../operacao/runbooks/08-restauracao-banco-pitr.md#7-ao-fechar-o-chamado), para todo tipo de incidente. Incidente de segurança gera relatório a **todo cliente afetado**, de qualquer plano, e segue também os prazos do [DPA](juridico/02-acordo-de-tratamento-de-dados.md) (aviso em até 24 horas da confirmação).
 
 ## 7. Ferramenta de chamados
 
@@ -252,12 +269,15 @@ Incidente com dados pessoais segue também os prazos do [DPA](juridico/02-acordo
 
 | Opção | Custo | Observação |
 |---|---|---|
-| **Better Stack** | **Gratuito:** 10 monitores e 1 página de status; página extra US$ 15/mês | Intervalo de verificação do plano gratuito [CONFIRMAR] |
+| **Better Stack** | **Gratuito:** 10 monitores e 1 página de status, verificação a cada **3 min**. **Pago:** verificação até 30 s, de vários locais; ~US$ 29–34/mês [CONFIRMAR o plano exato]; página extra US$ 15/mês | O gratuito **não mede** o SLA da seção 3.2 (1 min) [7] |
 | Instatus | Gratuito (1 página pública); Pro ~US$ 15–20/mês | — |
 | Atlassian Statuspage | A partir de ~US$ 29/mês [CONFIRMAR] | Mais caro |
 | openstatus | Código aberto | Hospedar e operar |
 
-**Recomendação [PROPOSTA]:** **Better Stack gratuito** no piloto, no endereço do próprio fornecedor (sem domínio próprio, D28). Endereço em **um só lugar** (a central de ajuda e este documento), para trocar fácil quando houver domínio.
+**Recomendação [PROPOSTA]:**
+- **Piloto (sem crédito):** Better Stack **gratuito**, a cada 3 min; cada falha conta 3 minutos (seção 3.2).
+- **A partir do primeiro contrato Pro ou Enterprise (com crédito):** Better Stack **pago**, com verificação de **1 minuto** de pelo menos 2 locais. Custo em [planos e preços, §8.1](planos-e-precos.md#81-fornecedores).
+- Página no endereço do próprio fornecedor (sem domínio próprio, D28). Endereço em **um só lugar** (a central de ajuda e este documento), para trocar fácil quando houver domínio.
 
 ## 9. Janelas de manutenção **[PROPOSTA]**
 
@@ -291,15 +311,19 @@ Vale para o gateway em **comodato ou locação** (D2 aberta). Na **venda**, vale
 | **R1** | Até 150 km | 3 dias úteis | 2 dias úteis | Próximo dia útil |
 | **R2** | 150 a 600 km | 5 dias úteis | 3 dias úteis | 2 dias úteis |
 | **R3** | Demais (transportadora ou aéreo) | 7 dias úteis | 5 dias úteis | 3 dias úteis |
-| Com **gateway reserva no local** (opcional do Enterprise) | Qualquer | — | — | **Mesmo dia útil** |
+| Com **gateway reserva no local** (opcional do Enterprise) | R1 | — | — | **Mesmo dia útil** |
+| Com gateway reserva no local | R2 e R3 | — | — | Próximo dia útil |
 
-**Como a troca é feita:**
-1. A Engemase registra o gateway novo **no mesmo registro de gateway**: ele herda a configuração ([docs/16 §7](../16-projeto-do-gateway.md#7-preparação-na-engemase-e-ciclo-de-vida)). Os contadores recomeçam com marca de troca, sem contagem dupla.
-2. O gateway sai da bancada já testado e registrado. **Duas formas de instalar:**
-   - **técnico da Engemase** no local (R1, ou quando o cliente pedir);
-   - **eletricista do cliente**, com apoio da Engemase por telefone: trilho DIN, 24 VDC, dois cabos de rede e os bornes RS-485. É o caminho mais rápido em R2 e R3.
-3. O gateway com defeito volta para a Engemase. Se o armazenamento estiver bom, a fila não enviada é recuperada. Os dados são apagados antes de reuso ou descarte, com termo de eliminação (Anexo H, H.6).
-4. Enquanto o gateway reserva estiver na caixa, ele fica no estado **"Em trânsito"** e não gera alerta de offline ([docs/17, L23](../17-backlog-e-pendencias.md#4-lacunas-de-especificação)).
+**Os prazos de R2 e R3 supõem a unidade nova registrada na bancada** (instalação pelo eletricista do cliente, abaixo). Quando o registro precisa ser no local, vai um técnico da Engemase e esses prazos ganham **2 dias úteis** **[PROPOSTA]**. A ficha do cliente para o suporte ([onboarding, §10](onboarding-comercial.md#10-passagem-para-o-suporte-e-primeiros-30-dias)) diz, para cada gateway, qual é o caso.
+
+**Como a troca é feita** (passo a passo técnico: [RB-10](../operacao/runbooks/10-troca-hardware-gateway.md)):
+1. A unidade nova é gravada na bancada com a rede do cliente e registrada **no mesmo gateway da plataforma**: herda a configuração ([docs/16 §7](../16-projeto-do-gateway.md#7-preparação-na-engemase-e-ciclo-de-vida)). A unidade nova começa sem base de contador: nada é contado em dobro, e o período da troca fica "sem dados".
+2. **Onde registrar** ([RB-10 §5.1](../operacao/runbooks/10-troca-hardware-gateway.md#51-na-bancada-antes-da-visita)):
+   - **Na bancada**, só quando a unidade antiga está morta (ou sem fila a recuperar) **e** a nova fala com a nuvem na bancada com a rede gravada (ex.: rede IT em DHCP, sem proxy). Aí ela sai registrada e o **eletricista do cliente** pode instalar, com apoio da Engemase por telefone: trilho DIN, 24 VDC, dois cabos de rede e os bornes RS-485. É o caminho mais rápido em R2 e R3.
+   - **No local**, nos outros casos: proxy, IP fixo na rede IT, ou unidade antiga ainda falando com a nuvem (registrar a nova antes de desligar a antiga derruba a antiga). O registro é feito no console local (usuário `tecnico`) com um código de ativação, por um **técnico da Engemase** (D13: o cliente não configura o gateway). Não há acesso remoto ao console.
+   - **Reserva no local (Enterprise):** fica gravada com a rede do cliente, mas **sem registro** (registrar antes derruba a unidade em uso). O registro é no local, na hora da troca: por isso "mesmo dia útil" só vale em R1.
+3. O gateway com defeito volta para a Engemase. **No MVP, a fila não enviada de uma unidade que não fala com a nuvem se perde:** ainda não há ferramenta para recuperá-la ([RB-10 §5.2](../operacao/runbooks/10-troca-hardware-gateway.md#52-fila-da-unidade-antiga)). Os dados são apagados antes de reuso ou descarte, com termo de eliminação (Anexo H, H.6), depois de o N2 decidir o destino da fila.
+4. **Unidade registrada na bancada, no transporte:** o estado **"Em trânsito"**, que suprime o alerta de offline, ainda não existe (**Fase 1**, [docs/17, L23](../17-backlog-e-pendencias.md#4-lacunas-de-especificação)). Até lá, o alerta "Gateway offline" pode aparecer no cliente durante o transporte: o suporte avisa o cliente ao despachar.
 
 **Estoque de reserva:** pelo menos **10% da frota, mínimo de 2 unidades**, já testadas na bancada. A importação do R1000 é o maior risco de prazo do projeto: sem estoque, nenhum prazo desta tabela se cumpre.
 
@@ -335,15 +359,17 @@ Crédito = desconto na fatura seguinte, em % da **mensalidade do mês afetado**.
 | 1 | Metas de disponibilidade por plano | 99,0% meta / 99,5% / 99,5% (seção 3.1) |
 | 2 | Contratar a Vercel Enterprise para oferecer 99,8% | Não agora (seção 3.3) |
 | 3 | Horários de atendimento e de plantão | Seção 6.2 |
-| 4 | **Plantão 24×7** no Enterprise com a equipe atual | Só com 3 pessoas ou mais na escala |
+| 4 | **Escala de sobreaviso 24×7** (segurança para todos; P1 do Pro e do Enterprise) | Pelo menos 3 pessoas, antes do piloto (seção 6.2) |
 | 5 | Prazos de resposta e de configuração | Seções 6.5 e 6.6 |
 | 6 | Ferramenta de chamados | Jira Service Management Free no piloto (seção 7) |
-| 7 | Página de status | Better Stack gratuito (seção 8) |
+| 7 | Monitor e página de status | Better Stack gratuito no piloto; pago (1 min) a partir do primeiro contrato com crédito (seção 8) |
 | 8 | Janela de manutenção | Domingo, 1h–5h (seção 9) |
-| 9 | Regiões e prazos de troca, cidade-base, estoque de reserva | Seção 11 |
+| 9 | Regiões e prazos de troca, cidade-base, estoque de reserva; prazo extra quando o registro é no local | Seção 11 (+2 dias úteis em R2 e R3) |
 | 10 | Créditos e tetos | Seção 12 |
 | 11 | Janela de restauração do banco e cópia externa diária | 14 dias; diária (seção 5) |
-| 12 | Telefone, e-mail e WhatsApp do suporte | **[PREENCHER]** (o protótipo usa valores de exemplo) |
+| 12 | Telefone, e-mail e WhatsApp do suporte; telefone e e-mail de segurança 24×7 | **[PREENCHER]** (o protótipo usa valores de exemplo) |
+| 13 | RTO da restauração completa do banco | Até 2 h fora do ar, medido no teste trimestral (seção 5) |
+| 14 | Região de contingência fora de `gru1` | Escolher a região reserva (ex.: `iad1`); só usar depois de o advogado aprovar o contrato, cl. 10.4, e o DPA, cl. 9.6 (seção 5) |
 
 ## Fontes
 
@@ -355,6 +381,7 @@ Consultadas em 12/11/2026 por busca na web. As páginas oficiais não puderam se
 - [4] Neon, planos (SLA no Scale, não no Launch): <https://neon.com/docs/introduction/plans> · <https://neon.com/pricing>
 - [5] Histórico de incidentes da Vercel por terceiros: <https://uptimerobot.com/is-it-down/vercel/2026/> · <https://statusgator.com/services/vercel/outage-history> · status oficial: <https://www.vercel-status.com>
 - [6] Neon, janela de restauração (padrão de 1 dia; até 7 no Launch e 30 no Scale; US$ 0,20/GB-mês): <https://neon.com/docs/introduction/restore-window>
+- [7] Better Stack, intervalo de verificação (3 min no gratuito, até 30 s nos pagos): <https://betterstack.com/docs/uptime/check-frequency/> · preço pago (resumo de terceiros, conferir): <https://hyperping.com/blog/betterstack-pricing>
 - Jira Service Management (gratuito até 3 agentes): <https://www.desk365.io/blog/jira-service-management-pricing/> · comparação de preços de help desk 2026: <https://costbench.com/stats/help-desk-pricing-2026/>
 - Zoho Desk: <https://www.desk365.io/blog/zoho-desk-pricing> · Freshdesk × Zoho Desk: <https://costbench.com/compare/freshdesk-vs-zohodesk/>
 - Movidesk (G2): <https://www.g2.com/products/movidesk/pricing>

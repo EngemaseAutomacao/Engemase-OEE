@@ -213,8 +213,12 @@ Recomendado para todo primeiro cliente e para clientes com CLPs de classe I3.
 
 ### 6.2 Termo de piloto: conteúdo mínimo
 
-O jurídico ainda não tem este termo ([README do jurídico, §6, item 9](juridico/README.md#6-o-que-falta)). Conteúdo mínimo:
-1. Escopo (linha, máquinas, gateway, terminais) e duração.
+O jurídico ainda não tem este termo ([README do jurídico, §6, item 9](juridico/README.md#6-o-que-falta)).
+
+**Duração no termo:** a do piloto inteiro, **6 a 8 semanas** (seção 6.1). As "2 semanas" do [docs/09](../09-roadmap.md#fase-1-mvp-7-semanas--2-de-piloto), citadas no README do jurídico, são **só a estabilização técnica**, a primeira parte do piloto.
+
+Conteúdo mínimo:
+1. Escopo (linha, máquinas, gateway, terminais) e duração total (estabilização + uso).
 2. Preço, abatimento e condições de pagamento.
 3. Critérios de aceite (seção 6.4) e prazo para o aceite.
 4. Obrigações do cliente: ficha de TI, acesso, programa dos CLPs, lista de operadores.
@@ -295,7 +299,7 @@ O estado **Ativo** ([docs/15 §6](../15-multi-cliente-e-acesso.md#6-ciclo-de-vid
 | A11 | Contrato, DPA, Anexo H e Pedido assinados | Comercial | Documentos |
 | A12 | Termo de aceite da implantação assinado pelo cliente | Comercial | Documento |
 
-**Cobrança:** a mensalidade começa no Ativo ou **30 dias depois da instalação do primeiro gateway**, o que vier antes ([planos, §3.2](planos-e-precos.md#32-início-aumento-redução-e-troca-de-plano)). Se um item depender só do cliente (ex.: ficha de TI atrasada), a cobrança começa no prazo mesmo assim.
+**Cobrança:** a mensalidade começa no Ativo ou **30 dias depois do marco de início**, o que vier antes ([planos, §3.2](planos-e-precos.md#32-início-aumento-redução-e-troca-de-plano)). O marco é a instalação do primeiro gateway **feita depois da assinatura do Pedido**; se o cliente veio do piloto e não há gateway novo a instalar, é a assinatura do Pedido. **O tempo do piloto não entra:** ele é pago só pelo preço do piloto (seção 6.1). Se um item depender só do cliente (ex.: ficha de TI atrasada), a cobrança começa no prazo mesmo assim (conta a data combinada para a instalação).
 
 ## 9. Treinamento por papel
 
@@ -323,7 +327,7 @@ O estado **Ativo** ([docs/15 §6](../15-multi-cliente-e-acesso.md#6-ciclo-de-vid
 - unidades, linhas e máquinas, com a classe de integração e as particularidades de cada CLP;
 - gateways: número de série (`EGW-NNNNN`), local, rede (IPs OT e IT, proxy), portas RS-485 usadas;
 - riscos conhecidos (ex.: proxy que muda, rede OT instável);
-- região para troca de hardware ([SLA, §11](sla-e-suporte.md#11-troca-de-hardware-em-campo)).
+- região para troca de hardware ([SLA, §11](sla-e-suporte.md#11-troca-de-hardware-em-campo)) e, por gateway, se a unidade de troca pode sair **registrada da bancada** (rede IT em DHCP, sem proxy) ou se o registro precisa ser no local, com técnico da Engemase ([RB-10 §5.1](../operacao/runbooks/10-troca-hardware-gateway.md#51-na-bancada-antes-da-visita)). Isso muda o prazo de troca em R2 e R3.
 
 **Acompanhamento de 30 dias** (incluído na implantação):
 - reunião semanal curta com o admin e um supervisor: dúvidas, paradas sem motivo, pedidos de configuração;
@@ -335,10 +339,10 @@ O estado **Ativo** ([docs/15 §6](../15-multi-cliente-e-acesso.md#6-ciclo-de-vid
 | # | Escolha | Proposta |
 |---|---|---|
 | 1 | Piloto pago: preço e regra de abatimento | Seção 6.1 |
-| 2 | Duração do piloto | 6 a 8 semanas |
+| 2 | Duração do piloto | 6 a 8 semanas no termo (as 2 semanas do docs/09 são só a estabilização, seção 6.2) |
 | 3 | Critérios de uso no aceite (U1 a U3) | Seção 6.4 |
 | 4 | Silêncio vale como aceite? | [ADVOGADO] |
-| 5 | Início da cobrança: Ativo ou 30 dias depois do primeiro gateway | Seção 8 |
+| 5 | Início da cobrança | Ativo ou 30 dias depois do marco (primeiro gateway instalado depois do Pedido, ou o Pedido, se vier do piloto), o que vier antes (seção 8) |
 | 6 | Estoque mínimo de gateways para vender | Para 2 pilotos |
 | 7 | Validade da proposta | 30 dias |
 | 8 | Critérios de qualificação | Seção 2 |

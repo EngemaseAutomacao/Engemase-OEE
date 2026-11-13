@@ -35,7 +35,7 @@ flowchart TD
 
 | Evento (`action` na auditoria) | Quando o gateway gera | Efeito nas peças |
 |---|---|---|
-| `gateway.counter_reset` | O valor caiu sem estar perto do máximo do tipo: zerado no CLP, CLP religado com contador não retentivo, leitura "rasgada" | Conta o valor atual como peças novas. As peças entre a última leitura e o zeramento se perdem |
+| `gateway.counter_reset` | O valor caiu sem estar perto do máximo do tipo: zerado no CLP, CLP religado com contador não retentivo ou trocado, leitura "rasgada" | Conta o valor atual como peças novas, se couber no limite de taxa (o mesmo do salto); acima dele, não conta nada. As peças entre a última leitura e o zeramento se perdem |
 | `gateway.counter_jump` | Subida acima de `max_rate_per_s` × segundos desde a última leitura + 10 (padrão: 1.000 peças/s) | **Descarta** a subida inteira (`discarded_delta`) e passa a contar a partir do valor novo |
 | `gateway.counter_rebaseline` | Endereço, tipo ou ordem das words da tag mudou na config | Começa de uma base nova. Nada é contado em dobro |
 
@@ -60,7 +60,7 @@ Cada evento traz `raw` (valor depois), `previous_raw` (antes), `tag_id` e `role`
 8. **Leitura "rasgada":** os dois registradores do contador vieram de ciclos diferentes ([bloco OEE §7](../bloco-oee-v1.md#7-requisitos-de-temporização-no-clp)). Aparece como `counter_reset` seguido de `counter_jump`, com valores perto de múltiplos de 65.536.
 9. **`max_rate_per_s` baixo demais** para a máquina, ou contador que soma em lotes (ex.: +50 de uma vez) → `counter_jump` com **peças reais descartadas**.
 10. **Tag mudada na config** (endereço, tipo ou ordem) → `counter_rebaseline`: perde só as peças entre a última leitura com a config antiga e a primeira com a nova. Tag **apagada e criada de novo** (id novo) começa sem base **e sem evento**.
-11. **CLP trocado** ou contador "corrigido" à mão para o valor da IHM → `counter_jump` (a diferença é descartada, como deve ser).
+11. **CLP trocado** ou contador "corrigido" à mão para o valor da IHM. Se o valor **subiu** além do limite de taxa → `counter_jump` (a diferença é descartada, como deve ser). Se **caiu** (CLP novo zerado, correção para baixo) → `counter_reset`: o valor novo conta como peças, se couber no limite de taxa. Procure os dois eventos na auditoria.
 
 **Período e cálculo** (o bruto bate e não há eventos)
 

@@ -133,9 +133,9 @@ As partes celebram este Contrato de Assinatura ("**Contrato**"), que se rege pel
 
 6.2. Proteger os Dados do Cliente com as medidas do DPA (Apêndice 2), entre elas: isolamento de dados por cliente em camadas, conexões cifradas, autenticação de dois fatores para a Equipe Engemase, Gateway só de saída e só leitura no CLP, atualizações assinadas e auditoria.
 
-6.3. Guardar os dados na região de São Paulo (cláusula 10.3).
+6.3. Guardar os dados na região de São Paulo (cláusulas 10.3 e 10.4).
 
-6.4. Avisar o Cliente sobre incidentes de segurança que afetem os Dados do Cliente, nos prazos do DPA.
+6.4. Avisar o Cliente, **sem demora indevida e em até 24 horas da confirmação**, sobre qualquer incidente de segurança que afete os Dados do Cliente, **pessoais ou não** (ex.: dados de produção expostos, Gateway comprometido). Quando houver Dados Pessoais, valem também o conteúdo do aviso, as atualizações e o relatório final do DPA (cláusula 11). Nos incidentes só com dados não pessoais, a Engemase segue o mesmo roteiro, no que couber. **[PROPOSTA]**
 
 6.5. Manter atualizada a lista de suboperadores (DPA, Apêndice 3) e avisar mudanças com antecedência.
 
@@ -147,7 +147,7 @@ As partes celebram este Contrato de Assinatura ("**Contrato**"), que se rege pel
 
 7.1. Disponibilidade, horários de atendimento, canais, prazos por severidade, janelas de manutenção, metas de recuperação (RPO e RTO) e eventuais créditos estão no **SLA (Anexo B)**: [`docs/negocio/sla-e-suporte.md`](../sla-e-suporte.md). [CONFIRMAR: o documento do SLA está sendo escrito em paralelo (lacuna L11).]
 
-7.2. Não contam como indisponibilidade da Plataforma: falta de internet, energia ou rede na planta; bloqueios no firewall ou proxy do Cliente; falha do CLP ou da máquina; manutenção programada avisada; força maior (cláusula 18).
+7.2. Não contam como indisponibilidade da Plataforma as exclusões do SLA (Anexo B, seção 3.4). Entre elas: falta de internet, energia ou rede na planta; bloqueios no firewall ou proxy do Cliente; falha do CLP, da máquina ou de equipamento do Cliente; Gateway desligado, mudado de lugar ou alterado sem a Engemase; manutenção programada avisada, dentro da janela do SLA; Cliente suspenso (cláusula 14); navegador, TV ou tablet fora da lista suportada; força maior (cláusula 18).
 
 7.3. Quando a internet da planta cai, o Gateway guarda os dados por até 30 dias (ou 1 GB) e os reenvia quando a conexão volta. Os dados chegam atrasados, mas não se perdem nesse período.
 
@@ -202,6 +202,8 @@ As partes celebram este Contrato de Assinatura ("**Contrato**"), que se rege pel
 
 10.3. **Região (D7):** o banco de dados fica na AWS `sa-east-1` (São Paulo), pelo fornecedor Neon; a aplicação roda nas funções da Vercel em `gru1` (São Paulo). Os fornecedores são empresas estrangeiras e alguns guardam metadados e registros fora do Brasil. Por isso o DPA trata esse uso como **transferência internacional** (LGPD, art. 33) e define os mecanismos.
 
+10.4. **Contingência de região:** se a região `gru1` da Vercel ficar fora do ar por muito tempo, a Engemase pode rodar as funções da aplicação, **por tempo limitado**, em outra região da Vercel, com o banco em São Paulo, aviso ao Cliente e volta a `gru1` assim que possível, nas condições do DPA (cláusula 9.6). Os dados continuam guardados em São Paulo. **[PROPOSTA]**
+
 ## 11. Retenção (D6)
 
 11.1. Durante a vigência, a Engemase guarda:
@@ -209,7 +211,7 @@ As partes celebram este Contrato de Assinatura ("**Contrato**"), que se rege pel
 - (b) **registros de auditoria: 5 anos**;
 - (c) os demais dados pelos prazos do DPA (Apêndice 1).
 
-11.2. Retenção diferente por Plano ou por Cliente não está disponível nesta versão. **[CONFIRMAR com L9.]**
+11.2. Retenção diferente por Plano ou por Cliente não está disponível nesta versão: todos os Clientes seguem a cláusula 11.1. **[CONFIRMAR com L9 e com o produto: o console do protótipo ainda deixa o super admin mudar a "Retenção (meses)" de cada cliente, com mínimo de 6. Isso contradiz esta cláusula e a D6. Travar em 24 meses ou tirar o campo; se a equipe quiser retenção por cliente, mudar esta cláusula.]**
 
 11.3. Depois do fim do Contrato, vale a cláusula 16.
 
@@ -255,11 +257,13 @@ As partes celebram este Contrato de Assinatura ("**Contrato**"), que se rege pel
 
 15.3. **Rescisão por descumprimento:** se uma parte descumprir obrigação relevante e não corrigir em 30 dias do aviso escrito.
 
-15.4. **Rescisão antecipada sem motivo pelo Cliente:** [OPCIONAL] com aviso de [PREENCHER] dias e multa de [PREENCHER: % das mensalidades restantes do período]. [ADVOGADO]
+15.4. **Rescisão por descumprimento repetido do SLA:** nos Planos com crédito, se a disponibilidade ficar abaixo da meta por 3 meses seguidos, o Cliente pode rescindir sem multa, nas condições do SLA (Anexo B, seção 12). **[ADVOGADO]**
 
-15.5. **Objeção a novo suboperador:** o Cliente pode rescindir a parte afetada, sem multa, nos casos do DPA (cláusula 8).
+15.5. **Rescisão antecipada sem motivo pelo Cliente:** [OPCIONAL] com aviso de [PREENCHER] dias e multa de [PREENCHER: % das mensalidades restantes do período]. [ADVOGADO]
 
-15.6. [ADVOGADO: falência, recuperação judicial e mudança de controle.]
+15.6. **Objeção a novo suboperador:** o Cliente pode rescindir a parte afetada, sem multa, nos casos do DPA (cláusula 8).
+
+15.7. [ADVOGADO: falência, recuperação judicial e mudança de controle.]
 
 ## 16. Encerramento: exportação e eliminação dos dados **[PADRÃO PROPOSTO — D4 em aberto]**
 
@@ -270,15 +274,15 @@ As partes celebram este Contrato de Assinatura ("**Contrato**"), que se rege pel
 | **Dia 0** (fim do Contrato) | Cliente passa a "Encerrado". Gateways e Terminais são revogados e a coleta para. Os Usuários deixam de acessar, exceto o Admin do Cliente, que mantém acesso só para baixar a exportação **[PROPOSTA]**. A Engemase gera a **exportação completa em CSV** |
 | **Até o dia 30** | O Cliente baixa os arquivos. Pode pedir uma nova geração, sem custo, uma vez **[PROPOSTA]** |
 | **Dias 31 a 60** | Os dados ficam guardados sem acesso do Cliente, só para atender pedido sobre a exportação |
-| **Dia 60** | **Eliminação definitiva** dos Dados do Cliente no banco de produção. A Engemase envia o **termo de eliminação** ao Admin do Cliente |
-| **Depois do dia 60** | As cópias de segurança expiram sozinhas no fim da janela de restauração do banco: [PREENCHER: N dias, conforme o plano Neon contratado] |
+| **Dia 60** | **Eliminação definitiva** dos Dados do Cliente no banco de produção. A Engemase envia o **termo de eliminação** ao Admin do Cliente. O termo lista as cópias de segurança que ainda guardam os dados e a data em que a última expira |
+| **Depois do dia 60** | As cópias de segurança expiram sozinhas: (a) a **janela de restauração do banco**, em [PREENCHER: N dias, conforme o plano Neon contratado; o SLA propõe 14 dias]; (b) as **cópias lógicas externas do banco** (exportação periódica para outro armazenamento), em até [PREENCHER: prazo máximo, ex.: 90 dias]. Até expirarem, as cópias ficam isoladas e só servem para recuperar a Plataforma em desastre. **Se uma cópia for restaurada, os dados de clientes já encerrados são apagados de novo** antes de a Plataforma voltar ao uso |
 
 16.2. **Formato da exportação:** arquivos CSV em UTF-8 com BOM, separador `;`, vírgula decimal e datas no fuso da unidade em ISO 8601 com o deslocamento (lacuna L6). Inclui: dados por minuto, eventos de estado e classificações, refugo, trocas de produto, consolidados por turno, cadastros, Usuários (nome, e-mail e papel) e auditoria.
 
-16.3. **O que fica guardado depois do dia 60** (LGPD, art. 16), isolado e sem uso para outra finalidade:
-- registros de auditoria do Cliente, inclusive os acessos da Equipe Engemase, até completar 5 anos (D6), para defesa das partes; **[ADVOGADO: confirmar a base legal (art. 7º, VI) e se o Cliente pode pedir a eliminação antecipada]**
-- registros de acesso à Plataforma exigidos pelo Marco Civil da Internet (Lei 12.965/2014, art. 15), por 6 meses;
-- documentos fiscais e contratuais, pelo prazo da lei.
+16.3. **O que fica guardado depois do dia 60**, isolado e sem uso para outra finalidade:
+- (a) **Por obrigação legal**, com a Engemase como controladora (LGPD, art. 16, I): os registros de acesso à Plataforma exigidos pelo Marco Civil da Internet (Lei 12.965/2014, art. 15), por 6 meses; e os documentos fiscais e contratuais, pelo prazo da lei.
+- (b) **Registros dos acessos da Equipe Engemase ao Cliente** (quem acessou, papel, motivo, chamado, início e fim, e as mudanças de configuração que a Equipe Engemase fez), até completar 5 anos de cada registro (D6). Aqui a Engemase é **controladora**, só desses registros e só para se defender em processo judicial, administrativo ou arbitral (LGPD, art. 7º, VI). O Cliente concorda que a Engemase fique com eles, embora também façam parte da auditoria do Cliente (cláusula 9.2, d). Dados de Usuários e de Operadores de Chão ficam fora desses registros ou reduzidos ao mínimo **[CONFIRMAR com o produto]**. **[ADVOGADO: confirmar a base legal e o prazo.]**
+- (c) **O restante da auditoria do Cliente** (ações dos Usuários e dos Operadores de Chão) vai na exportação (cláusula 16.2) e é **eliminado no dia 60**, com os demais Dados do Cliente. **[OPCIONAL]** Se o Cliente quiser que a Engemase guarde essa auditoria até completar 5 anos, dá a instrução por escrito, com a própria base legal; a Engemase guarda como operadora, isolada, nas condições do DPA. [PREENCHER: preço da guarda, se houver.]
 
 16.4. **Gateways:** conforme a alternativa do Anexo H. Os dados guardados no Gateway são apagados antes de reuso ou descarte, com termo de eliminação.
 
@@ -292,11 +296,13 @@ As partes celebram este Contrato de Assinatura ("**Contrato**"), que se rege pel
 
 17.4. A responsabilidade total de cada parte neste Contrato fica limitada ao **valor pago pelo Cliente nos 12 meses anteriores ao fato** que a originou. [ADVOGADO]
 
-17.5. O limite da cláusula 17.4 não vale para: dolo ou culpa grave; violação de confidencialidade; violação de propriedade intelectual; valores devidos pelo Cliente. **[ADVOGADO: definir se danos por violação da LGPD por culpa da Engemase têm limite próprio, ex.: 2 vezes o valor anual.]**
+17.5. O limite da cláusula 17.4 não vale para: dolo ou culpa grave; **divulgação de informação confidencial feita de propósito, sem autorização, pela própria parte ou por seu pessoal** (vazamento por falha, engano ou ataque segue a cláusula 17.6); violação de propriedade intelectual; valores devidos pelo Cliente.
 
-17.6. Perante os titulares e a ANPD, cada parte responde nos termos da LGPD (arts. 42 a 45). Entre as partes, quem pagar por culpa da outra tem direito de regresso.
+17.6. **Incidentes de segurança e proteção de dados têm limite próprio.** Danos causados por incidente de segurança que afete Dados do Cliente, ou por descumprimento da LGPD ou do DPA pela Engemase, ficam limitados a [PREENCHER: ex.: 2 vezes o valor pago pelo Cliente nos 12 meses anteriores ao fato] **[ADVOGADO]**. Esse limite vale **mesmo quando o incidente também for quebra de sigilo** dos Dados do Cliente (cláusula 12.1). Só fica sem limite o caso de dolo ou culpa grave, ou a divulgação da cláusula 17.5.
 
-17.7. Este é um contrato entre empresas. As partes declaram que negociaram a divisão de riscos (Código Civil, art. 421-A). [ADVOGADO: confirmar que o Código de Defesa do Consumidor não se aplica ao Cliente.]
+17.7. Perante os titulares e a ANPD, cada parte responde nos termos da LGPD (arts. 42 a 45). Entre as partes, quem pagar por culpa da outra tem direito de regresso.
+
+17.8. Este é um contrato entre empresas. As partes declaram que negociaram a divisão de riscos (Código Civil, art. 421-A). [ADVOGADO: confirmar que o Código de Defesa do Consumidor não se aplica ao Cliente.]
 
 ## 18. Força maior
 
@@ -363,11 +369,14 @@ Testemunhas (se o advogado mantiver): ______________________ · ________________
 | # | Ponto | Por quê |
 |---|---|---|
 | 1 | Cláusula 9 (acesso sempre liberado) × papel de operadora na LGPD | A operadora só trata dados segundo as instruções do controlador (LGPD, art. 39). A cláusula transforma o acesso em instrução documentada do Cliente. Conferir se basta |
-| 2 | Cláusula 16.3 (auditoria guardada 5 anos depois do fim) | Conservação permitida pelo art. 16; confirmar base legal e prazo |
-| 3 | Limite de responsabilidade e LGPD (17.4 e 17.5) | Definir se há limite próprio para danos de proteção de dados |
-| 4 | Multa de rescisão antecipada (15.4) | Depende do comodato (Anexo H) e do mercado |
+| 2 | Cláusula 16.3 (o que fica depois do dia 60) | O art. 16 da LGPD só cobre aqui a obrigação legal (inciso I): Marco Civil e documentos fiscais. A minuta guarda os acessos da Equipe Engemase com a Engemase como controladora, para defesa (art. 7º, VI), e elimina o resto da auditoria no dia 60, salvo instrução escrita do Cliente. Confirmar a base, o prazo e se o Cliente pode pedir a eliminação antecipada |
+| 3 | Limite de responsabilidade e LGPD (17.4 a 17.6) | Definir o valor do limite próprio para incidentes e proteção de dados (17.6). Conferir que a exceção da 17.5 (divulgação de propósito e sem autorização) não esvazia esse limite |
+| 4 | Multa de rescisão antecipada (15.5) | Depende do comodato (Anexo H) e do mercado |
 | 5 | Suspensão com Gateways enviando (14.3) | A Engemase segue tratando dados durante a suspensão. Confirmar que o Cliente concorda |
-| 6 | Prazos do encerramento (16.1) | D4 em aberto. Conferir com o runbook de encerramento (manual no MVP) |
+| 6 | Prazos do encerramento (16.1) | D4 em aberto. Conferir com o runbook de encerramento (manual no MVP) e definir o prazo máximo das cópias lógicas externas |
+| 7 | Contingência de região (10.4) | Funções fora de São Paulo por tempo limitado são transferência internacional. Confirmar que o aviso e as cláusulas-padrão com a Vercel bastam |
+| 8 | Rescisão por descumprimento repetido do SLA (15.4) | Vem do SLA (Anexo B, seção 12). Confirmar se vale também para o Starter, que não tem crédito |
+| 9 | Piloto sem este Contrato | No piloto assinam-se só o termo de piloto, o DPA e os Termos de Uso. O DPA já traz o essencial das cláusulas 9 e 16. O termo de piloto precisa repetir ou incorporar as cláusulas 8, 12 e 17 ([README, seção 6, item 9](README.md#6-o-que-falta)) |
 
 ## Fontes
 

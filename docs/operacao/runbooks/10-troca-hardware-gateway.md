@@ -8,15 +8,23 @@
 | **Quem atende** | **N2** decide a troca e o destino da fila; a bancada grava a unidade nova; o técnico de campo instala; o TI do cliente atualiza o MAC novo. Custo conforme a modalidade do hardware (D2 em aberto, [Anexo H](../../negocio/juridico/01-anexo-h-hardware.md)) |
 | **Perde dados?** | **Em parte.** (1) A fila não enviada da unidade antiga, se ela não puder ser esvaziada antes. (2) O período da troca: peças e tempo entre o último minuto fechado da antiga e a primeira leitura da nova ficam "sem dados". **Nada é contado em dobro:** a unidade nova começa sem base de contador |
 
-## 1. Quando trocar
+## 1. Sintoma
+
+A unidade (o R1000) tem defeito, sumiu ou foi danificada, e o problema não é de rede, de CLP nem de config. Quando trocar:
 
 - **Defeito confirmado** na unidade: não liga; eMMC ou banco com erro; porta ETH ou RS-485 que não funciona com a config certa ([RB-02 §6](02-clp-sem-comunicacao.md#6-quando-escalar)); relógio que se perde a cada queda de energia ([RB-04 §6](04-relogio-fora-de-sincronia.md#6-quando-escalar)); agente que não volta depois de uma atualização ([RB-05 §6](05-atualizacao-falhou-rollback.md#6-quando-escalar)).
 - **Unidade furtada, perdida ou danificada.** Furto ou perda: bloqueie o token antes ([RB-09](09-rotacao-token-gateway.md)).
 - **Não troque** para "resolver" problema de rede, de CLP ou de config: a troca não resolve e arrisca a fila (regra de ouro 2 do [README](../README.md#3-regras-de-ouro)).
 
-## 2. O que muda e o que fica
+## 2. Como aparece na plataforma e nos alertas
 
-A unidade nova é registrada **no mesmo gateway da plataforma** ([docs/16 §7](../../16-projeto-do-gateway.md#7-preparação-na-engemase-e-ciclo-de-vida)) e herda tudo o que é dele.
+| Momento | O que aparece |
+|---|---|
+| Antes da troca | O alerta do defeito: "Gateway offline" ([RB-01](01-gateway-offline.md)), "Sem comunicação" das máquinas ([RB-02](02-clp-sem-comunicacao.md)) ou o resultado da atualização ([RB-05](05-atualizacao-falhou-rollback.md)) |
+| Durante | Gateway "offline" (e o alerta, depois de 5 min); máquinas em "sem comunicação"; selo "dados atrasados" nas telas |
+| Depois | O **mesmo** gateway online, com o hostname da unidade nova; evento `gateway.enrolled` na auditoria do cliente com o hardware novo; config aplicada = última publicada; o período da troca como "sem dados" na linha do tempo das máquinas |
+
+**O que muda e o que fica.** A unidade nova é registrada **no mesmo gateway da plataforma** ([docs/16 §7](../../16-projeto-do-gateway.md#7-preparação-na-engemase-e-ciclo-de-vida)) e herda tudo o que é dele.
 
 | Fica (é do gateway na plataforma) | Muda (é da unidade) |
 |---|---|
@@ -128,7 +136,7 @@ timedatectl                 # hora certa? "System clock synchronized: yes"
 sudo oee-gateway diag       # credencial: "gateway não registrado" (ou ok, se registrada na bancada); DNS da nuvem: ok
 ```
 
-5. **Código de ativação para o mesmo gateway**, gerado pela equipe Engemase (unidade já registrada na bancada: pule os passos 5 e 6; o `diag` mostra a credencial em `ok`). Na plataforma é **Fase 1**; até lá, o SQL do [RB-09 §5.1](09-rotacao-token-gateway.md#51-bloquear-o-token-e-gerar-o-código-equipe-engemase) **sem o passo a)** (não precisa bloquear: o registro da nova já troca o token).
+5. **Código de ativação para o mesmo gateway**, gerado pela equipe Engemase (unidade já registrada na bancada: pule os passos 5 e 6; o `diag` mostra a credencial em `ok`). Na plataforma é **Fase 1**; até lá, o SQL do [RB-09 §5.1](09-rotacao-token-gateway.md#51-bloquear-o-token-e-gerar-o-código-equipe-engemase), passos 1, 2, 4 e 5, **sem o passo 3** (não precisa bloquear: o registro da nova já troca o token).
 6. **Registre**, sem `--force`:
 
 ```bash

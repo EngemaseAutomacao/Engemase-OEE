@@ -4,10 +4,13 @@
 |---|---|
 | **Vale a partir de** | Hoje, com o agente que grava o marcador `auth-blocked`. Bloquear o token e gerar o código pela tela da plataforma é **Fase 1**: até lá, SQL (seção 5.1). A rotação pela nuvem sem ir ao local (`token.rotate`) é da **F2** ([docs/04](../../04-protocolo-gateway-nuvem.md#autenticação)) |
 | **Severidade típica** | Alta quando há suspeita de vazamento (S2 no [plano de incidentes](../../negocio/juridico/06-plano-de-resposta-a-incidentes.md#4-severidade)); média quando é só registrar de novo o mesmo gateway |
+| **Alerta** | Nenhum próprio. Com o token recusado (401), o gateway para de enviar e aparece como "Gateway offline" ([RB-01](01-gateway-offline.md)); o motivo está no `diag` do gateway e nos logs da ingestão (seção 2) |
 | **Quem atende** | **N2** (super admin ou engenheiro de campo atribuído: só a equipe Engemase mexe em gateways, D13); técnico de campo no console; coordenador do incidente se houver vazamento |
 | **Perde dados?** | **Não.** Com o token bloqueado, o agente para de enviar e guarda tudo na fila (até 30 dias ou 1 GB). Depois do novo registro, envia a fila com o token novo |
 
-## 1. Quando rotacionar
+## 1. Sintoma
+
+Sinais de que o token do gateway precisa ser trocado:
 
 - **Suspeita de vazamento** do `credentials.json`: cópia numa imagem de engenharia, num backup ou num chamado; unidade furtada ou perdida.
 - **Dois equipamentos com o mesmo token** (eMMC clonado): na aba **Saúde**, `boot_id` e `uptime_s` alternando entre dois valores; na auditoria, minutos reescritos (`production_minute.rewritten`) nas máquinas do gateway.
@@ -24,7 +27,18 @@
 | **Revogar o gateway** | `status = 'revoked'` e `revoked_at` | 401 `token_revoked` | **Não**: todo código desse gateway é recusado (`activation_code_invalid`) | Só no encerramento do cliente ou no descarte definitivo do gateway (D4) |
 | **Registrar** (`enroll`) | Token novo; o anterior deixa de valer na hora | — | — | Último passo da rotação e da troca de hardware |
 
-## 2. Como funciona (para entender o diagnóstico)
+## 2. Como aparece na plataforma e nos alertas
+
+**Enquanto o token está bloqueado:**
+
+| Onde | O que aparece |
+|---|---|
+| Plataforma | Gateway sem contato: "offline" e, depois de 5 min, o alerta "Gateway offline". Avise o cliente antes de bloquear |
+| `systemctl status oee-gateway` | `coletando N/M dispositivos · nuvem bloqueada (401)` |
+| `sudo oee-gateway diag` | Linha `credencial` em `falha`: `gateway <id>, organização <cliente>: a nuvem recusa o token desde <hora> (unauthorized); gere um código novo na plataforma e rode oee-gateway enroll --code ...` |
+| Log do agente | `nuvem recusou o token: envio parado, buffer mantido; o mesmo token é testado de novo a cada 15m0s (se persistir, refaça o enroll)`, com `erro="nuvem respondeu 401 (unauthorized): Token ausente ou inválido."` |
+
+**Como funciona** (para entender o diagnóstico):
 
 ```mermaid
 sequenceDiagram
@@ -48,15 +62,6 @@ sequenceDiagram
 - **No 401**, o agente para de enviar, mantém a fila e grava `/var/lib/oee-gateway/auth-blocked` (dono `oee`, 0600) com o início do bloqueio, o último 401 e o código da nuvem (`unauthorized` ou `token_revoked`). A cada 15 min ele testa o **mesmo** token de novo; se a nuvem voltar a aceitar, apaga o marcador e segue sozinho.
 - **Com o marcador presente**, o `enroll` troca a credencial existente **sem `--force`**. É o único jeito em campo: o `sudo` do `tecnico` recusa `--force`, `--url`, `--hostname` e `--config`, e a imagem não tem root ([deploy/gateway, sudo do técnico](../../../deploy/gateway/README.md#6-sudo-do-técnico)).
 - **Sem o marcador** (o agente ainda não recebeu o 401), o `enroll` recusa trocar a credencial.
-
-**O que o gateway mostra enquanto o token está bloqueado:**
-
-| Onde | O que aparece |
-|---|---|
-| `systemctl status oee-gateway` | `coletando N/M dispositivos · nuvem bloqueada (401)` |
-| `sudo oee-gateway diag` | Linha `credencial` em `falha`: `gateway <id>, organização <cliente>: a nuvem recusa o token desde <hora> (unauthorized); gere um código novo na plataforma e rode oee-gateway enroll --code ...` |
-| Log do agente | `nuvem recusou o token: envio parado, buffer mantido; o mesmo token é testado de novo a cada 15m0s (se persistir, refaça o enroll)`, com `erro="nuvem respondeu 401 (unauthorized): Token ausente ou inválido."` |
-| Plataforma | Gateway sem contato: "offline" e, depois de 5 min, o alerta "Gateway offline". Avise o cliente antes de bloquear |
 
 ## 3. Causas prováveis de falha no novo registro
 
@@ -117,40 +122,55 @@ COMMIT;
 c=$(LC_ALL=C tr -dc 'ABCDEFGHJKMNPQRSTUVWXYZ23456789' < /dev/urandom | head -c 8); echo "${c:0:4}-${c:4:4}"
 ```
 
-**3. Bloquear o token, trocar o código e registrar na auditoria** (uma transação; troque os `<...>` e o código `WXYZ-5678` pelo gerado):
+**3. Bloquear o token** (na troca de hardware, [RB-10](10-troca-hardware-gateway.md), pule este passo: o registro da unidade nova já troca o token). Uma instrução só bloqueia e grava a auditoria do cliente, e a auditoria só é gravada se o bloqueio aconteceu. Troque os `<...>`:
 
 ```sql
 BEGIN;
 SET LOCAL ROLE app_user;
 SELECT app.set_tenant('<organization_id>');
 
--- a) Bloqueia o token atual. O gateway continua cadastrado, com a config e as máquinas.
---    Na troca de hardware (RB-10), pule este passo: o registro da unidade nova já troca o token.
-UPDATE gateway
-   SET status = 'pending_enrollment', previous_token_hash = NULL,
-       previous_token_expires_at = NULL, updated_at = now()
- WHERE id = '<gateway_id>' AND status = 'active' AND deleted_at IS NULL
-RETURNING id, name, status;
+-- Bloqueia o token atual. O gateway continua cadastrado, com a config e as máquinas.
+WITH bloqueado AS (
+  UPDATE gateway
+     SET status = 'pending_enrollment', previous_token_hash = NULL,
+         previous_token_expires_at = NULL, updated_at = now()
+   WHERE id = '<gateway_id>' AND status = 'active' AND deleted_at IS NULL
+  RETURNING id, organization_id, unit_id
+)
+INSERT INTO audit_log (organization_id, actor_type, actor_label, action, entity_type, entity_id, unit_id, after)
+SELECT organization_id, 'engemase', '<nome> (engenharia Engemase)', 'gateway.token_blocked',
+       'gateway', id, unit_id, jsonb_build_object('chamado', '<número>', 'motivo', '<motivo>')
+  FROM bloqueado;
+COMMIT;
+```
 
--- b) Códigos ainda não usados deste gateway deixam de valer.
+O `psql` precisa mostrar `INSERT 0 1`. Com `INSERT 0 0`, **nada mudou**: o gateway não está `active` (já bloqueado, revogado ou nunca registrado) ou o id e o cliente não conferem. Confira com a consulta do passo 1 antes de seguir.
+
+**4. Trocar o código e registrar na auditoria** (uma transação; troque os `<...>` e o código `WXYZ-5678` pelo gerado no passo 2):
+
+```sql
+BEGIN;
+SET LOCAL ROLE app_user;
+SELECT app.set_tenant('<organization_id>');
+
+-- 4a) Códigos ainda não usados deste gateway deixam de valer.
 UPDATE gateway_enrollment SET expires_at = now()
  WHERE gateway_id = '<gateway_id>' AND used_at IS NULL AND expires_at > now();
 
--- c) Código novo, válido por 24 h. O banco guarda só o hash.
+-- 4b) Código novo, válido por 24 h. O banco guarda só o hash.
 INSERT INTO gateway_enrollment (organization_id, gateway_id, code_hash, expires_at)
 VALUES ('<organization_id>', '<gateway_id>',
         encode(sha256(convert_to('WXYZ-5678', 'UTF8')), 'hex'), now() + interval '24 hours');
 
--- d) Auditoria do cliente (visível para ele). Sem o passo a) (troca de hardware),
---    use a ação 'gateway.activation_code_created'.
+-- 4c) Auditoria do cliente (visível para ele).
 INSERT INTO audit_log (organization_id, actor_type, actor_label, action, entity_type, entity_id, unit_id, after)
-SELECT organization_id, 'engemase', '<nome> (engenharia Engemase)', 'gateway.token_blocked',
+SELECT organization_id, 'engemase', '<nome> (engenharia Engemase)', 'gateway.activation_code_created',
        'gateway', id, unit_id, jsonb_build_object('chamado', '<número>', 'motivo', '<motivo>')
   FROM gateway WHERE id = '<gateway_id>';
 COMMIT;
 ```
 
-O `UPDATE` do passo a) precisa devolver uma linha. Nenhuma linha: o gateway não está `active` (já bloqueado, revogado ou nunca registrado) ou o id e o cliente não conferem. Confira o código antes de enviá-lo:
+**5. Conferir o código** antes de enviá-lo:
 
 ```sql
 BEGIN READ ONLY;
@@ -159,9 +179,9 @@ SELECT state FROM app.resolve_gateway_enrollment_state(encode(sha256(convert_to(
 COMMIT;
 ```
 
-O resultado esperado é `valid`. Mande o código ao técnico por um canal direto; no chamado, registre só a hora em que foi gerado.
+O resultado esperado é `valid` (`gateway_revoked`: o gateway foi revogado e nenhum código dele funciona). Mande o código ao técnico por um canal direto; no chamado, registre só a hora em que foi gerado.
 
-**Bloqueio ou revogação por engano, sem suspeita de vazamento:** o banco mantém o hash do token. N2 volta o gateway para `status = 'active'` (com `revoked_at = NULL`, se foi revogado), invalida o código gerado (passo b) e registra na auditoria. O token antigo volta a valer e o agente se recupera sozinho na próxima sonda (até 15 min), sem ir ao local. **Com** suspeita de vazamento, o caminho é `pending_enrollment` e o passo 3 sem o a): um gateway revogado não aceita nenhum código.
+**Bloqueio ou revogação por engano, sem suspeita de vazamento:** o banco mantém o hash do token. N2 volta o gateway para `status = 'active'` (com `revoked_at = NULL`, se foi revogado), invalida o código gerado (passo 4a) e registra na auditoria. O token antigo volta a valer e o agente se recupera sozinho na próxima sonda (até 15 min), sem ir ao local. **Com** suspeita de vazamento, o caminho é voltar para `pending_enrollment` (não `active`) e seguir os passos 4 e 5: um gateway revogado não aceita nenhum código.
 
 ### 5.2 Registrar de novo no local (técnico)
 
@@ -178,7 +198,7 @@ sudo -u oee oee-gateway enroll --code WXYZ-5678
 |---|---|---|
 | `Gateway registrado na organização <cliente> (id <id>).` / `Credencial gravada em /var/lib/oee-gateway/credentials.json.` / `Credencial anterior (gateway <id>, organização <cliente>) substituída: a nuvem a recusava desde <hora> (unauthorized).` | Certo | Conferir que o id é o mesmo do gateway na plataforma. Seguir para 5.3 |
 | `Proxy de /etc/oee-gateway/proxy.env (HTTPS_PROXY, NO_PROXY).` | Informativo: o `enroll` usou o proxy da unidade | Nada |
-| `erro: gateway já registrado (id ..., organização ...) e o agente não marcou a credencial como recusada pela nuvem (sem /var/lib/oee-gateway/auth-blocked); confira com oee-gateway diag. Para registrar de novo assim mesmo, use --force` | O agente ainda não recebeu o 401 | Confirmar o bloqueio (5.1, passo a) e esperar o próximo `/sync`. Gateway sem rede: [RB-01](01-gateway-offline.md) primeiro. **Não** tente `--force` (o `sudo` recusa) |
+| `erro: gateway já registrado (id ..., organização ...) e o agente não marcou a credencial como recusada pela nuvem (sem /var/lib/oee-gateway/auth-blocked); confira com oee-gateway diag. Para registrar de novo assim mesmo, use --force` | O agente ainda não recebeu o 401 | Confirmar o bloqueio (5.1, passo 3) e esperar o próximo `/sync`. Gateway sem rede: [RB-01](01-gateway-offline.md) primeiro. **Não** tente `--force` (o `sudo` recusa) |
 | `erro: registro recusado: nuvem respondeu 410 (activation_code_used): Este código de ativação já foi usado. ...` | Código já usado | Pedir código novo |
 | `erro: registro recusado: nuvem respondeu 410 (activation_code_expired): Este código de ativação venceu (vale 24 h). ...` | Código vencido | Pedir código novo |
 | `erro: registro recusado: nuvem respondeu 400 (activation_code_invalid): Código de ativação inválido. ...` | Código digitado errado, de outro ambiente, ou gateway **revogado** | Conferir o código; se o gateway foi revogado, N2 (5.1, último parágrafo) |

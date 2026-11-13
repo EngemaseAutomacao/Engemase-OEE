@@ -39,15 +39,16 @@
 |---|---|---|
 | **Conta de acesso** | Nome, e-mail, senha (guardamos só um código irreversível, o "hash"), verificação em duas etapas, sessões, último acesso | Administrador da empresa (convite); você, ao definir a senha |
 | **Vínculo com a empresa** | Papel, escopo (empresa, unidades ou máquinas), situação | Administrador da empresa |
-| **Uso e segurança** | Endereço IP, navegador e sistema, data e hora de login e de cada ação registrada, tentativas de acesso | Seu navegador, automaticamente |
+| **Uso e segurança** | Endereço IP e porta lógica de origem (quando disponível), navegador e sistema, data e hora de login e de cada ação registrada, tentativas de acesso | Seu navegador, automaticamente |
 | **Ações na plataforma** | Quem classificou parada, lançou refugo, trocou produto ou mudou cadastro, com máquina e horário | Você, ao usar a plataforma |
 | **Operador de chão** | Nome ou apelido, matrícula (se a empresa usar), unidade e o que apontou no tablet, com máquina e horário | Lista enviada pela empresa; você, ao escolher seu nome no tablet |
 | **Notificações** | Inscrição de push (endereço técnico do serviço, chaves, nome do aparelho), preferências e notificações recebidas | Você, ao ativar notificações |
 | **E-mails** | Nome, e-mail e conteúdo dos e-mails de serviço | Plataforma |
 | **Contatos da empresa** | Nome, e-mail, telefone, cargo | Empresa cliente (ficha técnica, contrato, chamados) |
+| **Avisos da página de status** | E-mail | Você, ao se inscrever |
 | **Técnicos da Engemase** | Nome, papel, motivo e chamado de cada acesso a um cliente; nas sessões de acesso remoto (Fase 2), identificação do técnico, IPs e comandos executados no gateway | Plataforma e gateway |
 
-**O que não coletamos:** dados sensíveis (saúde, religião, biometria e outros), localização do celular, imagens, vídeo ou áudio. **Os gateways não coletam dados pessoais:** leem só sinais das máquinas.
+**O que não coletamos:** dados sensíveis (saúde, religião, biometria e outros), localização do celular, imagens, vídeo ou áudio. **Os gateways não coletam dados pessoais das máquinas:** leem só sinais. Guardam apenas registros técnicos, inclusive os das sessões de acesso remoto da equipe Engemase (Fase 2), e a configuração de rede da empresa.
 
 ## 5. Para que usamos e com qual base legal
 
@@ -59,13 +60,14 @@
 |---|---|---|
 | Manter sua conta de acesso: login, senha, verificação em duas etapas, sessões | Nome, e-mail, hash da senha, 2FA, sessões | Legítimo interesse (inciso IX): dar o acesso que a sua empresa contratou, com segurança |
 | Proteger a plataforma: bloquear ataques, limitar tentativas de login, investigar abusos | IP, navegador, horários, tentativas de acesso | Legítimo interesse (inciso IX), com dados mínimos |
-| Guardar registros de acesso à aplicação por 6 meses | IP, data e hora de acesso | Obrigação legal (inciso II): Marco Civil da Internet, art. 15 |
+| Guardar registros de acesso à aplicação por 6 meses | IP, porta lógica de origem (quando disponível), data e hora de acesso | Obrigação legal (inciso II): Marco Civil da Internet, art. 15 |
 | Enviar e-mails de conta e de contrato (definir e redefinir senha, avisos de segurança, avisos de acesso da Engemase e de suspensão) | Nome, e-mail | Legítimo interesse (inciso IX), ligado ao contrato com a empresa |
-| Gerir o contrato, cobrar e emitir notas | Nome, e-mail e telefone dos contatos de cobrança e dos representantes | Execução de contrato (inciso V) e obrigação legal fiscal (inciso II) |
+| Gerir o contrato, cobrar e emitir notas | Nome, cargo, e-mail e telefone dos representantes e dos contatos de cobrança da empresa cliente | Legítimo interesse (inciso IX): o contrato é com a empresa, e não com essas pessoas; usamos só os dados que a empresa indicou. Obrigação legal (inciso II) para os documentos fiscais **[ADVOGADO]** |
 | Atender chamados de suporte | Nome, e-mail, telefone, conteúdo do chamado | Legítimo interesse (inciso IX) |
+| Avisar sobre a disponibilidade da plataforma (página de status), para quem se inscrever | E-mail | Legítimo interesse (inciso IX) |
 | Registrar o trabalho da equipe Engemase nos clientes (transparência exigida no contrato) | Dados dos técnicos | Legítimo interesse (inciso IX) e execução do contrato de trabalho (inciso V) |
 | Monitorar erros técnicos | Identificador técnico do usuário, mensagens de erro (sem IP e sem e-mail) | Legítimo interesse (inciso IX) |
-| Defender direitos em processos | Registros de auditoria e de acesso | Exercício regular de direitos (inciso VI) |
+| Defender direitos em processos | Registros dos acessos da equipe Engemase às empresas clientes (guardados até 5 anos, inclusive depois do fim do contrato da empresa) e registros de acesso à aplicação | Exercício regular de direitos (inciso VI) |
 
 Não vendemos dados. Não usamos dados para publicidade. Não tomamos decisões automatizadas sobre pessoas: os alertas são sobre máquinas.
 
@@ -84,7 +86,7 @@ Não usamos cookies de publicidade nem de rastreamento. **[CONFIRMAR antes de pu
 ## 7. Com quem compartilhamos
 
 - **Com a sua empresa:** o administrador vê os usuários, os acessos e a auditoria, inclusive quem fez cada ação.
-- **Com fornecedores que nos ajudam a operar** (suboperadores), só o necessário:
+- **Com fornecedores que nos ajudam a operar**, só o necessário:
 
 | Fornecedor | Para quê | País da empresa |
 |---|---|---|
@@ -93,14 +95,17 @@ Não usamos cookies de publicidade nem de rastreamento. **[CONFIRMAR antes de pu
 | Sentry | Monitoramento de erros | EUA |
 | Resend | Envio de e-mails | EUA |
 | Tailscale (só se a empresa contratar acesso remoto, Fase 2) | VPN de manutenção dos gateways | Canadá / EUA |
+| Ferramenta de chamados [DECIDIR: proposta, Jira Service Management, da Atlassian] | Registro dos chamados de suporte | Austrália / EUA [CONFIRMAR] |
+| WhatsApp (Meta) | Contato rápido com o suporte, se você nos chamar por lá | EUA |
+| Better Stack | Página de status da plataforma e avisos por e-mail a quem se inscrever | EUA [CONFIRMAR] |
 
-  A lista completa, com onde ficam os dados, está no [Acordo de Tratamento de Dados](02-acordo-de-tratamento-de-dados.md#apêndice-3--suboperadores) e é atualizada antes de cada mudança.
+  A lista dos fornecedores que tratam dados das empresas clientes, com onde ficam os dados, está no [Acordo de Tratamento de Dados](02-acordo-de-tratamento-de-dados.md#apêndice-3--suboperadores) e é atualizada antes de cada mudança.
 - **Serviços de notificação do seu navegador** (Google, Apple ou Mozilla): entregam o push ao seu aparelho. A mensagem vai cifrada.
 - **Autoridades**, quando a lei ou uma ordem judicial exigir.
 
 ## 8. Transferência internacional
 
-Os dados ficam em **São Paulo**: banco de dados na AWS `sa-east-1` e aplicação na Vercel `gru1`. Mesmo assim, nossos fornecedores são empresas estrangeiras: podem acessar os dados a partir do exterior para operar e dar suporte, e alguns guardam registros técnicos fora do Brasil (por exemplo, nos EUA ou na União Europeia).
+Os dados ficam em **São Paulo**: banco de dados na AWS `sa-east-1` e aplicação na Vercel `gru1`. Se a região de São Paulo da Vercel ficar fora do ar por muito tempo, a aplicação pode rodar por tempo limitado em outra região da Vercel, com o banco em São Paulo. Mesmo assim, nossos fornecedores são empresas estrangeiras: podem acessar os dados a partir do exterior para operar e dar suporte, e alguns guardam registros técnicos fora do Brasil (por exemplo, nos EUA ou na União Europeia).
 
 Nesses casos usamos os mecanismos da LGPD (art. 33): **cláusulas-padrão contratuais aprovadas pela ANPD** (Resolução CD/ANPD nº 19/2024) e, para a União Europeia, a **decisão de adequação** da ANPD (Resolução CD/ANPD nº 32/2026). Você pode pedir mais informações pelo canal da seção 1.
 
@@ -109,15 +114,16 @@ Nesses casos usamos os mecanismos da LGPD (art. 33): **cláusulas-padrão contra
 | Dado | Prazo |
 |---|---|
 | Conta de acesso | Enquanto tiver vínculo ativo com alguma empresa. Sem vínculo, [PROPOSTA: 6 meses]; depois disso é eliminada ou anonimizada |
-| Registros de acesso (IP, data e hora) | 6 meses (Marco Civil da Internet) |
+| Registros de acesso (IP, porta lógica de origem quando disponível, data e hora) | 6 meses (Marco Civil da Internet) |
 | Auditoria (quem fez o quê) | 5 anos |
 | Dados de produção por minuto | 2 anos |
 | Identificação do operador nos apontamentos | Enquanto durar o contrato da empresa. [PROPOSTA: anonimizada após 2 anos] |
 | Notificações | [PROPOSTA: 12 meses] |
 | Dados de cobrança | Prazo da legislação fiscal [CONFIRMAR com o contador] |
 | Registros de erros técnicos | [CONFIRMAR: prazo do plano do Sentry, ex.: 90 dias] |
+| Inscrição nos avisos da página de status | Até você cancelar a inscrição |
 
-Quando o contrato da empresa termina, ela tem 30 dias para exportar os dados, e eles são eliminados até o 60º dia **[PADRÃO PROPOSTO — D4]**. Ficam só os registros que a lei permite guardar (LGPD, art. 16).
+Quando o contrato da empresa termina, ela tem 30 dias para exportar os dados, e eles são eliminados até o 60º dia **[PADRÃO PROPOSTO — D4]**. As cópias de segurança expiram depois, em prazo fixo. Ficam só: os registros de acesso exigidos pelo Marco Civil (6 meses); os documentos fiscais; e o registro dos acessos da equipe Engemase à empresa (até 5 anos, para defesa em processos). O restante da auditoria só fica se a empresa pedir por escrito.
 
 ## 10. Seus direitos
 
@@ -154,5 +160,5 @@ Avisamos mudanças relevantes na plataforma antes de elas valerem. A data da úl
 ## Fontes
 
 - LGPD (Lei 13.709/2018), arts. 7º, 14, 16, 18, 19 e 33: <https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm>
-- Marco Civil da Internet (Lei 12.965/2014), art. 15: <https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2014/lei/l12965.htm>
+- Marco Civil da Internet (Lei 12.965/2014), art. 15: <https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2014/lei/l12965.htm>. Porta lógica de origem: STJ, REsp 1.784.156/SP, ver [README](README.md#fontes).
 - Resoluções CD/ANPD nº 2/2022, 15/2024, 18/2024, 19/2024 e 32/2026: ver [README](README.md#fontes).

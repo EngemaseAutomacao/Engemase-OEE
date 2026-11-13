@@ -48,7 +48,7 @@
 | D1 Assinatura por máquina, com planos | Decidida | Contrato, cl. 3 |
 | D5 Engemase sempre com acesso, com registro e faixa na tela | Decidida | Contrato, cl. 9; DPA, cl. 5; Termos, seção 6 |
 | D6 Minuto 2 anos, auditoria 5 anos | Decidida | Contrato, cl. 11; DPA, Apêndice 1; Política, seção 9 |
-| D7 São Paulo (Vercel `gru1`, Neon `sa-east-1`) | Decidida | Contrato, cl. 10.3; DPA, cl. 9 |
+| D7 São Paulo (Vercel `gru1`, Neon `sa-east-1`) | Decidida | Contrato, cl. 10.3 e 10.4 (contingência de região); DPA, cl. 9 e 9.6 |
 | D11 Escopo por máquina | Decidida | Termos, seção 3; DPA, Apêndice 2 |
 | D12 e D13 Configuração só pela Engemase; usuários pelo admin do cliente | Decididas | Contrato, cl. 4 e 5; Termos, seção 3 |
 | D28 Endereço da Vercel por enquanto | Decidida | Contrato, cl. 1 e 19.3; Termos, 1.3 |
@@ -72,7 +72,8 @@
 | **Resolução CD/ANPD nº 32/2026** (adequação da União Europeia) | A ANPD reconheceu a UE como destino com proteção adequada (janeiro de 2026), em decisão recíproca com a Comissão Europeia | DPA, cl. 9.3 (Sentry na UE) |
 | **Resolução CD/ANPD nº 18/2024** (encarregado) | Controlador indica encarregado, com substituto, e divulga identidade e contato no site; para o **operador**, a indicação é **facultativa** (conta como boa prática); agente de pequeno porte dispensado deve manter canal de comunicação | Política, seção 1; seção 6 abaixo |
 | **Resolução CD/ANPD nº 2/2022** (agentes de pequeno porte) | Microempresas, empresas de pequeno porte e startups, **exceto** se fizerem tratamento de alto risco, tiverem receita acima do limite legal (R$ 4,8 milhões por ano para empresa de pequeno porte; limite próprio para startups) ou pertencerem a grupo econômico acima desse limite: dispensa de encarregado (com canal de comunicação), registro simplificado, prazos em dobro [CONFIRMAR no texto oficial] | Seção 6 abaixo |
-| **Marco Civil da Internet** (Lei 12.965/2014), art. 15 | Provedor de aplicação guarda os registros de acesso (IP, data e hora) por **6 meses**, em sigilo | Política; ROPA CT-03 |
+| **Marco Civil da Internet** (Lei 12.965/2014), art. 15 | Provedor de aplicação guarda os registros de acesso (IP, data e hora) por **6 meses**, em sigilo. O STJ incluiu a **porta lógica de origem** enquanto o IP for IPv4 (REsp 1.784.156/SP, 2019) | Política; ROPA CT-03 |
+| **Guia da ANPD sobre legítimo interesse** (2024) | Teste de balanceamento documentado (art. 10). Base usada para contatos e representantes do cliente, que não são parte do contrato (art. 7º, V, não serve) | Política, seção 5; ROPA CT-04 |
 
 ## 6. O que falta
 
@@ -81,12 +82,12 @@
 | 1 | **Revisão jurídica** de todas as minutas (proteção de dados e contratos). A nota do operador de chão também por advogado **trabalhista**; o Anexo H também pelo **contador** (venda × locação) | Direção da Engemase | Piloto |
 | 2 | **Nomear o encarregado (DPO)** e um substituto, e publicar nome e contato na política. Mesmo se a Engemase puder ser dispensada como agente de pequeno porte, **a recomendação é nomear**: a Engemase acessa os dados de todos os clientes (D5) e os clientes vão pedir um contato formal. Pode ser pessoa da equipe sem conflito de interesse ou serviço externo | Direção | Piloto |
 | 3 | **Confirmar o enquadramento** como agente de pequeno porte: receita bruta anual (até R$ 4,8 milhões para empresa de pequeno porte), grupo econômico e ausência de tratamento de alto risco. Muda os prazos (em dobro) e a dispensa de encarregado | Direção e contador | Piloto |
-| 4 | **Cláusulas-padrão da ANPD com cada fornecedor:** conferir se os DPAs da Vercel, Neon, Sentry, Resend e Tailscale já as incluem; se não, assinar em instrumento separado ou trocar o fornecedor | Direção e advogado | Primeiro dado real de cliente |
-| 5 | **Confirmar onde cada fornecedor guarda os dados** (logs da Vercel, região do Blob, cópias da Neon, retenção do Resend e do Sentry) e decidir a região do Sentry (UE recomendada) | Equipe técnica | Contas criadas (N1) |
+| 4 | **Cláusulas-padrão da ANPD com cada fornecedor:** conferir se os DPAs da Vercel, Neon, Sentry, Resend e Tailscale, da ferramenta de chamados (se externa), da Better Stack e do armazenamento da cópia lógica externa já as incluem; se não, assinar em instrumento separado ou trocar o fornecedor. Os termos do WhatsApp são de adesão: ver com o advogado | Direção e advogado | Primeiro dado real de cliente |
+| 5 | **Confirmar onde cada fornecedor guarda os dados** (logs da Vercel, região do Blob, cópias da Neon, retenção do Resend e do Sentry, ferramenta de chamados, Better Stack) e decidir a região do Sentry (UE recomendada), a região reserva da Vercel (DPA, cl. 9.6) e o prazo máximo da cópia lógica externa (DPA, cl. 14.2) | Equipe técnica | Contas criadas (N1) |
 | 6 | Preencher dados: razão social, CNPJ, endereços, foro, e-mails de privacidade, segurança e suporte, contatos 24 horas | Direção | Assinatura |
 | 7 | Preços e limites dos planos (L9) e SLA (L11) para os Anexos A e B | Comercial | Venda |
 | 8 | Decisões abertas que mudam o texto: D2, D3, D4, D14, D20 | Dono do produto | Assinatura |
-| 9 | **Assinatura** do contrato, do DPA e do Anexo H (eletrônica) com o cliente do piloto, mais o **termo de piloto** (escopo, 2 semanas, critérios de saída do [docs/09](../../09-roadmap.md)), que não está nesta pasta | Direção e cliente | Piloto |
+| 9 | **Termo de piloto** (escopo, duração, critérios de saída do [docs/09](../../09-roadmap.md) e do [onboarding, seção 6](../onboarding-comercial.md)), que não está nesta pasta. No piloto, assinam-se só o termo, o DPA e os Termos de Uso. **O DPA foi escrito para valer sozinho** (definições, finalidades e regras do acesso da Engemase, encerramento e eliminação estão nele), mas o termo de piloto precisa **repetir ou incorporar por referência** as cláusulas do contrato sobre propriedade dos dados (8), confidencialidade (12) e responsabilidade (17, inclusive o limite próprio para incidentes da 17.6). Depois, a **assinatura** do contrato, do DPA e do Anexo H (eletrônica) | Direção, advogado e cliente | Piloto |
 | 10 | Primeiro **exercício simulado** do plano de incidentes | Equipe Engemase | Piloto |
 
 **O que o produto precisa ter para cumprir as minutas** (anotado aqui para a equipe técnica; nenhuma destas mudanças foi feita):
@@ -96,13 +97,17 @@
 | P1 | Aceite dos Termos e da Política no primeiro login, com versão e data na auditoria | Termos |
 | P2 | Links fixos para Termos e Política na tela de login e no rodapé | Política |
 | P3 | Aviso curto no tablet, na tela de escolha do operador, com nome e canal do cliente | Nota do operador |
-| P4 | Guardar eventos de login (IP, data e hora) por 6 meses (Marco Civil) | Política; ROPA CT-03 |
+| P4 | Guardar eventos de login (IP, porta lógica de origem quando disponível, data e hora) por 6 meses (Marco Civil). [CONFIRMAR se a Vercel entrega a porta de origem às funções] | Política; ROPA CT-03 |
 | P5 | Anonimizar a identificação do operador (por pessoa e após 2 anos); hoje `machine_state_event` tem retenção indefinida | Nota do operador; DPA |
 | P6 | Exportar os registros de uma pessoa (pedido de titular) | DPA, cl. 10 |
 | P7 | Eliminar ou anonimizar a conta de acesso sem vínculo depois do prazo | Política, seção 9; ROPA CT-01 |
 | P8 | Validade do link e exclusão dos arquivos de exportação | DPA, Apêndice 1 |
 | P9 | Sentry sem dados pessoais (sem IP, e-mail ou corpo de requisição) | DPA, Apêndice 3 |
-| P10 | Exportação completa em CSV e roteiro de encerramento (dias 0, 30 e 60) com termo de eliminação | Contrato, cl. 16 |
+| P10 | Exportação completa em CSV e roteiro de encerramento (dias 0, 30 e 60) com termo de eliminação, que lista as cópias de segurança e a data em que a última expira | Contrato, cl. 16 |
+| P11 | Travar a retenção em 24 meses no console (hoje o campo "Retenção (meses)" de cada cliente é editável, com mínimo de 6) ou tirar o campo | Contrato, cl. 11.2 |
+| P12 | Lista dos clientes já eliminados, para apagar os dados deles de novo depois de restaurar uma cópia de segurança (runbook RB-08) | Contrato, cl. 16.1; DPA, cl. 14.2 |
+| P13 | Separar na auditoria os acessos da equipe Engemase, para guardar só eles depois do dia 60 | Contrato, cl. 16.3 |
+| P14 | Aviso ao cliente e registro de início e fim quando as funções mudarem de região (contingência) | DPA, cl. 9.6 |
 
 ## Fontes
 
@@ -115,6 +120,9 @@ Consultadas em 12/11/2026. Os sites `gov.br` e `in.gov.br` não estavam acessív
 - Resolução CD/ANPD nº 18/2024 (DOU de 17/07/2024), reprodução do Diário Oficial: <https://sintse.tse.jus.br/documentos/2024/Jul/17/diario-oficial-da-uniao-secao-1/autoridade-nacional-de-protecao-de-dados-resolucao-no-18-de-16-de-julho-de-2024-aprova-o-regulamento>
 - Resolução CD/ANPD nº 19/2024 (DOU de 23/08/2024), cópia em PDF: <https://arq.migalhas.com.br/arquivos/2026/2/DC8DD5485D6EBE_RESOLUCAOCD_ANPDNº19,DE23DEAGO.pdf>
 - Site da ANPD (resoluções, formulário de incidente, guias): <https://www.gov.br/anpd/>
+
+- STJ, REsp 1.784.156/SP (3ª Turma, 2019), porta lógica de origem, acórdão no site do MPF: <https://www.mpf.mp.br/atuacao/ccr2/coordenacao/comissoes-e-grupos-de-trabalho/combate-crimes-cirberneticos/pareceres-decisoes/resp-1-784-156-sp_acordao_indicacao-ipv4-1.pdf>
+- ANPD, Guia orientativo: hipóteses legais de tratamento, legítimo interesse (versão 1.0, fevereiro de 2024): <https://www.gov.br/anpd/pt-br/documentos-e-publicacoes/guia_legitimo_interesse.pdf>
 
 **Análises consultadas:**
 - Resolução 15/2024: Mattos Filho, <https://www.mattosfilho.com.br/unico/regulamento-incidente-seguranca/>; Machado Meyer, <https://www.machadomeyer.com.br/pt/inteligencia-juridica/publicacoes-ij/direito-digital/anpd-publica-regulamento-de-comunicacao-de-incidente-de-seguranca>; Serpro (papel do operador), <https://www.serpro.gov.br/menu/noticias/noticias-2025/incidentes-seguranca-dados-pessoais>

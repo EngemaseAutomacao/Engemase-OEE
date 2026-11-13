@@ -21,7 +21,7 @@ Pasta [`juridico/`](juridico/README.md): índice, marcações, decisões usadas,
 | [Plano de resposta a incidentes](juridico/06-plano-de-resposta-a-incidentes.md) | Papéis, prazos, comunicação ao cliente e à ANPD |
 | [Registro das operações de tratamento](juridico/07-registro-das-operacoes-de-tratamento.md) | ROPA como operadora e como controladora |
 
-**Falta:** revisão jurídica, nomear o encarregado (DPO), confirmar as cláusulas-padrão da ANPD com cada fornecedor e assinar ([detalhe](juridico/README.md#6-o-que-falta)).
+**Falta:** revisão jurídica, nomear o encarregado (DPO), confirmar as cláusulas-padrão da ANPD com cada fornecedor, escrever o termo de piloto (que precisa repetir ou incorporar cláusulas do contrato) e assinar ([detalhe](juridico/README.md#6-o-que-falta)).
 
 ## Comercial e suporte (L9, L10, L11)
 

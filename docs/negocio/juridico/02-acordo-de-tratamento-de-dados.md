@@ -2,9 +2,11 @@
 
 > **Minuta para revisão por advogado; não usar sem revisão.**
 >
-> Versão 0.1 · 12/11/2026 · Anexo C do [Contrato de assinatura](01-contrato-de-assinatura.md). Marcações e o que falta: [README desta pasta](README.md).
+> Versão 0.1 · 12/11/2026 · Anexo C do [Contrato de assinatura](01-contrato-de-assinatura.md) e anexo do termo de piloto. Marcações e o que falta: [README desta pasta](README.md).
 
 **Para que serve.** Este acordo regula os dados pessoais que a Engemase trata **em nome do Cliente** na plataforma Engemase OEE. O Cliente é o **controlador**; a Engemase é a **operadora** (LGPD, art. 5º, VI e VII). Os dados que a Engemase trata para fins próprios ficam na [Política de Privacidade](04-politica-de-privacidade.md).
+
+**Vale também no piloto.** No piloto, o Cliente assina este acordo com o termo de piloto, antes do Contrato de assinatura. Por isso as regras essenciais estão escritas aqui mesmo: definições, finalidades e regras do acesso da Engemase, encerramento e eliminação. Onde este acordo remete ao "Contrato de assinatura", a regra vale depois que ele for assinado; no piloto, vale o que está aqui ou no termo de piloto.
 
 **Prevalência.** Em proteção de dados, este acordo prevalece sobre o Contrato, o SLA e os Termos de Uso.
 
@@ -12,10 +14,20 @@
 
 ## 1. Definições
 
-Valem as definições da LGPD (art. 5º) e do Contrato. Além delas:
+Valem as definições da LGPD (art. 5º). Os termos abaixo valem mesmo antes de o Contrato de assinatura ser assinado:
 
 | Termo | Significado |
 |---|---|
+| **Contrato** | O Contrato de assinatura ou, no piloto, o termo de piloto: o que estiver em vigor. Se os dois estiverem em vigor, vale o Contrato de assinatura |
+| **Plataforma** | O software Engemase OEE, acessado pela internet, com dashboards, relatórios, alertas, Terminais e a API dos Gateways |
+| **Gateway** | Computador instalado na planta que só lê os CLPs e envia os dados à Plataforma só por conexões de saída |
+| **Terminal** | TV ou tablet pareado à Plataforma por código. É um aparelho, não uma conta de pessoa |
+| **Usuário** | Pessoa com login na Plataforma, convidada pelo Admin do Cliente (ou, só o primeiro Admin, pela Engemase) |
+| **Admin do Cliente** | Usuário com o papel de administrador do Cliente. Gerencia os Usuários do Cliente |
+| **Operador de Chão** | Pessoa que usa o Terminal e se identifica escolhendo o próprio nome numa lista. Não tem login |
+| **Dados do Cliente** | Tudo o que o Cliente, seus Usuários, Terminais e Gateways colocam na Plataforma: dados de produção, cadastros, apontamentos, configurações e registros de auditoria do Cliente |
+| **Dados Pessoais do Cliente** | Os Dados Pessoais dentro dos Dados do Cliente, que a Engemase trata em nome do Cliente (cláusula 2.1) |
+| **Dia útil** | Segunda a sexta-feira, exceto feriados nacionais |
 | **Suboperador** | Empresa contratada pela Engemase que trata Dados Pessoais do Cliente para a Engemase prestar o serviço (Apêndice 3) |
 | **Incidente de segurança** | Evento adverso confirmado que comprometa a confidencialidade, a integridade, a disponibilidade ou a autenticidade de Dados Pessoais (Resolução CD/ANPD nº 15/2024) |
 | **Transferência internacional** | Transferência de Dados Pessoais para país estrangeiro ou organismo internacional (LGPD, art. 5º, XV), inclusive o acesso a partir do exterior por empresa estrangeira (ver cláusula 9) |
@@ -32,7 +44,7 @@ Valem as definições da LGPD (art. 5º) e do Contrato. Além delas:
 - (b) segurança da Plataforma e prevenção a fraude;
 - (c) registros de acesso exigidos pelo Marco Civil da Internet (Lei 12.965/2014, art. 15);
 - (d) cobrança e relacionamento com o Cliente;
-- (e) dados da própria Equipe Engemase (inclusive quando aparecem na auditoria do Cliente).
+- (e) dados da própria Equipe Engemase (inclusive quando aparecem na auditoria do Cliente) e, depois do fim do Contrato, os registros dos acessos da Equipe Engemase ao Cliente, guardados só para defesa em processos (cláusula 14.3).
 
 Esses tratamentos estão na Política de Privacidade e no [registro de operações](07-registro-das-operacoes-de-tratamento.md). **[ADVOGADO: confirmar a divisão da conta de acesso (Engemase) e do vínculo (Cliente).]**
 
@@ -46,7 +58,7 @@ Esses tratamentos estão na Política de Privacidade e no [registro de operaçõ
 
 3.3. Se o Cliente incluir **adolescentes** (ex.: jovens aprendizes) na lista de Operadores de Chão, deve tratar esses dados no melhor interesse deles (LGPD, art. 14). A recomendação é identificar só pela matrícula ([nota do operador de chão](05-operador-de-chao.md)).
 
-## 4. Instruções do Cliente
+## 4. Instruções e deveres do Cliente
 
 4.1. As instruções do Cliente são: o Contrato; este acordo; a configuração da Plataforma feita a pedido do Cliente; e os pedidos registrados no canal de suporte.
 
@@ -56,17 +68,36 @@ Esses tratamentos estão na Política de Privacidade e no [registro de operaçõ
 
 4.4. Se a Engemase entender que uma instrução viola a LGPD, avisa o Cliente e pode suspender aquela instrução até o Cliente se manifestar.
 
+4.5. **Obrigações do Cliente como controlador.** O Cliente garante que:
+- (a) tem **base legal** para os Dados Pessoais que coloca ou manda colocar na Plataforma: convites de Usuários, lista de Operadores de Chão, contatos e o que os Usuários registram;
+- (b) **informou os titulares** (Usuários e Operadores de Chão) sobre o tratamento, inclusive: o registro de quem aponta no Terminal; o **acesso da Equipe Engemase a qualquer tempo**, com faixa na tela e registro na auditoria (cláusula 5); o uso de **fornecedores estrangeiros** e as **transferências internacionais** (cláusula 9 e Apêndice 3); e os prazos de retenção (Apêndice 1). A [nota do operador de chão](05-operador-de-chao.md) serve de modelo;
+- (c) suas instruções são **lícitas** e seguem a LGPD;
+- (d) envia só os **dados mínimos** para cada finalidade, sem dados sensíveis (cláusula 3.2);
+- (e) mantém os Usuários e os escopos atualizados e desativa quem sai da empresa;
+- (f) atende os titulares e, quando for o caso, comunica a ANPD (cláusulas 10 e 11), com o apoio da Engemase.
+
+**[ADVOGADO: conferir se o Cliente deve declarar essas garantias também no termo de piloto.]**
+
 ## 5. Acesso da Equipe Engemase (D5)
 
-5.1. **O Cliente instrui e autoriza** que a Equipe Engemase acesse os Dados do Cliente, inclusive os Dados Pessoais, a qualquer tempo e **sem aprovação prévia caso a caso**, só para as finalidades da cláusula 9 do Contrato (configurar, dar suporte, monitorar, responder a incidentes e cumprir a lei).
+5.1. **O Cliente instrui e autoriza** que a Equipe Engemase acesse os Dados do Cliente, inclusive os Dados Pessoais, a qualquer tempo e **sem aprovação prévia caso a caso**, só para:
+- (a) implantar e manter a configuração do Cliente, que só a Engemase faz (unidades, linhas, máquinas, gateways, conexões, tags, terminais, turnos, produtos, motivos de parada, aparência e marca, e políticas);
+- (b) prestar suporte e atender chamados;
+- (c) monitorar a saúde, a segurança e o funcionamento da Plataforma e dos Gateways;
+- (d) investigar e responder a incidentes;
+- (e) cumprir obrigação legal ou ordem de autoridade.
+
+É a mesma lista da cláusula 9.1 do Contrato de assinatura. No piloto, vale esta.
 
 5.2. Cada acesso:
-- (a) exige papel de plataforma, concessão de suporte (com motivo, chamado e prazo de até 4 horas) ou atribuição de campo (com validade);
-- (b) usa autenticação de dois fatores;
-- (c) mostra **faixa na tela**;
-- (d) fica na **auditoria visível ao Cliente** (nome, papel, motivo, chamado, início e fim).
+- (a) é feito só pela Equipe Engemase, com dever de sigilo (cláusula 6);
+- (b) exige papel de plataforma, concessão de suporte (com motivo, chamado e prazo de até 4 horas, renovável com novo registro) ou atribuição de campo (só nos clientes atribuídos, com validade);
+- (c) usa autenticação de dois fatores;
+- (d) mostra **faixa na tela**;
+- (e) fica na **auditoria visível ao Cliente** (nome, papel, motivo, chamado, início e fim);
+- (f) vai só até o mínimo necessário à finalidade.
 
-5.3. A Equipe Engemase não altera Usuários, papéis nem escopos do Cliente, salvo as exceções do Contrato (cláusula 9.4).
+5.3. A Equipe Engemase **não cria, altera nem desativa Usuários do Cliente** e não muda papéis e escopos. Exceções: (a) criar o primeiro Admin do Cliente na implantação; (b) reiniciar o segundo fator do Admin do Cliente, depois de conferir a identidade de quem pede **[PADRÃO PROPOSTO — L20]**.
 
 5.4. **Acesso remoto aos Gateways** (VPN de manutenção, opcional, Fase 2) segue regra própria: cada sessão aprovada pelo Admin do Cliente (Contrato, cláusula 9.6). Nessas sessões não se acessam Dados Pessoais do Cliente além dos registros técnicos do Gateway.
 
@@ -110,7 +141,15 @@ Esses tratamentos estão na Política de Privacidade e no [registro de operaçõ
 
 9.4. **[CONFIRMAR com cada fornecedor]** se o acordo de tratamento dele já inclui as cláusulas-padrão da ANPD. Se não incluir, a Engemase assina as cláusulas em instrumento separado ou troca o fornecedor (ex.: NetBird hospedado no Brasil no lugar da Tailscale, [docs/12](../../12-acesso-remoto-vpn.md)).
 
-9.5. O Cliente autoriza as transferências do Apêndice 3. A Engemase fornece ao Cliente as informações de que ele precisa para cumprir os deveres de transparência da Resolução CD/ANPD nº 19/2024 perante os titulares.
+9.5. O Cliente autoriza as transferências do Apêndice 3 e a da cláusula 9.6. A Engemase fornece ao Cliente as informações de que ele precisa para cumprir os deveres de transparência da Resolução CD/ANPD nº 19/2024 perante os titulares.
+
+9.6. **Contingência de região [PROPOSTA].** Se a região `gru1` da Vercel ficar fora do ar por muito tempo, a Engemase pode rodar as funções da aplicação, **por tempo limitado**, em outra região da Vercel [DECIDIR: região reserva, ex.: `iad1`, EUA], até `gru1` voltar. Nessa situação:
+- (a) o banco de dados continua em São Paulo; os dados passam pela outra região só durante o processamento das requisições;
+- (b) a transferência usa os mecanismos da cláusula 9.3 (cláusulas-padrão com a Vercel);
+- (c) a Engemase avisa o Cliente em até 24 horas da mudança e registra o início e o fim;
+- (d) a Engemase volta para `gru1` assim que a região estiver estável.
+
+**[ADVOGADO: confirmar que o aviso e as cláusulas-padrão bastam para esta transferência temporária.]**
 
 ## 10. Direitos dos titulares
 
@@ -133,7 +172,7 @@ Esses tratamentos estão na Política de Privacidade e no [registro de operaçõ
 - (d) medidas tomadas e propostas;
 - (e) contato do responsável na Engemase.
 
-11.3. A Engemase manda atualizações pelo menos a cada 24 horas enquanto o incidente estiver aberto e um relatório final em até 10 dias úteis do encerramento.
+11.3. A Engemase manda atualizações pelo menos a cada 24 horas enquanto o incidente estiver aberto e um relatório final em até 10 dias úteis do encerramento. Este prazo vale para **incidentes com Dados Pessoais**. Indisponibilidade da Plataforma sem dados pessoais segue o relatório pós-incidente do SLA (5 dias úteis, nos planos que o têm). Se o mesmo incidente tiver as duas coisas, o relatório do SLA sai no prazo dele, e o relatório final deste acordo o completa.
 
 11.4. **Quem comunica a ANPD e os titulares é o Cliente**, como controlador (LGPD, art. 48; Resolução CD/ANPD nº 15/2024: 3 dias úteis do conhecimento). A Engemase não comunica em nome do Cliente sem instrução escrita.
 
@@ -161,9 +200,21 @@ A Engemase fornece ao Cliente as informações de que ele precisar para elaborar
 
 14.1. **Durante o Contrato:** prazos do Apêndice 1, com as decisões D6 (dados por minuto: 2 anos; auditoria: 5 anos).
 
-14.2. **No fim do Contrato** **[PADRÃO PROPOSTO — D4 em aberto]:** exportação completa em CSV disponível por 30 dias; eliminação definitiva no banco de produção no dia 60; cópias de segurança expiram no fim da janela de restauração do banco; termo de eliminação ao Cliente (Contrato, cláusula 16).
+14.2. **No fim do Contrato**, inclusive no fim de um piloto sem contratação **[PADRÃO PROPOSTO — D4 em aberto]**. Dia 0 é o dia em que o Contrato termina:
+- (a) **dia 0:** a coleta para, e a Engemase gera a exportação completa em CSV;
+- (b) **até o dia 30:** o Cliente baixa os arquivos;
+- (c) **dia 60:** eliminação definitiva no banco de produção e **termo de eliminação** ao Admin do Cliente;
+- (d) **cópias de segurança:** a janela de restauração do banco expira em [PREENCHER: N dias; o SLA propõe 14]; as **cópias lógicas externas do banco** expiram em até [PREENCHER: prazo máximo, ex.: 90 dias]. Até lá, ficam isoladas e só servem para recuperar a Plataforma em desastre. **Se uma cópia for restaurada, os dados de clientes já encerrados são apagados de novo** antes de a Plataforma voltar ao uso;
+- (e) o termo de eliminação lista essas cópias e a data em que a última expira.
 
-14.3. **Conservação permitida (LGPD, art. 16):** a Engemase pode guardar, isolados e sem outro uso, os registros de auditoria do Cliente até completar 5 anos, os registros de acesso do Marco Civil da Internet por 6 meses e os documentos fiscais e contratuais pelo prazo legal. **[ADVOGADO]**
+O detalhe está na cláusula 16 do Contrato de assinatura. No piloto, vale este roteiro.
+
+14.3. **O que a Engemase guarda depois do dia 60**, isolado e sem outro uso:
+- (a) como **controladora**, por obrigação legal (LGPD, art. 16, I): os registros de acesso do Marco Civil da Internet por 6 meses e os documentos fiscais e contratuais pelo prazo legal;
+- (b) como **controladora**, só para defesa em processo judicial, administrativo ou arbitral (LGPD, art. 7º, VI): os registros dos acessos da Equipe Engemase ao Cliente (quem, papel, motivo, chamado, início e fim, e as mudanças de configuração feitas), até completar 5 anos de cada registro;
+- (c) como **operadora**, só com instrução escrita do Cliente: o restante da auditoria do Cliente, até completar 5 anos. Sem essa instrução, ele é eliminado no dia 60, depois de ir na exportação.
+
+**[ADVOGADO: confirmar as bases e os prazos.]**
 
 14.4. **Gateways:** dados apagados antes de reuso, devolução ou descarte, com termo de eliminação (Anexo H, cláusula H.6).
 
@@ -171,7 +222,7 @@ A Engemase fornece ao Cliente as informações de que ele precisar para elaborar
 
 15.1. A Engemase responde quando descumprir a LGPD ou não seguir as instruções lícitas do Cliente (LGPD, art. 42, § 1º, I). Nos demais casos, quem responde perante os titulares é o controlador, com direito de regresso contra quem causou o dano.
 
-15.2. O limite de responsabilidade do Contrato (cláusula 17) se aplica a este acordo, salvo o que o advogado definir para danos de proteção de dados. **[ADVOGADO]**
+15.2. Vale o limite de responsabilidade do Contrato de assinatura (cláusulas 17.4 a 17.6), inclusive o **limite próprio para incidentes de segurança e proteção de dados** (cláusula 17.6). No piloto, vale o limite do termo de piloto, que deve repetir essas regras. **[ADVOGADO]**
 
 ## 16. Vigência
 
@@ -199,7 +250,7 @@ Este acordo vale enquanto a Engemase tratar Dados Pessoais do Cliente, inclusive
 
 **Dados de produção (não pessoais), para referência:** dados por minuto **2 anos** (D6); consolidados por turno e por hora enquanto durar o Contrato; amostras de tags de 30 a 90 dias; buffer do Gateway até 30 dias ou 1 GB, rotativo.
 
-**Local:** banco na AWS `sa-east-1` (São Paulo); aplicação na Vercel `gru1` (São Paulo); demais locais no Apêndice 3.
+**Local:** banco na AWS `sa-east-1` (São Paulo); aplicação na Vercel `gru1` (São Paulo), salvo a contingência da cláusula 9.6; demais locais no Apêndice 3.
 
 ## Apêndice 2 — Medidas de segurança
 
@@ -219,7 +270,7 @@ Resumo do desenho de [docs/08](../../08-seguranca-e-operacao.md) e [docs/15](../
 | **Ambientes** | Ambientes de teste (preview) com dados sintéticos, nunca cópia da produção; proteção de acesso aos previews |
 | **Proteção da aplicação** | Limite de taxa por IP e por gateway; cabeçalhos de segurança (CSP, HSTS); SQL sempre parametrizado; validação de entrada |
 | **Auditoria** | Toda mudança de configuração, comando a gateway, mudança de usuário ou papel e acesso da Engemase |
-| **Cópias de segurança** | Restauração a um ponto no tempo (PITR) da Neon; teste de restauração a cada 3 meses |
+| **Cópias de segurança** | Restauração a um ponto no tempo (PITR) da Neon; cópia lógica externa com prazo máximo de guarda (cláusula 14.2); teste de restauração a cada 3 meses |
 | **Erros e logs** | Monitoramento de erros sem dados pessoais desnecessários (sem IP e sem corpo de requisição); tokens fora de URLs e logs |
 | **Pessoas** | Termo de sigilo; mínimo necessário; revogação na saída; plano de resposta a incidentes testado a cada 6 meses **[PROPOSTA]** |
 | **Descarte de hardware** | Apagamento por nível (remoto, limpeza, purga ou destruição) com termo de eliminação |
@@ -230,25 +281,29 @@ Consultado em 12/11/2026. **Todos os itens [CONFIRMAR] precisam ser conferidos n
 
 | Suboperador | País da empresa | Finalidade | Onde ficam os dados | Dados pessoais | Mecanismo de transferência |
 |---|---|---|---|---|---|
-| **Vercel Inc.** | EUA | Hospedagem da aplicação web e da API dos gateways; rede de entrega e firewall; tarefas agendadas; armazenamento de arquivos (Blob: exportações e pacotes de atualização); logs de execução | Funções em `gru1` (São Paulo). Painel, logs e metadados podem ficar nos EUA [CONFIRMAR]. Região do Blob [CONFIRMAR] | Tudo o que passa pelas requisições (contas, IP, conteúdo das telas); logs (IP, endereço acessado, horário) | Cláusulas-padrão da ANPD [CONFIRMAR se o DPA da Vercel as inclui] |
+| **Vercel Inc.** | EUA | Hospedagem da aplicação web e da API dos gateways; rede de entrega e firewall; tarefas agendadas; armazenamento de arquivos (Blob: exportações e pacotes de atualização); logs de execução | Funções em `gru1` (São Paulo); em contingência, por tempo limitado, em outra região da Vercel (cláusula 9.6). Painel, logs e metadados podem ficar nos EUA [CONFIRMAR]. Região do Blob [CONFIRMAR] | Tudo o que passa pelas requisições (contas, IP, conteúdo das telas); logs (IP, endereço acessado, horário) | Cláusulas-padrão da ANPD [CONFIRMAR se o DPA da Vercel as inclui] |
 | **Neon** (Neon Inc., grupo Databricks) | EUA | Banco de dados Postgres de produção, com cópias de segurança | AWS `sa-east-1` (São Paulo). Plano de controle e acesso de suporte a partir do exterior [CONFIRMAR] | Todos os dados do Apêndice 1 | Cláusulas-padrão da ANPD [CONFIRMAR] |
 | **Sentry** (Functional Software, Inc.) | EUA | Monitoramento de erros da aplicação | Região de dados escolhida na criação da conta: **UE (Frankfurt) recomendada** ou EUA [DECIDIR] | Identificador técnico do usuário e mensagens de erro. Configurado para não enviar IP, e-mail nem corpo de requisição | UE: adequação (Res. 32/2026). Acesso a partir dos EUA: cláusulas-padrão [CONFIRMAR] |
 | **Resend, Inc.** | EUA | Envio de e-mail transacional | Região de envio São Paulo (`sa-east-1`) disponível [CONFIRMAR plano]. Dados da conta, metadados e logs ficam nos EUA, qualquer que seja a região de envio (documentação do Resend) | Nome, e-mail, conteúdo e metadados de entrega | Cláusulas-padrão da ANPD [CONFIRMAR] |
 | **Tailscale Inc.** — só se o Cliente contratar acesso remoto (Fase 2) | Canadá / EUA | Rede da VPN de manutenção sob demanda | Plano de controle e relays fora do Brasil (a política de privacidade cita Canadá, Alemanha, EUA e Reino Unido) [CONFIRMAR] | Identificação dos técnicos da Engemase, nome do Gateway, IPs e metadados de conexão. O tráfego da sessão é cifrado de ponta a ponta | Cláusulas-padrão da ANPD [CONFIRMAR]. Alternativa sem transferência: NetBird hospedado no Brasil ou Headscale ([docs/12](../../12-acesso-remoto-vpn.md)) |
+| **Ferramenta de chamados do suporte** [DECIDIR antes da assinatura; proposta do [SLA, seção 7](../sla-e-suporte.md) para o piloto: **Jira Service Management**, da Atlassian]. **Se a escolha for o chamado dentro da própria Plataforma, apagar esta linha** | Austrália (Atlassian Pty Ltd, que contrata o Jira); grupo com sede nos EUA [CONFIRMAR] | Registrar e acompanhar os chamados; o "Abrir chamado" da Plataforma cria o chamado pela API, com o contexto | [CONFIRMAR: no plano gratuito não se escolhe a região dos dados] | Nome, e-mail e telefone de quem abre; conteúdo do chamado; contexto (cliente, unidade, máquina, gateway). Pode citar Usuários e Operadores de Chão | Cláusulas-padrão da ANPD [CONFIRMAR] |
 
 **Infraestrutura por trás dos fornecedores:** Amazon Web Services e outros provedores de nuvem aparecem como suboperadores dos fornecedores acima, nas listas publicadas por eles.
 
 **Não são suboperadores** (não tratam Dados Pessoais do Cliente): GitHub (código-fonte; proibido colocar dados de produção no repositório) e Telegram (alertas internos da Engemase sobre a frota de gateways, sem dados pessoais) **[CONFIRMAR quando implementado]**.
 
+**Fornecedores que a Engemase usa como controladora** (estão na [Política de Privacidade, seção 7](04-politica-de-privacidade.md#7-com-quem-compartilhamos) e no [registro de operações](07-registro-das-operacoes-de-tratamento.md), não aqui):
+- **WhatsApp do suporte** (Meta, EUA): contato rápido, fotos do equipamento e avisos. Recebe nome e telefone de quem conversa. **Regra:** não mandar por lá listas de pessoas, exportações nem telas com nomes de Usuários ou Operadores de Chão. Se o canal passar a receber Dados Pessoais do Cliente, entra nesta lista com aviso de 30 dias. **[ADVOGADO]**
+- **Página de status e monitor externo** (Better Stack, EUA [CONFIRMAR]): mede a disponibilidade e publica avisos. Não mostra dados de clientes; guarda só o e-mail de quem se inscreve nos avisos.
+
 **Serviços de notificação dos navegadores** (Google, Apple, Mozilla): entregam as notificações push ao aparelho. O conteúdo vai cifrado e eles não conseguem lê-lo; veem só o endereço da inscrição e metadados de entrega. Não são contratados pela Engemase. **[ADVOGADO: confirmar o enquadramento.]**
 
-**Previstos, a incluir com aviso de 30 dias quando entrarem:**
+**Previstos, a incluir com aviso de 30 dias quando entrarem** (se já estiverem em uso na assinatura, passam para a tabela de cima):
 
 | Serviço | Quando | Dados |
 |---|---|---|
-| Ferramenta de chamados do suporte (definida no SLA, lacuna L11) | Antes do piloto | Nome, e-mail e telefone de quem abre o chamado; conteúdo do chamado |
-| Cópia lógica externa do banco ([docs/06](../../06-banco-de-dados.md#backup-e-recuperação)) | Fase 1 | Todos os dados do Apêndice 1 |
-| WhatsApp Cloud API (Meta Platforms) | Fase 2b | Telefone e nome de quem recebe alertas |
+| Armazenamento da cópia lógica externa do banco ([docs/06](../../06-banco-de-dados.md#backup-e-recuperação)) [DECIDIR o fornecedor e a região] | Fase 1 | Todos os dados do Apêndice 1, com o prazo máximo da cláusula 14.2 |
+| WhatsApp Cloud API (Meta Platforms) para alertas | Fase 2b | Telefone e nome de quem recebe alertas |
 
 ## Apêndice 4 — Contatos
 
@@ -262,7 +317,7 @@ Consultado em 12/11/2026. **Todos os itens [CONFIRMAR] precisam ser conferidos n
 
 ## Fontes
 
-- LGPD (Lei 13.709/2018), arts. 5º, 14, 16, 18, 19, 33, 37 a 39, 42, 46 a 48: <https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm>
+- LGPD (Lei 13.709/2018), arts. 5º, 7º, 14, 16, 18, 19, 33, 37 a 39, 42, 46 a 48: <https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm>
 - Resolução CD/ANPD nº 15/2024 (incidentes): ver [README](README.md#fontes).
 - Resolução CD/ANPD nº 19/2024 (transferência internacional e cláusulas-padrão) e Resolução CD/ANPD nº 32/2026 (adequação da União Europeia): ver [README](README.md#fontes).
 - Neon, regiões (São Paulo `aws-sa-east-1`): <https://neon.com/docs/introduction/regions>
@@ -270,3 +325,5 @@ Consultado em 12/11/2026. **Todos os itens [CONFIRMAR] precisam ser conferidos n
 - Sentry, local de armazenamento (EUA ou UE): <https://docs.sentry.io/organization/data-storage-location/>
 - Resend, regiões (dados da conta nos EUA): <https://resend.com/docs/dashboard/domains/regions>
 - Tailscale, política de privacidade e DPA: <https://tailscale.com/privacy-policy> · <https://tailscale.com/dpa>
+- Atlassian, empresa que contrata cada produto (Jira: Atlassian Pty Ltd): <https://www.atlassian.com/legal/product-terms>
+- Better Stack, DPA: <https://betterstack.com/dpa>

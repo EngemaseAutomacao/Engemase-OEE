@@ -16,7 +16,7 @@
 
 **Controlador:** cada cliente. Um registro igual a este vale para todos os clientes; o que muda por cliente fica na tabela A.0.
 
-**Locais comuns:** banco na Neon, AWS `sa-east-1` (São Paulo); aplicação na Vercel `gru1` (São Paulo). Transferência internacional por acesso remoto e metadados dos fornecedores: ver o [DPA, cláusula 9 e Apêndice 3](02-acordo-de-tratamento-de-dados.md#apêndice-3--suboperadores).
+**Locais comuns:** banco na Neon, AWS `sa-east-1` (São Paulo); aplicação na Vercel `gru1` (São Paulo), salvo a contingência de região do [DPA, cláusula 9.6](02-acordo-de-tratamento-de-dados.md#9-transferência-internacional). Cópias de segurança: janela de restauração da Neon e cópia lógica externa, com prazo máximo (DPA, cláusula 14.2). Transferência internacional por acesso remoto e metadados dos fornecedores: ver o [DPA, cláusula 9 e Apêndice 3](02-acordo-de-tratamento-de-dados.md#apêndice-3--suboperadores).
 
 **Segurança:** [DPA, Apêndice 2](02-acordo-de-tratamento-de-dados.md#apêndice-2--medidas-de-segurança).
 
@@ -37,7 +37,7 @@
 |---|---|---|---|
 | OP-01 | Vínculos dos usuários com o cliente (papel e escopo) | Usuários do cliente | Enquanto ativo; depois, na auditoria (OP-03) |
 | OP-02 | Identificação do operador de chão e apontamentos | Operadores de chão | Contrato; [PROPOSTA: anonimizar após 2 anos] |
-| OP-03 | Auditoria do cliente | Usuários, operadores, equipe Engemase | 5 anos (D6) |
+| OP-03 | Auditoria do cliente | Usuários, operadores, equipe Engemase | 5 anos (D6) durante o contrato; no fim, eliminada no dia 60, salvo instrução escrita do cliente |
 | OP-04 | Notificações e alertas | Usuários; terminais | Inscrição até remover; notificações [PROPOSTA: 12 meses] |
 | OP-05 | E-mails de alertas e resumos (Fase 2) | Usuários | Prazo do fornecedor [CONFIRMAR] |
 | OP-06 | Terminais pareados | Quem pareou | Enquanto existir o terminal; depois, na auditoria |
@@ -68,7 +68,7 @@
 - **Dados:** ator (nome, tipo: pessoa, Engemase, terminal, gateway, sistema), ação, entidade, antes e depois, IP, horário.
 - **Sistema:** `audit_log`, `support_access_grant`, `platform_assignment`.
 - **Compartilhamento:** Vercel, Neon.
-- **Retenção:** 5 anos (D6), inclusive depois do fim do contrato **[ADVOGADO]**.
+- **Retenção:** 5 anos (D6) durante o contrato. No fim do contrato, vai na exportação e é eliminada no dia 60, salvo instrução escrita do cliente para guardar até completar 5 anos ([contrato, cl. 16.3](01-contrato-de-assinatura.md#16-encerramento-exportação-e-eliminação-dos-dados-padrão-proposto--d4-em-aberto)). Os registros dos acessos da equipe Engemase ficam com a Engemase como controladora, para defesa em processos (CT-06) **[ADVOGADO]**.
 
 **OP-04 · Notificações e alertas**
 - **Finalidade:** avisar as pessoas certas sobre máquinas paradas, falhas, gateway offline e outros eventos.
@@ -114,13 +114,14 @@
 | CT-01 | Contas de acesso à plataforma | Usuários de todos os clientes e da Engemase | Legítimo interesse (IX) | Enquanto houver vínculo ativo; [PROPOSTA: 6 meses] sem vínculo |
 | CT-02 | Segurança da plataforma e prevenção a fraude | Usuários; visitantes da tela de login | Legítimo interesse (IX) | [PROPOSTA: 6 meses] |
 | CT-03 | Registros de acesso à aplicação | Usuários | Obrigação legal (II): Marco Civil, art. 15 | 6 meses |
-| CT-04 | Contrato, cobrança e faturamento | Representantes e contatos de cobrança do cliente | Execução de contrato (V); obrigação legal fiscal (II) | Prazo fiscal [CONFIRMAR: em regra 5 anos] |
-| CT-05 | Suporte e relacionamento | Contatos do cliente que abrem chamados | Legítimo interesse (IX) | [PROPOSTA: contrato + 5 anos] |
-| CT-06 | Equipe Engemase na plataforma | Pessoas da Engemase | Execução do contrato de trabalho (V); legítimo interesse (IX) | Conta: enquanto ativa; auditoria: 5 anos |
+| CT-04 | Contrato, cobrança e faturamento | Representantes e contatos de cobrança do cliente | Legítimo interesse (IX); obrigação legal fiscal (II) para os documentos fiscais **[ADVOGADO]** | Prazo fiscal [CONFIRMAR: em regra 5 anos] |
+| CT-05 | Suporte e relacionamento | Contatos do cliente que abrem chamados ou falam com o suporte | Legítimo interesse (IX) | [PROPOSTA: contrato + 5 anos] |
+| CT-06 | Equipe Engemase na plataforma | Pessoas da Engemase | Execução do contrato de trabalho (V); legítimo interesse (IX); depois do fim do contrato do cliente, exercício regular de direitos (VI) | Conta: enquanto ativa; registros de acesso aos clientes: 5 anos, inclusive depois do fim do contrato do cliente |
 | CT-07 | Propostas e contatos comerciais | Contatos de clientes em prospecção | Legítimo interesse (IX) | [PROPOSTA: 2 anos sem negócio] |
 | CT-08 | Monitoramento de erros | Usuários (identificador técnico) | Legítimo interesse (IX) | [CONFIRMAR: prazo do Sentry] |
 | CT-09 | Pedidos de titulares e registro de incidentes | Quem pede; titulares afetados | Obrigação legal (II) | Incidentes: 5 anos (Res. 15/2024); pedidos: [PROPOSTA: 5 anos] |
 | CT-10 | Ciclo de vida do hardware | Técnicos da Engemase | Legítimo interesse (IX) | Enquanto existir o equipamento + 5 anos |
+| CT-11 | Página de status e avisos de disponibilidade | Quem se inscreve nos avisos (usuários, contatos do cliente) | Legítimo interesse (IX) | Até cancelar a inscrição |
 
 ### B.2 Detalhe
 
@@ -140,22 +141,27 @@
 - **Compartilhamento:** Vercel (firewall e logs).
 
 **CT-03 · Registros de acesso à aplicação (Marco Civil da Internet)**
-- **Finalidade:** cumprir o art. 15 da Lei 12.965/2014: guardar, em sigilo e ambiente seguro, os registros de acesso (IP, data e hora) por 6 meses.
-- **Lacuna do projeto:** as sessões do Better Auth são apagadas quando expiram, e os logs da Vercel podem ter retenção curta. **É preciso guardar os eventos de login (IP, data e hora) por 6 meses** numa tabela própria ou num destino de logs. [CONFIRMAR]
+- **Finalidade:** cumprir o art. 15 da Lei 12.965/2014: guardar, em sigilo e ambiente seguro, os registros de acesso (IP, porta lógica de origem quando disponível, data e hora) por 6 meses.
+- **Porta lógica de origem:** o STJ decidiu que o provedor de aplicação também deve guardar e fornecer a porta lógica de origem enquanto o IP for IPv4, porque o mesmo IP pode ser compartilhado por muitas pessoas (REsp 1.784.156/SP, 2019). **[ADVOGADO: confirmar o alcance.]** **[CONFIRMAR se a Vercel entrega a porta de origem às funções; se não entregar, registrar a limitação e o motivo.]**
+- **Lacuna do projeto:** as sessões do Better Auth são apagadas quando expiram, e os logs da Vercel podem ter retenção curta. **É preciso guardar os eventos de login (IP, porta lógica de origem quando disponível, data e hora) por 6 meses** numa tabela própria ou num destino de logs. [CONFIRMAR]
 
 **CT-04 · Contrato, cobrança e faturamento**
 - **Dados:** nome, cargo, e-mail e telefone dos representantes e dos contatos de cobrança; dados da empresa; plano e máquinas contratadas (`client_account`).
+- **Base legal:** o contrato é com a empresa cliente. Os representantes e os contatos não são parte dele, por isso a execução de contrato (art. 7º, V) não serve para os dados deles. Usa-se o legítimo interesse (IX) e, para os documentos fiscais, a obrigação legal (II).
+- **Teste de legítimo interesse:** a Engemase precisa falar com quem representa e paga pela empresa para cumprir o contrato com ela; dados mínimos, indicados pela própria empresa; esperado por quem é indicado como contato; a pessoa pode pedir para ser trocada por outro contato. [ADVOGADO: documentar o teste (art. 10).]
 - **Compartilhamento:** contador e sistema de emissão de notas [PREENCHER]; banco ou meio de pagamento [PREENCHER].
 
 **CT-05 · Suporte e relacionamento**
-- **Dados:** nome, e-mail e telefone de quem abre o chamado; conteúdo do chamado.
-- **Compartilhamento:** ferramenta de chamados (definida no SLA, L11) [PREENCHER]; e-mail corporativo da Engemase [PREENCHER].
+- **Dados:** nome, e-mail e telefone de quem abre o chamado ou fala com o suporte; conteúdo do chamado ou da conversa; fotos do equipamento.
+- **Compartilhamento:** ferramenta de chamados [DECIDIR: proposta do [SLA, seção 7](../sla-e-suporte.md), Jira Service Management, da Atlassian, no piloto; também é suboperadora no [DPA, Apêndice 3](02-acordo-de-tratamento-de-dados.md#apêndice-3--suboperadores)]; WhatsApp do suporte (Meta, EUA), só para contato rápido, sem listas de pessoas, exportações ou telas com nomes; e-mail corporativo da Engemase [PREENCHER].
+- **Transferência internacional:** a ferramenta de chamados e o WhatsApp são de empresas estrangeiras. Cláusulas-padrão da ANPD [CONFIRMAR com cada uma; os termos do WhatsApp são de adesão, ADVOGADO].
 
 **CT-06 · Equipe Engemase na plataforma**
 - **Finalidade:** conta de plataforma, 2FA, concessões de suporte, atribuições de campo; transparência ao cliente (o nome da pessoa aparece na auditoria e na faixa da tela, D5); identificação nas sessões de acesso remoto e log de comandos no gateway (Fase 2).
 - **Dados:** nome, e-mail, papel, 2FA, motivo e chamado de cada acesso, IP; na VPN: identificação, IPs, comandos executados.
 - **Sistema:** `user` (papel de plataforma), `support_access_grant`, `platform_assignment`, `remote_access_*`, `audit_log`.
 - **Compartilhamento:** clientes (nome, papel, motivo, chamado); Vercel, Neon; Tailscale (Fase 2).
+- **Depois do fim do contrato do cliente:** os registros dos acessos da equipe àquele cliente ficam até completar 5 anos, isolados, só para defesa em processos (exercício regular de direitos, art. 7º, VI; [contrato, cl. 16.3](01-contrato-de-assinatura.md#16-encerramento-exportação-e-eliminação-dos-dados-padrão-proposto--d4-em-aberto)). **[ADVOGADO]**
 - **Observação:** informar a equipe, no contrato de trabalho ou em política interna, que seus acessos ficam visíveis aos clientes.
 
 **CT-07 · Propostas e contatos comerciais**
@@ -176,8 +182,14 @@
 - **Dados:** nome do técnico, data, método.
 - **Onde:** planilha controlada até existir a tabela `gateway_unit` ([docs/16](../../16-projeto-do-gateway.md)).
 
+**CT-11 · Página de status e avisos de disponibilidade**
+- **Finalidade:** mostrar se a plataforma está no ar e avisar incidentes e manutenções ([SLA, seção 8](../sla-e-suporte.md)).
+- **Dados:** e-mail de quem se inscreve. O monitor externo não trata dados pessoais; a página não mostra gateways nem dados de clientes.
+- **Compartilhamento:** Better Stack [DECIDIR: proposta do SLA; EUA, CONFIRMAR onde guarda os dados]. Cláusulas-padrão da ANPD [CONFIRMAR].
+- **Teste de legítimo interesse:** quem se inscreve pede os avisos; dado mínimo; cancelamento em um clique. [ADVOGADO: documentar o teste.]
+
 ## Fontes
 
 - LGPD (Lei 13.709/2018), arts. 7º, 10, 14, 37: <https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm>
 - Marco Civil da Internet (Lei 12.965/2014), art. 15: <https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2014/lei/l12965.htm>
-- Resoluções CD/ANPD nº 2/2022 e 15/2024: ver [README](README.md#fontes).
+- Resoluções CD/ANPD nº 2/2022 e 15/2024, guia de legítimo interesse da ANPD e STJ, REsp 1.784.156/SP (porta lógica de origem): ver [README](README.md#fontes).
