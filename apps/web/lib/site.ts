@@ -16,8 +16,26 @@ export const GATEWAY_URL = PLATFORM_URL
 /** Endereço de pareamento mostrado nas TVs e tablets. */
 export const PAIRING_HOST = `${PLATFORM_HOST}/terminal`
 
-/**
- * Contato comercial mostrado na página de apresentação (/produto).
- * A CONFIRMAR com a Engemase antes de divulgar a página.
- */
-export const SALES_EMAIL = "comercial@engemase.com.br"
+/** Contato e dados públicos da Engemase, mostrados na página inicial (apresentação do produto). */
+export const COMPANY = {
+  name: "Engemase Engenharia",
+  email: "engemase@engemase.com.br",
+  phone: "(49) 3565-2016",
+  phoneHref: "tel:+554935652016",
+  whatsapp: "(49) 99816-4377",
+  whatsappNumber: "5549998164377",
+  address: ["Rua Leonardo Granemann, 443", "Alto Bonito, Caçador/SC", "CEP 89.510-537"],
+  site: "https://engemase.com.br/",
+  social: {
+    facebook: "https://www.facebook.com/engemase",
+    instagram: "https://www.instagram.com/engemaseengenharia/",
+    linkedin: "https://www.linkedin.com/company/76475350/",
+  },
+} as const
+
+/** Link do WhatsApp com mensagem pronta. */
+export const whatsappHref = (text: string) =>
+  `https://api.whatsapp.com/send?phone=${COMPANY.whatsappNumber}&text=${encodeURIComponent(text)}`
+
+/** E-mail comercial (o mesmo e-mail geral da Engemase). */
+export const SALES_EMAIL = COMPANY.email

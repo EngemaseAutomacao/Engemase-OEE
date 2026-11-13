@@ -278,7 +278,7 @@ function UserChip({ user }: { user: HeaderUser }) {
         )}
         {user.isPlatform && (
           <DropdownMenuItem asChild>
-            <Link href="/">
+            <Link href="/inicio">
               <FactoryIcon />
               Trocar de cliente
             </Link>

@@ -72,7 +72,7 @@ function EmailLogin() {
     if (Object.keys(next).length > 0) return
     setPending(true)
     // Protótipo: sem autenticação real.
-    window.setTimeout(() => router.push("/"), 500)
+    window.setTimeout(() => router.push("/inicio"), 500)
   }
 
   return (

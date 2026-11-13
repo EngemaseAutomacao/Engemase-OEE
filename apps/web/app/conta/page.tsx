@@ -30,14 +30,14 @@ export default function Page() {
       {/* Cabeçalho próprio (fora do layout do cliente) */}
       <header className="sticky top-0 z-20 border-b bg-card/90 backdrop-blur">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4 md:px-6">
-          <Link href="/" className="flex min-w-0 items-center gap-2" aria-label="Engemase OEE: início">
+          <Link href="/inicio" className="flex min-w-0 items-center gap-2" aria-label="Engemase OEE: início">
             <Image src="/brand/engemase-icone.png" alt="" width={32} height={32} className="size-8 shrink-0" priority />
             <span className="hidden truncate text-sm font-semibold sm:inline">Engemase OEE</span>
           </Link>
           <span className="hidden h-5 w-px bg-border sm:block" aria-hidden />
           <span className="truncate text-sm text-muted-foreground">Minha conta</span>
           <div className="ml-auto flex items-center gap-1.5">
-            <BackButton fallbackHref="/" />
+            <BackButton fallbackHref="/inicio" />
             <ThemeToggle />
             <span
               className="hidden size-8 items-center justify-center rounded-full bg-[#2c4e73] text-xs font-semibold text-white sm:flex"

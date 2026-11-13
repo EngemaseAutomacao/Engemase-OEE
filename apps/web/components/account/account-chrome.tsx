@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
 /** "Voltar": volta para a página anterior da plataforma; sem histórico, vai para o seletor de clientes. */
-export function BackButton({ fallbackHref = "/" }: { fallbackHref?: string }) {
+export function BackButton({ fallbackHref = "/inicio" }: { fallbackHref?: string }) {
   const router = useRouter()
   return (
     <Button asChild variant="outline" size="sm" className="rounded-lg">
