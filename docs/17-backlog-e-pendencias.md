@@ -105,9 +105,27 @@ Em 12/11/2026 o dono do produto decidiu D1, D5, D6, D7, D11, D12, D13, D26, D28 
 | D36 | Prazo | **Aceita:** reforço parcial + corte de MVP; piloto nas semanas 14 a 16 (meados de fevereiro a início de março de 2027) | — |
 | D37 | ADRs "Proposta" | **Aceitas formalmente** ([docs/10](10-decisoes-arquiteturais.md)), com as notas das decisões acima | Já eram seguidas pelo código |
 
+**Escolhas complementares (equipe técnica, 13/11/2026, provisórias):**
+
+| Tema | Escolha |
+|---|---|
+| Ações de chão | Classificar paradas, lançar refugo e trocar produto: admin do cliente, supervisor e operador. O engenheiro do cliente só tem leitura técnica (saúde dos gateways, conexões e tags) e dashboards; comandos ao gateway ("Ler agora", "Testar conexão") ficam com a Engemase |
+| Menu Configurações | Visível, só para leitura, ao admin e ao engenheiro do cliente; oculto para supervisor, operador e visualizador. O código de ativação de gateway nunca aparece para o cliente |
+| Usuários do cliente | O admin do cliente e o super admin da Engemase (primeiro admin e apoio). Suporte e engenheiro de campo, não |
+| Acesso remoto (D20) | O modo da política (com aprovação, janela pré-aprovada, emergência) é definido pela Engemase conforme o contrato; cada sessão é aprovada pelo admin do cliente, com 2FA |
+| Cobrança | Mensalidade sobre o **maior** entre máquinas contratadas e máquinas ativas no mês. Cadastrar acima do contratado gera aviso à Engemase, sem bloquear. Começa quando o cliente vira "Ativo" ou 30 dias depois do primeiro gateway instalado, o que vier primeiro |
+| Preços iniciais | Por máquina por mês: Starter R$ 230, Pro R$ 330, Enterprise R$ 420. Mínimo de 5, 10 e 40 máquinas. Contrato mínimo de 12 meses; desconto total de no máximo 20%. Tabela inicial, revisar depois do piloto ([`docs/negocio/planos-e-precos.md`](negocio/planos-e-precos.md)) |
+| Retenção | Igual para todos os planos e clientes (D6) |
+| Operação | Monitor externo pago a partir do primeiro contrato Pro ou Enterprise. Plantão 24×7 só para P1 nos planos Pro e Enterprise, com escala de 3 pessoas. Restauração completa do banco em até 2 h; PITR de 14 dias; cópias externas por 90 dias. Região reserva da Vercel: `iad1`. Sentry na região da UE. Encarregado (DPO) e substituto a nomear |
+| Rockwell | CompactLogix e ControlLogix: AOI de servidor Modbus TCP da Rockwell quando o controlador suportar; senão, gateway de protocolo EtherNet/IP ↔ Modbus TCP. Driver nativo EtherNet/IP no roadmap |
+| Protocolos nativos | F2: S7comm (Siemens) primeiro, depois EtherNet/IP (Rockwell); OPC UA e outros depois |
+| Siemens legado | S7-300 e S7-400: a licença Modbus/TCP por CPU entra na proposta, paga pelo cliente; ou I/O remoto até existir S7comm |
+| Outras marcas | Sob demanda, com teste de bancada antes do primeiro cliente, cobrado no projeto de implantação. Só prometer modelo e firmware testados |
+| Bancada | S7-1200 CPU 1211C DC/DC/DC, M221 TM221CE16T, Micro820 com Ethernet e AC500-eCo V3 PM5012-T-ETH. Licenças: TIA Portal STEP 7 Basic, Studio 5000 numa edição com editor de ST e Machine Expert |
+
 **Recomendação sobre o domínio (D28):** registrar o domínio próprio **antes de o primeiro gateway ir para um cliente**. A TI do cliente libera a saída pelo nome do host, e trocar o host depois exige atualizar o `cloud.url` de cada gateway instalado.
 
-**Ainda dependem de dados (não de decisão):** nomes dos super admins (D17), valores dos planos (L9), cotação do hardware (D2).
+**Ainda dependem de dados (não de decisão):** nomes dos super admins (D17), do encarregado (DPO) e da escala de plantão; cotação do hardware (D2) e da bancada; confirmação do nome do projeto na Vercel (D28); revisão das minutas por advogado (L7).
 
 ## 4. Lacunas de especificação
 
