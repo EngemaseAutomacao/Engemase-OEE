@@ -2,12 +2,14 @@
 
 // Teste de integração com o simulador tools/plc-sim: compila e sobe o simulador,
 // lê o bloco OEE padrão pelo cliente Modbus do agente e roda poller + motor contra
-// ele. Rode com: go test -tags integration ./test/integration/
+// ele, e os comandos da nuvem (tag.read, device.test) contra ele.
+// Rode com: go test -tags integration ./test/integration/
 package integration
 
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -17,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/engemaseautomacao/engemase-oee/gateway/internal/commands"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/config"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/contracts"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/engine"
@@ -178,5 +181,106 @@ loop:
 	live := eng.Live(time.Now())
 	if len(live) != 1 || live[0].CounterTotal == nil || *live[0].CounterTotal < 100000 || live[0].Product == "" {
 		t.Fatalf("live: %+v", live)
+	}
+}
+
+// Comandos da nuvem contra o simulador: tag.read pela fila do poller em execução e
+// device.test pela conexão da coleta e por uma conexão avulsa (endereço fora da config).
+func TestCommandsAgainstSimulator(t *testing.T) {
+	addr := startSim(t, "--machines", "2", "--start-total", "100000", "--seed", "5", "--speed", "10")
+	_, port, _ := net.SplitHostPort(addr)
+	const dev = "01a1599e-7f90-7b47-976d-2b40a6cb24c1"
+	body := fmt.Sprintf(`{"config_version":1,"serial_buses":[],
+	"devices":[{"id":"%s","protocol":"modbus-tcp","params":{"host":"localhost","port":%s,"unit_id":1},
+	  "blocks":[{"area":"holding_register","start":1000,"count":14,"poll_ms":200}],
+	  "tags":[{"id":"01a159a5-0388-7c92-8248-4dd1953e51e0","address":{"area":"holding_register","offset":1002},"type":"uint16","role":"state.code","machine_id":"01a159a1-4a68-72de-9057-14e72d836a47"}]}],
+	"machines":[{"id":"01a159a1-4a68-72de-9057-14e72d836a47","state_rules":{"mode":"state_code","map":{"1":"RUNNING"}}}],
+	"uplink":{"sync_interval_s":10,"max_batch_items":2000}}`, dev, port)
+	cfg, err := config.ParseRemote([]byte(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps, err := poller.Build(cfg, config.DefaultLocal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	readings := make(chan poller.Reading, 256)
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		_ = ps[0].Run(ctx, readings)
+	}()
+	go func() {
+		for {
+			select {
+			case <-readings:
+			case <-stopped:
+				return
+			}
+		}
+	}()
+	defer func() { cancel(); <-stopped }()
+	reg := &poller.Registry{}
+	reg.Set(ps)
+
+	x := commands.New(commands.Options{})
+	defer x.Close()
+	commands.RegisterMVP(x, commands.Deps{
+		Config: func() *config.GatewayConfig { return cfg }, Local: config.DefaultLocal(),
+		Modbus: &commands.Access{Pollers: reg}, AllowTarget: func(net.IP) error { return nil },
+	})
+	schema := testutil.StrictSchema(t, "command-result")
+	n := 0
+	run := func(typ, payload string) map[string]any {
+		t.Helper()
+		n++
+		id := fmt.Sprintf("01a1cab3-55e8-7cf0-a52e-%012d", n)
+		x.Handle([]contracts.Command{{ID: id, Type: typ, ExpiresAt: contracts.FormatTime(time.Now().Add(time.Minute)),
+			Payload: []byte(payload)}}, time.Now())
+		for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+			for _, r := range x.Results(50) {
+				if !bytes.Contains(r, []byte(id)) {
+					continue
+				}
+				if errs := testutil.ValidateJSON(t, schema, r); errs != "" {
+					t.Fatalf("resultado fora do contrato: %s\n%s", errs, r)
+				}
+				var m map[string]any
+				_ = json.Unmarshal(r, &m)
+				x.Confirm()
+				if m["status"] != "ok" {
+					t.Fatalf("%s: %s", typ, r)
+				}
+				return m["result"].(map[string]any)
+			}
+		}
+		t.Fatalf("%s sem resultado", typ)
+		return nil
+	}
+
+	r := run("tag.read", `{"device_id":"`+dev+`","address":{"area":"holding_register","offset":1004},"type":"uint32","word_order":"CDAB"}`)
+	if v, _ := r["value"].(float64); v < 100000 {
+		t.Fatalf("contador lido: %v", r)
+	}
+	r = run("tag.read", `{"device_id":"`+dev+`","address":{"area":"holding_register","offset":1000},"type":"uint16"}`)
+	if r["value"] != float64(1) {
+		t.Fatalf("versão do bloco OEE: %v", r)
+	}
+	if r = run("tag.read", `{"device_id":"`+dev+`","address":{"area":"coil","offset":0},"type":"bool"}`); r["value"] == nil {
+		t.Fatalf("coil: %v", r)
+	}
+	// Máquina 2 (unit 2) pela conexão da coleta.
+	r = run("device.test", `{"connection":{"protocol":"modbus-tcp","params":{"host":"localhost","port":`+port+`,"unit_id":2}},
+		"probe":{"area":"holding_register","offset":1000,"count":14}}`)
+	if raw := r["probe"].(map[string]any)["raw"].([]any); len(raw) != 14 || raw[0] != float64(1) {
+		t.Fatalf("probe da máquina 2: %v", r)
+	}
+	// Fora da config (127.0.0.1 em vez de localhost): conexão avulsa.
+	run("device.test", `{"connection":{"protocol":"modbus-tcp","params":{"host":"127.0.0.1","port":`+port+`,"unit_id":1}}}`)
+	r = run("device.test", `{"connection":{"protocol":"modbus-tcp","params":{"host":"127.0.0.1","port":`+port+`,"unit_id":1}},
+		"probe":{"area":"coil","offset":0,"count":2}}`)
+	if raw := r["probe"].(map[string]any)["raw"].([]any); len(raw) != 2 {
+		t.Fatalf("probe avulso: %v", r)
 	}
 }

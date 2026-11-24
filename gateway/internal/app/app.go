@@ -100,6 +100,17 @@ type agent struct {
 	reconfigure chan *config.GatewayConfig
 	fetchConfig chan struct{}
 
+	// pollers são os da config em execução: os comandos leem pela fila deles.
+	pollers poller.Registry
+	// applyMu serializa baixar e aplicar a config (configLoop e config.reload).
+	applyMu sync.Mutex
+	// runCtx é o contexto das rotinas (o reinício agendado termina com ele).
+	runCtx context.Context
+	// restartCh recebe o id do agent.restart: Run para e sai (o systemd religa).
+	restartCh chan string
+	restartMu sync.Mutex
+	restart   *pendingRestart
+
 	// Só a rotina de coleta (tick e collectWith) mexe nestes.
 	unsent      buffer.Write                      // saída do motor que o buffer ainda não gravou (ver flush)
 	lost        *unsentLoss                       // o que saiu de unsent pelo limite, ainda sem data_loss gravado
@@ -153,11 +164,16 @@ func Run(ctx context.Context, o Options) error {
 	defer store.Close()
 
 	a := &agent{
-		local: o.Local, store: store, log: log, ids: ids.NewGenerator(nil), cmds: commands.New(),
+		local: o.Local, store: store, log: log, ids: ids.NewGenerator(nil),
 		started: time.Now(), opts: o, health: newHealthCollector(o.Local.Paths.StateDir),
 		reconfigure: make(chan *config.GatewayConfig, 1), fetchConfig: make(chan struct{}, 1),
+		restartCh: make(chan string, 1),
 	}
+	a.cmds = a.newExecutor()
 	if err := a.loadSavedConfig(ctx); err != nil {
+		return err
+	}
+	if err := a.restoreRestart(ctx); err != nil {
 		return err
 	}
 	if err := a.recordStart(ctx); err != nil {
@@ -168,6 +184,7 @@ func Run(ctx context.Context, o Options) error {
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	a.runCtx = runCtx
 	var wg sync.WaitGroup
 	// As rotinas só terminam sozinhas com erro (hoje, só a coleta, quando o motor não
 	// tem como partir: ver collectWith). O agente então para com esse erro e o systemd
@@ -193,23 +210,33 @@ func Run(ctx context.Context, o Options) error {
 	start("watchdog", a.watchdog)
 	_ = sdNotify("READY=1\nSTATUS=" + a.statusLine())
 
-	var failure error
+	var (
+		failure   error
+		restartID string
+	)
 	select {
 	case <-ctx.Done():
 	case failure = <-failed:
+	case restartID = <-a.restartCh:
 	}
 	_ = sdNotify("STOPPING=1")
 	cancel()
 	wg.Wait()
+	a.cmds.Close()
 	if failure == nil { // erro junto com o SIGTERM: a parada não foi limpa
 		select {
 		case failure = <-failed:
 		default:
 		}
 	}
-	a.recordStop(failure)
+	a.recordStop(failure, restartID)
 	if failure != nil {
 		return failure
+	}
+	if restartID != "" {
+		// Saída limpa: o systemd (Restart=always) religa o agente.
+		log.Info("agente parado para o reinício pedido pela nuvem", "comando", restartID)
+		return nil
 	}
 	log.Info("agente parado")
 	return nil
@@ -345,31 +372,45 @@ func (a *agent) configLoop(ctx context.Context) error {
 			return ctx.Err()
 		case <-a.fetchConfig:
 		}
-		a.mu.Lock()
-		client, etag := a.client, a.etag
-		if a.rejectedETag != "" && a.rejectedETag != etag {
-			// If-None-Match aceita lista: 304 também se a última ainda é a recusada (409).
-			etag = strings.TrimPrefix(etag+", "+a.rejectedETag, ", ")
-		}
-		a.mu.Unlock()
-		if client == nil {
-			continue
-		}
-		fctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-		body, newETag, err := client.FetchConfig(fctx, etag)
-		cancel()
-		if errors.Is(err, uplink.ErrNotModified) {
-			continue
-		}
-		if err != nil {
-			a.log.Warn("falha ao baixar a config; tenta no próximo sync", "erro", err)
-			continue
-		}
-		a.applyConfig(ctx, body, newETag)
+		_, _ = a.syncConfig(ctx, false)
 	}
 }
 
-func (a *agent) applyConfig(ctx context.Context, body []byte, etag string) {
+// syncConfig baixa e aplica a config. Com force (config.reload), baixa sem
+// If-None-Match: a nuvem manda a config publicada mesmo que seja a aplicada.
+// Serializado por applyMu: o configLoop e o comando nunca aplicam ao mesmo tempo.
+func (a *agent) syncConfig(ctx context.Context, force bool) (commands.ConfigReloadResult, error) {
+	a.applyMu.Lock()
+	defer a.applyMu.Unlock()
+	a.mu.Lock()
+	client, etag := a.client, a.etag
+	if a.rejectedETag != "" && a.rejectedETag != etag {
+		// If-None-Match aceita lista: 304 também se a última ainda é a recusada (409).
+		etag = strings.TrimPrefix(etag+", "+a.rejectedETag, ", ")
+	}
+	a.mu.Unlock()
+	if force {
+		etag = ""
+	}
+	if client == nil {
+		return commands.ConfigReloadResult{}, commands.Fail(commands.CodeConfigFetchFailed, "Gateway sem credencial: a config não pode ser baixada.")
+	}
+	fctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	body, newETag, err := client.FetchConfig(fctx, etag)
+	cancel()
+	if errors.Is(err, uplink.ErrNotModified) {
+		return commands.ConfigReloadResult{Version: a.configVersion(), Outcome: "unchanged"}, nil
+	}
+	if err != nil {
+		a.log.Warn("falha ao baixar a config; tenta no próximo sync", "erro", err)
+		return commands.ConfigReloadResult{}, commands.Fail(commands.CodeConfigFetchFailed, "Falha ao baixar a config: %v", err)
+	}
+	return a.applyConfig(ctx, body, newETag)
+}
+
+// applyConfig valida, grava e aplica a config baixada. O resultado é o do
+// config.reload: applied, unchanged ou config_invalid (a coleta segue com a atual).
+func (a *agent) applyConfig(ctx context.Context, body []byte, etag string) (commands.ConfigReloadResult, error) {
 	now := time.Now()
 	prev := a.configVersion()
 	cfg, err := config.ParseRemote(body)
@@ -384,8 +425,9 @@ func (a *agent) applyConfig(ctx context.Context, body []byte, etag string) {
 		a.rejectedETag = etag
 		a.mu.Unlock()
 		a.setConfig(nil, "rejected", msg)
+		invalid := commands.Fail(commands.CodeConfigInvalid, "%s", msg)
 		if again {
-			return // já recusada e registrada: um config_rejected por versão
+			return commands.ConfigReloadResult{}, invalid // já recusada e registrada: um config_rejected por versão
 		}
 		a.log.Error("config recusada; a coleta segue com a atual", "versao", v, "erro", err)
 		if v >= 1 {
@@ -398,17 +440,17 @@ func (a *agent) applyConfig(ctx context.Context, body []byte, etag string) {
 			a.enqueueEventMeta(ctx, ev, now, map[string]string{
 				metaRejectedVersion: strconv.Itoa(v), metaRejectedError: msg, metaRejectedAgent: agentBuild()})
 		}
-		return
+		return commands.ConfigReloadResult{}, invalid
 	}
 	if cfg.ConfigVersion == prev {
 		a.mu.Lock()
 		a.etag = etag
 		a.mu.Unlock()
-		return
+		return commands.ConfigReloadResult{Version: prev, Outcome: "unchanged"}, nil
 	}
 	if err := a.store.SaveConfig(ctx, cfg.ConfigVersion, body); err != nil {
 		a.log.Error("falha ao salvar a config", "erro", err)
-		return
+		return commands.ConfigReloadResult{}, commands.Fail(commands.CodeInternalError, "Falha ao salvar a config: %v", err)
 	}
 	ev := contracts.ConfigAppliedEvent{ID: a.ids.New(now), Type: contracts.EventConfigApplied, At: contracts.FormatTime(now), Version: cfg.ConfigVersion}
 	if prev > 0 {
@@ -424,6 +466,7 @@ func (a *agent) applyConfig(ctx context.Context, body []byte, etag string) {
 	case a.reconfigure <- cfg:
 	default: // já há uma troca pendente: a coleta lê a config atual de qualquer forma
 	}
+	return commands.ConfigReloadResult{Version: cfg.ConfigVersion, Outcome: "applied"}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -513,6 +556,7 @@ func (a *agent) collectWith(ctx context.Context, cfg *config.GatewayConfig) erro
 		p.Logger = a.log // mudanças do estado de conexão dos dispositivos
 	}
 	a.beatPollers(pollers)
+	a.pollers.Set(pollers) // leituras dos comandos pela fila de cada transporte
 
 	pctx, stopPollers := context.WithCancel(ctx)
 	readings := make(chan poller.Reading, 1024)
@@ -552,6 +596,7 @@ func (a *agent) collectWith(ctx context.Context, cfg *config.GatewayConfig) erro
 	// com a parada atravessando a virada do minuto, o minuto em que ela começou não seria
 	// enviado: o motor antigo não o fecharia e o novo parte depois dele.
 	stop := func() {
+		a.pollers.Set(nil)
 		a.beatStopBegin(pollers)
 		stopPollers()
 		wg.Wait()
@@ -942,8 +987,8 @@ func (a *agent) startSync(ctx context.Context, creds *config.Credentials, cancel
 		// Falhas e volta do /sync e o marcador no log do agente (journald), com o nível dele.
 		Log: a.log,
 		OnResponse: func(resp *contracts.SyncResponse) {
-			a.cmds.Confirm()
-			a.cmds.Handle(resp.Commands, time.Now())
+			a.onConfirmed(a.cmds.Confirm())
+			a.cmds.Handle(resp.Commands, a.cloudNow())
 			if a.wantsConfig(resp.Config.LatestVersion) {
 				a.requestConfig()
 			}
@@ -1035,10 +1080,13 @@ func (a *agent) recordStart(ctx context.Context) error {
 // recordStop registra a parada (agent_stop). Parada pedida (failure nil, SIGTERM) é
 // desligamento limpo; parada por erro de uma rotina vai com reason error e o erro no
 // detail, e clean_shutdown fica "0" (a próxima partida não a dá como limpa).
-func (a *agent) recordStop(failure error) {
+func (a *agent) recordStop(failure error, restartID string) {
 	now := time.Now()
 	ev := contracts.AgentStopEvent{ID: a.ids.New(now), Type: contracts.EventAgentStop, At: contracts.FormatTime(now), Reason: "shutdown"}
 	meta := map[string]string{"clean_shutdown": "1"}
+	if restartID != "" {
+		ev.Reason, ev.Detail = "restart", a.restartDetail(restartID)
+	}
 	if failure != nil {
 		ev.Reason, ev.Detail, meta = "error", truncate(failure.Error(), 2000), nil
 	}

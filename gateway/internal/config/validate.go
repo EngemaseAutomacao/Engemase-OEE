@@ -189,24 +189,8 @@ func (c *GatewayConfig) validateStructure(v *validator) {
 		v.schema(fmt.Sprintf("máximo de %d máquinas", MaxMachines), "machines")
 	}
 
-	for i, b := range c.SerialBuses {
-		v.uuid(b.ID, "serial_buses", i, "id")
-		v.text(b.Name, 120, "serial_buses", i, "name")
-		if len(b.Port) > 64 || !serialRe.MatchString(b.Port) {
-			v.schema("porta serial inválida: use um nome lógico (rs485-1) ou /dev/...", "serial_buses", i, "port")
-		}
-		if !validBauds[b.Baud] {
-			v.schema(fmt.Sprintf("velocidade %d não suportada", b.Baud), "serial_buses", i, "baud")
-		}
-		if b.Parity != "N" && b.Parity != "E" && b.Parity != "O" {
-			v.schema("paridade deve ser N, E ou O", "serial_buses", i, "parity")
-		}
-		if b.DataBits != 8 {
-			v.schema("Modbus RTU usa sempre 8 bits de dados", "serial_buses", i, "data_bits")
-		}
-		if b.StopBits != 1 && b.StopBits != 2 {
-			v.schema("stop_bits deve ser 1 ou 2", "serial_buses", i, "stop_bits")
-		}
+	for i := range c.SerialBuses {
+		c.SerialBuses[i].validateStructure(v, i)
 	}
 
 	for d := range c.Devices {
@@ -265,6 +249,26 @@ func (c *GatewayConfig) validateStructure(v *validator) {
 	v.intRange(c.Uplink.MaxBatchItems, 1, DefaultMaxBatchItems, "uplink", "max_batch_items")
 	if c.Uplink.MaxBatchBytes != 0 {
 		v.intRange(c.Uplink.MaxBatchBytes, 1024, DefaultMaxBatchBytes, "uplink", "max_batch_bytes")
+	}
+}
+
+func (b *SerialBus) validateStructure(v *validator, i int) {
+	v.uuid(b.ID, "serial_buses", i, "id")
+	v.text(b.Name, 120, "serial_buses", i, "name")
+	if len(b.Port) > 64 || !serialRe.MatchString(b.Port) {
+		v.schema("porta serial inválida: use um nome lógico (rs485-1) ou /dev/...", "serial_buses", i, "port")
+	}
+	if !validBauds[b.Baud] {
+		v.schema(fmt.Sprintf("velocidade %d não suportada", b.Baud), "serial_buses", i, "baud")
+	}
+	if b.Parity != "N" && b.Parity != "E" && b.Parity != "O" {
+		v.schema("paridade deve ser N, E ou O", "serial_buses", i, "parity")
+	}
+	if b.DataBits != 8 {
+		v.schema("Modbus RTU usa sempre 8 bits de dados", "serial_buses", i, "data_bits")
+	}
+	if b.StopBits != 1 && b.StopBits != 2 {
+		v.schema("stop_bits deve ser 1 ou 2", "serial_buses", i, "stop_bits")
 	}
 }
 
