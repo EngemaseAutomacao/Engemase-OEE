@@ -19,6 +19,7 @@ import type {
   ModbusTcpParams,
   Scale,
   TagSampling,
+  UplinkSettings,
 } from "@engemase/contracts"
 import { sql } from "drizzle-orm"
 import {
@@ -30,6 +31,7 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  real,
   smallint,
   text,
   unique,
@@ -84,6 +86,11 @@ export const gateway = pgTable(
     configVersionApplied: integer("config_version_applied"),
     hwInfo: jsonb("hw_info").$type<HardwareInfo>(),
     health: jsonb("health").$type<GatewayHealth>(),
+    /**
+     * Ajustes do uplink publicados na config (`uplink` do contrato: intervalo do /sync, itens e bytes
+     * por lote). Nulo = padrão do contrato (10 s, 2000 itens). Lido pelo publicador de config.
+     */
+    uplink: jsonb("uplink").$type<UplinkSettings>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
@@ -374,5 +381,53 @@ export const gatewayDeviceStatus = pgTable(
       foreignColumns: [device.id, device.gatewayId, device.organizationId],
     }).onDelete("cascade"),
     check("gateway_device_status_status_chk", oneOf(t.status, DEVICE_CONN_STATUSES)),
+  ],
+)
+
+/**
+ * Histórico resumido da saúde do gateway (docs/04, "Regras de processamento na nuvem"): uma linha
+ * por gateway a cada 5 min, atualizada a cada /sync (máximos, mínimos e o último valor). A foto mais
+ * recente continua em `gateway.health`. Retenção curta (30 dias), aplicada pelo cron de limpeza.
+ */
+export const gatewayHealthSample = pgTable(
+  "gateway_health_sample",
+  {
+    organizationId: organizationId(),
+    gatewayId: uuid("gateway_id").notNull(),
+    /** Início da janela de 5 min (UTC). */
+    bucketStart: tstz("bucket_start").notNull(),
+    firstAt: tstz("first_at").notNull(),
+    lastAt: tstz("last_at").notNull(),
+    /** Quantos /sync chegaram na janela. */
+    syncCount: integer("sync_count").notNull().default(1),
+    agentVersion: text("agent_version"),
+    configVersion: integer("config_version"),
+    /** Estado da config no agente (`config_status.state`: applying, observing, applied, rejected, reverted). */
+    configState: text("config_state"),
+    cpuPctMax: real("cpu_pct_max"),
+    memMbMax: real("mem_mb_max"),
+    diskFreeMbMin: real("disk_free_mb_min"),
+    bufferPendingMax: integer("buffer_pending_max"),
+    bufferOldestSMax: integer("buffer_oldest_s_max"),
+    quarantinedMax: integer("quarantined_max"),
+    /** Maior |clock_offset_ms| da janela. */
+    clockOffsetMsMaxAbs: integer("clock_offset_ms_max_abs"),
+    tempCMax: real("temp_c_max"),
+    devicesTotal: smallint("devices_total"),
+    /** Menor número de dispositivos `connected` visto na janela. */
+    devicesConnectedMin: smallint("devices_connected_min"),
+    /** Maior número de barramentos fora de `ok` visto na janela. */
+    busesDegradedMax: smallint("buses_degraded_max"),
+  },
+  (t) => [
+    primaryKey({ name: "gateway_health_sample_pk", columns: [t.gatewayId, t.bucketStart] }),
+    foreignKey({
+      name: "gateway_health_sample_gateway_fk",
+      columns: [t.gatewayId, t.organizationId],
+      foreignColumns: [gateway.id, gateway.organizationId],
+    }).onDelete("cascade"),
+    index("gateway_health_sample_bucket_idx").on(t.bucketStart),
+    check("gateway_health_sample_count_chk", sql`${t.syncCount} >= 1`),
+    check("gateway_health_sample_window_chk", sql`${t.lastAt} >= ${t.firstAt}`),
   ],
 )

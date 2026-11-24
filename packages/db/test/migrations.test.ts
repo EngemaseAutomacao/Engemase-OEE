@@ -49,7 +49,11 @@ async function useOwnerWithoutBypassRls(client: PGlite): Promise<void> {
     ALTER SCHEMA drizzle OWNER TO migration_owner;
     GRANT CREATE ON SCHEMA public TO migration_owner;
     GRANT USAGE ON SCHEMA app TO migration_owner;
-    GRANT EXECUTE ON FUNCTION app.enable_tenant_rls(regclass) TO migration_owner;`)
+    GRANT EXECUTE ON FUNCTION app.enable_tenant_rls(regclass) TO migration_owner;
+    -- Na Neon o mesmo dono rodou a 0001: é dono do schema app e membro de app_lookup (a 0001 faz o
+    -- GRANT), o que as migrações que criam funções de busca (0008) precisam.
+    ALTER SCHEMA app OWNER TO migration_owner;
+    GRANT app_lookup TO migration_owner;`)
 }
 
 /** Aplica todas as migrações como `migration_owner`. */
@@ -87,6 +91,8 @@ describe("migrações", () => {
       "0004_organization_slug_check",
       "0005_member_machine_owner_decisions",
       "0006_client_limits_machines_required",
+      "0007_gateway_api_w6",
+      "0008_gateway_api_w6_rls",
     ])
   })
 

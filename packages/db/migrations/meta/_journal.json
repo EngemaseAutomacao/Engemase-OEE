@@ -50,6 +50,20 @@
       "when": 1794526145003,
       "tag": "0006_client_limits_machines_required",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795551393046,
+      "tag": "0007_gateway_api_w6",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795551418069,
+      "tag": "0008_gateway_api_w6_rls",
+      "breakpoints": true
     }
   ]
 }

@@ -235,6 +235,16 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
   await db
     .insert(s.gatewayDeviceStatus)
     .values({ organizationId, gatewayId: gw.id, deviceId: dev.id, status: "connected" })
+  await db.insert(s.gatewayHealthSample).values({
+    organizationId,
+    gatewayId: gw.id,
+    bucketStart: new Date(Math.floor(now / 300_000) * 300_000),
+    firstAt: new Date(now),
+    lastAt: new Date(now),
+    agentVersion: "1.0.0",
+    configVersion: 1,
+    bufferPendingMax: 0,
+  })
 
   const prod = first(
     await db.insert(s.product).values({ organizationId, code: "PRD-001", name: "Tampa 28 mm" }).returning(),
