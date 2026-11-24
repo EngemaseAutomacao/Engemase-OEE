@@ -359,4 +359,56 @@ describe("RLS por cliente", () => {
     })
     expect(all.length).toBe(4)
   })
+
+  it("papel de login NOINHERIT: consulta fora do withTenant falha alto, mesmo com cliente de sessão esquecido (revisão W11)", async () => {
+    // Cenário do pool: uma requisição deixou `app.org_id` de A na SESSÃO (set_config sem LOCAL, por bug) e
+    // a próxima, de B, consulta sem withTenant. Com o login herdando app_user (INHERIT, o padrão de
+    // `IN ROLE app_user`), a RLS usa o cliente que sobrou e devolve os dados de A. Com NOINHERIT, o login
+    // não tem privilégio nenhum fora do `SET LOCAL ROLE app_user` do withTenant: a consulta falha.
+    await t.client.exec(`
+      CREATE ROLE w11_login_herda LOGIN;
+      GRANT app_user TO w11_login_herda;
+      CREATE ROLE w11_login_sem_heranca LOGIN NOINHERIT;
+      GRANT app_user TO w11_login_sem_heranca WITH INHERIT FALSE, SET TRUE;
+    `)
+    const comoLogin = async <T,>(papel: string, fn: () => Promise<T>): Promise<T> => {
+      await t.client.exec(`SET ROLE ${papel}`)
+      await t.client.query("SELECT set_config('app.org_id', $1, false)", [a.organizationId])
+      try {
+        return await fn()
+      } finally {
+        await t.client.exec("RESET app.org_id; RESET ROLE")
+      }
+    }
+    const semWithTenant = () => t.client.query<{ organization_id: string }>("SELECT DISTINCT organization_id FROM machine")
+    const vazou = await comoLogin("w11_login_herda", semWithTenant)
+    expect(vazou.rows).toEqual([{ organization_id: a.organizationId }])
+    await expect(comoLogin("w11_login_sem_heranca", semWithTenant)).rejects.toThrow(/permission denied/)
+    // O withTenant continua funcionando com o login NOINHERIT (SET LOCAL ROLE app_user é permitido)...
+    const proprio = await comoLogin("w11_login_sem_heranca", async () => {
+      await t.client.exec("RESET app.org_id")
+      return withTenant(t.db, b.organizationId, (q) => q.select({ org: machine.organizationId }).from(machine))
+    })
+    expect(new Set(proprio.map((r) => r.org))).toEqual(new Set([b.organizationId]))
+    // ...e, com o cliente de sessão esquecido, recusa trocar de cliente em vez de misturar.
+    await expectDbError(
+      comoLogin("w11_login_sem_heranca", () => withTenant(t.db, b.organizationId, (q) => q.select().from(machine))),
+      /outro cliente/,
+    )
+  })
+
+  it("limite (revisão W11): o app_user vincula qualquer pessoa ao próprio cliente e passa a ler nome e e-mail dela", async () => {
+    // A RLS não sabe se o vínculo é legítimo: entrar como membro de um segundo cliente é fluxo previsto
+    // (docs/15, seção 5). Por isso a Server Action de entrada de usuário resolve a pessoa pelo e-mail NO
+    // SERVIDOR e nunca aceita `user_id` vindo do navegador. Se o vínculo passar para uma função própria
+    // ou para o auth_service (W5), troque este teste.
+    const emails = await asTenant(t.client, a.organizationId, async (tx) => {
+      await tx.query("INSERT INTO member (organization_id, user_id, role) VALUES ($1, $2, 'viewer')", [
+        a.organizationId,
+        b.userId,
+      ])
+      return (await tx.query<{ email: string }>('SELECT email FROM "user" WHERE id = $1', [b.userId])).rows
+    })
+    expect(emails).toEqual([{ email: "admin@beta.example" }])
+  })
 })

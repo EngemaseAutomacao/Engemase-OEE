@@ -49,7 +49,7 @@ flowchart LR
 | Cron | `CRON_SECRET` validado em `/api/cron/*` |
 | Segredos | Variáveis de ambiente da Vercel (com a integração Neon injetando as credenciais do banco). Nada de segredo no repositório |
 | Auditoria | `audit_log` para toda alteração de configuração, comando enviado e mudança de usuário ou papel |
-| Cabeçalhos | CSP, HSTS, `X-Frame-Options` (exceto no modo TV, se for embutido) |
+| Cabeçalhos | CSP (só a própria origem, sem nonce por causa do prerender parcial), HSTS, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, `frame-ancestors 'none'` + `X-Frame-Options: DENY` em todas as rotas (exceção para o modo TV só se ele for embutido). Em `apps/web/lib/cabecalhos-seguranca.ts`; revisão e conferência no navegador em [operacao/revisao-seguranca-w11.md](operacao/revisao-seguranca-w11.md) |
 | LGPD | Dados pessoais mínimos (nome e e-mail do usuário, operador que apontou). Política de retenção. Exportação e exclusão a pedido |
 
 ## Ambientes
