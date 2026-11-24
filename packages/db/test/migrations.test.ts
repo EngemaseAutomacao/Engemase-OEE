@@ -48,7 +48,8 @@ async function useOwnerWithoutBypassRls(client: PGlite): Promise<void> {
     $$;
     ALTER SCHEMA drizzle OWNER TO migration_owner;
     GRANT CREATE ON SCHEMA public TO migration_owner;
-    GRANT USAGE ON SCHEMA app TO migration_owner;
+    -- Na Neon, o mesmo papel cria o schema app (0001) e as funções das migrações seguintes.
+    GRANT USAGE, CREATE ON SCHEMA app TO migration_owner;
     GRANT EXECUTE ON FUNCTION app.enable_tenant_rls(regclass) TO migration_owner;`)
 }
 
@@ -87,6 +88,9 @@ describe("migrações", () => {
       "0004_organization_slug_check",
       "0005_member_machine_owner_decisions",
       "0006_client_limits_machines_required",
+      "0007_w2b_calendar_reject_operator_transit",
+      "0008_w2b_rls_new_tables_reversal_trigger",
+      "0009_w2b_partitions_maintenance",
     ])
   })
 
@@ -97,9 +101,11 @@ describe("migrações", () => {
   })
 
   it("criam exatamente as tabelas declaradas no schema", async () => {
-    const result = await t.client.query<{ name: string }>(
-      "SELECT tablename AS name FROM pg_tables WHERE schemaname = 'public' ORDER BY 1",
-    )
+    // Partições ficam de fora: são da tabela-mãe (test/partitions.test.ts).
+    const result = await t.client.query<{ name: string }>(`
+      SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relispartition
+      ORDER BY 1`)
     const inDb = result.rows.map((r) => r.name)
     const inSchema = ALL_TABLES.map((table) => getTableName(table)).sort()
     expect(inDb).toEqual(inSchema)

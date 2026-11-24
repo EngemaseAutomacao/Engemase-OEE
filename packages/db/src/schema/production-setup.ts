@@ -1,6 +1,7 @@
 /**
- * Cadastros de produção: produtos e ciclo ideal por máquina, turnos, paradas planejadas,
- * motivos de parada e mapa de códigos de falha (docs/06, "4. Cadastros de produção"; docs/07).
+ * Cadastros de produção: produtos e ciclo ideal por máquina, turnos e feriados da unidade, paradas
+ * planejadas, motivos de parada e de refugo, operadores da unidade e mapa de códigos de falha
+ * (docs/06, "4. Cadastros de produção"; docs/07; L2, L3 e L19 do docs/17).
  */
 import { sql } from "drizzle-orm"
 import {
@@ -84,7 +85,12 @@ export interface ShiftBreak {
 /**
  * Turno da unidade (formato de `ShiftDefinition` do `@engemase/oee-core`).
  * `end_time <= start_time` = atravessa a meia-noite (pertence à data de início).
- * Calendário completo (feriados, exceções, "dia produtivo") é a lacuna L2 do docs/17.
+ *
+ * Regras do calendário (L2 do docs/17, escolha de 12/11/2026): o turno pertence ao dia em que COMEÇA;
+ * feriado da unidade (`unit_holiday`) = nenhum turno começa naquele dia (tempo não planejado); turnos
+ * não se sobrepõem na mesma unidade (regra da aplicação: o banco não confere sobreposição entre dias
+ * da semana, vigências e turnos que atravessam a meia-noite); mudança de turno vale dali para a
+ * frente (nova linha com `valid_from`, sem recalcular o passado).
  */
 export const shift = pgTable(
   "shift",
@@ -118,6 +124,37 @@ export const shift = pgTable(
     ),
     check("shift_validity_chk", sql`${t.validFrom} IS NULL OR ${t.validTo} IS NULL OR ${t.validFrom} <= ${t.validTo}`),
     check("shift_breaks_chk", sql`jsonb_typeof(${t.breaks}) = 'array'`),
+  ],
+)
+
+/**
+ * Feriado da unidade (L2 do docs/17), cadastrado pela Engemase: no dia `holiday_date` (data local da
+ * unidade) nenhum turno começa, e o tempo vira não planejado. Produção nesse dia conta as peças e o
+ * tempo produzido vira planejado (como D24). Um feriado por dia e unidade (entre os não excluídos).
+ */
+export const unitHoliday = pgTable(
+  "unit_holiday",
+  {
+    id: pk(),
+    organizationId: organizationId(),
+    unitId: uuid("unit_id").notNull(),
+    holidayDate: date("holiday_date", { mode: "string" }).notNull(),
+    name: text("name").notNull(),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: deletedAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "unit_holiday_unit_fk",
+      columns: [t.unitId, t.organizationId],
+      foreignColumns: [unit.id, unit.organizationId],
+    }),
+    uniqueIndex("unit_holiday_unit_date_uq")
+      .on(t.unitId, t.holidayDate)
+      .where(sql`${t.deletedAt} IS NULL`),
+    check("unit_holiday_name_chk", sql`btrim(${t.name}) <> ''`),
   ],
 )
 
@@ -232,5 +269,72 @@ export const faultCodeMap = pgTable(
     unique("fault_code_map_template_code_uq").on(t.templateId, t.faultCode),
     check("fault_code_map_target_chk", sql`(${t.machineId} IS NULL) <> (${t.templateId} IS NULL)`),
     check("fault_code_map_fault_code_chk", faultCodeInRange(t.faultCode)),
+  ],
+)
+
+/**
+ * Motivo de refugo (L3 do docs/17), cadastrado pela Engemase por cliente. Usado no lançamento manual
+ * de refugo (`quality_entry.reject_reason_id`). Desativar (`active = false`) tira o motivo da lista sem
+ * mexer nos lançamentos antigos.
+ */
+export const rejectReason = pgTable(
+  "reject_reason",
+  {
+    id: pk(),
+    organizationId: organizationId(),
+    /** Código opcional (ex.: o do CLP ou o da planilha de qualidade do cliente). */
+    code: text("code"),
+    name: text("name").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: deletedAt(),
+  },
+  (t) => [
+    unique("reject_reason_id_org_uq").on(t.id, t.organizationId),
+    uniqueIndex("reject_reason_org_name_uq")
+      .on(t.organizationId, sql`lower(${t.name})`)
+      .where(sql`${t.deletedAt} IS NULL`),
+    uniqueIndex("reject_reason_org_code_uq")
+      .on(t.organizationId, t.code)
+      .where(sql`${t.code} IS NOT NULL AND ${t.deletedAt} IS NULL`),
+    check("reject_reason_name_chk", sql`btrim(${t.name}) <> ''`),
+    check("reject_reason_code_chk", sql`${t.code} IS NULL OR btrim(${t.code}) <> ''`),
+  ],
+)
+
+/**
+ * Operador de chão da unidade (L19 do docs/17; D18): escolhido numa lista no tablet ou no desktop,
+ * sem login próprio. Cadastrado pela Engemase, com nome e matrícula opcional (dado pessoal mínimo,
+ * LGPD). A matrícula é única na unidade entre os não excluídos.
+ */
+export const unitOperator = pgTable(
+  "unit_operator",
+  {
+    id: pk(),
+    organizationId: organizationId(),
+    unitId: uuid("unit_id").notNull(),
+    name: text("name").notNull(),
+    /** Matrícula na empresa do cliente (opcional). */
+    employeeCode: text("employee_code"),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: deletedAt(),
+  },
+  (t) => [
+    unique("unit_operator_id_org_uq").on(t.id, t.organizationId),
+    foreignKey({
+      name: "unit_operator_unit_fk",
+      columns: [t.unitId, t.organizationId],
+      foreignColumns: [unit.id, unit.organizationId],
+    }),
+    index("unit_operator_unit_idx").on(t.unitId),
+    uniqueIndex("unit_operator_unit_code_uq")
+      .on(t.unitId, t.employeeCode)
+      .where(sql`${t.employeeCode} IS NOT NULL AND ${t.deletedAt} IS NULL`),
+    check("unit_operator_name_chk", sql`btrim(${t.name}) <> ''`),
+    check("unit_operator_code_chk", sql`${t.employeeCode} IS NULL OR btrim(${t.employeeCode}) <> ''`),
   ],
 )

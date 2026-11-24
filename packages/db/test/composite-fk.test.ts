@@ -255,7 +255,7 @@ describe("FKs compostas entre tabelas de cliente", () => {
 
   describe("estorno de qualidade (quality_entry.reverses_id)", () => {
     const reverseQuality =
-      "INSERT INTO quality_entry (organization_id, machine_id, at, quantity, reason, reverses_id) VALUES ($1, $2, now(), $3, 'Estorno', $4)"
+      "INSERT INTO quality_entry (organization_id, machine_id, at, quantity, reason, reverses_id, reversal_reason) VALUES ($1, $2, now(), $3, 'Estorno', $4, 'Lançado na máquina errada')"
     const REVERSES_FK = /quality_entry_reverses_fk/
 
     it("o app no cliente A não estorna lançamento do cliente B", async () => {
@@ -289,7 +289,7 @@ describe("FKs compostas entre tabelas de cliente", () => {
       const id = randomUUID()
       await expectDbError(
         asOwner(
-          "INSERT INTO quality_entry (id, organization_id, machine_id, at, quantity, reverses_id) VALUES ($1, $2, $3, now(), -1, $1)",
+          "INSERT INTO quality_entry (id, organization_id, machine_id, at, quantity, reverses_id, reversal_reason) VALUES ($1, $2, $3, now(), -1, $1, 'Teste')",
           [id, a.organizationId, a.machineId],
         ),
         /quality_entry_reversal_chk/,

@@ -51,7 +51,7 @@ Premissas: 2 desenvolvedores (**Web** e **Gateway**), semana 1 = 16/11/2026, sem
   - alertas e ajuda depois do piloto;
   - configuração de rede pela nuvem só na F2.
 
-**Já adiantado:** a parte de código de W1, X1, W2a, W3, W4 e G0, e boa parte de W2b (RLS completa e FKs compostas) e de G4 (`.deb`, units, firewall, imagem). Ficam pendentes as partes que dependem de contas (deploy, Neon, PoC com 100 gateways) e de hardware (bancada, pacote de suporte ao R1000).
+**Já adiantado:** a parte de código de W1, X1, W2a, W3, W4 e G0, a parte de código de W2b (RLS completa, FKs compostas, partições com a rotina diária, seed sintético e as tabelas de L2, L3, L19 e L23; falta criar o branch-semente na Neon, que depende de N1) e boa parte de G4 (`.deb`, units, firewall, imagem). Ficam pendentes as partes que dependem de contas (deploy, Neon, PoC com 100 gateways) e de hardware (bancada, pacote de suporte ao R1000).
 
 ## 3. Decisões
 

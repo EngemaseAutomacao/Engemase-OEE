@@ -7,6 +7,8 @@ import { NULLABLE_TENANT_TABLES, TENANT_TABLE_NAMES } from "../src/tenancy"
 import {
   applicationRoles,
   nullableOrganizationIdColumns,
+  partitions,
+  partitionsWithApplicationPrivileges,
   permissivePolicies,
   securityDefinerFunctionExecutors,
   securityDefinerFunctions,
@@ -17,7 +19,7 @@ import {
   tenantTablesWithoutIsolationPolicy,
   tenantTablesWithoutOrganizationFk,
 } from "./catalog"
-import { createTestDatabase, type TestDatabase } from "./helpers"
+import { createTestDatabase, ident, type TestDatabase } from "./helpers"
 
 describe("catálogo do banco", () => {
   let t: TestDatabase
@@ -116,7 +118,8 @@ describe("catálogo do banco", () => {
   it("as políticas permissivas são só as previstas (qualquer nova exige revisão)", async () => {
     const policies = await permissivePolicies(t.client)
     const unexpected = policies.filter((p) => {
-      if (p.policy === "tenant_access") return !(p.roles === "app_user" && TENANT_TABLE_NAMES.includes(p.table))
+      // Em partição, vale a tabela-mãe (a política vem de app.enable_tenant_rls na criação da partição).
+      if (p.policy === "tenant_access") return !(p.roles === "app_user" && TENANT_TABLE_NAMES.includes(p.root))
       if (p.policy === "auth_service_all") {
         return !(p.roles === "auth_service" && ["member", "organization", "user"].includes(p.table))
       }
@@ -137,8 +140,28 @@ describe("catálogo do banco", () => {
     })
     expect(unexpected).toEqual([])
     // Toda tabela de cliente tem a permissiva do app_user (sem ela, o app não leria nada).
-    const withAccess = policies.filter((p) => p.policy === "tenant_access").map((p) => p.table)
+    const withAccess = policies.filter((p) => p.policy === "tenant_access" && p.root === p.table).map((p) => p.table)
     expect(withAccess).toEqual([...TENANT_TABLE_NAMES])
+  })
+
+  it("só as séries temporais previstas são particionadas, e toda partição tem RLS forçada e nenhum GRANT", async () => {
+    const parents = [...new Set((await partitions(t.client)).map((p) => p.parent))]
+    expect(parents).toEqual(["production_minute", "tag_sample"])
+    // Cada partição tem organization_id: as verificações de RLS forçada e de política já a incluem.
+    expect(await tenantTablesWithoutForcedRls(t.client)).toEqual([])
+    expect(await tenantTablesWithoutIsolationPolicy(t.client)).toEqual([])
+    // O app lê e grava pela tabela-mãe; partição não tem GRANT para nenhum papel da aplicação.
+    expect(await partitionsWithApplicationPrivileges(t.client)).toEqual([])
+  })
+
+  it("o teste pega uma partição com GRANT direto para o app_user", async () => {
+    await t.client.transaction(async (tx) => {
+      const [first] = await partitions(tx)
+      if (first === undefined) throw new Error("sem partições")
+      await tx.exec(`GRANT SELECT ON public.${ident(first.partition)} TO app_user`)
+      expect(await partitionsWithApplicationPrivileges(tx)).toEqual([first.partition])
+      await tx.rollback()
+    })
   })
 
   it("as funções SECURITY DEFINER pertencem a app_lookup e fixam o search_path", async () => {

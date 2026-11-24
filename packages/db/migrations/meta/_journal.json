@@ -50,6 +50,27 @@
       "when": 1794526145003,
       "tag": "0006_client_limits_machines_required",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795551334211,
+      "tag": "0007_w2b_calendar_reject_operator_transit",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795551350175,
+      "tag": "0008_w2b_rls_new_tables_reversal_trigger",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795551351410,
+      "tag": "0009_w2b_partitions_maintenance",
+      "breakpoints": true
     }
   ]
 }

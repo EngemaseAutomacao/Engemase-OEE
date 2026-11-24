@@ -8,6 +8,7 @@ Schema do banco (Drizzle ORM, **Postgres 18**), migrações SQL versionadas e **
 pnpm --filter @engemase/db test        # Vitest + PGlite (Postgres 18 em WASM, sem servidor)
 pnpm --filter @engemase/db typecheck
 pnpm --filter @engemase/db db:generate # gera SQL a partir do schema (não precisa de banco)
+ENGEMASE_SEED=sintetico DATABASE_URL=postgres://… pnpm --filter @engemase/db db:seed   # migra + seed de demonstração
 ```
 
 Os testes aplicam as migrações num banco vazio e provam, com dois clientes completos (uma linha em **todas** as tabelas de cliente):
@@ -19,6 +20,9 @@ Os testes aplicam as migrações num banco vazio e provam, com dois clientes com
 | `test/composite-fk.test.ts` | Impossível ligar o gateway de A a uma máquina de B (mesmo como dono do banco); tag só em máquina ligada ao gateway do dispositivo; gateway e máquina da mesma unidade; escopo de pessoa (`member_unit`, `member_machine`) só com unidade/máquina do mesmo cliente; estorno de qualidade só de lançamento existente do mesmo cliente |
 | `test/lookups.test.ts` | Busca por hash de token antes de saber o cliente (gateway, ativação, terminal, tokens próprios), **estado** da credencial (código usado/vencido, token revogado/rotacionado) e slug da URL → cliente |
 | `test/migrations.test.ts` | Migrações aplicam do zero e são idempotentes; **schema TS e migrações não divergem** (falha se esquecerem o `db:generate`); a 0005 liga `managed_by_engemase` dos clientes que já existiam mesmo com um dono de tabelas **sem `BYPASSRLS`** (como na Neon); a 0006 para se algum cliente não tiver `limits.machines` |
+| `test/partitions.test.ts` | `production_minute` (mês) e `tag_sample` (semana) particionadas, com chave, CHECKs e FKs na tabela-mãe; `ON CONFLICT` na chave funciona; RLS pela tabela-mãe e partição sem GRANT; `maintainPartitions()` cria os períodos seguintes, é idempotente, tem dry-run e apaga só partições inteiras além da retenção; a 0009 sobre tabela com dados mantém todas as linhas (sem cópia) com dono **sem `BYPASSRLS`** |
+| `test/calendar-quality-operators.test.ts` | Tabelas novas do W2b (`unit_holiday`, `reject_reason`, `unit_operator`): RLS por cliente (SELECT/INSERT/UPDATE/DELETE), FKs compostas (inclusive motivo e operador em `quality_entry`, `production_run`, `machine_state_event`), unicidades; estorno de refugo (motivo obrigatório, quantidade oposta, mesma máquina, um só, não estorna estorno); gateway "Em trânsito" (até 30 dias) |
+| `test/seed.test.ts` | Seed sintético só com `ENGEMASE_SEED=sintetico` e fora de produção; recusa banco com cliente real e conexão sem `BYPASSRLS`; determinístico, idempotente e respeitando a RLS |
 | `test/enums.test.ts` | "Enums" e faixas do banco iguais aos de `@engemase/contracts` (inclusive `fault_code` uint32 em `bigint` e o formato do slug do cliente, `org` do /enroll); campos de minuto/live do contrato têm coluna; CHECKs recusam valores inválidos (escopo `machines` aceito, admin só com `all`, concessão de suporte sem aprovação, limites inteiros >= 0 com `machines` obrigatório) |
 
 ## Estrutura
@@ -27,6 +31,8 @@ Os testes aplicam as migrações num banco vazio e provam, com dois clientes com
 src/schema/      tabelas por domínio (auth, assets, access, connectivity, production-*, alerts, remote-access)
 src/tenancy.ts   withTenant(), papéis, lista das tabelas de cliente
 src/lookups.ts   sha256Hex(), busca por hash de token (e estado da credencial) e por slug (funções SECURITY DEFINER)
+src/partitions.ts maintainPartitions(): manutenção diária das partições (cria as futuras, apaga pela retenção)
+src/seed/        seed sintético (`@engemase/db/seed`); scripts/seed.ts é o `db:seed`
 migrations/      0000_init.sql (drizzle-kit) e 0001_rls.sql (MANUAL: papéis, RLS, GRANTs, funções)
                  0002_contract_columns_quality_reversal.sql (drizzle-kit, com o UNIQUE movido para antes da FK)
                  0003_organization_rls_state_lookups.sql (MANUAL: RLS em organization, funções de estado e slug)
@@ -34,6 +40,11 @@ migrations/      0000_init.sql (drizzle-kit) e 0001_rls.sql (MANUAL: papéis, RL
                  0005_member_machine_owner_decisions.sql (drizzle-kit + MANUAL: member_machine com RLS,
                    decisões D1, D5, D11 e D13; liga managed_by_engemase dos clientes existentes)
                  0006_client_limits_machines_required.sql (drizzle-kit: `limits.machines` obrigatório, D1)
+                 0007_w2b_calendar_reject_operator_transit.sql (drizzle-kit: feriados L2, motivos de refugo e
+                   estorno L3, operadores L19, gateway em trânsito L23)
+                 0008_w2b_rls_new_tables_reversal_trigger.sql (MANUAL: RLS/GRANTs das tabelas novas e gatilho
+                   do estorno)
+                 0009_w2b_partitions_maintenance.sql (MANUAL: partições e app.maintain_partitions)
 ```
 
 ## Isolamento por cliente
@@ -86,6 +97,29 @@ Na implantação, criar os usuários de login **por SQL** (não pelo console da 
 
 **Ajustar dados de tabela de cliente numa migração:** com a RLS forçada, o dono das tabelas sem `BYPASSRLS` não enxerga nenhuma linha, e um `UPDATE` simples passa sem fazer nada. Use o padrão da 0005: `ALTER TABLE x NO FORCE ROW LEVEL SECURITY` → `UPDATE` → `ALTER TABLE x FORCE ROW LEVEL SECURITY`, tudo na transação da migração (o migrator do Drizzle com `pg`/node-postgres, neon-serverless ou PGlite aplica numa transação só; o de `neon-http` não usa transação e **não serve para migrar**: uma falha no meio deixaria a tabela sem `FORCE`). O teste de catálogo pega se o `FORCE` não voltar.
 
+## Partições e manutenção diária (W2b)
+
+| Tabela | Partição | Criadas adiante | Retenção |
+|---|---|---|---|
+| `production_minute` | Mensal (`bucket_start`) | 3 meses | 2 anos (D6) |
+| `tag_sample` | Semanal (`at`, semana começa na segunda) | 8 semanas | 90 dias |
+
+- Particionamento **nativo** (RANGE), sem `pg_partman` (o PGlite dos testes não tem a extensão; a rotina é Postgres padrão). Limites em UTC.
+- A 0009 **não copia dados**: a tabela antiga vira a partição `<tabela>_legacy` (de `MINVALUE` até o início do período seguinte ao dado mais novo) e uma tabela-mãe com o mesmo nome, colunas, chave, CHECKs, FKs, RLS e GRANTs fica no lugar. O código anterior continua igual (inclusive `ON CONFLICT` na chave).
+- **Tarefa agendada diária** (L17): `maintainPartitions(db)` (`app.maintain_partitions(now, dry_run)`) cria o período atual e os seguintes e apaga partições inteiras mais velhas que a retenção. Idempotente; devolve as ações para o log. Precisa conectar com o papel **dono das tabelas** (DDL): não é SECURITY DEFINER e ninguém tem EXECUTE (nem o `app_user`). Configuração em `app.partitioned_table`.
+- Gravar além das partições criadas **falha alto** (`no partition of relation … found for row`): a folga de 3 meses / 8 semanas cobre semanas sem a tarefa. Dado antigo (antes da partição atual) cai na `_legacy` enquanto ela existir.
+- Toda partição tem RLS forçada com a política de cliente (`app.enable_tenant_rls`, o catálogo confere) e **nenhum GRANT**: o app acessa só pela tabela-mãe. O drizzle-kit não enxerga partições (para ele são tabelas comuns).
+- Fora, de propósito: `machine_state_event` e `audit_log` têm chave só em `id` (o `/sync` usa `ON CONFLICT (id)`); particionar mudaria a chave. A retenção de 5 anos da auditoria fica para quando houver dados de 5 anos.
+
+## Seed sintético e branch-semente
+
+`src/seed` grava dois clientes de demonstração (`demo-metalurgica`, `demo-plasticos`) com pessoas, unidade, área "Geral", linhas, máquinas, gateway ativo e um "Em trânsito", dispositivos e tags, produtos, turnos, feriados, motivos de parada e de refugo, operadores, regra de alerta e N dias (padrão 7) de `production_minute`, `machine_state_event`, `production_run`, `machine_live` e refugo com um estorno. É o conteúdo do **branch-semente** da Neon, de onde saem os previews (docs/06), e do banco local.
+
+- **Nunca roda em produção:** o `db:seed` exige `ENGEMASE_SEED=sintetico` e recusa `VERCEL_ENV`/`NODE_ENV` = `production`; `seedSynthetic()` recusa banco com cliente cujo slug não começa com `demo-` e conexão sem SUPERUSER/BYPASSRLS.
+- Determinístico (ids por hash do nome lógico, séries com semente por máquina e dia) e idempotente (`ON CONFLICT DO NOTHING`).
+- Imprime o token em claro só dos gateways criados naquela execução (o banco guarda o hash), para apontar o simulador para o banco local.
+- `db:seed` aplica as migrações antes (com `pg`, numa transação só); `--sem-migrar` pula, `--dias N` muda o período.
+
 ## Decisões
 
 - **UUIDv7 gerado no banco** (`uuidv7()` nativo do Postgres 18; Neon e PGlite 0.5 já são 18). Eventos da borda trazem o próprio id.
@@ -99,15 +133,22 @@ Na implantação, criar os usuários de login **por SQL** (não pelo console da 
   - **D5, acesso da Engemase:** sempre liberado com registro. `support_access_grant` nasce `active`, sem estados `requested`/`denied` nem colunas de aprovação. A aprovação de sessões de acesso remoto (`remote_access_*`, D20) não mudou.
   - **D1, cobrança por máquina com planos:** `client_account.plan` (texto) e `limits.machines` (máquinas contratadas). Valores de `limits` são inteiros >= 0 e **`machines` é obrigatório** (`client_account_limits_chk`, 0006; a coluna não tem mais padrão `{}`): todo cliente nasce com as máquinas contratadas, inclusive a "Engemase Lab", e `0` = nenhuma máquina pode ser cadastrada. As outras chaves são opcionais: ausente = sem limite. Preços ficam fora do banco; não há tabela de faturamento.
   - **D38:** RLS por variável de sessão aceita, com o limite descrito em "Isolamento por cliente".
+- **Lacunas do docs/17 (§4) aplicadas no W2b:**
+  - **L2:** `unit_holiday` (feriado por unidade, um por dia): nenhum turno começa nesse dia. O turno pertence ao dia em que começa; mudança de turno é uma linha nova com `valid_from`.
+  - **L3:** `reject_reason` (motivos cadastrados pela Engemase) e, em `quality_entry`, `reject_reason_id`, `reversal_reason` (obrigatório só no estorno) e `operator_id`. Lançamento comum é sempre positivo e soma ao refugo do CLP. Estorno: no máximo um por lançamento (índice único parcial), mesma máquina, quantidade oposta e nunca de outro estorno (gatilho `quality_entry_reversal_trg`, 0008).
+  - **L19:** `unit_operator` (nome e matrícula opcional, única na unidade); `operator_id`/`classified_operator_id` em `quality_entry`, `production_run` e `machine_state_event`.
+  - **L23:** `gateway.in_transit_since`/`in_transit_until` (até 30 dias, `gateway_in_transit_chk`) e `installed_at`. Não é um valor novo de `status`: o gateway em trânsito já está `active` e autentica.
 - **Tabelas do Better Auth declaradas de forma mínima** (`src/schema/auth.ts`); serão geradas/ajustadas pelo Better Auth na W5, mantendo ids `uuid`.
 
 ## Pendências
 
-- **Seed** a partir dos dados simulados do protótipo (`apps/web/lib/mock`): não feito. Caminho sugerido: mover os dados para um pacote compartilhado, mapear os ids de texto (`usr_ana`, `mch_...`) para UUIDs determinísticos e gravar como dono. O seed sintético de `test/fixtures.ts` já cobre todas as tabelas e pode virar a base do branch-semente de preview. Atenção: o mock tem o estado `PLANNED_STOP`, que no banco não é estado bruto (é classificação por motivo).
+- **Seed a partir do mock do protótipo** (`apps/web/lib/mock`): o seed sintético (`src/seed`) já serve ao desenvolvimento e ao branch-semente; usar os mesmos nomes e números do protótipo exigiria mover o mock para um pacote compartilhado. Atenção: o mock tem o estado `PLANNED_STOP`, que no banco não é estado bruto (é classificação por motivo). `oee_shift` não é semeado: sai do cálculo (W7).
+- **Branch-semente na Neon** (N1): criar o branch, rodar `db:seed` nele com um papel com BYPASSRLS e apontar a integração da Vercel para ele.
+- **Rota da tarefa diária de partições** (outro especialista, W7): chamar `maintainPartitions(db)` com uma conexão do dono das tabelas e registrar as ações no log.
 - **Script de migração contra a Neon** (`db:migrate` com `pg`, numa transação só; nunca o migrator de `neon-http`) e bootstrap da organização "Engemase Lab" + primeiro super admin: dependem das contas (N1). O projeto Neon fica em AWS `sa-east-1` (São Paulo, D7).
-- **Particionamento** (`pg_partman`) de `production_minute` e `tag_sample`, e retenção (W2b). Retenção decidida (D6, 12/11/2026): `production_minute` por **2 anos** e `audit_log` por **5 anos** (docs/06, "Volume, particionamento e retenção").
+- **Retenção da auditoria** (5 anos, D6): sem partição (chave em `id`); limpeza a decidir antes de 2031.
 - **Better Auth (W5):** gerar as tabelas definitivas (+ `two_factor`); decidir como "criar conta + membro + escopo na mesma transação" (docs/15, seção 5) convive com o papel `auth_service`.
 - **Console da Engemase:** leituras entre clientes (lista de clientes, frota de gateways) e eventos de plataforma na auditoria precisam de um papel de plataforma próprio (ainda não criado).
 - **Confirmar na Neon** se o papel dono das tabelas tem `BYPASSRLS` (com `FORCE`, sem ele o dono não lê dados de cliente). Dentro de migração, o padrão `NO FORCE` → `UPDATE` → `FORCE` (0005) dispensa o `BYPASSRLS`; backfill e scripts fora de migração ainda precisam dele.
 - `machine_template` e `oee_hour` (F2/opcional) e `remote_access_recording` (Fase C) ainda não existem.
-- **Estorno de qualidade (L3 do docs/17):** o banco garante só que o estorno aponta para lançamento existente do mesmo cliente, com quantidade negativa. Ainda não garante "no máximo um estorno por lançamento", "quantidade igual à do original" nem "não estornar um estorno" (regras entre linhas: na API, ou com índice único parcial em `reverses_id` quando a regra fechar).
+- **Regras de aplicação do W2b** (o banco não garante): turnos sem sobreposição na mesma unidade (L2); prazo do lançamento atrasado e registro do estorno na auditoria (L3); operador da mesma unidade da máquina (L19); fim do trânsito no primeiro `/sync` no cliente e supressão do alerta de offline enquanto `in_transit_until > now()` e `installed_at` nulo (L23).

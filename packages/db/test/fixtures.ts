@@ -35,6 +35,9 @@ export interface SeededTenant {
   readonly alertRuleId: string
   readonly remoteSessionId: string
   readonly qualityEntryId: string
+  readonly holidayId: string
+  readonly rejectReasonId: string
+  readonly unitOperatorId: string
   /** Tokens em claro (o banco só guarda o hash). */
   readonly gatewayToken: string
   readonly enrollmentCode: string
@@ -256,6 +259,21 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
       })
       .returning(),
   )
+  const holiday = first(
+    await db
+      .insert(s.unitHoliday)
+      .values({ organizationId, unitId: unitRow.id, holidayDate: "2026-12-25", name: "Natal" })
+      .returning(),
+  )
+  const rejectReasonRow = first(
+    await db.insert(s.rejectReason).values({ organizationId, code: "RB", name: "Rebarba" }).returning(),
+  )
+  const unitOperatorRow = first(
+    await db
+      .insert(s.unitOperator)
+      .values({ organizationId, unitId: unitRow.id, name: `Operadora ${slug}`, employeeCode: "1042" })
+      .returning(),
+  )
   const reason = first(
     await db
       .insert(s.downtimeReason)
@@ -309,7 +327,15 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
   const quality = first(
     await db
       .insert(s.qualityEntry)
-      .values({ organizationId, machineId: machineRow.id, at: minute, quantity: 3, reason: "Rebarba" })
+      .values({
+        organizationId,
+        machineId: machineRow.id,
+        at: minute,
+        quantity: 3,
+        reason: "Rebarba",
+        rejectReasonId: rejectReasonRow.id,
+        operatorId: unitOperatorRow.id,
+      })
       .returning(),
   )
   await db.insert(s.machineLive).values({
@@ -498,6 +524,9 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
     alertRuleId: rule.id,
     remoteSessionId: session.id,
     qualityEntryId: quality.id,
+    holidayId: holiday.id,
+    rejectReasonId: rejectReasonRow.id,
+    unitOperatorId: unitOperatorRow.id,
     gatewayToken,
     enrollmentCode,
     terminalToken,
