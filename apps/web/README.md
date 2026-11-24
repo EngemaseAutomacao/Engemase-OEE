@@ -109,7 +109,14 @@ Erros esperados saem como `GatewayAdminError` (código + mensagem em português 
 
 ## Tarefas agendadas (`/api/cron/*`, L17)
 
-Lógica em `lib/server/cron/` (`runner.ts` + um arquivo por job); os `route.ts` só repassam. Agendadas no `vercel.json` (horários em UTC):
+Lógica em `lib/server/cron/` (`runner.ts` + um arquivo por job); os `route.ts` só repassam. Horários em UTC:
+
+> **Fase de testes, plano gratuito (Hobby) da Vercel (desde 24/11/2026).** O Hobby recusa o deploy inteiro quando o
+> `vercel.json` tem tarefa que roda mais de uma vez por dia. Por isso `PLANO_VERCEL = "hobby"` em
+> `lib/server/cron/jobs.ts` e o `vercel.json` agenda só `limpeza` (03:30) e `resumo-diario` (só às 10h, sem a
+> 2ª tentativa das 11h). `alertas`, `expiracao` e `vpn` continuam no código, sem agendamento: rodam só à mão (curl
+> abaixo). **Antes de clientes usarem os alertas**, passe o projeto para o Pro, troque `PLANO_VERCEL` para `"pro"`
+> e ponha no `vercel.json` as 5 entradas da tabela (o teste `test/cron/cron.test.ts` confere que os dois batem).
 
 | Rota | Quando | O que faz |
 |---|---|---|

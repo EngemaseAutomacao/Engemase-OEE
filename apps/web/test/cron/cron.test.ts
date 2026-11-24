@@ -1,10 +1,10 @@
 /**
  * Tarefas agendadas (lib/server/cron): segredo, janela única, os 5 jobs da L17 contra o PGlite com
- * as migrações e a RLS, e o `vercel.json` em dia com a lista de jobs.
+ * as migrações e a RLS, e o `vercel.json` em dia com a lista de jobs e o plano da Vercel.
  */
 import { existsSync, readFileSync } from "node:fs"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { CRON_JOBS } from "@/lib/server/cron/jobs"
+import { CRON_JOBS, cronsDoVercel, horarioDiario, PLANO_VERCEL } from "@/lib/server/cron/jobs"
 import { type CronDeps, type CronJob, cronAuthorized, runCronJob } from "@/lib/server/cron/runner"
 import { localDay, minuteWindow } from "@/lib/server/cron/windows"
 import { count, createTestDatabase, EXAMPLE_CONFIG, remapIds, rows, type SeededClient, seedClient, type TestDatabase } from "../gateway/support"
@@ -47,11 +47,11 @@ describe("tarefas agendadas", () => {
   }
 
   describe("rotas e vercel.json", () => {
-    it("o vercel.json agenda exatamente os 5 jobs, cada um com a sua rota", () => {
+    it("o vercel.json agenda o que o plano da Vercel aceita, e cada job tem a sua rota", () => {
       const vercel = JSON.parse(readFileSync(new URL("../../vercel.json", import.meta.url), "utf8")) as {
         crons: { path: string; schedule: string }[]
       }
-      expect(vercel.crons).toEqual(CRON_JOBS.map((j) => ({ path: `/api/cron/${j.name}`, schedule: j.schedule })))
+      expect(vercel.crons).toEqual(cronsDoVercel(PLANO_VERCEL))
       expect(CRON_JOBS.map((j) => j.name)).toEqual(["alertas", "expiracao", "vpn", "limpeza", "resumo-diario"])
       for (const j of CRON_JOBS) {
         const route = new URL(`../../app/api/cron/${j.name}/route.ts`, import.meta.url)
@@ -60,6 +60,19 @@ describe("tarefas agendadas", () => {
         expect(source).toContain(`handleCronRoute(request, "${j.name}")`)
         expect(source).toContain("export const maxDuration = 60")
       }
+    })
+
+    it("plano da Vercel: no Pro vão os 5 jobs; no Hobby, só os de uma vez por dia", () => {
+      expect(cronsDoVercel("pro")).toEqual(CRON_JOBS.map((j) => ({ path: `/api/cron/${j.name}`, schedule: j.schedule })))
+      expect(cronsDoVercel("hobby")).toEqual([
+        { path: "/api/cron/limpeza", schedule: "30 3 * * *" },
+        { path: "/api/cron/resumo-diario", schedule: "0 10 * * *" },
+      ])
+      expect(horarioDiario("* * * * *")).toBeNull()
+      expect(horarioDiario("*/5 * * * *")).toBeNull()
+      expect(horarioDiario("0 * * * *")).toBeNull()
+      expect(horarioDiario("0 10 * * 1")).toBeNull()
+      expect(horarioDiario("0 10,11 * * *")).toBe("0 10 * * *")
     })
 
     it("janelas: minuto, 5 e 15 min, dia em Brasília", () => {
