@@ -2,7 +2,7 @@
  * Limites de taxa da API dos gateways (L21 do docs/17), guardados no Postgres para valer entre as
  * instâncias serverless da Vercel (memória do processo não serve: cada instância contaria sozinha).
  *
- * Algoritmo GCRA (`app.rate_limit_take`, migração 0011 de @engemase/db): uma requisição a cada
+ * Algoritmo GCRA (`app.rate_limit_take`, migração 0010 de @engemase/db): uma requisição a cada
  * `intervalMs`, com até `burst` seguidas. Acima disso: 429 `rate_limited` com `retry_after_s` (e o
  * cabeçalho `Retry-After`), que o agente respeita.
  *

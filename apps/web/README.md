@@ -131,3 +131,22 @@ Lógica em `lib/server/cron/` (`runner.ts` + um arquivo por job); os `route.ts` 
 | `DATABASE_POOL_MAX` | não | Conexões por instância (padrão 5) |
 | `CRON_SECRET` | sim, para os crons | Segredo das rotas `/api/cron/*` (a Vercel envia sozinha) |
 | `RESEND_API_KEY` · `RESUMO_DIARIO_DE` · `RESUMO_DIARIO_PARA` | não | Resumo diário por e-mail (remetente verificado no Resend; destinatários separados por vírgula). Sem elas o resumo não é enviado |
+
+## Login e acesso por cliente (W5)
+
+Better Auth (senha, sessão, 2FA) + autorização nossa ([docs/15](../../docs/15-multi-cliente-e-acesso.md)).
+
+- **Login** (`app/(auth)/login`): a tela do protótipo chama Server Actions (`actions.ts`) que usam `auth.api.*` no servidor. Senha ≥ 12 sem regra de composição; senha nova conferida contra vazamentos (k-anonimato, `lib/server/auth/password.ts`; sem rede, aceita). 5 senhas erradas em 15 min → 15 min bloqueado (`throttle.ts`, tabela `auth_login_throttle`, chave = hash do e-mail). Sessão de 12 h renovada com o uso; "manter conectado" até 30 dias, nunca para a equipe Engemase (`session-policy.ts`).
+- **2FA** (TOTP + 10 códigos de recuperação, plugin two-factor): cadastro em `/conta/seguranca`; obrigatório para a equipe Engemase e o admin do cliente (D14) — sem ele, `requireTenant` manda para o cadastro.
+- **`/api/auth/*` fechado por padrão** (`lib/server/auth/routes.ts`): só `get-session`, `sign-out`, `sign-in/email` e a verificação do 2FA; o teste falha se o Better Auth ganhar rota não classificada.
+- **`requireTenant(slug)`** (`lib/server/access/require-tenant.ts`; para route handlers, `tenantForRequest` em `route.ts`): sessão → cliente da URL → vínculo, papel, escopo, estado do cliente e concessão Engemase, lidos sob RLS (`load.ts`) e decididos por `decideAccess` (`context.ts`, função pura). Sem acesso → 404. Dados de cliente só por funções que recebem o `TenantContext` (`data.ts`) e aplicam o escopo (`scope.ts`). Exemplo real: `GET /api/clientes/{cliente}/maquinas`.
+- **Proxy** (`proxy.ts`): com `AUTH_ENFORCED` ligado, tela do sistema sem cookie de sessão vai para `/login?next=…` (checagem otimista; a autorização é no servidor). As telas do mock ainda não usam `requireTenant` (W8).
+
+| Variável | Para quê |
+|---|---|
+| `AUTH_ENFORCED` | `true` exige login nas telas do sistema; `false` deixa o protótipo navegável. **Sem a variável: ligado em produção (`NODE_ENV=production`, inclusive na Vercel) quando o `BETTER_AUTH_SECRET` existe, e desligado no `next dev`.** Enquanto o login não for configurado na Vercel, a demonstração continua aberta; ao criar o segredo, o login passa a ser exigido (para manter a demonstração aberta mesmo assim até a W8, crie `AUTH_ENFORCED=false`) |
+| `BETTER_AUTH_SECRET` | Segredo (≥ 32 caracteres, `openssl rand -base64 32`), diferente por ambiente. Sem ele o login fica indisponível (com `AUTH_ENFORCED=false`, a tela entra em modo demonstração e vai para `/inicio`) |
+| `BETTER_AUTH_URL` | Endereço canônico (ex.: `https://engemase-oee.vercel.app`); única origem confiável |
+| `AUTH_DATABASE_URL` | Conexão do Better Auth com um usuário do papel `auth_service` (ver packages/db/README.md). Sem ela usa `DATABASE_URL`, o que só funciona em banco local com superusuário |
+
+Testes (`pnpm --filter web test`): `test/access` (isolamento entre clientes, escopo, papéis, Engemase, suspenso, 2FA; rota com login real) e `test/auth` (Better Auth de verdade no PGlite: bloqueio, sessão, 2FA, política de senha, lista de rotas).

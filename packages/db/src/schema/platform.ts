@@ -3,7 +3,7 @@
  * tarefas agendadas (cron).
  *
  * O `app_user` NÃO tem nenhum privilégio nelas: o acesso é só pelas funções SECURITY DEFINER do
- * schema `app` (donas `app_lookup`, migração 0011), que fazem uma operação fechada cada:
+ * schema `app` (donas `app_lookup`, migração 0010), que fazem uma operação fechada cada:
  * - `app.rate_limit_take(chave, intervalo_ms, rajada, agora)`: GCRA (balde furado) numa linha por chave;
  * - `app.rate_limit_purge(antes)`: limpeza das chaves vencidas;
  * - `app.cron_claim(job, chave, agora, prazo_s)` / `app.cron_finish(job, chave, agora, resultado)`;

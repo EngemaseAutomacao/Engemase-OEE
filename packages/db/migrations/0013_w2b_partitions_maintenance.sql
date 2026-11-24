@@ -1,5 +1,5 @@
 -- =============================================================================================
--- 0009 — migração MANUAL (W2b): particionamento das séries temporais e rotina de manutenção das partições.
+-- 0013 — migração MANUAL (W2b): particionamento das séries temporais e rotina de manutenção das partições.
 --
 -- Ver docs/06 ("Volume, particionamento e retenção") e o README de packages/db.
 --

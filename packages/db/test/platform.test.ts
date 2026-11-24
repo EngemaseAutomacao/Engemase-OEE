@@ -1,5 +1,5 @@
 /**
- * Tabelas de plataforma (0010/0011): limitador de taxa e registro dos crons, só pelas funções
+ * Tabelas de plataforma (0009/0010): limitador de taxa e registro dos crons, só pelas funções
  * SECURITY DEFINER; e o histórico de saúde do gateway, que é tabela de cliente.
  */
 import type { Transaction } from "@electric-sql/pglite"

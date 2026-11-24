@@ -202,7 +202,20 @@ describe("catálogo do banco", () => {
     const result = await t.client.query<{ table: string; privilege: string }>(`
       SELECT table_name AS "table", privilege_type AS privilege
       FROM information_schema.role_table_grants
-      WHERE grantee = 'app_user' AND table_name IN ('session', 'account', 'verification')`)
+      WHERE grantee IN ('app_user', 'app_lookup')
+        AND table_name IN ('session', 'account', 'verification', 'two_factor', 'auth_login_throttle')`)
     expect(result.rows).toEqual([])
+  })
+
+  it("auth_service lê e grava as tabelas do login (2FA e bloqueio por tentativas, 0008)", async () => {
+    for (const table of ["two_factor", "auth_login_throttle", "session"]) {
+      for (const privilege of ["SELECT", "INSERT", "UPDATE", "DELETE"]) {
+        const result = await t.client.query<{ ok: boolean }>(
+          `SELECT has_table_privilege('auth_service', $1, $2) AS ok`,
+          [`public.${table}`, privilege],
+        )
+        expect(result.rows[0]?.ok, `${table} ${privilege}`).toBe(true)
+      }
+    }
   })
 })

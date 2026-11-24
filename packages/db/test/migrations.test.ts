@@ -51,7 +51,7 @@ async function useOwnerWithoutBypassRls(client: PGlite): Promise<void> {
     GRANT USAGE ON SCHEMA app TO migration_owner;
     GRANT EXECUTE ON FUNCTION app.enable_tenant_rls(regclass) TO migration_owner;
     -- Na Neon o mesmo dono rodou a 0001: é dono do schema app e membro de app_lookup (a 0001 faz o
-    -- GRANT), o que as migrações que criam funções de busca (0011) precisam.
+    -- GRANT), o que as migrações que criam funções de busca (0010) precisam.
     ALTER SCHEMA app OWNER TO migration_owner;
     GRANT app_lookup TO migration_owner;`)
 }
@@ -93,9 +93,11 @@ describe("migrações", () => {
       "0006_client_limits_machines_required",
       "0007_w2b_calendar_reject_operator_transit",
       "0008_w2b_rls_new_tables_reversal_trigger",
-      "0009_w2b_partitions_maintenance",
-      "0010_gateway_api_w6",
-      "0011_gateway_api_w6_rls",
+      "0009_gateway_api_w6",
+      "0010_gateway_api_w6_rls",
+      "0011_auth_two_factor_session_throttle",
+      "0012_auth_grants",
+      "0013_w2b_partitions_maintenance",
     ])
   })
 

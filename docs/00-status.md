@@ -8,7 +8,7 @@
 - **Protótipo da interface** (`apps/web`, dados simulados): completo para validação com clientes.
 - **Fase 0 de código:** pronta e testada sem contas na nuvem e sem hardware. Contrato, cálculo de OEE, banco com RLS, API real dos gateways, agente Go revisado, simulador de CLP, pacote `.deb`, receita da imagem e CI. Um teste de ponta a ponta liga tudo: simulador → agente → API → banco.
 - **Bloqueios para seguir:** contas (Vercel, Neon, domínio) e hardware de bancada. As decisões foram todas tomadas em 12/11/2026.
-- **O que dá para fazer já e quem faz:** levantamento de 24/11/2026 no [`docs/17` §8](17-backlog-e-pendencias.md#8-levantamento-de-24112026-o-que-falta-e-quem-faz).
+- **O que dá para fazer já e quem faz:** levantamento de 24/11/2026 no [`docs/17` §8](17-backlog-e-pendencias.md#8-levantamento-de-24112026-o-que-falta-e-quem-faz); na mesma data entraram W5 (login e isolamento), W6/W7 (config, comandos, limites e crons), o restante da W2b, a parte de código da W11 e os comandos do gateway (§8.1). Próximo: W8 (trocar o mock pelo banco).
 
 ## Protótipo da interface
 

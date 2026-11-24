@@ -1,5 +1,5 @@
 -- =============================================================================================
--- 0011_gateway_api_w6_rls — migração MANUAL (não gerada pelo drizzle-kit), par da 0010.
+-- 0010_gateway_api_w6_rls — migração MANUAL (não gerada pelo drizzle-kit), par da 0009.
 --
 -- Ver o README de packages/db e a 0001_rls.sql (papéis, funções de contexto e convenções).
 -- Só acrescenta (tabelas novas, GRANTs e funções novas): o código anterior continua funcionando.

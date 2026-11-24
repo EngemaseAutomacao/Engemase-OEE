@@ -1,5 +1,5 @@
 /**
- * Manutenção das partições das séries temporais (migração 0009; docs/06, "Volume, particionamento e
+ * Manutenção das partições das séries temporais (migração 0013; docs/06, "Volume, particionamento e
  * retenção"; L17 do docs/17).
  *
  * `production_minute` é particionada por mês (retenção de 2 anos, D6) e `tag_sample` por semana (90 dias).
@@ -11,7 +11,7 @@
  */
 import { type SQL, sql } from "drizzle-orm"
 
-/** Tabelas particionadas e as regras gravadas em `app.partitioned_table` pela 0009 (para consulta/documentação). */
+/** Tabelas particionadas e as regras gravadas em `app.partitioned_table` pela 0013 (para consulta/documentação). */
 export const PARTITIONED_TABLES = {
   production_minute: { period: "month", premake: 3, retention: "2 years" },
   tag_sample: { period: "week", premake: 8, retention: "90 days" },

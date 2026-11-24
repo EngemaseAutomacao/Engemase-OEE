@@ -1,5 +1,5 @@
 /**
- * Particionamento das séries temporais (migração 0009) e manutenção diária (`app.maintain_partitions`,
+ * Particionamento das séries temporais (migração 0013) e manutenção diária (`app.maintain_partitions`,
  * `maintainPartitions()`): partições futuras, retenção, idempotência, RLS pela tabela-mãe e conversão de
  * uma tabela que já tinha dados (sem copiar nem perder linhas, com um dono SEM BYPASSRLS, como na Neon).
  */
@@ -222,20 +222,23 @@ describe("partições das séries temporais", () => {
   })
 })
 
-describe("0009 aplicada sobre tabelas que já tinham dados", () => {
+/** A migração das partições é sempre a última: o teste aplica todas as anteriores, grava dados e só então a aplica. */
+const PARTITIONS_TAG = "0013_w2b_partitions_maintenance"
+
+describe("0013 (partições) aplicada sobre tabelas que já tinham dados", () => {
   let folder: string
   let client: PGlite
 
   beforeAll(async () => {
     interface Journal {
-      readonly entries: readonly { readonly idx: number }[]
+      readonly entries: readonly { readonly idx: number; readonly tag: string }[]
     }
     const journal = JSON.parse(readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8")) as Journal
-    folder = mkdtempSync(join(tmpdir(), "engemase-db-ate-0008-"))
+    folder = mkdtempSync(join(tmpdir(), "engemase-db-antes-particoes-"))
     cpSync(MIGRATIONS_FOLDER, folder, { recursive: true })
     writeFileSync(
       join(folder, "meta", "_journal.json"),
-      JSON.stringify({ ...journal, entries: journal.entries.filter((e) => e.idx <= 8) }, null, 2),
+      JSON.stringify({ ...journal, entries: journal.entries.filter((e) => e.tag !== PARTITIONS_TAG) }, null, 2),
     )
     client = new PGlite()
     await migrate(drizzle({ client }), { migrationsFolder: folder })
@@ -275,8 +278,10 @@ describe("0009 aplicada sobre tabelas que já tinham dados", () => {
       $$;
       ALTER SCHEMA drizzle OWNER TO migration_owner;
       GRANT CREATE ON SCHEMA public TO migration_owner;
-      GRANT USAGE, CREATE ON SCHEMA app TO migration_owner;
-      GRANT EXECUTE ON FUNCTION app.enable_tenant_rls(regclass) TO migration_owner;`)
+      GRANT EXECUTE ON FUNCTION app.enable_tenant_rls(regclass) TO migration_owner;
+      -- Na Neon o mesmo dono rodou a 0001: é dono do schema app e membro de app_lookup.
+      ALTER SCHEMA app OWNER TO migration_owner;
+      GRANT app_lookup TO migration_owner;`)
     await client.exec("SET ROLE migration_owner")
     try {
       await migrate(drizzle({ client }), { migrationsFolder: MIGRATIONS_FOLDER })

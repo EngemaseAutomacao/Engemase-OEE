@@ -211,7 +211,7 @@ Estimativa para **100 máquinas**:
 
 **Retenção decidida (D6, 12/11/2026):** dados por minuto por 2 anos e auditoria por 5 anos. As demais linhas da tabela continuam como sugestão. Retenção diferente por cliente ou por plano não foi decidida.
 
-**Implementado (W2b, migração 0009):** particionamento nativo (sem pg_partman, que o banco dos testes não tem) de `production_minute` (mensal) e `tag_sample` (semanal). Uma tarefa agendada diária chama `app.maintain_partitions()` (`maintainPartitions()` em `packages/db`), que cria as partições dos próximos períodos (3 meses / 8 semanas) e apaga as que passaram da retenção, com o papel dono das tabelas. Detalhes no README de `packages/db`.
+**Implementado (W2b, migração 0013):** particionamento nativo (sem pg_partman, que o banco dos testes não tem) de `production_minute` (mensal) e `tag_sample` (semanal). Uma tarefa agendada diária chama `app.maintain_partitions()` (`maintainPartitions()` em `packages/db`), que cria as partições dos próximos períodos (3 meses / 8 semanas) e apaga as que passaram da retenção, com o papel dono das tabelas. Detalhes no README de `packages/db`.
 
 ## Ambientes e migrações
 

@@ -5,7 +5,7 @@
  * Todas com `organization_id` (desnormalizado da máquina) e FK composta com a máquina: o gateway de
  * um cliente não consegue gravar em máquina de outro.
  *
- * Particionamento (W2b, migração manual 0009): `production_minute` por mês e `tag_sample` por semana
+ * Particionamento (W2b, migração manual 0013): `production_minute` por mês e `tag_sample` por semana
  * (RANGE na coluna de tempo, que já faz parte da chave primária). As partições futuras e a limpeza pela
  * retenção são feitas por `app.maintain_partitions()` (`maintainPartitions()` em `src/partitions.ts`),
  * chamada por uma tarefa agendada diária. O drizzle-kit não enxerga o particionamento: para ele, as

@@ -20,7 +20,7 @@ Os testes aplicam as migrações num banco vazio e provam, com dois clientes com
 | `test/composite-fk.test.ts` | Impossível ligar o gateway de A a uma máquina de B (mesmo como dono do banco); tag só em máquina ligada ao gateway do dispositivo; gateway e máquina da mesma unidade; escopo de pessoa (`member_unit`, `member_machine`) só com unidade/máquina do mesmo cliente; estorno de qualidade só de lançamento existente do mesmo cliente |
 | `test/lookups.test.ts` | Busca por hash de token antes de saber o cliente (gateway, ativação, terminal, tokens próprios), **estado** da credencial (código usado/vencido, token revogado/rotacionado) e slug da URL → cliente |
 | `test/migrations.test.ts` | Migrações aplicam do zero e são idempotentes; **schema TS e migrações não divergem** (falha se esquecerem o `db:generate`); a 0005 liga `managed_by_engemase` dos clientes que já existiam mesmo com um dono de tabelas **sem `BYPASSRLS`** (como na Neon); a 0006 para se algum cliente não tiver `limits.machines` |
-| `test/partitions.test.ts` | `production_minute` (mês) e `tag_sample` (semana) particionadas, com chave, CHECKs e FKs na tabela-mãe; `ON CONFLICT` na chave funciona; RLS pela tabela-mãe e partição sem GRANT; `maintainPartitions()` cria os períodos seguintes, é idempotente, tem dry-run e apaga só partições inteiras além da retenção; a 0009 sobre tabela com dados mantém todas as linhas (sem cópia) com dono **sem `BYPASSRLS`** |
+| `test/partitions.test.ts` | `production_minute` (mês) e `tag_sample` (semana) particionadas, com chave, CHECKs e FKs na tabela-mãe; `ON CONFLICT` na chave funciona; RLS pela tabela-mãe e partição sem GRANT; `maintainPartitions()` cria os períodos seguintes, é idempotente, tem dry-run e apaga só partições inteiras além da retenção; a 0013 sobre tabela com dados mantém todas as linhas (sem cópia) com dono **sem `BYPASSRLS`** |
 | `test/calendar-quality-operators.test.ts` | Tabelas novas do W2b (`unit_holiday`, `reject_reason`, `unit_operator`): RLS por cliente (SELECT/INSERT/UPDATE/DELETE), FKs compostas (inclusive motivo e operador em `quality_entry`, `production_run`, `machine_state_event`), unicidades; estorno de refugo (motivo obrigatório, quantidade oposta, mesma máquina, um só, não estorna estorno); gateway "Em trânsito" (até 30 dias) |
 | `test/seed.test.ts` | Seed sintético só com `ENGEMASE_SEED=sintetico` e fora de produção; recusa banco com cliente real e conexão sem `BYPASSRLS`; determinístico, idempotente e respeitando a RLS |
 | `test/enums.test.ts` | "Enums" e faixas do banco iguais aos de `@engemase/contracts` (inclusive `fault_code` uint32 em `bigint` e o formato do slug do cliente, `org` do /enroll); campos de minuto/live do contrato têm coluna; CHECKs recusam valores inválidos (escopo `machines` aceito, admin só com `all`, concessão de suporte sem aprovação, limites inteiros >= 0 com `machines` obrigatório) |
@@ -44,11 +44,15 @@ migrations/      0000_init.sql (drizzle-kit) e 0001_rls.sql (MANUAL: papéis, RL
                    estorno L3, operadores L19, gateway em trânsito L23)
                  0008_w2b_rls_new_tables_reversal_trigger.sql (MANUAL: RLS/GRANTs das tabelas novas e gatilho
                    do estorno)
-                 0009_w2b_partitions_maintenance.sql (MANUAL: partições e app.maintain_partitions)
-                 0010_gateway_api_w6.sql (drizzle-kit: gateway.uplink, alert_rule.system_key,
+                 0009_gateway_api_w6.sql (drizzle-kit: gateway.uplink, alert_rule.system_key,
                    gateway_health_sample, api_rate_limit, cron_run)
-                 0011_gateway_api_w6_rls.sql (MANUAL: RLS de gateway_health_sample; funções do
+                 0010_gateway_api_w6_rls.sql (MANUAL: RLS de gateway_health_sample; funções do
                    limitador de taxa e dos crons, donas app_lookup)
+                 0011_auth_two_factor_session_throttle.sql (drizzle-kit: two_factor, auth_login_throttle,
+                   session.remember_me/last_active_at)
+                 0012_auth_grants.sql (MANUAL: tabelas novas do login só para auth_service)
+                 0013_w2b_partitions_maintenance.sql (MANUAL: partições e app.maintain_partitions; fica por
+                   último porque o teste a aplica sobre um banco já com dados)
 ```
 
 ## Isolamento por cliente
@@ -128,7 +132,7 @@ GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE;
 | `tag_sample` | Semanal (`at`, semana começa na segunda) | 8 semanas | 90 dias |
 
 - Particionamento **nativo** (RANGE), sem `pg_partman` (o PGlite dos testes não tem a extensão; a rotina é Postgres padrão). Limites em UTC.
-- A 0009 **não copia dados**: a tabela antiga vira a partição `<tabela>_legacy` (de `MINVALUE` até o início do período seguinte ao dado mais novo) e uma tabela-mãe com o mesmo nome, colunas, chave, CHECKs, FKs, RLS e GRANTs fica no lugar. O código anterior continua igual (inclusive `ON CONFLICT` na chave).
+- A 0013 **não copia dados**: a tabela antiga vira a partição `<tabela>_legacy` (de `MINVALUE` até o início do período seguinte ao dado mais novo) e uma tabela-mãe com o mesmo nome, colunas, chave, CHECKs, FKs, RLS e GRANTs fica no lugar. O código anterior continua igual (inclusive `ON CONFLICT` na chave).
 - **Tarefa agendada diária** (L17): `maintainPartitions(db)` (`app.maintain_partitions(now, dry_run)`) cria o período atual e os seguintes e apaga partições inteiras mais velhas que a retenção. Idempotente; devolve as ações para o log. Precisa conectar com o papel **dono das tabelas** (DDL): não é SECURITY DEFINER e ninguém tem EXECUTE (nem o `app_user`). Configuração em `app.partitioned_table`.
 - Gravar além das partições criadas **falha alto** (`no partition of relation … found for row`): a folga de 3 meses / 8 semanas cobre semanas sem a tarefa. Dado antigo (antes da partição atual) cai na `_legacy` enquanto ela existir.
 - Toda partição tem RLS forçada com a política de cliente (`app.enable_tenant_rls`, o catálogo confere) e **nenhum GRANT**: o app acessa só pela tabela-mãe. O drizzle-kit não enxerga partições (para ele são tabelas comuns).
@@ -161,7 +165,7 @@ GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE;
   - **L3:** `reject_reason` (motivos cadastrados pela Engemase) e, em `quality_entry`, `reject_reason_id`, `reversal_reason` (obrigatório só no estorno) e `operator_id`. Lançamento comum é sempre positivo e soma ao refugo do CLP. Estorno: no máximo um por lançamento (índice único parcial), mesma máquina, quantidade oposta e nunca de outro estorno (gatilho `quality_entry_reversal_trg`, 0008).
   - **L19:** `unit_operator` (nome e matrícula opcional, única na unidade); `operator_id`/`classified_operator_id` em `quality_entry`, `production_run` e `machine_state_event`.
   - **L23:** `gateway.in_transit_since`/`in_transit_until` (até 30 dias, `gateway_in_transit_chk`) e `installed_at`. Não é um valor novo de `status`: o gateway em trânsito já está `active` e autentica.
-- **Tabelas do Better Auth declaradas de forma mínima** (`src/schema/auth.ts`); serão geradas/ajustadas pelo Better Auth na W5, mantendo ids `uuid`.
+- **Tabelas do Better Auth** (`src/schema/auth.ts`), ids `uuid`, conferidas pelo próprio Better Auth na partida (`validateSchema`). W5: `two_factor` (plugin two-factor), `auth_login_throttle` (bloqueio depois de 5 senhas erradas) e `session.remember_me`/`session.last_active_at` (0011, drizzle-kit); só o `auth_service` lê e grava (0012, manual).
 
 ## Pendências
 
@@ -170,7 +174,8 @@ GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE;
 - **Rota da tarefa diária de partições** (outro especialista, W7): chamar `maintainPartitions(db)` com uma conexão do dono das tabelas e registrar as ações no log.
 - **Script de migração contra a Neon** (`db:migrate` com `pg`, numa transação só; nunca o migrator de `neon-http`) e bootstrap da organização "Engemase Lab" + primeiro super admin: dependem das contas (N1). O projeto Neon fica em AWS `sa-east-1` (São Paulo, D7).
 - **Retenção da auditoria** (5 anos, D6): sem partição (chave em `id`); limpeza a decidir antes de 2031.
-- **Better Auth (W5):** gerar as tabelas definitivas (+ `two_factor`); decidir como "criar conta + membro + escopo na mesma transação" (docs/15, seção 5) convive com o papel `auth_service`.
+- **Better Auth (W5):** login, sessão, bloqueio e 2FA feitos (apps/web/lib/server/auth). Falta o fluxo "criar conta + membro + escopo na mesma transação" (docs/15, seção 5) e como ele convive com o papel `auth_service`. Esse fluxo deve achar a pessoa pelo e-mail no servidor e nunca aceitar `user_id` do navegador (revisão W11: o `app_user` consegue gravar `member` com qualquer `user_id`).
+- **Usuários de login na implantação:** o do Better Auth (`AUTH_DATABASE_URL`) precisa HERDAR `auth_service` (`CREATE ROLE auth_login LOGIN PASSWORD '…' IN ROLE auth_service;`), porque o Better Auth não troca de papel por consulta. O do app (`DATABASE_URL`) pode ser `NOINHERIT` com `GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE`: a camada de acesso sempre roda em `withTenant` (`SET LOCAL ROLE app_user`), inclusive a busca do slug. Testado localmente assim (W5).
 - **Console da Engemase:** leituras entre clientes (lista de clientes, frota de gateways) e eventos de plataforma na auditoria precisam de um papel de plataforma próprio (ainda não criado).
 - **Confirmar na Neon** se o papel dono das tabelas tem `BYPASSRLS` (com `FORCE`, sem ele o dono não lê dados de cliente). Dentro de migração, o padrão `NO FORCE` → `UPDATE` → `FORCE` (0005) dispensa o `BYPASSRLS`; backfill e scripts fora de migração ainda precisam dele.
 - `machine_template` e `oee_hour` (F2/opcional) e `remote_access_recording` (Fase C) ainda não existem.
