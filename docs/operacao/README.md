@@ -25,6 +25,8 @@ Documentação de operação da plataforma Engemase OEE e do gateway (Seeed reCo
 | [bloco-oee-v1.md](bloco-oee-v1.md) | Especificação formal v1 do bloco OEE padrão Engemase (mantida pela D26) e template de tags do gateway | Automação, engenharia, campo |
 | [FB_OEE_ENGEMASE.st](FB_OEE_ENGEMASE.st) | Bloco de função IEC 61131-3 (ST) que monta o bloco OEE no CLP, com notas de portabilidade (TIA Portal, Studio 5000, Machine Expert, Automation Builder) | Automação |
 | [adaptacoes-por-fabricante.md](adaptacoes-por-fabricante.md) | Como expor o bloco por Modbus TCP/RTU em cada marca de CLP: Siemens, Schneider, Rockwell e ABB primeiro, com fontes oficiais; depois as outras marcas | Automação, campo |
+| [poc-100-gateways.md](poc-100-gateways.md) | PoC de carga da API dos gateways (W3): N gateways simulados, latência e erros; roda hoje local e, com a Neon, contra o preview da Vercel | Engenharia |
+| [protecao-da-main.md](protecao-da-main.md) | Proteção da `main` no GitHub (N1/W1): passo a passo com os checks obrigatórios do CI | Administrador do repositório |
 
 ## 2. Marcações usadas
 
