@@ -172,6 +172,33 @@
       }
     },
     {
+      "id": "01a1cab3-7a10-7c11-9a21-3c5d7e9f1a2b",
+      "finished_at": "2026-11-11T13:02:07.303Z",
+      "duration_ms": 3,
+      "type": "log.level",
+      "status": "ok",
+      "result": {
+        "level": "debug",
+        "previous": "info",
+        "until": "2026-11-11T13:17:07.000Z"
+      }
+    },
+    {
+      "id": "01a1cab3-7b10-7d22-8b32-4d6e8f0a2b3c",
+      "finished_at": "2026-11-11T13:02:07.480Z",
+      "duration_ms": 180,
+      "type": "logs.upload",
+      "status": "ok",
+      "result": {
+        "source": "journald",
+        "lines": [
+          "2026-11-11T13:01:42Z INFO máquina mudou de estado machine=Injetora 03 de=RUNNING para=FAULT",
+          "2026-11-11T13:02:05Z INFO /sync ok ack_seq=18245 itens=15"
+        ],
+        "truncated": false
+      }
+    },
+    {
       "id": "01a1cab3-7910-7e62-8c88-888f9222f5d9",
       "finished_at": "2026-11-11T13:02:07.320Z",
       "duration_ms": 20,

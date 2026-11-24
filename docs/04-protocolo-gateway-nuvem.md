@@ -158,7 +158,7 @@ Todo comando traz `id`, `type`, `payload`, `expires_at` e, opcionalmente, `issue
 | `modbus.scan` | Varre unit ids de um barramento RS-485 ou uma faixa de registradores, para ajudar no comissionamento | 10 min | 120 s | F2 (contrato pronto) |
 | `vpn.enable` · `vpn.disable` · `vpn.status` | Sessão de acesso remoto sob demanda, com aprovação assinada ([12](12-acesso-remoto-vpn.md)) | 5 min · 1 h · 2 min | 60 s · 30 s · 10 s | F2 (contrato pronto) |
 | `ot.forward.open` · `ot.forward.close` | Encaminhamento temporário para um CLP pela VPN (portas sugeridas 502, 102, 44818) | 5 min · 1 h | 30 s | F2 (contrato pronto) |
-| `logs.upload` · `log.level` | Envio das últimas linhas de log e nível de log, versões mínimas junto do OTA mínimo (D29) | — | — | M4b (fora do contrato v1, entram como campos novos) |
+| `log.level` · `logs.upload` | Nível de log por um tempo (`level`, `duration_s` 60–3600, padrão 900 → `level`, `previous`, `until`) · últimas linhas do journald (`lines` 1–2000, padrão 500; `since_s` até 7 dias → `source`, `lines`, `truncated`; até 256 KiB) | 10 min · 10 min | 10 s · 30 s | MVP (tipos novos e compatíveis da v1, 24/11/2026) |
 | `agent.update` · `token.rotate` | Atualização comandada pela nuvem e rotação de credencial. No MVP, o OTA mínimo é por consulta do `oee-updater` a `/releases/latest` | — | — | F2 (fora do contrato v1) |
 
 **Resultados** (`command_results[]`): sempre com `id`, `type` e `status`. `ok` traz `result` tipado pelo `type`; `error`, `expired` e `rejected` trazem `error.code`. Um tipo que o agente não conhece ou ainda não implementa (os marcados F2, no agente do MVP) volta como `rejected` com `unsupported`, sem travar o `/sync`. Códigos de erro de comando: `unsupported`, `invalid_payload`, `expired`, `timeout`, `device_not_found`, `target_not_allowed`, `bus_not_found`, `bus_pause_required`, `port_unavailable`, `connection_failed`, `read_timeout`, `modbus_exception`, `decode_error`, `config_fetch_failed`, `config_invalid`, `policy_denied`, `approval_invalid`, `session_conflict`, `session_not_found`, `vpn_failed`, `internal_error`.
@@ -184,7 +184,7 @@ Devolve a config completa do gateway com `ETag`; com `If-None-Match` igual à ve
 | `minutes` | `production_minute` (inclui `good`, quando o CLP tem contador de boas) | PK `(machine_id, bucket_start)` → upsert (a borda só envia minutos fechados) |
 | `live` | `machine_live` (uma linha por máquina, com `speed`) | Upsert, só se `at` for mais novo que o gravado |
 | `samples` | `tag_sample` (particionada, retenção curta) | PK `(tag_id, at)` → `DO NOTHING` |
-| `agent`, `devices`, `buses` | `gateway` e `gateway_device_status` (última foto). Histórico de saúde resumido: F1 | Upsert |
+| `agent`, `devices`, `buses` | `gateway` e `gateway_device_status` (última foto) e `gateway_health_sample` (histórico resumido: uma linha a cada 5 min com máximos, mínimos e contagem de `/sync`; 30 dias) | Upsert |
 | `command_results` | `gateway_command` | Por `id` |
 
 Além disso:
@@ -194,10 +194,11 @@ Além disso:
 - A API valida que cada `machine_id`, `tag_id`, `device_id` e id de comando pertence ao gateway autenticado (vínculo `gateway_machine`, com `organization_id` e chaves compostas). Um gateway nunca escreve em máquina de outro gateway ou de outra organização.
   - Nos itens **da fila** (eventos, minutos, amostras), uma referência alheia devolve `400 unknown_reference` com o caminho do item, para o agente isolá-lo.
   - Na **foto do ciclo** (`live`, `devices`, `command_results`), a referência alheia é **ignorada em silêncio**: o agente não tem como isolar esses itens, e um 400 travaria a fila inteira.
-- Timestamps no futuro além de `server_time` + 2 min são rejeitados (inclusive em `live`). Um minuto reenviado com valores diferentes é atualizado e a versão anterior vai para o `audit_log`; o **alerta** dessa reescrita é da F1.
+- Timestamps no futuro além de `server_time` + 2 min são rejeitados (inclusive em `live`). Um minuto reenviado com valores diferentes é atualizado, a versão anterior vai para o `audit_log` e abre (ou soma em) um **alerta** por máquina para a equipe Engemase (regra do sistema `minute_rewritten`, resolvida sozinha depois de 24 h sem reescrita nova).
 - **Comandos:** cada resposta leva até 20 comandos abertos; os não respondidos são reenviados (o agente descarta repetidos pelo `id`). Comando vencido vira `expired`. Comando que não passa no schema do contrato (tipo fora da v1, payload inválido, validade acima de 24 h) é marcado `rejected` na nuvem e nunca é enviado.
 - **`next_sync_s`:** 1 enquanto houver comando aberto com menos de 5 min; senão, o `sync_interval_s` da config publicada (padrão 10). O modo interativo da tela de comissionamento aberta é da F1.
-- **Ainda não implementado na API:** `429` (fica com o Firewall da Vercel) e `409 config_outdated`.
+- **`409 config_outdated`:** um item da fila cita máquina, tag ou sessão fora do gateway **e** o agente está numa config anterior à publicada (`agent.config_version` < `config.latest_version`) sem tê-la recusado (`config_status` da versão publicada em `rejected`/`reverted`). O lote não é gravado; o agente baixa a config e reenvia. Com a config em dia (ou recusada), a resposta continua `400 unknown_reference`, para o agente isolar o item.
+- **Limites de taxa** (guardados no Postgres, valem entre as instâncias da Vercel): `/sync` 60 por minuto por gateway (rajada de 10); `/config` 30 por minuto por gateway (rajada de 5); `/enroll` 10 por hora por IP e 5 tentativas por código (uma nova a cada 4,8 h). Acima disso, `429 rate_limited` com `retry_after_s` e `Retry-After`. Requisição sem token válido leva `401` antes de contar.
 - **Suspensão do cliente não interrompe a ingestão:** o gateway continua enviando e nada se perde ([15](15-multi-cliente-e-acesso.md#6-ciclo-de-vida-do-cliente)).
 
 ## Erros e retentativas

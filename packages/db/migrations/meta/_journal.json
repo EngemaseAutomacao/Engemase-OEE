@@ -68,8 +68,22 @@
     {
       "idx": 9,
       "version": "7",
-      "when": 1795551351410,
-      "tag": "0009_w2b_partitions_maintenance",
+      "when": 1795553612022,
+      "tag": "0009_gateway_api_w6",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795553612929,
+      "tag": "0010_gateway_api_w6_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795553613806,
+      "tag": "0011_w2b_partitions_maintenance",
       "breakpoints": true
     }
   ]

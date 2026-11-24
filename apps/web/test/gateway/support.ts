@@ -66,9 +66,12 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   return { client, db }
 }
 
-/** Dependências dos handlers para os testes. */
+/**
+ * Dependências dos handlers para os testes. Sem limite de taxa (os testes fazem muitas chamadas com
+ * o relógio parado); `test/gateway/rate-limit.test.ts` liga os limites de propósito.
+ */
 export function deps(t: TestDatabase, now?: Date): GatewayApiDeps {
-  return { db: t.db, ...(now !== undefined ? { now: () => now } : {}), logError: () => undefined }
+  return { db: t.db, ...(now !== undefined ? { now: () => now } : {}), logError: () => undefined, rateLimits: null }
 }
 
 // ---------------------------------------------------------------------------

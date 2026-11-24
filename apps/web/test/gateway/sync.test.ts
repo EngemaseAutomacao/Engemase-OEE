@@ -456,7 +456,7 @@ describe("POST /sync", () => {
     expect(statuses).toEqual([
       { status: "error", n: 1 },
       { status: "expired", n: 1 },
-      { status: "ok", n: 10 },
+      { status: "ok", n: 12 },
       { status: "rejected", n: 1 },
     ])
   })

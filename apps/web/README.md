@@ -93,3 +93,41 @@ Primeiro código real de servidor: `enroll`, `sync` e `config` ([docs/04](../../
 - Lógica em `lib/server/gateway/` (sem Next.js: recebe `Request` e um banco do Drizzle e devolve `Response`); os `app/api/gateway/v1/*/route.ts` só repassam.
 - Banco: `DATABASE_URL` (Neon com pooler; usuário membro de `app_user`) e, opcional, `DATABASE_POOL_MAX` (padrão 5). Sem `DATABASE_URL`, as rotas respondem 503 e o build não conecta em nada.
 - Toda leitura/escrita de um gateway roda em `withTenant()` (`app_user` + `app.org_id` do gateway autenticado, sob RLS); o token é buscado pelo hash antes (`app.resolve_gateway_token`).
+- **Limites de taxa (L21)** em `rate-limit.ts`, guardados no Postgres (`app.rate_limit_take`, GCRA), para valer entre instâncias serverless: `/sync` 60/min por gateway (rajada 10), `/config` 30/min (rajada 5), `/enroll` 10/h por IP e 5 tentativas por código. Acima disso, `429 rate_limited` com `retry_after_s` e `Retry-After`.
+- **`409 config_outdated`** no `/sync`: referência fora do gateway com o agente numa config anterior à publicada (e sem tê-la recusado); senão `400 unknown_reference`.
+- **Histórico de saúde** em `gateway_health_sample` (janela de 5 min) e **alerta de minuto reescrito** (regra do sistema `minute_rewritten`, `lib/server/alerts/system.ts`).
+
+### Operações da web sobre os gateways (sem tela ainda; chamadas pelas Server Actions da W8)
+
+| Função | Arquivo | O que faz |
+|---|---|---|
+| `publishGatewayConfig` | `lib/server/gateway/publish.ts` | Monta a config do contrato a partir do cadastro, valida e grava a próxima versão (sem mudança: `unchanged`) |
+| `createActivationCode` | `lib/server/gateway/activation.ts` | Código ABCD-1234 de 24 h (só o hash no banco); invalida os anteriores não usados |
+| `enqueueGatewayCommand` · `getGatewayCommand` · `cancelGatewayCommand` | `lib/server/gateway/commands.ts` | Fila de comandos: valida pelo contrato, entrega no `/sync`, guarda o resultado |
+
+Erros esperados saem como `GatewayAdminError` (código + mensagem em português + problemas por campo). Quem chama confere antes o login e a permissão (W5) e passa o `actor` para a auditoria.
+
+## Tarefas agendadas (`/api/cron/*`, L17)
+
+Lógica em `lib/server/cron/` (`runner.ts` + um arquivo por job); os `route.ts` só repassam. Agendadas no `vercel.json` (horários em UTC):
+
+| Rota | Quando | O que faz |
+|---|---|---|
+| `/api/cron/alertas` | 1 min | Gateway sem `/sync` há mais de 6 min → alerta crítico (resolve ao voltar); minuto reescrito resolve em 24 h |
+| `/api/cron/expiracao` | 5 min | Comandos, concessões de suporte e token anterior vencidos |
+| `/api/cron/vpn` | 15 min | Pedidos de acesso sem decisão (24 h); `vpn.disable`/`ot.forward.close` para sessões e encaminhamentos vencidos |
+| `/api/cron/limpeza` | 03:30 UTC | Limitador, histórico dos crons, saúde (30 dias), comandos (90 dias), códigos antigos; partições pendentes (W2b) |
+| `/api/cron/resumo-diario` | 10h e 11h UTC | Resumo por cliente para a equipe Engemase pelo Resend (a 2ª chamada só envia se a 1ª falhou) |
+
+- Protegidas por `CRON_SECRET` (a Vercel manda `Authorization: Bearer <CRON_SECRET>`): sem a variável, 503; segredo errado, 401.
+- Uma execução por janela (`cron_run`, `app.cron_claim`): chamada repetida responde `skipped`; erro libera a janela.
+- Para rodar à mão: `curl -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/cron/limpeza`.
+
+### Variáveis de ambiente
+
+| Variável | Obrigatória | Uso |
+|---|---|---|
+| `DATABASE_URL` | sim | Banco (ver acima) |
+| `DATABASE_POOL_MAX` | não | Conexões por instância (padrão 5) |
+| `CRON_SECRET` | sim, para os crons | Segredo das rotas `/api/cron/*` (a Vercel envia sozinha) |
+| `RESEND_API_KEY` · `RESUMO_DIARIO_DE` · `RESUMO_DIARIO_PARA` | não | Resumo diário por e-mail (remetente verificado no Resend; destinatários separados por vírgula). Sem elas o resumo não é enviado |

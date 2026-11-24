@@ -167,6 +167,12 @@ describe("catálogo do banco", () => {
   it("as funções SECURITY DEFINER pertencem a app_lookup e fixam o search_path", async () => {
     const functions = await securityDefinerFunctions(t.client)
     expect(functions.map((f) => f.name)).toEqual([
+      "cron_claim",
+      "cron_finish",
+      "cron_organizations",
+      "cron_purge",
+      "rate_limit_purge",
+      "rate_limit_take",
       "resolve_account_token",
       "resolve_gateway_enrollment",
       "resolve_gateway_enrollment_state",
@@ -183,7 +189,7 @@ describe("catálogo do banco", () => {
 
   it("as funções SECURITY DEFINER só podem ser executadas pelo app_user (nunca PUBLIC)", async () => {
     const executors = await securityDefinerFunctionExecutors(t.client)
-    expect(executors.length).toBe(7)
+    expect(executors.length).toBe(13)
     for (const f of executors) expect(f.executors, f.name).toBe("app_lookup,app_user")
     // auth_service não resolve token nem slug (não precisa: lê organization pela própria política).
     const authCanExecute = await t.client.query<{ n: number }>(`

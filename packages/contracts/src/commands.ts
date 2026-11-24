@@ -49,6 +49,8 @@ export const COMMAND_TYPES = [
   "vpn.status",
   "ot.forward.open",
   "ot.forward.close",
+  "log.level",
+  "logs.upload",
 ] as const
 export const CommandTypeSchema = z.enum(COMMAND_TYPES)
 export type CommandType = z.infer<typeof CommandTypeSchema>
@@ -289,6 +291,29 @@ export const OtForwardOpenCommandSchema = command("ot.forward.open", OtForwardOp
 export const OtForwardCloseCommandSchema = command("ot.forward.close", OtForwardClosePayloadSchema)
 
 /** Comando tipado (união por `type`). É o que a nuvem gera. */
+/**
+ * log.level — muda o nível de log do agente por um tempo (depois volta ao da config local).
+ * `duration_s` padrão: 900 s.
+ */
+export const LogLevelSchema = z.enum(["debug", "info", "warn", "error"])
+export type LogLevel = z.infer<typeof LogLevelSchema>
+
+export const LogLevelPayloadSchema = z.object({
+  level: LogLevelSchema,
+  duration_s: z.int().min(60).max(3600).optional().describe("Por quanto tempo vale o nível (padrão: 900 s)"),
+})
+export type LogLevelPayload = z.infer<typeof LogLevelPayloadSchema>
+
+/** logs.upload — envia as últimas linhas do log do agente (journald), no resultado do comando. */
+export const LogsUploadPayloadSchema = z.object({
+  lines: z.int().min(1).max(2000).optional().describe("Quantas linhas (padrão: 500)"),
+  since_s: z.int().min(1).max(604_800).optional().describe("Só as linhas dos últimos N segundos"),
+})
+export type LogsUploadPayload = z.infer<typeof LogsUploadPayloadSchema>
+
+export const LogLevelCommandSchema = command("log.level", LogLevelPayloadSchema)
+export const LogsUploadCommandSchema = command("logs.upload", LogsUploadPayloadSchema)
+
 export const CommandSchema = z.discriminatedUnion("type", [
   TagReadCommandSchema,
   DeviceTestCommandSchema,
@@ -300,6 +325,8 @@ export const CommandSchema = z.discriminatedUnion("type", [
   VpnStatusCommandSchema,
   OtForwardOpenCommandSchema,
   OtForwardCloseCommandSchema,
+  LogLevelCommandSchema,
+  LogsUploadCommandSchema,
 ])
 export type Command = z.infer<typeof CommandSchema>
 export type CommandOf<T extends CommandType> = Extract<Command, { type: T }>
@@ -481,6 +508,26 @@ export const OtForwardCloseResultSchema = z.object({
 })
 export type OtForwardCloseResult = z.infer<typeof OtForwardCloseResultSchema>
 
+export const LogLevelResultSchema = z.object({
+  level: LogLevelSchema,
+  previous: LogLevelSchema,
+  until: UtcDateTimeSchema.describe("Quando o nível volta ao anterior"),
+})
+export type LogLevelResult = z.infer<typeof LogLevelResultSchema>
+
+/** Tamanho máximo das linhas de log num resultado de logs.upload (soma dos textos, UTF-8). */
+export const MAX_LOGS_UPLOAD_BYTES = 256 * 1024
+
+export const LogsUploadResultSchema = z.object({
+  source: z.literal("journald"),
+  lines: z
+    .array(z.string().max(MAX_LOGS_UPLOAD_BYTES))
+    .max(2000)
+    .describe("Últimas linhas, da mais antiga à mais nova; o agente corta para caber em 256 KiB no total"),
+  truncated: z.boolean().describe("true = havia mais linhas (ou passaria de 256 KiB) e só as últimas vieram"),
+})
+export type LogsUploadResult = z.infer<typeof LogsUploadResultSchema>
+
 const resultBase = {
   id: EntityIdSchema.describe("id do comando"),
   finished_at: UtcDateTimeSchema.optional(),
@@ -503,6 +550,8 @@ export const CommandSuccessSchema = z.discriminatedUnion("type", [
   success("vpn.status", VpnStatusResultSchema),
   success("ot.forward.open", OtForwardOpenResultSchema),
   success("ot.forward.close", OtForwardCloseResultSchema),
+  success("log.level", LogLevelResultSchema),
+  success("logs.upload", LogsUploadResultSchema),
 ])
 export type CommandSuccess = z.infer<typeof CommandSuccessSchema>
 

@@ -51,6 +51,8 @@ Premissas: 2 desenvolvedores (**Web** e **Gateway**), semana 1 = 16/11/2026, sem
   - alertas e ajuda depois do piloto;
   - configuração de rede pela nuvem só na F2.
 
+**Já adiantado (24/11/2026):** W6 pronto no código (publicador de config, códigos de ativação, fila de comandos, limites da L21, `409 config_outdated`, histórico de saúde e alerta de minuto reescrito; o teste de ponta a ponta aplica config e responde a comandos) e as 5 tarefas da L17 (W7; falta o fechamento de turno e o recálculo dos turnos sujos).
+
 **Já adiantado:** a parte de código de W1, X1, W2a, W3, W4 e G0, a parte de código de W2b (RLS completa, FKs compostas, partições com a rotina diária, seed sintético e as tabelas de L2, L3, L19 e L23; falta criar o branch-semente na Neon, que depende de N1), boa parte de G4 (`.deb`, units, firewall, imagem) e de W11 os cabeçalhos HTTP (CSP, HSTS...), a revisão do limite da RLS ([operacao/revisao-seguranca-w11.md](operacao/revisao-seguranca-w11.md)) e os testes de navegador com Playwright (faltam Firewall e os testes de isolamento de nível 3 e 4, que dependem da W5). Ficam pendentes as partes que dependem de contas (deploy, Neon, PoC oficial com 100 gateways) e de hardware (bancada, pacote de suporte ao R1000).
 
 ## 3. Decisões
@@ -131,7 +133,7 @@ Em 12/11/2026 o dono do produto decidiu D1, D5, D6, D7, D11, D12, D13, D26, D28 
 
 | # | Tema | O que falta | Quando |
 |---|---|---|---|
-| L1 | Contrato `/sync`, `/enroll`, `/config` | **Fechada:** `packages/contracts` e `docs/04`. Pendente só o que é da F1: `logs.upload`/`log.level` mínimos (já no agente, `gateway/internal/commands/ops.go`, com a proposta de payload e resultado; falta entrar no contrato e na nuvem), `/releases/latest`, `409 config_outdated` e `429` | F0 ✓ |
+| L1 | Contrato `/sync`, `/enroll`, `/config` | **Fechada:** `packages/contracts` e `docs/04`. `409 config_outdated` e `429` implementados na API (24/11/2026). `log.level` e `logs.upload` no contrato (24/11/2026). Pendente só o que é da F1: `/releases/latest` | F0 ✓ |
 | L2 | Turnos e calendário | Dia do turno noturno, feriados, exceções, turnos sobrepostos, produção fora do turno, vigência, "dia produtivo" | F1 |
 | L3 | Refugo manual e troca de produto | Soma ou substituição do refugo do CLP, motivos de refugo, retrabalho, lançamentos atrasados e estornos | F1 |
 | L4 | Metas e faixas de OEE | `oee_target` (onde e quem define) e faixas 85/60 documentadas | F1 |
@@ -169,11 +171,11 @@ Em 12/11/2026 o dono do produto decidiu D1, D5, D6, D7, D11, D12, D13, D26, D28 
 | L12 | OEE da plataforma igual ao da planilha de referência com diferença de até 0,5 ponto percentual por turno. Peças iguais ao contador do CLP no turno, salvo período `NO_COMM` registrado. Navegadores: Chrome e Edge atuais, Safari do iOS atual; TV com Chrome ou Android TV. Carga: 100 gateways simulados (W3) |
 | L13 | Sentry para erros e logs da Vercel. Meta: 99% dos `/sync` respondidos em menos de 1 s. Alerta para a Engemase quando um gateway passa 15 min sem `/sync` ou o atraso do buffer passa de 10 min |
 | L14 | PITR do Neon na janela do plano contratado; RPO e RTO os do SLA ([`docs/negocio/sla-e-suporte.md`](negocio/sla-e-suporte.md)). Teste de restauração a cada 3 meses (runbook 08). Chaves (OTA, VAPID, CA SSH) num cofre de senhas da empresa, com 2 pessoas com acesso |
-| L17 | Vercel Cron: alertas (1 min); expiração de concessões, tokens e códigos (5 min); reconciliação da VPN (15 min); partições e limpeza (diário); resumo diário por e-mail (diário) |
+| L17 | Vercel Cron: alertas (1 min); expiração de concessões, tokens e códigos (5 min); reconciliação da VPN (15 min); partições e limpeza (diário); resumo diário por e-mail (diário). **Implementado** em `/api/cron/*` (24/11/2026; partições quando houver pg_partman) |
 | L18 | Só português do Brasil até a F2. Quando entrar o segundo idioma (provavelmente espanhol), usar `next-intl` |
 | L19 | Várias TVs por linha, sim. Lista de operadores por unidade, cadastrada pela Engemase (nome e matrícula opcional). Fila offline no tablet por até 24 h. Se o tablet e o desktop reclassificarem a mesma parada, vale a última, e as duas ficam na auditoria |
 | L20 | Senha de 12 caracteres ou mais, sem regra de composição, recusada se aparecer em vazamentos conhecidos (consulta por k-anonimato). Depois de 5 erros, espera de 15 min e aviso por e-mail. Sessão de 12 h renovada com o uso; "manter conectado" até 30 dias (a equipe Engemase fica sempre em 12 h). 2FA por aplicativo autenticador (TOTP), com 10 códigos de recuperação. O admin do cliente reinicia o 2FA dos usuários; a Engemase reinicia o do admin, com conferência de identidade. SSO (Microsoft e Google) na F3 |
-| L21 | `/sync`: 60 por minuto por gateway (rajada de 10). `/enroll`: 10 por hora por IP e 5 tentativas por código. `/config`: 30 por minuto por gateway. Acima disso, `429` com `retry_after_s` |
+| L21 | `/sync`: 60 por minuto por gateway (rajada de 10). `/enroll`: 10 por hora por IP e 5 tentativas por código. `/config`: 30 por minuto por gateway (rajada de 5). Acima disso, `429` com `retry_after_s`. **Implementado** no Postgres (24/11/2026) |
 | L23 | Novo estado **"Em trânsito"**: o gateway ativado na bancada não gera alerta de offline até o primeiro `/sync` no cliente ou até a Engemase marcá-lo como instalado. Prazo máximo de 30 dias |
 
 ## 5. Pendências do protótipo
@@ -209,7 +211,7 @@ Continua valendo: `generateStaticParams` e `instant = false` são permitidos só
 5. Abrir o PR do branch de trabalho, revisar e ligar o CI (já inclui o teste de ponta a ponta).
 6. Aplicar as migrações 0000–0004 num branch Neon de preview e confirmar que o papel de login é membro de `app_user` e que o dono das tabelas não tem BYPASSRLS.
 7. Deploy de preview na Vercel com `DATABASE_URL` e rodar o PoC com 100 gateways simulados contra ele (W3).
-8. Escrever o publicador de config e o gerador de códigos de ativação na web (hoje só a API do gateway existe).
+8. ~~Escrever o publicador de config e o gerador de códigos de ativação na web~~ (feito em 24/11/2026: `apps/web/lib/server/gateway/publish.ts` e `activation.ts`; falta a tela, W8).
 9. Equipe de automação: implementar o `FB_OEE_ENGEMASE` (`docs/operacao/`) na primeira marca de CLP e escolher o cliente e a linha do piloto.
 10. Com o hardware: roteiro de bancada (`docs/operacao/verificacao-bancada-r1000.md`), receita do pacote de suporte ao R1000 e primeira imagem Trixie.
 

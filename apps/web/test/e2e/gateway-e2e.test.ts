@@ -20,8 +20,10 @@ import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 import { type GatewayConfig, GatewayConfigSchema } from "@engemase/contracts"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { enqueueGatewayCommand, getGatewayCommand } from "@/lib/server/gateway/commands"
 import { hashActivationCode } from "@/lib/server/gateway/enroll"
 import { serveGatewayApi } from "../gateway/servidor"
+import { publishGatewayConfig } from "@/lib/server/gateway/publish"
 import { count, createTestDatabase, randomActivationCode, rows, type SeededClient, seedClient, type TestDatabase, uuidv7 } from "../gateway/support"
 
 const RUN = process.env.E2E_GATEWAY === "1"
@@ -198,5 +200,58 @@ describe.skipIf(!RUN)("ponta a ponta: plc-sim → agente Go → API → banco", 
       expect(httpLog.filter((l) => !/→ (200|201|304)$/.test(l))).toEqual([])
     },
     180_000,
+  )
+
+  it(
+    "a web publica uma config nova e o agente a aplica; a fila de comandos vai e volta pelo /sync",
+    async () => {
+      const org = client.organizationId
+      // Muda o cadastro (uplink) e publica pela web: versão 2, anunciada no /sync e baixada pelo /config.
+      await t.client.query(`UPDATE gateway SET uplink = '{"sync_interval_s": 1, "max_batch_items": 1000}' WHERE id = $1`, [
+        client.gatewayId,
+      ])
+      const published = await publishGatewayConfig(t.db, {
+        organizationId: org,
+        gatewayId: client.gatewayId,
+        actor: { type: "engemase", label: "e2e" },
+      })
+      expect(published).toMatchObject({ kind: "published", version: 2 })
+      await waitFor(
+        "config 2 aplicada pelo agente",
+        async () => (await count(t, "SELECT 1 FROM gateway WHERE id = $1 AND config_version_applied = 2", [client.gatewayId])) === 1,
+        45_000,
+      )
+      expect(await count(t, "SELECT 1 FROM audit_log WHERE organization_id = $1 AND action = 'gateway.config_applied'", [org])).toBe(2)
+
+      // Comandos enfileirados pela web chegam ao agente no /sync e a resposta volta no /sync seguinte.
+      const deviceId = client.config.devices[0]!.id
+      const read = await enqueueGatewayCommand(t.db, {
+        organizationId: org,
+        gatewayId: client.gatewayId,
+        type: "tag.read",
+        payload: { device_id: deviceId, address: { area: "holding_register", offset: 1002 }, type: "uint16" },
+      })
+      const reload = await enqueueGatewayCommand(t.db, { organizationId: org, gatewayId: client.gatewayId, type: "config.reload", payload: {} })
+      const finished = ["ok", "error", "rejected", "expired"]
+      await waitFor(
+        "resposta do agente aos comandos",
+        async () => {
+          const done = await Promise.all([read.id, reload.id].map((id) => getGatewayCommand(t.db, org, id)))
+          return done.every((c) => c !== null && finished.includes(c.status))
+        },
+        30_000,
+      )
+      for (const id of [read.id, reload.id]) {
+        const command = await getGatewayCommand(t.db, org, id)
+        // O agente responde a todo comando: com o resultado (ok) ou com o motivo (ex.: `unsupported` enquanto
+        // o tipo não estiver implementado nele). Vencido sem resposta não conta.
+        expect(command?.status, JSON.stringify(command)).not.toBe("expired")
+        expect(command?.sentAt).not.toBeNull()
+        expect(command?.result).not.toBeNull()
+      }
+      // Ainda nenhuma requisição recusada (inclusive nenhum 429 com os limites da L21 ligados).
+      expect(httpLog.filter((l) => !/→ (200|201|304)$/.test(l))).toEqual([])
+    },
+    120_000,
   )
 })
