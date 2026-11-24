@@ -116,19 +116,35 @@ Lógica em `lib/server/cron/` (`runner.ts` + um arquivo por job); os `route.ts` 
 > `lib/server/cron/jobs.ts` e o `vercel.json` agenda só `limpeza` (03:30) e `resumo-diario` (só às 10h, sem a
 > 2ª tentativa das 11h). `alertas`, `expiracao` e `vpn` continuam no código, sem agendamento: rodam só à mão (curl
 > abaixo). **Antes de clientes usarem os alertas**, passe o projeto para o Pro, troque `PLANO_VERCEL` para `"pro"`
-> e ponha no `vercel.json` as 5 entradas da tabela (o teste `test/cron/cron.test.ts` confere que os dois batem).
+> e ponha no `vercel.json` as 6 entradas da tabela (o teste `test/cron/cron.test.ts` confere que os dois batem).
+> Enquanto for Hobby, o fechamento de turno (`turnos`) também só roda à mão.
 
 | Rota | Quando | O que faz |
 |---|---|---|
-| `/api/cron/alertas` | 1 min | Gateway sem `/sync` há mais de 6 min → alerta crítico (resolve ao voltar); minuto reescrito resolve em 24 h |
+| `/api/cron/alertas` | 1 min | Gateway sem `/sync` há mais de 6 min → alerta crítico (resolve ao voltar); gateway "Em trânsito" (L23: `in_transit_until` no futuro e `installed_at` nulo) não alerta e o alerta aberto resolve; minuto reescrito resolve em 24 h |
 | `/api/cron/expiracao` | 5 min | Comandos, concessões de suporte e token anterior vencidos |
 | `/api/cron/vpn` | 15 min | Pedidos de acesso sem decisão (24 h); `vpn.disable`/`ot.forward.close` para sessões e encaminhamentos vencidos |
-| `/api/cron/limpeza` | 03:30 UTC | Limitador, histórico dos crons, saúde (30 dias), comandos (90 dias), códigos antigos; partições pendentes (W2b) |
+| `/api/cron/limpeza` | 03:30 UTC | Limitador, histórico dos crons, saúde (30 dias), comandos (90 dias), códigos antigos; auditoria além de `AUDITORIA_RETENCAO_DIAS` (padrão 5 anos, D6; `app.audit_log_purge`, lotes de 5.000); partições de `production_minute`/`tag_sample` com `maintainPartitions()` pela conexão de manutenção (sem `DATABASE_MAINTENANCE_URL`, registra e pula) |
 | `/api/cron/resumo-diario` | 10h e 11h UTC | Resumo por cliente para a equipe Engemase pelo Resend (a 2ª chamada só envia se a 1ª falhou) |
+| `/api/cron/turnos` | :10 de cada hora | Fechamento de turno (W7): cada turno terminado há 5 min ou mais, nos últimos 7 dias, ganha uma linha em `oee_shift` por máquina ativa, calculada pelo `@engemase/oee-core` (feriado da unidade não tem turno); depois recalcula os turnos sujos (`dirty`: dado atrasado do `/sync`, refugo lançado depois). Até 300 cálculos por cliente por execução; o resto aparece em `shifts_pending` e sai na hora seguinte |
 
 - Protegidas por `CRON_SECRET` (a Vercel manda `Authorization: Bearer <CRON_SECRET>`): sem a variável, 503; segredo errado, 401.
 - Uma execução por janela (`cron_run`, `app.cron_claim`): chamada repetida responde `skipped`; erro libera a janela.
 - Para rodar à mão: `curl -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/cron/limpeza`.
+- Fechamento e recálculo de turno em `lib/server/production/oee-shifts.ts`; o `/sync` marca o turno sujo com um
+  UPDATE que trava a linha, e o recálculo pega a linha com `FOR UPDATE SKIP LOCKED`: dado que chega durante o
+  recálculo deixa o turno sujo de novo, nunca se perde.
+
+### Regras de produção conferidas no servidor (`lib/server/production`)
+
+Funções para as telas da W8 chamarem (a rota confere login, permissão e escopo antes). Erros esperados saem como
+`ProductionRuleError` (código + mensagem em português; status HTTP em `PRODUCTION_ERROR_STATUS`).
+
+| Função | Regra |
+|---|---|
+| `saveShift` (`shifts.ts`) | Turnos da mesma unidade não se sobrepõem (dias da semana, vigência e turno noturno, L2); turno com turnos já fechados não muda horário, dias nem pausas (encerre a vigência e crie outro); pausas dentro do turno; auditoria |
+| `recordQualityEntry` (`quality.ts`) | Refugo manual soma ao do CLP; prazo até o fim do turno seguinte, depois só supervisor ou admin do cliente (L3); motivo ativo; operador ativo da mesma unidade (L19); marca o turno consolidado como sujo; auditoria |
+| `reverseQualityEntry` (`quality.ts`) | Estorno com motivo, um por lançamento, mesmo prazo do lançamento; auditoria |
 
 ### Variáveis de ambiente
 
@@ -137,6 +153,8 @@ Lógica em `lib/server/cron/` (`runner.ts` + um arquivo por job); os `route.ts` 
 | `DATABASE_URL` | sim | Banco (ver acima) |
 | `DATABASE_POOL_MAX` | não | Conexões por instância (padrão 5) |
 | `CRON_SECRET` | sim, para os crons | Segredo das rotas `/api/cron/*` (a Vercel envia sozinha) |
+| `DATABASE_MAINTENANCE_URL` | não | Conexão direta (sem pooler) com o papel DONO das tabelas, só para a limpeza diária criar/apagar partições (DDL). Aberta e fechada na tarefa. Sem ela, as partições não são mantidas (a 0013 deixou 3 meses / 8 semanas adiante) e o log avisa |
+| `AUDITORIA_RETENCAO_DIAS` | não | Dias que a auditoria fica guardada (padrão 1825 = 5 anos, D6; mínimo 365, que o banco também confere). Valor inválido: a auditoria não é limpa e a tarefa responde 500 |
 | `RESEND_API_KEY` · `RESUMO_DIARIO_DE` · `RESUMO_DIARIO_PARA` | não | Resumo diário por e-mail (remetente verificado no Resend; destinatários separados por vírgula). Sem elas o resumo não é enviado |
 
 ## Login e acesso por cliente (W5)
