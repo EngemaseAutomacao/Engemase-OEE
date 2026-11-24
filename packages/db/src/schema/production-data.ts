@@ -5,8 +5,11 @@
  * Todas com `organization_id` (desnormalizado da máquina) e FK composta com a máquina: o gateway de
  * um cliente não consegue gravar em máquina de outro.
  *
- * Particionamento (pg_partman, mensal para `production_minute`, diário/semanal para `tag_sample`)
- * fica para a épica W2b: as chaves primárias já incluem a coluna de tempo onde a partição exige.
+ * Particionamento (W2b, migração manual 0009): `production_minute` por mês e `tag_sample` por semana
+ * (RANGE na coluna de tempo, que já faz parte da chave primária). As partições futuras e a limpeza pela
+ * retenção são feitas por `app.maintain_partitions()` (`maintainPartitions()` em `src/partitions.ts`),
+ * chamada por uma tarefa agendada diária. O drizzle-kit não enxerga o particionamento: para ele, as
+ * duas continuam tabelas comuns com a mesma chave.
  */
 import { sql } from "drizzle-orm"
 import {
@@ -22,6 +25,7 @@ import {
   primaryKey,
   text,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core"
 import { createdAt, faultCode, faultCodeInRange, oneOf, pk, tstz } from "./_columns"
@@ -29,7 +33,7 @@ import { organizationId } from "./_tenant"
 import { machine } from "./assets"
 import { tag } from "./connectivity"
 import { MACHINE_STATES, PRODUCTION_RUN_SOURCES, STATE_EVENT_SOURCES } from "./enums"
-import { downtimeReason, product, shift } from "./production-setup"
+import { downtimeReason, product, rejectReason, shift, unitOperator } from "./production-setup"
 
 /**
  * Intervalo de estado da máquina. O id (UUIDv7) vem da borda: `ON CONFLICT (id) DO NOTHING`.
@@ -51,10 +55,17 @@ export const machineStateEvent = pgTable(
     reasonId: uuid("reason_id"),
     classifiedBy: uuid("classified_by"),
     classifiedAt: tstz("classified_at"),
+    /** Operador escolhido na lista ao classificar no tablet (L19; D18). `classified_by` é quem estava logado. */
+    classifiedOperatorId: uuid("classified_operator_id"),
     source: text("source", { enum: STATE_EVENT_SOURCES }).notNull().default("edge"),
     createdAt: createdAt(),
   },
   (t) => [
+    foreignKey({
+      name: "machine_state_event_operator_fk",
+      columns: [t.classifiedOperatorId, t.organizationId],
+      foreignColumns: [unitOperator.id, unitOperator.organizationId],
+    }),
     foreignKey({
       name: "machine_state_event_machine_fk",
       columns: [t.machineId, t.organizationId],
@@ -131,9 +142,16 @@ export const productionRun = pgTable(
     endedAt: tstz("ended_at"),
     source: text("source", { enum: PRODUCTION_RUN_SOURCES }).notNull(),
     createdBy: uuid("created_by"),
+    /** Operador escolhido na lista na troca de produto pelo tablet (L19; D18). */
+    operatorId: uuid("operator_id"),
     createdAt: createdAt(),
   },
   (t) => [
+    foreignKey({
+      name: "production_run_operator_fk",
+      columns: [t.operatorId, t.organizationId],
+      foreignColumns: [unitOperator.id, unitOperator.organizationId],
+    }),
     foreignKey({
       name: "production_run_machine_fk",
       columns: [t.machineId, t.organizationId],
@@ -151,11 +169,18 @@ export const productionRun = pgTable(
 )
 
 /**
- * Lançamento manual de qualidade. `quantity > 0` move peças de boas para refugo;
- * `quantity < 0` estorna um lançamento anterior (`reverses_id`). Regras completas: L3 do docs/17.
+ * Lançamento manual de refugo (L3 do docs/17, escolha de 12/11/2026). `quantity > 0` move peças de boas
+ * para refugo e **soma** ao refugo do CLP (nunca o substitui); `quantity < 0` estorna um lançamento
+ * anterior (`reverses_id`). Linhas imutáveis: o app_user só tem SELECT e INSERT (corrigir = estornar e
+ * lançar de novo). Lançamento atrasado (até o fim do turno seguinte; depois, só o supervisor) e o
+ * registro do estorno na auditoria são regras da aplicação. Retrabalho fica fora do MVP.
  *
- * Garantias no banco: o estorno aponta para um lançamento existente do MESMO cliente (FK composta
- * `(reverses_id, organization_id)`), tem quantidade negativa e não aponta para si mesmo.
+ * Garantias no banco:
+ * - o estorno aponta para um lançamento existente do MESMO cliente (FK composta), tem quantidade
+ *   negativa, não aponta para si mesmo e traz o motivo do estorno (`reversal_reason`);
+ * - no máximo um estorno por lançamento (`quality_entry_one_reversal_uq`);
+ * - o estorno tem a quantidade oposta à do original, é da mesma máquina e não estorna outro estorno
+ *   (gatilho `quality_entry_reversal_trg`, migração manual 0008).
  */
 export const qualityEntry = pgTable(
   "quality_entry",
@@ -166,8 +191,15 @@ export const qualityEntry = pgTable(
     at: tstz("at").notNull(),
     quantity: integer("quantity").notNull(),
     productCode: text("product_code"),
+    /** Texto livre (legado/observação). O motivo cadastrado vai em `reject_reason_id`. */
     reason: text("reason"),
+    /** Motivo de refugo cadastrado pela Engemase (L3). */
+    rejectReasonId: uuid("reject_reason_id"),
     reversesId: uuid("reverses_id"),
+    /** Por que o lançamento foi estornado (obrigatório no estorno, proibido no lançamento comum). */
+    reversalReason: text("reversal_reason"),
+    /** Operador escolhido na lista (L19; D18). `created_by` é quem estava logado. */
+    operatorId: uuid("operator_id"),
     createdBy: uuid("created_by"),
     createdAt: createdAt(),
   },
@@ -183,14 +215,33 @@ export const qualityEntry = pgTable(
       columns: [t.reversesId, t.organizationId],
       foreignColumns: [t.id, t.organizationId],
     }),
+    foreignKey({
+      name: "quality_entry_reject_reason_fk",
+      columns: [t.rejectReasonId, t.organizationId],
+      foreignColumns: [rejectReason.id, rejectReason.organizationId],
+    }),
+    foreignKey({
+      name: "quality_entry_operator_fk",
+      columns: [t.operatorId, t.organizationId],
+      foreignColumns: [unitOperator.id, unitOperator.organizationId],
+    }),
     index("quality_entry_machine_time_idx").on(t.machineId, t.at),
     index("quality_entry_reverses_idx")
+      .on(t.reversesId)
+      .where(sql`${t.reversesId} IS NOT NULL`),
+    uniqueIndex("quality_entry_one_reversal_uq")
       .on(t.reversesId)
       .where(sql`${t.reversesId} IS NOT NULL`),
     check("quality_entry_quantity_chk", sql`${t.quantity} <> 0`),
     check(
       "quality_entry_reversal_chk",
       sql`${t.reversesId} IS NULL OR (${t.quantity} < 0 AND ${t.reversesId} <> ${t.id})`,
+    ),
+    // Lançamento comum é sempre positivo; negativo só como estorno de um lançamento.
+    check("quality_entry_sign_chk", sql`(${t.reversesId} IS NULL) = (${t.quantity} > 0)`),
+    check(
+      "quality_entry_reversal_reason_chk",
+      sql`(${t.reversesId} IS NULL AND ${t.reversalReason} IS NULL) OR (${t.reversesId} IS NOT NULL AND coalesce(btrim(${t.reversalReason}), '') <> '')`,
     ),
   ],
 )

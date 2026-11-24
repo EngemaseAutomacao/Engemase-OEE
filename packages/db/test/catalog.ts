@@ -7,14 +7,17 @@ import type { PGlite, Transaction } from "@electric-sql/pglite"
 
 type Queryable = PGlite | Transaction
 
-/** Tabelas (schema public) que têm a coluna `organization_id`. */
+/**
+ * Tabelas (schema public) que têm a coluna `organization_id`, sem as partições (que aparecem pela
+ * tabela-mãe; as verificações de RLS abaixo continuam olhando cada partição).
+ */
 export async function tablesWithOrganizationId(db: Queryable): Promise<string[]> {
   const result = await db.query<{ name: string }>(`
     SELECT c.relname AS name
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
     JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'organization_id' AND NOT a.attisdropped
-    WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+    WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relispartition
     ORDER BY 1`)
   return result.rows.map((r) => r.name)
 }
@@ -58,6 +61,8 @@ export async function tenantTablesWithoutIsolationPolicy(db: Queryable): Promise
 
 export interface PolicyRow {
   readonly table: string
+  /** Tabela-mãe, quando `table` é uma partição; senão, a própria `table`. */
+  readonly root: string
   readonly policy: string
   readonly roles: string
   readonly cmd: string
@@ -66,11 +71,53 @@ export interface PolicyRow {
 /** Políticas PERMISSIVAS em tabelas de cliente (e em "user"), para conferir contra uma lista fechada. */
 export async function permissivePolicies(db: Queryable): Promise<PolicyRow[]> {
   const result = await db.query<PolicyRow>(`
-    SELECT p.tablename AS "table", p.policyname AS policy, array_to_string(p.roles, ',') AS roles, p.cmd
+    SELECT p.tablename AS "table",
+      coalesce((
+        SELECT r.relname FROM pg_class r
+        WHERE r.oid = pg_partition_root(format('%I.%I', p.schemaname, p.tablename)::regclass)
+      ), p.tablename) AS root,
+      p.policyname AS policy, array_to_string(p.roles, ',') AS roles, p.cmd
     FROM pg_policies p
     WHERE p.schemaname = 'public' AND p.permissive = 'PERMISSIVE'
+    ORDER BY 1, 3`)
+  return result.rows
+}
+
+export interface PartitionRow {
+  readonly parent: string
+  readonly partition: string
+}
+
+/** Partições (schema public) e a tabela-mãe de cada uma. */
+export async function partitions(db: Queryable): Promise<PartitionRow[]> {
+  const result = await db.query<PartitionRow>(`
+    SELECT p.relname AS parent, c.relname AS partition
+    FROM pg_inherits i
+    JOIN pg_class c ON c.oid = i.inhrelid
+    JOIN pg_class p ON p.oid = i.inhparent
+    JOIN pg_namespace n ON n.oid = p.relnamespace
+    WHERE n.nspname = 'public' AND c.relispartition AND c.relkind IN ('r', 'p')
     ORDER BY 1, 2`)
   return result.rows
+}
+
+/**
+ * Partições em que algum papel da aplicação tem privilégio. O acesso é sempre pela tabela-mãe (cuja RLS
+ * vale para todas as partições); GRANT direto numa partição abriria um caminho paralelo.
+ */
+export async function partitionsWithApplicationPrivileges(db: Queryable): Promise<string[]> {
+  const result = await db.query<{ name: string }>(`
+    SELECT c.relname AS name
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relispartition
+      AND EXISTS (
+        SELECT 1 FROM unnest(ARRAY['app_user', 'auth_service', 'app_lookup']) AS r(role)
+        WHERE pg_catalog.has_table_privilege(r.role, c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
+           OR pg_catalog.has_any_column_privilege(r.role, c.oid, 'SELECT, INSERT, UPDATE, REFERENCES')
+      )
+    ORDER BY 1`)
+  return result.rows.map((r) => r.name)
 }
 
 /**

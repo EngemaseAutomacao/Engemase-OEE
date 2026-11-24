@@ -44,6 +44,7 @@ import {
   DATA_TYPES,
   DEVICE_CONN_STATUSES,
   GATEWAY_STATUSES,
+  GATEWAY_TRANSIT_MAX_DAYS,
   PARITIES,
   PROTOCOLS,
   TAG_ROLES,
@@ -84,6 +85,16 @@ export const gateway = pgTable(
     configVersionApplied: integer("config_version_applied"),
     hwInfo: jsonb("hw_info").$type<HardwareInfo>(),
     health: jsonb("health").$type<GatewayHealth>(),
+    /**
+     * "Em trânsito" (L23 do docs/17): ativado na bancada e desligado para envio. Enquanto
+     * `in_transit_until > now()` e `installed_at` for nulo, o gateway NÃO gera alerta de offline.
+     * Termina no primeiro `/sync` no cliente ou quando a Engemase o marca como instalado (aplicação);
+     * prazo máximo de 30 dias a partir de `in_transit_since` (`GATEWAY_TRANSIT_MAX_DAYS`).
+     */
+    inTransitSince: tstz("in_transit_since"),
+    inTransitUntil: tstz("in_transit_until"),
+    /** Quando foi instalado no cliente (primeiro `/sync` no local ou marcação da Engemase). */
+    installedAt: tstz("installed_at"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
@@ -108,6 +119,12 @@ export const gateway = pgTable(
     ),
     check("gateway_active_token_chk", sql`${t.status} <> 'active' OR ${t.tokenHash} IS NOT NULL`),
     check("gateway_revoked_chk", sql`(${t.status} = 'revoked') = (${t.revokedAt} IS NOT NULL)`),
+    check(
+      "gateway_in_transit_chk",
+      sql`(${t.inTransitSince} IS NULL) = (${t.inTransitUntil} IS NULL) AND (${t.inTransitUntil} IS NULL
+        OR (${t.inTransitUntil} > ${t.inTransitSince}
+          AND ${t.inTransitUntil} <= ${t.inTransitSince} + make_interval(days => ${sql.raw(String(GATEWAY_TRANSIT_MAX_DAYS))})))`,
+    ),
   ],
 )
 
