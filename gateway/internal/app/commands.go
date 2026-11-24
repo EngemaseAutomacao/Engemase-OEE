@@ -48,6 +48,12 @@ func (a *agent) newExecutor() *commands.Executor {
 		Now:             a.cloudNow,
 		Log:             a.log,
 	})
+	ops := commands.OpsDeps{Now: a.cloudNow}
+	if a.opts.LogLevel != nil {
+		a.level = &commands.LevelControl{Var: a.opts.LogLevel, Base: parseLevel(a.local.Log.Level)}
+		ops.Level = a.level
+	}
+	commands.RegisterOps(x, ops)
 	return x
 }
 

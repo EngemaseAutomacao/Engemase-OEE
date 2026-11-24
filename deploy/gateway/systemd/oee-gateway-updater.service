@@ -6,6 +6,10 @@
 #  1. Confere de novo a assinatura Ed25519 do manifesto, o SHA-256 do .deb, o
 #     Package (oee-gateway), a arquitetura e a versão mínima (sem downgrade fora
 #     de allowed_rollback_to).
+#     O manifesto traz buffer_schema (oee-gateway version --buffer-schema no
+#     build; ausente = 1). No rollback automático (passo 4), recusa reinstalar um
+#     pacote cujo buffer_schema é menor que o user_version do buffer.db no disco
+#     (L25: update.CheckAutoRollback + buffer.FileSchemaVersion, gateway/internal/update).
 #  2. Guarda o .deb instalado em $STATE_DIRECTORY (root, fora do alcance do oee).
 #  3. dpkg -i --force-confdef --force-confold (sem perguntas sobre conffiles).
 #  4. Espera até 5 min pelo update/health.json do agente novo; sem ele, reinstala

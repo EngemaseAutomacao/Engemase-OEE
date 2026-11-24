@@ -40,6 +40,7 @@ flowchart LR
 | `internal/uplink` | Cliente HTTP (gzip, Bearer, User-Agent, proxy por `HTTPS_PROXY` com a falha do CONNECT tipada, CA extra, TLS 1.2+), backoff com jitter e o `Syncer` (ritmo por `next_sync_s`, envio imediato em mudança de estado) |
 | `internal/commands` | Executor dos comandos da nuvem: deduplicação por id, `expired` pelo relógio corrigido pelo `server_time`, até 4 em paralelo, prazo por tipo, resultados até a nuvem confirmar. Handlers de `tag.read`, `device.test`, `config.reload` e `agent.restart` (payloads validados como no Zod, com os mesmos ids de regra); tipo sem handler volta `rejected/unsupported`. As leituras passam pela fila do poller dono do transporte (`Access`) |
 | `internal/contracts` | Tipos Go do `/sync`, `/enroll` e eventos |
+| `internal/update` | Regras do OTA mínimo sem rede nem root: manifesto do pacote (com `buffer_schema`) e `CheckAutoRollback`, que recusa o rollback automático para um pacote que não abre o esquema atual do `buffer.db` (L25) |
 | `internal/ids` | UUIDv7 monotônico com timestamp injetável |
 
 ### Regras que garantem a contagem
@@ -138,6 +139,7 @@ Config local: [`examples/gateway.yaml`](examples/gateway.yaml) (arquivo ausente 
   - `tag.read`: lê pelo poller do dispositivo (um mestre por linha; nenhuma conexão TCP extra no CLP); dispositivo desabilitado usa o dono da linha ou uma conexão avulsa. Erros: `device_not_found`, `read_timeout`, `modbus_exception` (com o código), `port_unavailable`, `connection_failed`, `decode_error`, `timeout`.
   - `device.test`: endpoint da config vai pela coleta; fora da config só IPv4 privado/link-local numa sub-rede de interface que não é a da rota padrão (a OT), no máximo 10 testes a cada 10 min, com auditoria no log (`target_not_allowed` senão). RTU com outros parâmetros seriais exige `allow_bus_pause` (`bus_pause_required`) e pausa a coleta do barramento por no máximo 5 s. Sem `probe`: Modbus TCP só conecta; os outros fazem uma transação mínima (HR 0) e exceção do escravo (menos 10/11) conta como conexão.
   - `config.reload`: baixa sem `If-None-Match`, serializado com o `configLoop`; `applied`/`unchanged`, ou `config_fetch_failed`/`config_invalid`.
+  - `log.level` e `logs.upload` (D29, **ainda fora do contrato v1**: a nuvem não os envia até o contrato ganhar os tipos): nível temporário do log (60 s a 60 min, volta sozinho ao do `gateway.yaml`) e as últimas linhas do journal do agente no próprio resultado (até 2000 linhas e 256 KiB, tokens redigidos).
   - `agent.restart`: grava o pedido no buffer (meta `restart_command`), devolve `restart_at` e sai limpo (`agent_stop` com `reason: restart`; o systemd religa) no horário pedido, depois que a nuvem confirma o resultado (ou 30 s sem confirmação). Depois de religar, o resultado gravado é reenviado e o comando repetido não é executado de novo.
 
 ## Pendências (próximos passos)

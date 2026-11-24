@@ -33,6 +33,9 @@ type Options struct {
 	Local *config.Local
 	// Logger (nil = JSON em stderr no nível da config local).
 	Logger *slog.Logger
+	// LogLevel é o nível ajustável do Logger (NewLeveledLogger), para o comando
+	// log.level. nil com Logger nil: criado junto; nil com Logger dado: sem log.level.
+	LogLevel *slog.LevelVar
 	// TickEvery é o ritmo do motor (padrão 1 s).
 	TickEvery time.Duration
 	// CredentialsPollEvery é o intervalo para perceber credencial nova (padrão 10 s).
@@ -110,6 +113,8 @@ type agent struct {
 	restartCh chan string
 	restartMu sync.Mutex
 	restart   *pendingRestart
+	// level é o nível temporário do log (log.level); nil sem LevelVar.
+	level *commands.LevelControl
 
 	// Só a rotina de coleta (tick e collectWith) mexe nestes.
 	unsent      buffer.Write                      // saída do motor que o buffer ainda não gravou (ver flush)
@@ -155,7 +160,7 @@ func Run(ctx context.Context, o Options) error {
 	}
 	log := o.Logger
 	if log == nil {
-		log = NewLogger(o.Local.Log.Level)
+		log, o.LogLevel = NewLeveledLogger(o.Local.Log.Level)
 	}
 	store, err := buffer.Open(o.Local.Paths.Buffer, buffer.Options{})
 	if err != nil {
@@ -223,6 +228,9 @@ func Run(ctx context.Context, o Options) error {
 	cancel()
 	wg.Wait()
 	a.cmds.Close()
+	if a.level != nil {
+		a.level.Stop()
+	}
 	if failure == nil { // erro junto com o SIGTERM: a parada não foi limpa
 		select {
 		case failure = <-failed:
@@ -244,18 +252,22 @@ func Run(ctx context.Context, o Options) error {
 
 // NewLogger cria o logger JSON (journald guarda o stderr do serviço).
 func NewLogger(level string) *slog.Logger {
-	var lv slog.Level
-	switch strings.ToLower(level) {
-	case "debug":
-		lv = slog.LevelDebug
-	case "warn":
-		lv = slog.LevelWarn
-	case "error":
-		lv = slog.LevelError
-	default:
-		lv = slog.LevelInfo
+	log, _ := NewLeveledLogger(level)
+	return log
+}
+
+// NewLeveledLogger cria o logger JSON com o nível ajustável em execução (log.level).
+func NewLeveledLogger(level string) (*slog.Logger, *slog.LevelVar) {
+	lv := &slog.LevelVar{}
+	lv.Set(parseLevel(level))
+	return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: lv})), lv
+}
+
+func parseLevel(level string) slog.Level {
+	if lv, ok := commands.ParseLevel(strings.ToLower(level)); ok {
+		return lv
 	}
-	return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: lv}))
+	return slog.LevelInfo
 }
 
 // ---------------------------------------------------------------------------

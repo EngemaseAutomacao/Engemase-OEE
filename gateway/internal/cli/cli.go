@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/app"
+	"github.com/engemaseautomacao/engemase-oee/gateway/internal/buffer"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/buildinfo"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/config"
 )
@@ -89,23 +90,31 @@ func newRunCmd() *cobra.Command {
 			// O logger do agente (JSON no stderr, nível da config local) é também o
 			// padrão do processo: o que não recebe um logger explícito (ex.: as falhas
 			// do /sync com Syncer.Log nil) sai no mesmo journal e no mesmo nível.
-			log := app.NewLogger(local.Log.Level)
+			// O nível é ajustável em execução pelo comando log.level (volta sozinho).
+			log, level := app.NewLeveledLogger(local.Log.Level)
 			slog.SetDefault(log)
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return runAgent(ctx, app.Options{Local: local, Logger: log})
+			return runAgent(ctx, app.Options{Local: local, Logger: log, LogLevel: level})
 		},
 	}
 }
 
 func newVersionCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Mostra versão, commit e data do build",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if only, _ := cmd.Flags().GetBool("buffer-schema"); only {
+				// Para o build do pacote: vai no manifesto como buffer_schema (L25).
+				fmt.Fprintln(cmd.OutOrStdout(), buffer.SchemaVersion)
+				return nil
+			}
 			fmt.Fprintln(cmd.OutOrStdout(), buildinfo.String())
 			return nil
 		},
 	}
+	cmd.Flags().Bool("buffer-schema", false, "mostra só a versão do esquema do buffer (buffer_schema do manifesto)")
+	return cmd
 }

@@ -42,6 +42,9 @@ func TestVersion(t *testing.T) {
 	if code != 0 || !strings.HasPrefix(out, "oee-gateway ") {
 		t.Fatalf("version: %q (%d)", out, code)
 	}
+	if out, _, code = run(t, "version", "--buffer-schema"); code != 0 || strings.TrimSpace(out) != "1" {
+		t.Fatalf("version --buffer-schema: %q (%d)", out, code)
+	}
 }
 
 func TestNormalizeActivationCode(t *testing.T) {
