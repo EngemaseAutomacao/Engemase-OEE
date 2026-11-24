@@ -1,8 +1,9 @@
-# CI do monorepo: três jobs em paralelo e, depois de go e packages, o ponta a ponta.
+# CI do monorepo: quatro jobs em paralelo e, depois de go e packages, o ponta a ponta.
 #   web      — apps/web: typecheck, lint e build do Next.js
 #   packages — packages/*: typecheck e testes (Vitest; o db usa PGlite, sem servidor)
 #   go       — gateway/ e tools/plc-sim: gofmt, go vet, go test -race e integração com o simulador
 #   e2e      — plc-sim → agente Go → API dos gateways → banco (apps/web/test/e2e, PGlite)
+#   navegador — Playwright: telas principais no celular e no computador (apps/web/test/navegador)
 name: CI
 
 on:
@@ -189,3 +190,66 @@ jobs:
       # O script liga E2E_GATEWAY=1 (sem ele a suíte é pulada). Leva ~1–2 min: espera um minuto fechado.
       - name: Teste ponta a ponta do gateway
         run: pnpm --filter web test:e2e
+
+      # Mantém o roteiro do PoC de 100 gateways funcionando (docs/operacao/poc-100-gateways.md):
+      # aqui com 5 gateways e PGlite (~10 s), só para pegar quebra do script ou do contrato.
+      - name: PoC de carga dos gateways (5 gateways, PGlite)
+        env:
+          POC_N: "5"
+          POC_CICLOS: "3"
+        run: pnpm --filter web poc:gateways
+
+  # Testes de navegador (Playwright, W11): as telas principais abrem no celular (Pixel 7) e no
+  # computador (1440×900) sem erro no console e sem rolagem horizontal (apps/web/test/navegador).
+  # Roda contra o `next start` do build de produção, sem banco. Rastro sempre desligado (--trace off).
+  # Ainda não é check obrigatório da main (docs/operacao/protecao-da-main.md): vira depois de
+  # algumas semanas estável.
+  navegador:
+    name: navegador (Playwright, celular e computador)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar pnpm (versão do campo packageManager)
+        uses: pnpm/action-setup@v4
+
+      - name: Instalar Node.js com cache do pnpm
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      # Só restaura o cache do build (quem salva é o job web, com a mesma chave).
+      - name: Cache do build do Next.js
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/**/*.ts', 'apps/web/**/*.tsx', 'apps/web/**/*.css', '!apps/web/node_modules/**', '!apps/web/.next/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      # Chromium da mesma versão do @playwright/test do lockfile, com as bibliotecas do sistema.
+      - name: Instalar o Chromium do Playwright
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      - name: Build
+        run: pnpm --filter web build
+
+      - name: Testes de navegador
+        run: pnpm --filter web test:navegador
+
+      # Só as capturas das falhas (sem rastro nem vídeo), por 7 dias.
+      - name: Guardar capturas das falhas
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navegador-falhas
+          path: apps/web/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

@@ -16,6 +16,8 @@ pnpm dev
 
 Abra http://localhost:3000. Comece pela página inicial (seletor de cliente) ou vá direto para `/plastiform` (área do cliente) e `/admin` (console Engemase).
 
+Variáveis de ambiente: copie `.env.example` para `.env.local` (fica fora do git). Cada variável tem comentário dizendo para que serve, se o código já lê e em quais ambientes da Vercel criar. Nada é obrigatório para o protótipo; sem `DATABASE_URL` a API dos gateways responde 503.
+
 ## Stack
 
 Next.js 16 (App Router, Cache Components ligado) · React 19 · Tailwind CSS 4 · shadcn/ui (componentes em `components/ui`, copiados do repositório oficial) · Apache ECharts · lucide-react · next-themes.
@@ -77,6 +79,11 @@ pnpm --filter web build
 ```bash
 pnpm --filter web test       # API dos gateways (Vitest + PGlite, sem servidor)
 pnpm --filter web test:e2e   # plc-sim → agente Go → API → banco (precisa do Go 1.24; ~1 min)
+```
+
+```bash
+pnpm --filter web build && pnpm --filter web test:navegador   # Playwright: telas principais no celular e no computador
+pnpm --filter web poc:gateways                                # PoC de carga com N gateways simulados (docs/operacao/poc-100-gateways.md)
 ```
 
 ## API dos gateways (`/api/gateway/v1`)

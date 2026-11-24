@@ -12,17 +12,16 @@
  */
 import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_process"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
+import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
-import { Readable } from "node:stream"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
-import { API_ROUTES, type GatewayConfig, GatewayConfigSchema } from "@engemase/contracts"
+import { type GatewayConfig, GatewayConfigSchema } from "@engemase/contracts"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { hashActivationCode } from "@/lib/server/gateway/enroll"
-import { type GatewayApiDeps, handleConfig, handleEnroll, handleSync } from "@/lib/server/gateway/handlers"
+import { serveGatewayApi } from "../gateway/servidor"
 import { count, createTestDatabase, randomActivationCode, rows, type SeededClient, seedClient, type TestDatabase, uuidv7 } from "../gateway/support"
 
 const RUN = process.env.E2E_GATEWAY === "1"
@@ -78,38 +77,6 @@ function simConfig(gatewayId: string, plcPort: number): GatewayConfig {
   }) as GatewayConfig
 }
 
-/** Adaptador node:http → handlers (Fetch API), como o Next.js faz com os route.ts. */
-function serve(apiDeps: GatewayApiDeps, log: string[]): Server {
-  return createServer((req: IncomingMessage, res: ServerResponse) => {
-    void (async () => {
-      const url = new URL(req.url ?? "/", "http://127.0.0.1")
-      const headers = new Headers()
-      for (const [name, value] of Object.entries(req.headers)) {
-        if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(", ") : value)
-      }
-      const withBody = req.method === "POST"
-      const request = new Request(url, {
-        method: req.method ?? "GET",
-        headers,
-        ...(withBody ? { body: Readable.toWeb(req) as ReadableStream<Uint8Array>, duplex: "half" } : {}),
-      } as RequestInit)
-      let response: Response
-      if (req.method === "POST" && url.pathname === API_ROUTES.enroll) response = await handleEnroll(request, apiDeps)
-      else if (req.method === "POST" && url.pathname === API_ROUTES.sync) response = await handleSync(request, apiDeps)
-      else if (req.method === "GET" && url.pathname === API_ROUTES.config) response = await handleConfig(request, apiDeps)
-      else response = new Response("{}", { status: 404 })
-      log.push(`${req.method} ${url.pathname} → ${response.status}`)
-      res.statusCode = response.status
-      response.headers.forEach((value, name) => res.setHeader(name, value))
-      res.end(Buffer.from(await response.arrayBuffer()))
-    })().catch((error: unknown) => {
-      log.push(`erro no adaptador: ${String(error)}`)
-      res.statusCode = 500
-      res.end()
-    })
-  })
-}
-
 describe.skipIf(!RUN)("ponta a ponta: plc-sim → agente Go → API → banco", () => {
   let t: TestDatabase
   let client: SeededClient
@@ -146,7 +113,7 @@ describe.skipIf(!RUN)("ponta a ponta: plc-sim → agente Go → API → banco", 
       [client.organizationId, client.gatewayId, hashActivationCode(activationCode)],
     )
 
-    server = serve({ db: t.db, logError: (message, error) => httpLog.push(`${message}: ${String(error)}`) }, httpLog)
+    server = serveGatewayApi({ db: t.db, logError: (message, error) => httpLog.push(`${message}: ${String(error)}`) }, httpLog)
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
     const apiUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 
