@@ -1,6 +1,7 @@
 /**
  * Tabelas de plataforma (0009/0010): limitador de taxa e registro dos crons, só pelas funções
- * SECURITY DEFINER; e o histórico de saúde do gateway, que é tabela de cliente.
+ * SECURITY DEFINER; o histórico de saúde do gateway, que é tabela de cliente; e a retenção da auditoria
+ * (0014, `app.audit_log_purge`).
  */
 import type { Transaction } from "@electric-sql/pglite"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
@@ -123,5 +124,35 @@ describe("tabelas de plataforma", () => {
       await tx.query("DELETE FROM gateway_health_sample WHERE organization_id = $1", [b.organizationId])
     })
     expect(await count(t.client, "SELECT 1 FROM gateway_health_sample WHERE organization_id = $1", [b.organizationId])).toBe(1)
+  })
+
+  it("audit_log_purge apaga em lote só a auditoria velha (de todos os clientes) e recusa prazo menor que 365 dias", async () => {
+    await t.client.query(
+      `INSERT INTO audit_log (organization_id, actor_type, action, at) VALUES
+       ($1, 'system', 'teste.retencao', now() - interval '6 years'),
+       ($1, 'system', 'teste.retencao', now() - interval '5 years 2 days'),
+       ($2, 'system', 'teste.retencao', now() - interval '5 years 1 day'),
+       (NULL, 'system', 'teste.retencao', now() - interval '7 years'),
+       ($1, 'system', 'teste.retencao', now() - interval '4 years')`,
+      [a.organizationId, b.organizationId],
+    )
+    const purge = async (tx: Transaction, before: string, limit: number) => {
+      const r = await tx.query<{ n: number }>(`SELECT app.audit_log_purge(${before}, $1) AS n`, [limit])
+      return r.rows[0]?.n
+    }
+    // Numa transação só (asTenant desfaz no fim): lote de 2 com os mais velhos primeiro, depois o resto
+    // além de 5 anos; o registro de 4 anos só sai com um prazo menor.
+    const flow = await asTenant(t.client, null, async (tx) => [
+      await purge(tx, "now() - interval '5 years'", 2),
+      await purge(tx, "now() - interval '5 years'", 100),
+      await purge(tx, "now() - interval '5 years'", 100),
+      await purge(tx, "now() - interval '3 years'", 100),
+    ])
+    expect(flow).toEqual([2, 2, 0, 1])
+
+    await expect(asTenant(t.client, null, (tx) => purge(tx, "now() - interval '364 days'", 100))).rejects.toThrow(/365 dias/)
+    await expect(asTenant(t.client, null, (tx) => purge(tx, "now() - interval '2 years'", 0))).rejects.toThrow(/lote/)
+    // O app_user continua sem apagar a auditoria diretamente.
+    await expect(asTenant(t.client, a.organizationId, (tx) => tx.query("DELETE FROM audit_log"))).rejects.toThrow(DENIED)
   })
 })
