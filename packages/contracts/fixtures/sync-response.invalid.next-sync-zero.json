@@ -168,6 +168,26 @@
         "session_id": "01a1cab3-7cf8-7f23-8fdf-c01d84c79403",
         "reason": "requested"
       }
+    },
+    {
+      "id": "01a1cab3-7a10-7c11-9a21-3c5d7e9f1a2b",
+      "type": "log.level",
+      "issued_at": "2026-11-11T13:02:05.300Z",
+      "expires_at": "2026-11-11T13:12:05.300Z",
+      "payload": {
+        "level": "debug",
+        "duration_s": 900
+      }
+    },
+    {
+      "id": "01a1cab3-7b10-7d22-8b32-4d6e8f0a2b3c",
+      "type": "logs.upload",
+      "issued_at": "2026-11-11T13:02:05.300Z",
+      "expires_at": "2026-11-11T13:12:05.300Z",
+      "payload": {
+        "lines": 500,
+        "since_s": 3600
+      }
     }
   ],
   "next_sync_s": 0,

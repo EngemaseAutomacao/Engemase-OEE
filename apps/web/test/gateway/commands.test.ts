@@ -126,6 +126,21 @@ describe("fila de comandos", () => {
     expect(await getGatewayCommand(t.db, client.organizationId, queued.id)).toMatchObject({ status: "rejected", errorCode: "unsupported" })
   })
 
+  it("log.level e logs.upload: validade padrão de 10 min e payload pelo contrato", async () => {
+    const { client } = await freshClient()
+    const base = { organizationId: client.organizationId, gatewayId: client.gatewayId, now }
+    const level = await enqueueGatewayCommand(t.db, { ...base, type: "log.level", payload: { level: "debug", duration_s: 900 } })
+    expect(level.expiresAt.getTime() - now.getTime()).toBe(600_000)
+    const logs = await enqueueGatewayCommand(t.db, { ...base, type: "logs.upload", payload: { lines: 500 } })
+    expect(logs.status).toBe("pending")
+    expect((await adminError(enqueueGatewayCommand(t.db, { ...base, type: "log.level", payload: { level: "trace" } }))).code).toBe(
+      "invalid_command",
+    )
+    expect((await adminError(enqueueGatewayCommand(t.db, { ...base, type: "logs.upload", payload: { lines: 5000 } }))).code).toBe(
+      "invalid_command",
+    )
+  })
+
   it("payload fora do contrato, tipo desconhecido ou validade acima de 24 h → invalid_command", async () => {
     const { client } = await freshClient()
     const base = { organizationId: client.organizationId, gatewayId: client.gatewayId, now }
