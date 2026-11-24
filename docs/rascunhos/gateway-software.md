@@ -6,7 +6,7 @@
 
 # Gateway: projeto do software (proposta para documentação técnica)
 
-> **Status:** proposta de projeto, 11/11/2026. Parte do que está em [03](03-gateway.md), [04](04-protocolo-gateway-nuvem.md), [11](11-integracao-modbus.md), [12](12-acesso-remoto-vpn.md), [08](08-seguranca-e-operacao.md) e nas ADRs 002, 003, 006, 008, 011, 012 e 013. Itens **"a confirmar"** dependem da bancada com o reComputer R1000 ou do fornecedor. A seção 9 lista os ajustes que este projeto propõe aos documentos e ao contrato.
+> **Status:** proposta de projeto, 11/11/2026. Parte do que está em [03](../03-gateway.md), [04](../04-protocolo-gateway-nuvem.md), [11](../11-integracao-modbus.md), [12](../12-acesso-remoto-vpn.md), [08](../08-seguranca-e-operacao.md) e nas ADRs 002, 003, 006, 008, 011, 012 e 013. Itens **"a confirmar"** dependem da bancada com o reComputer R1000 ou do fornecedor. A seção 9 lista os ajustes que este projeto propõe aos documentos e ao contrato.
 
 **Princípios que guiam todas as decisões abaixo**
 1. **A coleta nunca depende da nuvem.** Com uma config válida salva, o agente coleta e grava, esteja online, offline, sem credencial válida ou atualizando.
@@ -29,7 +29,7 @@
 | F04 | Planejador de blocos | Agrupa registradores contíguos (≤ 125 registradores / 2.000 bits). Se o CLP responder exceção 02 (endereço inválido), divide o bloco ao meio até isolar a tag ruim | **MVP** |
 | F05 | Decodificação | bool, bit de registrador, int16/uint16, int32/uint32, float32; ordens ABCD/CDAB/BADC/DCBA; escala (`mul`, `add`) | **MVP** (int64/float64/string: F2) |
 | F06 | Saúde por dispositivo | Estado da conexão, latência, erros por tipo (timeout, CRC, exceção n), backoff do escravo morto sem travar o barramento | **MVP** |
-| F07 | Detector de 2º mestre | Bytes recebidos no RS-485 sem requisição nossa indicam IHM ou outro mestre no barramento → alerta (ver [11 §5](11-integracao-modbus.md#5-um-mestre-por-barramento)) | **MVP** (barato) |
+| F07 | Detector de 2º mestre | Bytes recebidos no RS-485 sem requisição nossa indicam IHM ou outro mestre no barramento → alerta (ver [11 §5](../11-integracao-modbus.md#5-um-mestre-por-barramento)) | **MVP** (barato) |
 | **Processamento** ||||
 | F08 | Sinais | Debounce de booleanos, deadband de analógicos, qualidade (boa/ruim/vencida) | **MVP** |
 | F09 | Estado da máquina | Modos `signals`, `state_code` e `count_derived`; `NO_COMM`; **heartbeat** do bloco OEE (CLP "congelado" vira `NO_COMM`) | **MVP** |
@@ -44,7 +44,7 @@
 | F17 | Proxy e CA corporativa | `HTTPS_PROXY`/`NO_PROXY` e CAs extras em PEM | **MVP** |
 | F18 | Relógio | Diferença em relação ao `server_time`, detecção de salto, operação sem NTP | **MVP** |
 | **Comandos** ||||
-| F19 | `tag.read`, `device.test`, `config.reload`, `agent.restart` | Como no [04](04-protocolo-gateway-nuvem.md#tipos-de-comando), sempre pela fila do barramento | **MVP** |
+| F19 | `tag.read`, `device.test`, `config.reload`, `agent.restart` | Como no [04](../04-protocolo-gateway-nuvem.md#tipos-de-comando), sempre pela fila do barramento | **MVP** |
 | F20 | `modbus.scan`, `logs.upload`, `token.rotate`, `log.level` (com prazo), `gateway.identify` (LED/buzzer) | Suporte e comissionamento remotos | **F2** |
 | F21 | `agent.update` (OTA) | `.deb` assinado (Ed25519), instalador root separado, rollback automático | **F2**. **Recomendação:** antecipar uma versão mínima para antes do piloto (ver M4b) |
 | **Operação local** ||||
@@ -56,7 +56,7 @@
 | F27 | Logs | Estruturados no journald, sem segredos, com limite de repetição; nível temporário | **MVP** (envio sob demanda: F2) |
 | F28 | Telemetria de saúde | CPU, RAM, disco, temperatura, **desgaste do eMMC**, links, NTP, fila, latências | **MVP** |
 | **Acesso remoto** ||||
-| F29 | VPN sob demanda | `vpn.enable/disable/status`, `ot.forward.open/close`, kill switch local, auditoria na outbox ([12](12-acesso-remoto-vpn.md)) | **F2** |
+| F29 | VPN sob demanda | `vpn.enable/disable/status`, `ot.forward.open/close`, kill switch local, auditoria na outbox ([12](../12-acesso-remoto-vpn.md)) | **F2** |
 | **Futuro** ||||
 | F30 | Credencial selada no TPM | `systemd-creds` com TPM2 (o R1000 tem TPM; suporte a confirmar) | F2/F3 |
 | F31 | Exportação do buffer | `buffer export` para pendrive, em planta sem internet | F3 |
@@ -259,7 +259,7 @@ Fluxo:
 
 O OTA usa **`.deb`**, não só o binário. Assim, units, hardening e arquivos de sysusers/tmpfiles também se atualizam, e o `dpkg` sempre sabe a versão instalada.
 
-### 2.7 Helper de acesso remoto (F2, resumo; detalhe no [12](12-acesso-remoto-vpn.md))
+### 2.7 Helper de acesso remoto (F2, resumo; detalhe no [12](../12-acesso-remoto-vpn.md))
 
 ```ini
 # oee-remote-access.service — nunca habilitado; iniciado pelo agente via D-Bus
@@ -565,7 +565,7 @@ Regras:
 
 ### 3.6 Motor de máquina: regras que garantem a contagem
 
-**Estados:** `RUNNING`, `STOPPED`, `FAULT`, `SETUP`, `NO_COMM` ([07](07-calculo-oee.md#modelo-de-estados)), e `UNKNOWN` só internamente, até a primeira leitura boa após o boot.
+**Estados:** `RUNNING`, `STOPPED`, `FAULT`, `SETUP`, `NO_COMM` ([07](../07-calculo-oee.md#modelo-de-estados)), e `UNKNOWN` só internamente, até a primeira leitura boa após o boot.
 
 1. **Debounce** (padrão 2 s): o estado candidato precisa se manter pelo prazo. O evento leva o **instante em que o candidato começou**, não o da confirmação.
 2. **`NO_COMM`:** é declarado após `comm_loss_after_s` sem leitura boa de qualquer tag de papel `state.*` ou `count.*`. O timestamp é o da **primeira falha**. O mesmo vale quando o `plc.heartbeat` fica parado por mais de `heartbeat_timeout_s` (papel novo, ver seção 9).
@@ -575,7 +575,7 @@ Regras:
    - Endereço, tipo ou ordem de words mudou na config → **redefine a base** sem delta + evento `counter_rebaseline`.
    - Contador `int16/int32` é tratado como sem sinal da mesma largura.
    - `max_rate_per_s` vem da config. Padrão: `20 / ideal_cycle_s`, ou 1.000/s se não houver ciclo ideal.
-   - Após `NO_COMM` longo, `Δt` é grande e o limite também: a produção do intervalo entra no primeiro minuto após a volta ([07](07-calculo-oee.md)).
+   - Após `NO_COMM` longo, `Δt` é grande e o limite também: a produção do intervalo entra no primeiro minuto após a volta ([07](../07-calculo-oee.md)).
 4. **Invariante de exatamente uma vez:**
    - o `counter_state.last_raw` gravado é **sempre o valor ao fim do último minuto confirmado no banco**;
    - minuto e estado do contador vão na **mesma transação**;
@@ -636,7 +636,7 @@ stateDiagram-v2
   - **modo rápido** (1 s) por 2 min após receber um comando;
   - em **Recuperando**, o próximo lote sai logo após o ack, com no mínimo 1 s entre lotes e jitter;
   - o servidor pode impor `next_sync_s`.
-- **Erros:** como na tabela do [04](04-protocolo-gateway-nuvem.md#erros-e-retentativas). Backoff de 1 s a 5 min com *full jitter*. `413` divide o lote. `400` faz bisseção até isolar o item, que vai para `quarantine` (sai da fila principal, fica registrado e é reportado).
+- **Erros:** como na tabela do [04](../04-protocolo-gateway-nuvem.md#erros-e-retentativas). Backoff de 1 s a 5 min com *full jitter*. `413` divide o lote. `400` faz bisseção até isolar o item, que vai para `quarantine` (sai da fila principal, fica registrado e é reportado).
 - **Diferença de relógio:** `offset = server_time − (t_envio + RTT/2)`, filtrada por mediana das últimas 5 medidas.
 
 **Aplicação de config:**
@@ -921,7 +921,7 @@ log:
 
   Ausente = acesso remoto desligado.
 
-### 5.2 Config remota (JSON da nuvem): acréscimos ao exemplo do [03](03-gateway.md#configuração-de-tags)
+### 5.2 Config remota (JSON da nuvem): acréscimos ao exemplo do [03](../03-gateway.md#configuração-de-tags)
 
 ```json
 {
@@ -1244,7 +1244,7 @@ Runner arm64: runners Linux arm64 do GitHub (disponibilidade no plano: **a confi
 | ID | Cenário | Como provocar | Critério |
 |---|---|---|---|
 | F1 | Internet cai 4 h | nftables bloqueia 443 / tirar o cabo IT | Conservação 100%; fila drena em < 10 min, lotes ≤ 2.000, sem 429 |
-| F2 | Nuvem com erros | Nuvem falsa com 500/429/413/400/401 programados | Comportamento da tabela do [04](04-protocolo-gateway-nuvem.md); item ruim isolado; 401 mantém o buffer |
+| F2 | Nuvem com erros | Nuvem falsa com 500/429/413/400/401 programados | Comportamento da tabela do [04](../04-protocolo-gateway-nuvem.md); item ruim isolado; 401 mantém o buffer |
 | F3 | Proxy + CA corporativa + inspeção TLS | squid + mitmproxy | Funciona com a CA em `ca.d`; erro claro no `diag` sem ela |
 | F4 | Corte seco | Relé, **500 ciclos** com 5–300 s ligado | `quick_check` OK; conservação 100%; zero duplicatas |
 | F5 (T-PWR-3) | Corte com UPS | Retorno em 1 s, 10 s, 60 s, 5 min, **inclusive durante o desligamento** | Sempre volta sozinho, sem intervenção |
@@ -1274,7 +1274,7 @@ Runner arm64: runners Linux arm64 do GitHub (disponibilidade no plano: **a confi
 
 ---
 
-## 8. Plano de implementação (time: 1 desenvolvedor dedicado ao gateway, conforme o [09](09-roadmap.md))
+## 8. Plano de implementação (time: 1 desenvolvedor dedicado ao gateway, conforme o [09](../09-roadmap.md))
 
 | Marco | Escopo | Prazo | Critério de pronto |
 |---|---|---|---|
@@ -1284,10 +1284,10 @@ Runner arm64: runners Linux arm64 do GitHub (disponibilidade no plano: **a confi
 | **M3: config remota, comandos e saúde** | Hot reload por diff, máquina de estados da config, `tag.read`, `device.test`, `config.reload`, `agent.restart`, saúde no `/sync`, LEDs | 1,5 sem | Config publicada na web aplicada em < 15 s sem reiniciar; F14 aprovado; "Ler agora" responde em < 3 s; saúde visível na web |
 | **M4: produto instalável** | `.deb` completo (sysusers, tmpfiles, hardening, socket, watchdog, journald), CLI `status`/`diag`/`enroll`/`net show`, tratamento de falta de energia, página de status (opcional), roteiro de instalação | 1,5 sem | Instalação do zero em R1000 em ≤ 15 min por alguém de campo, só com o roteiro; `systemd-analyze security` ≤ 2,0; F4 (500 ciclos), F5, F16 e F17 aprovados |
 | **M4b: OTA mínimo** (recomendado antes do piloto) | `oee-updater`, `.deb` assinado, rollback automático, `agent.update` para uma versão-alvo (sem canais nem rollout gradual) | 1–1,5 sem | Atualização e rollback (binário propositalmente quebrado) em 2 gateways da bancada; queda de energia no meio da atualização se recupera |
-| **M5: piloto** | Soak de 14 dias na bancada em paralelo ao piloto no cliente | 2 sem | Critério do [09](09-roadmap.md#fase-1-mvp-7-semanas--2-de-piloto): zero perda de contagem (inclusive com horas sem internet), máquina no ar pela equipe de campo, OEE batendo em 3 turnos; F18 aprovado |
+| **M5: piloto** | Soak de 14 dias na bancada em paralelo ao piloto no cliente | 2 sem | Critério do [09](../09-roadmap.md#fase-1-mvp-7-semanas--2-de-piloto): zero perda de contagem (inclusive com horas sem internet), máquina no ar pela equipe de campo, OEE batendo em 3 turnos; F18 aprovado |
 | **M6: operação remota** (F2) | OTA completo (canais, rollout, `min_agent_version`), `logs.upload`, `log.level`, `token.rotate`, `modbus.scan` remoto, amostras `custom` (se ficaram de fora) | 2 sem | 10 gateways atualizados por rollout; pacote de diagnóstico recebido na web em < 1 min |
 | **M7: comissionamento local** (F2) | Página local completa, `identify`, enroll pela página | 1,5 sem | Comissionar uma máquina **sem internet** (só testes de leitura) e registrar depois |
-| **M8: acesso remoto** (F2) | `oee-remote-access` (tsnet), polkit, SSH com certificado, `ot.forward`, kill switch, auditoria na outbox | 2–3 sem | Testes negativos do [12](12-acesso-remoto-vpn.md#itens-para-a-prova-de-conceito) automatizados; a VPN nunca religa após reboot; teto local respeitado sem nuvem |
+| **M8: acesso remoto** (F2) | `oee-remote-access` (tsnet), polkit, SSH com certificado, `ot.forward`, kill switch, auditoria na outbox | 2–3 sem | Testes negativos do [12](../12-acesso-remoto-vpn.md#itens-para-a-prova-de-conceito) automatizados; a VPN nunca religa após reboot; teto local respeitado sem nuvem |
 | **M9: novos protocolos e transporte** (F2/F3) | S7comm / EtherNet/IP / OPC UA como novos drivers; uplink MQTT | — | Mesmo conjunto de testes de engine e conservação, rodando sobre o driver novo |
 
 **Decisão pedida ao dono do produto:** M1 a M4 cabem nas 7 semanas da Fase 1. **M4b soma 1 a 1,5 semana.** Sem ele, qualquer correção durante o piloto exige ir até a fábrica, porque no MVP não há VPN. Recomendação: fazer o M4b.
@@ -1298,19 +1298,19 @@ Runner arm64: runners Linux arm64 do GitHub (disponibilidade no plano: **a confi
 
 | # | Onde | Ajuste | Por quê |
 |---|---|---|---|
-| 1 | [03](03-gateway.md), [08](08-seguranca-e-operacao.md) | `credentials.json` vai de `/etc/oee-gateway/` para **`/var/lib/oee-gateway/`** | Com `ProtectSystem=strict`, o agente não escreve em `/etc`, e o `token.rotate` precisa gravar |
-| 2 | [03](03-gateway.md), [04](04-protocolo-gateway-nuvem.md) | `serial_buses[].port` **lógico** (`rs485-1`) | Desacopla da placa (R1000, R1100, RevPi, USB de bancada) |
-| 3 | [04](04-protocolo-gateway-nuvem.md) | **Duas filas** com ack próprio: `batch.seq_*` (core) + `batch.samples_seq_*`; resposta com `ack_seq` e `ack_samples_seq` | O [03](03-gateway.md) manda enviar eventos e minutos antes das amostras, o que é incompatível com um único `ack_seq` "até aqui" |
-| 4 | [04](04-protocolo-gateway-nuvem.md) | Campos opcionais em `agent`: `config_status{version,state,error}`, `buffer_oldest_s`, `samples_pending`, `quarantined`, `temp_c`, `emmc_wear_pct`, `ntp_synced`, `boot_id`, `unclean_boots_24h`, `links`; `devices[]` com `timeouts_1m`, `exceptions`, `last_ok_at`; `buses[]` novo | Hoje uma config rejeitada não tem como ser reportada |
-| 5 | [04](04-protocolo-gateway-nuvem.md), [07](07-calculo-oee.md) | Minuto com `setup_s` (o estado `SETUP` existe no bloco OEE e não tem campo no minuto) | Fecha a conta de 60 s por minuto |
-| 6 | [04](04-protocolo-gateway-nuvem.md) | Tipos de evento: `state`, `product`, `counter_reset`, `counter_jump`, `counter_rebaseline`, `agent_start`, `agent_stop`, `power_loss`, `power_restored`, `clock_jump`, `data_loss`, `buffer_corrupted`, `config_applied`, `config_rejected`, `remote_access.*` | Auditoria e lacunas visíveis na nuvem |
-| 7 | [04](04-protocolo-gateway-nuvem.md) | Comandos `log.level` (com prazo) e `gateway.identify`; endpoint `POST /uploads/{command_id}` para `logs.upload` | Mesmo domínio que o firewall já libera |
-| 8 | [03](03-gateway.md) | Papel **`plc.heartbeat`** na tabela de papéis | O bloco OEE já tem `heartbeat`; sem o papel, um CLP em STOP com o servidor Modbus ativo parece "parado" e não `NO_COMM` |
-| 9 | [03](03-gateway.md) | Watchdog: `RuntimeWatchdogSec` **≤ 15 s** no CM4; registrar o watchdog de RTC (1–255 s) do R1000 | O texto atual atribui watchdog externo só ao R1100 |
-| 10 | [03](03-gateway.md) | Seção de queda de energia com o problema de "não religa" do UPS e a ação `reboot` | Achado da pesquisa (fórum Seeed) |
-| 11 | [03](03-gateway.md), [09](09-roadmap.md) | OTA em pacote `.deb` + atualizador root separado; OTA mínimo antes do piloto (M4b) | Rollback confiável; piloto sem VPN |
-| 12 | [03](03-gateway.md) | `plc-sim`: RTU por escravo próprio sobre PTY | O servidor da `simonvetter/modbus` só faz TCP e TCP+TLS |
-| 13 | [03](03-gateway.md) | Página local: status somente leitura no MVP (opcional) | Apoio ao critério "campo sem desenvolvimento" |
+| 1 | [03](../03-gateway.md), [08](../08-seguranca-e-operacao.md) | `credentials.json` vai de `/etc/oee-gateway/` para **`/var/lib/oee-gateway/`** | Com `ProtectSystem=strict`, o agente não escreve em `/etc`, e o `token.rotate` precisa gravar |
+| 2 | [03](../03-gateway.md), [04](../04-protocolo-gateway-nuvem.md) | `serial_buses[].port` **lógico** (`rs485-1`) | Desacopla da placa (R1000, R1100, RevPi, USB de bancada) |
+| 3 | [04](../04-protocolo-gateway-nuvem.md) | **Duas filas** com ack próprio: `batch.seq_*` (core) + `batch.samples_seq_*`; resposta com `ack_seq` e `ack_samples_seq` | O [03](../03-gateway.md) manda enviar eventos e minutos antes das amostras, o que é incompatível com um único `ack_seq` "até aqui" |
+| 4 | [04](../04-protocolo-gateway-nuvem.md) | Campos opcionais em `agent`: `config_status{version,state,error}`, `buffer_oldest_s`, `samples_pending`, `quarantined`, `temp_c`, `emmc_wear_pct`, `ntp_synced`, `boot_id`, `unclean_boots_24h`, `links`; `devices[]` com `timeouts_1m`, `exceptions`, `last_ok_at`; `buses[]` novo | Hoje uma config rejeitada não tem como ser reportada |
+| 5 | [04](../04-protocolo-gateway-nuvem.md), [07](../07-calculo-oee.md) | Minuto com `setup_s` (o estado `SETUP` existe no bloco OEE e não tem campo no minuto) | Fecha a conta de 60 s por minuto |
+| 6 | [04](../04-protocolo-gateway-nuvem.md) | Tipos de evento: `state`, `product`, `counter_reset`, `counter_jump`, `counter_rebaseline`, `agent_start`, `agent_stop`, `power_loss`, `power_restored`, `clock_jump`, `data_loss`, `buffer_corrupted`, `config_applied`, `config_rejected`, `remote_access.*` | Auditoria e lacunas visíveis na nuvem |
+| 7 | [04](../04-protocolo-gateway-nuvem.md) | Comandos `log.level` (com prazo) e `gateway.identify`; endpoint `POST /uploads/{command_id}` para `logs.upload` | Mesmo domínio que o firewall já libera |
+| 8 | [03](../03-gateway.md) | Papel **`plc.heartbeat`** na tabela de papéis | O bloco OEE já tem `heartbeat`; sem o papel, um CLP em STOP com o servidor Modbus ativo parece "parado" e não `NO_COMM` |
+| 9 | [03](../03-gateway.md) | Watchdog: `RuntimeWatchdogSec` **≤ 15 s** no CM4; registrar o watchdog de RTC (1–255 s) do R1000 | O texto atual atribui watchdog externo só ao R1100 |
+| 10 | [03](../03-gateway.md) | Seção de queda de energia com o problema de "não religa" do UPS e a ação `reboot` | Achado da pesquisa (fórum Seeed) |
+| 11 | [03](../03-gateway.md), [09](../09-roadmap.md) | OTA em pacote `.deb` + atualizador root separado; OTA mínimo antes do piloto (M4b) | Rollback confiável; piloto sem VPN |
+| 12 | [03](../03-gateway.md) | `plc-sim`: RTU por escravo próprio sobre PTY | O servidor da `simonvetter/modbus` só faz TCP e TCP+TLS |
+| 13 | [03](../03-gateway.md) | Página local: status somente leitura no MVP (opcional) | Apoio ao critério "campo sem desenvolvimento" |
 
 ---
 

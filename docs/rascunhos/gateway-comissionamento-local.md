@@ -272,7 +272,7 @@ MemoryDenyWriteExecute=yes
 Estado do gateway, com prazo de até 8 h, renovável.
 - **Quem liga:** a página (perfil técnico), a plataforma, a CLI (`oee-gateway commission start --for 4h`) ou o pendrive `OEE/commission`.
 - **Efeitos:**
-  - a plataforma **silencia os alertas** das máquinas desse gateway ([13](13-notificacoes-e-alertas.md)) e mostra a faixa "em comissionamento até 19:20";
+  - a plataforma **silencia os alertas** das máquinas desse gateway ([13](../13-notificacoes-e-alertas.md)) e mostra a faixa "em comissionamento até 19:20";
   - o `/sync` passa a cada 2 s, para conferir a tela ao vivo (cerca de 14 mil chamadas em 8 h, desprezível);
   - a sincronização rápida fica disponível para a página.
 - **Só pelo pendrive, além disso:** liga a página na OT por 2 h mesmo que a política a tenha desligado, e zera os bloqueios de login.
@@ -302,7 +302,7 @@ Estado do gateway, com prazo de até 8 h, renovável.
   - HTML no servidor (`html/template`), JS sem framework (módulos ES) e **SSE** para o tempo real. Se a leitura ao vivo pedir mais, usar Preact (~4 KB) compilado com esbuild;
   - tudo embutido (`embed`), até 300 KB comprimidos;
   - fontes do sistema;
-  - tokens e cores de estado do [14](14-identidade-visual-e-temas.md), com as cores de estado travadas;
+  - tokens e cores de estado do [14](../14-identidade-visual-e-temas.md), com as cores de estado travadas;
   - tema claro por padrão (reflexo no chão de fábrica) e escuro opcional;
   - português do Brasil;
   - alvo: notebook de 1280×720, utilizável em tablet a partir de 768 px.
@@ -424,7 +424,7 @@ O motor e as regras são os do rascunho de rede (§1.3 a §1.9): `network.json`,
 **2.5.4 Detectar parâmetros seriais (F2)**
 - **Condição:** só num barramento sem dispositivos cadastrados ou com **pausa explícita**. A pausa dura no máximo 60 s, renovável, e marca `gateway_maintenance`.
 - **Combinações testadas**, nesta ordem, nos units 1–3 (ou no unit informado), com no máximo 60 s no total: 19200 8E1, 9600 8N1, 9600 8E1, 19200 8N1, 38400 8N1, 38400 8E1, 57600 8N1, 115200 8N1, 9600 8N2, 19200 8N2, 9600 8O1, 19200 8O1.
-- **Modbus ASCII:** se o equipamento responder em ASCII a 9600 7E1, a tela avisa "dispositivo em Modbus ASCII (ex.: Delta DVP de fábrica). Configure RTU no CLP (D1120/M1143)" ([11](11-integracao-modbus.md)).
+- **Modbus ASCII:** se o equipamento responder em ASCII a 9600 7E1, a tela avisa "dispositivo em Modbus ASCII (ex.: Delta DVP de fábrica). Configure RTU no CLP (D1120/M1143)" ([11](../11-integracao-modbus.md)).
 
 **2.5.5 Leitura ao vivo de registradores**
 - **Entradas:**
@@ -903,7 +903,7 @@ s9a1  senha local                    senha       192.168.10.77 (…:ee:77)      
 **"Botão" de modo comissionamento e de reset de rede**
 - Como o R1000 não tem botão de usuário, a **presença física** é o **pendrive de serviço**: FAT32, montado com `noexec,nosuid,nodev`, só nomes fixos, nada é executado, processado uma vez por inserção e auditado.
 - Se a bancada mostrar que o "Reset Hole" é um GPIO legível, mapear: 5 s = janela de comissionamento; 15 s = reset de rede.
-- No R1100, uma DI pode receber uma chave de painel (kill switch do acesso remoto, [12](12-acesso-remoto-vpn.md)).
+- No R1100, uma DI pode receber uma chave de painel (kill switch do acesso remoto, [12](../12-acesso-remoto-vpn.md)).
 
 | Arquivo em `OEE/` no pendrive | Efeito | Fase |
 |---|---|---|
@@ -989,7 +989,7 @@ flowchart TD
 - **Formato:** JSON `{format: "oee-pkg/1", gateway_id, serial, issued_at, expires_at, items: [config | enroll_deferred | network], key_id, sig}`, assinado em **Ed25519 por uma chave da plataforma em KMS, separada da chave de OTA**. As duas chaves públicas (atual e próxima) vêm embutidas no agente.
 - **O gateway confere:** a assinatura; `serial` igual ao do `hw.json`; `gateway_id`; `config_version` maior que a atual (proteção contra volta de versão); a validade.
 - **Na volta da internet:** a versão já é a publicada (a própria plataforma gerou o pacote), então não há conflito.
-- **O que a internet traz depois:** os dados chegam em ordem, e os turnos afetados são recalculados ("turno sujo", [07](07-calculo-oee.md)). Nenhuma peça se perde.
+- **O que a internet traz depois:** os dados chegam em ordem, e os turnos afetados são recalculados ("turno sujo", [07](../07-calculo-oee.md)). Nenhuma peça se perde.
 
 ---
 
@@ -1059,13 +1059,13 @@ flowchart TD
 
 | Documento | Ajuste |
 |---|---|
-| [03](03-gateway.md) | Trocar "Página local de diagnóstico (Fase 2)" por um resumo desta proposta (MVP-L + F2); incluir `oee-localui` nos processos; tabela de LEDs; pendrive de serviço |
-| [04](04-protocolo-gateway-nuvem.md) | **Comandos** `localui.grant`, `localui.password.set`, `localui.sessions.revoke`, `commission.set`. Campos `agent.localui {enabled_ot, sessions[], spki_sha256, lockouts}` e `agent.commissioning_until`. Evento `local_audit`. Resposta do enroll com `local_access_key`. Código de ativação **vinculável ao número de série** e válido por até 7 dias (ativação adiada). Formato `.oeepkg` (F2). Chave de pacotes da plataforma **separada** da chave de OTA |
-| [08](08-seguranca-e-operacao.md) | Linha "Página local": "Só na OT e em localhost, processo isolado, login pela plataforma ou com senha local, bloqueio por tentativas, auditada" |
-| [12](12-acesso-remoto-vpn.md) | Bloqueio pela página permitido; desbloqueio só por CLI root; faixa e LED azul durante a sessão |
-| [13](13-notificacoes-e-alertas.md) | Modo comissionamento silencia os alertas do gateway; alerta "tentativas de acesso local" |
-| [15](15-multi-cliente-e-acesso.md) | Permissões `gateway.local_access.approve`, `gateway.local_password.view`/`rotate` (tabela §1.5); tipo de ator "pessoa no gateway (local)"; aviso ao admin do cliente quando a Engemase vê a senha |
-| [09](09-roadmap.md) | MVP-L no M4 (+1,5–2 sem); itens F2 no M7 |
+| [03](../03-gateway.md) | Trocar "Página local de diagnóstico (Fase 2)" por um resumo desta proposta (MVP-L + F2); incluir `oee-localui` nos processos; tabela de LEDs; pendrive de serviço |
+| [04](../04-protocolo-gateway-nuvem.md) | **Comandos** `localui.grant`, `localui.password.set`, `localui.sessions.revoke`, `commission.set`. Campos `agent.localui {enabled_ot, sessions[], spki_sha256, lockouts}` e `agent.commissioning_until`. Evento `local_audit`. Resposta do enroll com `local_access_key`. Código de ativação **vinculável ao número de série** e válido por até 7 dias (ativação adiada). Formato `.oeepkg` (F2). Chave de pacotes da plataforma **separada** da chave de OTA |
+| [08](../08-seguranca-e-operacao.md) | Linha "Página local": "Só na OT e em localhost, processo isolado, login pela plataforma ou com senha local, bloqueio por tentativas, auditada" |
+| [12](../12-acesso-remoto-vpn.md) | Bloqueio pela página permitido; desbloqueio só por CLI root; faixa e LED azul durante a sessão |
+| [13](../13-notificacoes-e-alertas.md) | Modo comissionamento silencia os alertas do gateway; alerta "tentativas de acesso local" |
+| [15](../15-multi-cliente-e-acesso.md) | Permissões `gateway.local_access.approve`, `gateway.local_password.view`/`rotate` (tabela §1.5); tipo de ator "pessoa no gateway (local)"; aviso ao admin do cliente quando a Engemase vê a senha |
+| [09](../09-roadmap.md) | MVP-L no M4 (+1,5–2 sem); itens F2 no M7 |
 | Rascunho de software | §2.1 (+`oee-localui`, +`oee-gateway-reset@.service`); §2.2 (+`u oee-ui`); §2.8 (substituir); §6.3 (LEDs); §7.2 (substituir pela §4.2); regra polkit para `oee-gateway-reset@{network,unenroll,factory}.service`; OTA offline (item 6 acima) |
 | Rascunho de rede | §2.1/§2.2: sem `CAP_NET_BIND_SERVICE`; acrescentar a porta 80 (só redirecionamento) na matriz de fluxos, linha 12; §1.4.4: acrescentar `commission` e `collect`; §4.10: substituir a tabela; §6.4 item 4: rotação da senha na entrega; **Trixie**: desligar a rede do cloud-init e os perfis gerados pelo Netplan para que `oee-it`/`oee-ot` prevaleçam (ver §10) |
 

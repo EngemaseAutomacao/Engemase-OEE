@@ -1,13 +1,14 @@
 # Status do projeto e próximos passos
 
-> Nota de passagem, atualizada em 12/11/2026, para retomar o trabalho em outra sessão ou máquina. O backlog completo, as decisões e as lacunas estão no [`docs/17`](17-backlog-e-pendencias.md).
+> Nota de passagem, atualizada em 24/11/2026, para retomar o trabalho em outra sessão ou máquina. O backlog completo, as decisões e as lacunas estão no [`docs/17`](17-backlog-e-pendencias.md).
 
 ## Resumo
 
 - **Documentação:** arquitetura (docs 01–16), backlog (17) e operação (`docs/operacao/`), conferida contra o código.
 - **Protótipo da interface** (`apps/web`, dados simulados): completo para validação com clientes.
 - **Fase 0 de código:** pronta e testada sem contas na nuvem e sem hardware. Contrato, cálculo de OEE, banco com RLS, API real dos gateways, agente Go revisado, simulador de CLP, pacote `.deb`, receita da imagem e CI. Um teste de ponta a ponta liga tudo: simulador → agente → API → banco.
-- **Bloqueios para seguir:** contas (Vercel, Neon, domínio), hardware de bancada e as decisões D2, D7, D26, D28, D29, D36, D37 e D38.
+- **Bloqueios para seguir:** contas (Vercel, Neon, domínio) e hardware de bancada. As decisões foram todas tomadas em 12/11/2026.
+- **O que dá para fazer já e quem faz:** levantamento de 24/11/2026 no [`docs/17` §8](17-backlog-e-pendencias.md#8-levantamento-de-24112026-o-que-falta-e-quem-faz).
 
 ## Protótipo da interface
 

@@ -6,7 +6,7 @@
 
 # Gateway: rede, instalação física e procedimento em campo
 
-> **Status:** proposta de projeto, ainda sem código, para virar o doc `16-gateway-rede-e-instalacao.md` (ou entrar como seções novas do [03](03-gateway.md)).
+> **Status:** proposta de projeto, ainda sem código, para virar o doc `16-gateway-rede-e-instalacao.md` (ou entrar como seções novas do [03](../03-gateway.md)).
 > **Base:** docs 03, 04, 08, 10, 11, 12 e 15, mais pesquisa de nov/2026 (fontes no fim).
 > **"A confirmar":** marca o que não foi verificado e deve ser validado na bancada da Fase 0.
 > **Limitação:** a rede desta sessão bloqueou o `wiki.seeedstudio.com`. Os fatos do R1000 vêm dos resumos de busca do wiki, do manual e de revendas. Vale reconferir no PDF oficial antes de publicar.
@@ -39,7 +39,7 @@ O que se sabe do R1000:
 - **ETH1** é a 10/100 convertida de USB, sem PoE.
 - O módulo PoE não vem no produto padrão. Em amostras, quem compra solda o módulo. Em lotes, a Seeed oferece a montagem.
 
-**Recomendação: ETH0 = OT e ETH1 = IT.** Isso já bate com o diagrama do [08](08-seguranca-e-operacao.md).
+**Recomendação: ETH0 = OT e ETH1 = IT.** Isso já bate com o diagrama do [08](../08-seguranca-e-operacao.md).
 
 | Critério | Por que ETH0 na OT |
 |---|---|
@@ -162,7 +162,7 @@ Há quatro caminhos, todos levando ao **mesmo motor** (`oee-netd`), com o mesmo 
 - **Sincronização com a nuvem:** toda mudança local sobe no próximo `/sync` (origem `local`, usuário `tecnico`) e vira a versão vigente também na nuvem.
 
 #### 1.4.3 Pela CLI
-A CLI fica disponível por SSH durante uma sessão de VPN ([12](12-acesso-remoto-vpn.md)) ou no console local (HDMI e teclado USB). No console, o login `tecnico` usa a senha local e tem `sudo` restrito a `oee-gateway net|diag|status`.
+A CLI fica disponível por SSH durante uma sessão de VPN ([12](../12-acesso-remoto-vpn.md)) ou no console local (HDMI e teclado USB). No console, o login `tecnico` usa a senha local e tem `sudo` restrito a `oee-gateway net|diag|status`.
 
 ```bash
 sudo oee-gateway net show
@@ -196,7 +196,7 @@ sudo oee-gateway net test
 - **Inspeção SSL:** a recomendação é **exceção para os domínios da Engemase e da Tailscale**.
   - Se o cliente não aceitar, a CA dele entra em `ca_bundle_pem`. Ela vai para `/usr/local/share/ca-certificates/oee-cliente-<hash>.crt`, seguida de `update-ca-certificates`. O Go usa o pool do sistema.
   - **Aviso na ficha:** com inspeção, o proxy do cliente vê o token do gateway. É preciso aceite por escrito e rotação do token se houver suspeita.
-  - **VPN:** com inspeção (ex.: FortiGate com DPI), a VPN Tailscale não funciona, como já registrado no [12](12-acesso-remoto-vpn.md). Isso não afeta a coleta.
+  - **VPN:** com inspeção (ex.: FortiGate com DPI), a VPN Tailscale não funciona, como já registrado no [12](../12-acesso-remoto-vpn.md). Isso não afeta a coleta.
 
 ### 1.6 NTP e relógio
 
@@ -368,7 +368,7 @@ Se o emissor do TLS for inesperado (por exemplo, a CA de um FortiGate), a mensag
 ### 2.1 Princípios e sysctl
 
 - Política **drop** em `input`, `forward` e `output`.
-- Os únicos processos com socket aberto: SSH em `127.0.0.1:22` ([12](12-acesso-remoto-vpn.md)) e a página local nos IPs da OT, porta 443. O agente recebe `CAP_NET_BIND_SERVICE` para isso.
+- Os únicos processos com socket aberto: SSH em `127.0.0.1:22` ([12](../12-acesso-remoto-vpn.md)) e a página local nos IPs da OT, porta 443. O agente recebe `CAP_NET_BIND_SERVICE` para isso.
 - O tsnet roda em espaço de usuário. O encaminhamento para um CLP é feito pelo helper como conexão TCP comum que sai pela OT, e por isso passa pela regra `ot_targets`.
 
 ```
@@ -486,7 +486,7 @@ table inet oee {
 
 Observações:
 - **O conjunto `ot_targets` vem da config de dispositivos.** Ele é atualizado a quente a cada nova `config_version`.
-- **Liberações temporárias:** o `device.test` de um IP ainda não cadastrado e o `ot.forward.open` da VPN entram com prazo, por exemplo `nft add element inet oee ot_targets { 192.168.10.99 . 502 timeout 5m }`. O alvo do `device.test` continua limitado como no [15](15-multi-cliente-e-acesso.md) (item 13).
+- **Liberações temporárias:** o `device.test` de um IP ainda não cadastrado e o `ot.forward.open` da VPN entram com prazo, por exemplo `nft add element inet oee ot_targets { 192.168.10.99 . 502 timeout 5m }`. O alvo do `device.test` continua limitado como no [15](../15-multi-cliente-e-acesso.md) (item 13).
 - **Filtro por domínio:** o gateway **não filtra por domínio**, porque os IPs da Vercel são dinâmicos. A lista de domínios fica no firewall do cliente. No gateway, a restrição é por porta e por processo (`skuid`).
 - **Saúde:** os contadores de descarte (`oee-drop-*`) vão no bloco de saúde do `/sync`. Descartes de saída na OT indicam dispositivo mal cadastrado.
 
@@ -498,7 +498,7 @@ Observações:
 | `ModemManager`, `wpa_supplicant`, `bluetooth`/`hciuart` (série -00 sem rádio) | Remover |
 | **`rpi-connect` / `rpi-connect-lite`** (acesso remoto da própria Raspberry Pi) | Remover, se presente |
 | `cloud-init` | Desabilitar após o primeiro boot, **se presente** (a confirmar na imagem Trixie) |
-| OpenSSH | Só em `127.0.0.1` ([12](12-acesso-remoto-vpn.md)) |
+| OpenSSH | Só em `127.0.0.1` ([12](../12-acesso-remoto-vpn.md)) |
 
 **Teste de aceite:**
 - `ss -tulpn` deve listar só `127.0.0.1:22`, `<IPs OT>:443` e o socket Unix do chrony.
@@ -537,7 +537,7 @@ Observações:
 - **Saída só pelas portas e destinos listados.** O gateway não acessa AD, compartilhamentos nem outros equipamentos da rede IT.
 - **Tráfego estimado:** ~0,5–2 GB por mês por gateway (sincronização a cada 10 s em lotes compactados, mais atualizações). **Estimativa a medir na PoC.**
 - **Sem internet, nada se perde:** o gateway guarda até 30 dias de dados e reenvia em ordem.
-- **Acesso remoto** só com aprovação do admin do cliente, com prazo, auditado e com bloqueio local ([12](12-acesso-remoto-vpn.md)).
+- **Acesso remoto** só com aprovação do admin do cliente, com prazo, auditado e com bloqueio local ([12](../12-acesso-remoto-vpn.md)).
 
 **Teste de liberação (o TI roda antes da visita, de um computador na mesma VLAN)**
 
@@ -601,7 +601,7 @@ Regras:
 - **No campo:** cabo industrial **Cat5e ou Cat6 blindado (SF/UTP)**, capa PUR em área com óleo, conectores RJ45 industriais. Dentro do painel, patch cords Cat6 blindados curtos (0,5–2 m).
 - **Até 100 m por canal.** Acima disso, switch intermediário ou fibra.
 - **Separação:** ≥ 20 cm de cabos de motor ou inversor, em canaleta separada, cruzando a 90°.
-- **CLP com uma porta só, ocupada pela IHM:** colocar um **switch industrial de 5 portas** entre CLP e IHM e ligar o gateway nele. Exige autorização e uma parada curta. Conferir o limite de conexões Modbus TCP do CLP ([11](11-integracao-modbus.md)).
+- **CLP com uma porta só, ocupada pela IHM:** colocar um **switch industrial de 5 portas** entre CLP e IHM e ligar o gateway nele. Exige autorização e uma parada curta. Conferir o limite de conexões Modbus TCP do CLP ([11](../11-integracao-modbus.md)).
 - **Switch OT fornecido pela Engemase:** não gerenciável, 24 VDC, trilho DIN, 5 portas (por exemplo, linhas de entrada de Moxa, Phoenix Contact, Weidmüller ou Hirschmann).
 
 ### 4.5 RS-485 no R1000
@@ -614,7 +614,7 @@ Regras:
 | Terminação | 120 Ω 1/4 W **só nas duas pontas**. **No R1000 o resistor não vem montado**: colocar o resistor no borne do gateway quando ele for ponta (caso típico) e outro no borne da última estação |
 | Polarização | Um único par no barramento. **A confirmar em bancada** se o R1000 polariza. Teste: medir a tensão entre A e B em repouso (≥ 200 mV). Se não houver, usar a polarização de um escravo que a ofereça |
 | Nomes A/B | Varia entre fabricantes. **Sem comunicação, a primeira suspeita é A/B invertidos** |
-| Mestre único | Conferir que não há IHM ou outro mestre no barramento ([11](11-integracao-modbus.md#5-um-mestre-por-barramento)) |
+| Mestre único | Conferir que não há IHM ou outro mestre no barramento ([11](../11-integracao-modbus.md#5-um-mestre-por-barramento)) |
 
 ### 4.6 Energia: supercapacitor e queda de energia
 
@@ -627,7 +627,7 @@ Regras:
   4. Executa `systemctl poweroff`.
 - **Bônus de OEE:** a plataforma pode **sugerir "falta de energia"** como motivo das paradas que coincidem com `power_loss`.
 - **Risco de "desligado sem religar":** se a energia voltar antes de o supercapacitor esgotar, o CM4 pode ficar parado depois do `poweroff`. Mitigação a validar: armar o **watchdog via RTC do R1000** (configurável de 1 a 255 s, segundo o manual) antes de desligar, para forçar o reset.
-  - Isso **corrige o [03](03-gateway.md)**, que diz que o R1000 só tem o watchdog interno.
+  - Isso **corrige o [03](../03-gateway.md)**, que diz que o R1000 só tem o watchdog interno.
   - Testar em bancada: queda de 2 s, retorno durante o desligamento e quedas repetidas.
 - **Nobreak CC (UPS 24 VDC com bateria)** só quando o cliente quiser que o gateway continue registrando durante quedas longas. Normalmente as máquinas também param.
 - **Padrão sugerido:** supercapacitor **em todas as unidades da frota**. O custo é pequeno perto de uma ida a campo para recuperar um eMMC corrompido. Decisão do dono do produto.
@@ -728,7 +728,7 @@ flowchart LR
   S4 -.- RT2
 ```
 
-A malha é aterrada só no painel do gateway. Até ~10 escravos a 19200 bps com leitura a cada ~1 s ([11](11-integracao-modbus.md#quanto-cabe-num-barramento)).
+A malha é aterrada só no painel do gateway. Até ~10 escravos a 19200 bps com leitura a cada ~1 s ([11](../11-integracao-modbus.md#quanto-cabe-num-barramento)).
 
 ### (c) Misto: TCP + dois barramentos RS-485
 
@@ -829,7 +829,7 @@ Cada máquina pertence a **um** gateway (vínculo `gateway_machine`).
 |---|---|
 | OT e IT no mesmo switch ou VLAN | Junta as redes fisicamente (o agente gera um alerta) |
 | Gateway como roteador ou NAT | Quebra a segmentação (`ip_forward=0`) |
-| Gateway como segundo mestre RS-485 com a IHM | Colisões ([11](11-integracao-modbus.md#5-um-mestre-por-barramento)) |
+| Gateway como segundo mestre RS-485 com a IHM | Colisões ([11](../11-integracao-modbus.md#5-um-mestre-por-barramento)) |
 | RS-485 em estrela, ou terminação em todas as estações | Reflexões e carga excessiva |
 | Cobre Ethernet ou RS-485 entre prédios | Surto e diferença de potencial de terra |
 | Gateway na mesma fonte de solenoides, sem fusível | Transientes e queda conjunta |
@@ -873,7 +873,7 @@ Cada máquina pertence a **um** gateway (vínculo `gateway_machine`).
 | 6 | Energizar | PWR aceso; LED azul piscando no boot; depois verde ou amarelo |
 | 7 | **IT:** ligar o cabo; com o celular, conferir o gateway "online" na plataforma. Se não aparecer, pegar o `net test` pela página local ou pelo pendrive `diag` e resolver com o TI no local | Online; relógio OK; latência do `/sync` abaixo de 2 s |
 | 8 | **OT:** conferir o IP OT (ajustar pela página local ou pela web, com confirmação); `ping` e `device.test` em cada CLP | Todos os dispositivos TCP respondendo |
-| 9 | Comissionar as máquinas pelo checklist do [11](11-integracao-modbus.md#7-checklist-de-comissionamento-em-campo): "Testar conexão", "Ler agora", ordem de words, escala | Valores batem com a IHM ou o CLP |
+| 9 | Comissionar as máquinas pelo checklist do [11](../11-integracao-modbus.md#7-checklist-de-comissionamento-em-campo): "Testar conexão", "Ler agora", ordem de words, escala | Valores batem com a IHM ou o CLP |
 | 10 | Testes de aceite (6.3) | Todos aprovados |
 | 11 | Fechar o painel, fotografar o painel aberto e o fechado, anexar ao cadastro do gateway | Fotos no cadastro |
 | 12 | Entrega e treinamento (6.4) | Termo assinado |
@@ -930,7 +930,7 @@ Cada máquina pertence a **um** gateway (vínculo `gateway_machine`).
 
 ### 6.7 Lista de materiais (BOM) por gateway
 
-> **Valores estimados em nov/2026, só para orçamento preliminar.** Cotar com fornecedores. O preço do R1000 vem do [03](03-gateway.md). Os demais são ordens de grandeza do mercado brasileiro, sem cotação.
+> **Valores estimados em nov/2026, só para orçamento preliminar.** Cotar com fornecedores. O preço do R1000 vem do [03](../03-gateway.md). Os demais são ordens de grandeza do mercado brasileiro, sem cotação.
 
 | Item | Qtd | Faixa (R$) | Quando |
 |---|---|---|---|
@@ -962,19 +962,19 @@ Cada máquina pertence a **um** gateway (vínculo `gateway_machine`).
 ## 7. Impacto nos outros documentos e pendências
 
 **Acréscimos propostos**
-- **[03](03-gateway.md):**
+- **[03](../03-gateway.md):**
   - daemon `oee-netd` (root) separado do agente;
   - LEDs e `gw.identify`;
   - comportamento com o supercapacitor;
   - **correção:** o R1000 tem watchdog via RTC (1–255 s) além do interno do SoC (a confirmar);
   - página local na OT, com endereço de serviço link-local.
-- **[04](04-protocolo-gateway-nuvem.md):**
+- **[04](../04-protocolo-gateway-nuvem.md):**
   - comandos `net.apply`, `net.status`, `net.test` e `gw.identify`;
   - endpoint público `GET /api/gateway/v1/ping`;
   - bloco `net` na saúde do `/sync`: IPs, link, NTP, proxy, temperatura, `power_loss` e contadores de descarte do firewall;
   - host dedicado para os gateways: fica para depois, com o domínio próprio (D28); por enquanto, `engemase-oee.vercel.app`.
-- **[08](08-seguranca-e-operacao.md):** trocar a linha "Firewall local" pela matriz 2.2; incluir a lista de serviços removidos (com `rpi-connect`).
-- **[12](12-acesso-remoto-vpn.md):**
+- **[08](../08-seguranca-e-operacao.md):** trocar a linha "Firewall local" pela matriz 2.2; incluir a lista de serviços removidos (com `rpi-connect`).
+- **[12](../12-acesso-remoto-vpn.md):**
   - usuário `oee-ra` para o helper;
   - `ot.forward.open` adiciona um elemento temporário em `ot_targets`;
   - lista de domínios e portas da Tailscale na ficha.
@@ -989,7 +989,7 @@ Cada máquina pertence a **um** gateway (vínculo `gateway_machine`).
 6. **Supercapacitor:** autonomia real, GPIO de falha de energia e o caso "desligado sem religar" com o watchdog via RTC.
 7. Correspondência borne ↔ `/dev/ttyAMA*`, polarização da RS-485 e revisão v1.1 da placa.
 8. Temperatura do SoC em painel fechado; consumo real com o supercapacitor carregando.
-9. `tsnet` através de proxy e com CA corporativa (já listado no [12](12-acesso-remoto-vpn.md)).
+9. `tsnet` através de proxy e com CA corporativa (já listado no [12](../12-acesso-remoto-vpn.md)).
 10. Nome exato do host do Vercel Blob para a ficha, ou servir a OTA pelo próprio domínio.
 
 **Perguntas para o dono do produto**

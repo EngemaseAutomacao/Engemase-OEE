@@ -198,9 +198,9 @@ Por que assim:
 
 | Item | Configuração |
 |---|---|
-| Usuários | Sem `pi` nem `recomputer`; `root` bloqueado. `tecnico`: login só no console HDMI/teclado, senha = senha local da unidade, `sudo` limitado a `oee-gateway status\|diag\|net *\|enroll *`. `suporte` (F2): sem senha, só SSH com certificado ([12](12-acesso-remoto-vpn.md)). `oee` e `oee-ra` vêm do sysusers do pacote |
+| Usuários | Sem `pi` nem `recomputer`; `root` bloqueado. `tecnico`: login só no console HDMI/teclado, senha = senha local da unidade, `sudo` limitado a `oee-gateway status\|diag\|net *\|enroll *`. `suporte` (F2): sem senha, só SSH com certificado ([12](../12-acesso-remoto-vpn.md)). `oee` e `oee-ra` vêm do sysusers do pacote |
 | SSH | **MVP:** `ssh.service` e `ssh.socket` mascarados fora do modo fábrica. **F2:** `ListenAddress 127.0.0.1`, `PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitRootLogin no`, `AllowUsers suporte`, `TrustedUserCAKeys /etc/ssh/engemase-user-ca.pub`; chaves de host assinadas pela CA de host da Engemase (sem "confiar no primeiro acesso") |
-| sudo | `Defaults use_pty, log_output, iolog_dir=/data/journal/sudo-io` (I/O log pedido no [12](12-acesso-remoto-vpn.md)) e `timestamp_timeout=5` |
+| sudo | `Defaults use_pty, log_output, iolog_dir=/data/journal/sudo-io` (I/O log pedido no [12](../12-acesso-remoto-vpn.md)) e `timestamp_timeout=5` |
 | Segredos | Imagem sem segredos: `/etc/machine-id` vazio e sem chaves de host SSH (geradas no 1º boot). Só chaves **públicas** |
 | Rede | Perfis NM e nftables "de fábrica" do rascunho de rede: IT em DHCP, OT só com o endereço de serviço, política *drop*, `ip_forward=0` |
 | sysctl (além do rascunho de rede) | `kernel.dmesg_restrict=1`, `kernel.kptr_restrict=2`, `kernel.unprivileged_bpf_disabled=1`, `net.core.bpf_jit_harden=2`, `fs.protected_fifos=2`, `fs.protected_regular=2`, `fs.suid_dumpable=0`, `kernel.sysrq=0` (1 só no modo fábrica), `kernel.panic=10`, `kernel.panic_on_oops=1` |
@@ -410,7 +410,7 @@ Serviço OT: 169.254.127.58
 Suporte: (xx) xxxx-xxxx
 ```
 - O QR **não carrega segredo**. Com o domínio da Vercel (D28), a etiqueta impressa só continua valendo se o endereço antigo seguir respondendo depois da troca para o domínio próprio ([`docs/16` §4](../16-projeto-do-gateway.md#4-caminhos-usuários-e-identidade-canônico)).
-- A URL exige login. Quem tem acesso ao gateway lógico vê a página dele; papel de plataforma vê a ficha da unidade; quem não tem acesso recebe 404, conforme o isolamento do [15](15-multi-cliente-e-acesso.md).
+- A URL exige login. Quem tem acesso ao gateway lógico vê a página dele; papel de plataforma vê a ficha da unidade; quem não tem acesso recebe 404, conforme o isolamento do [15](../15-multi-cliente-e-acesso.md).
 
 **Etiqueta 2, da caixa**: nº de série + QR, para leitura no recebimento e na expedição.
 
@@ -598,7 +598,7 @@ Toda transição grava `gateway_unit_event` (append-only) e entra no `audit_log`
 
 **F2 (enroll por identidade):** R4 e R5 passam para a entrada no estoque, e a reserva fica só em R1, R2 e R6.
 
-### 5.5 Modelo de dados (acréscimos ao [06](06-banco-de-dados.md))
+### 5.5 Modelo de dados (acréscimos ao [06](../06-banco-de-dados.md))
 
 | Tabela | Conteúdo |
 |---|---|
@@ -695,7 +695,7 @@ RandomizedDelaySec=90min
 
 ### 6.3 Monitoramento da frota
 
-Campos novos no `/sync` (opcionais, compatíveis com o [04](04-protocolo-gateway-nuvem.md)):
+Campos novos no `/sync` (opcionais, compatíveis com o [04](../04-protocolo-gateway-nuvem.md)):
 - `os{image, platform, debian, last_apt_ok_at, pending_security, reboot_required}`;
 - `hw{…}` (seção 3.6);
 - `emmc{life_time_a, life_time_b, pre_eol}`;
@@ -712,7 +712,7 @@ Campos novos no `/sync` (opcionais, compatíveis com o [04](04-protocolo-gateway
 
 ### 6.4 Alertas da frota
 
-Alertas internos da Engemase (Telegram/e-mail, [13](13-notificacoes-e-alertas.md)). Os do cliente seguem o catálogo do 13.
+Alertas internos da Engemase (Telegram/e-mail, [13](../13-notificacoes-e-alertas.md)). Os do cliente seguem o catálogo do 13.
 
 | Alerta | Condição | Severidade | Para quem |
 |---|---|---|---|
@@ -807,7 +807,7 @@ sequenceDiagram
 
 A importação usa `POST /api/admin/v1/gateways/{id}/import`. Ela passa pela mesma validação do `/sync` (máquinas do gateway lógico, limites de horário) e é idempotente (IDs UUIDv7 e chave por minuto). Os itens recebem `origin=recovered`, e os turnos afetados ficam "sujos" e são recalculados.
 
-### 7.4 Continuidade dos contadores (proposta, toca o [07](07-calculo-oee.md))
+### 7.4 Continuidade dos contadores (proposta, toca o [07](../07-calculo-oee.md))
 
 1. Na confirmação da troca, a config de N traz `counter_seed`: o último valor confirmado de cada contador, com horário.
 2. Na 1ª leitura, se o valor for ≥ semente e o salto for plausível (≤ `max_rate_per_s` × lacuna, sem reset), N emite `counter_gap{machine_id, from_at, to_at, from_value, to_value, delta}`.
@@ -833,7 +833,7 @@ A importação usa `POST /api/admin/v1/gateways/{id}/import`. Ela passa pela mes
 
 **Termo de eliminação**, por unidade:
 - conteúdo: nº de série, CID do eMMC, cliente (se houver), nível e método, data, operador e hash do log;
-- fica na plataforma e o `client_admin` vê no encerramento do contrato (pergunta P7 do [15](15-multi-cliente-e-acesso.md)).
+- fica na plataforma e o `client_admin` vê no encerramento do contrato (pergunta P7 do [15](../15-multi-cliente-e-acesso.md)).
 
 **Referências e próximos passos:**
 - **NIST SP 800-88 Rev. 2** (set/2025): o *Clear* pode deixar resíduo em memória flash. Para mídia que sai do controle, usar *Purge* ou destruição; detalhes das técnicas pela IEEE 2883.
@@ -849,7 +849,7 @@ A importação usa `POST /api/admin/v1/gateways/{id}/import`. Ela passa pela mes
 ### 7.7 Fim do contrato do cliente
 - **Comodato** (hardware da Engemase): L1 remoto, recolhimento, unidade em `em_triagem`.
 - **Vendido** (hardware do cliente): L1 remoto; a unidade fica com o cliente e vai para `baixado`. Opções: oferecer recompra, ou orientar o reset (`sudo oee-gateway factory-reset --purge` pelo console, com a senha local).
-- Em ambos: revogar a credencial e seguir os prazos do [15 §6](15-multi-cliente-e-acesso.md#6-ciclo-de-vida-do-cliente).
+- Em ambos: revogar a credencial e seguir os prazos do [15 §6](../15-multi-cliente-e-acesso.md#6-ciclo-de-vida-do-cliente).
 
 ---
 
@@ -883,7 +883,7 @@ A importação usa `POST /api/admin/v1/gateways/{id}/import`. Ela passa pela mes
 | Frete nacional + seguro (varia por região) | 50–180 |
 | Provisão de DOA/RMA (2–4% do hardware, com frete internacional) | 50–110 |
 | **Total sem hardware** | **~160–460** |
-| Hardware: R1000 R10xx-00 nacionalizado por courier ([03](03-gateway.md)) | 2.400–2.700 |
+| Hardware: R1000 R10xx-00 nacionalizado por courier ([03](../03-gateway.md)) | 2.400–2.700 |
 | SuperCAP UPS | A cotar |
 
 ### 8.3 Bancada: o que comprar
@@ -931,32 +931,32 @@ A importação usa `POST /api/admin/v1/gateways/{id}/import`. Ela passa pela mes
 | 9 | Enroll em bancada | — | Código usado na bancada | Mantido, com **credencial pendente** até "Confirmar instalação" |
 
 **Acréscimos aos documentos**
-- **[03](03-gateway.md):**
+- **[03](../03-gateway.md):**
   - Trixie + `rpi-image-gen`; partições; pacote `engemase-r1000-support` (não rodar o script da Seeed na unidade);
   - TPM SLB9670 e RTC com watchdog confirmados no overlay; `RS485_POWER_EN`;
   - substituir o fluxo "apt install + enroll" no cliente pelo fluxo de preparação em bancada.
-- **[04](04-protocolo-gateway-nuvem.md):**
+- **[04](../04-protocolo-gateway-nuvem.md):**
   - blocos `hw`, `os`, `emmc` e `disk` no `/sync`;
   - credencial `pending` (só saúde) e `collection: paused|running` na config;
   - enroll `mode: device` com desafio (F2);
   - comandos `gateway.reboot`, `gateway.decommission` e `localui.passwd` (F2);
   - `counter_seed` e evento `counter_gap`;
   - endpoint admin de importação de buffer recuperado.
-- **[06](06-banco-de-dados.md):** tabelas da seção 5.5; `gateway_credential` substitui `gateway.token_hash`.
-- **[07](07-calculo-oee.md):** "produção sem detalhe" vinda do `counter_gap`.
-- **[08](08-seguranca-e-operacao.md):**
+- **[06](../06-banco-de-dados.md):** tabelas da seção 5.5; `gateway_credential` substitui `gateway.token_hash`.
+- **[07](../07-calculo-oee.md):** "produção sem detalhe" vinda do `counter_gap`.
+- **[08](../08-seguranca-e-operacao.md):**
   - política de atualização do SO;
   - hardening da imagem;
   - níveis de apagamento e descarte;
   - runbook de troca detalhado (seção 7).
-- **[09](09-roadmap.md):**
+- **[09](../09-roadmap.md):**
   - **Fase 0:** imagem v0 Trixie no R1000; validar overlay, módulo, provisioner e tempos.
   - **Fase 1:** imagem v1, modo fábrica e selo, inventário mínimo, burn-in com script (orquestração manual), credencial pendente.
   - **Fase 2:** bancada automatizada, enroll por identidade, TPM, `decommission`, `buffer export`, alertas de frota completos.
   - **Fase 3:** layout imutável, espelho apt próprio, criptografia/secure boot.
-- **[12](12-acesso-remoto-vpn.md):** certificado de host SSH assinado pela CA; I/O log em `/data/journal/sudo-io`.
-- **[13](13-notificacoes-e-alertas.md):** alertas da seção 6.4.
-- **[15](15-multi-cliente-e-acesso.md):** papel `producao`; cliente vê os dados de hardware do seu gateway; "Confirmar instalação/troca" entre as permissões.
+- **[12](../12-acesso-remoto-vpn.md):** certificado de host SSH assinado pela CA; I/O log em `/data/journal/sudo-io`.
+- **[13](../13-notificacoes-e-alertas.md):** alertas da seção 6.4.
+- **[15](../15-multi-cliente-e-acesso.md):** papel `producao`; cliente vê os dados de hardware do seu gateway; "Confirmar instalação/troca" entre as permissões.
 
 ---
 
