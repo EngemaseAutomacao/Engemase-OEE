@@ -53,6 +53,22 @@ export interface ActiveRule {
   readonly params: Record<string, unknown>
 }
 
+/** Regra do sistema `key` do cliente da transação, sem criar (`null` se não existe, inativa ou excluída). */
+export async function findSystemRule(tx: GatewayTx, organizationId: string, key: SystemRuleKey): Promise<ActiveRule | null> {
+  const [rule] = await tx
+    .select({
+      id: alertRule.id,
+      severity: alertRule.severity,
+      params: alertRule.params,
+      active: alertRule.active,
+      deletedAt: alertRule.deletedAt,
+    })
+    .from(alertRule)
+    .where(and(eq(alertRule.systemKey, key), eq(alertRule.organizationId, organizationId)))
+  if (rule === undefined || !rule.active || rule.deletedAt !== null) return null
+  return { id: rule.id, severity: rule.severity, params: rule.params }
+}
+
 /**
  * Regra do sistema `key` do cliente da transação, criada se ainda não existir. `null` se a regra
  * foi desativada ou excluída (o cliente não quer esse alerta).
@@ -78,18 +94,7 @@ export async function ensureSystemRule(
       target: [alertRule.organizationId, alertRule.systemKey],
       where: sql`${alertRule.systemKey} IS NOT NULL`,
     })
-  const [rule] = await tx
-    .select({
-      id: alertRule.id,
-      severity: alertRule.severity,
-      params: alertRule.params,
-      active: alertRule.active,
-      deletedAt: alertRule.deletedAt,
-    })
-    .from(alertRule)
-    .where(and(eq(alertRule.systemKey, key), eq(alertRule.organizationId, organizationId)))
-  if (rule === undefined || !rule.active || rule.deletedAt !== null) return null
-  return { id: rule.id, severity: rule.severity, params: rule.params }
+  return findSystemRule(tx, organizationId, key)
 }
 
 export interface AlertOccurrence {
@@ -100,7 +105,7 @@ export interface AlertOccurrence {
   readonly machineId?: string | null
   readonly gatewayId?: string | null
   readonly at: Date
-  /** Dados do momento; `count` é somado ao do alerta aberto (ocorrências). */
+  /** Dados do momento; `count`, se vier, é somado ao do alerta aberto (ocorrências). */
   readonly data: Record<string, unknown> & { readonly count?: number }
 }
 
@@ -127,8 +132,10 @@ export async function raiseAlert(tx: GatewayTx, o: AlertOccurrence): Promise<{ r
       targetWhere: sql`${alertEvent.resolvedAt} IS NULL`,
       set: {
         lastSeenAt: sql`greatest(${alertEvent.lastSeenAt}, excluded.last_seen_at)`,
-        data: sql`(${alertEvent.data} || excluded.data) || jsonb_build_object('count',
-          coalesce((${alertEvent.data} ->> 'count')::bigint, 0) + coalesce((excluded.data ->> 'count')::bigint, 0))`,
+        data: sql`CASE WHEN excluded.data ? 'count'
+          THEN (${alertEvent.data} || excluded.data) || jsonb_build_object('count',
+            coalesce((${alertEvent.data} ->> 'count')::bigint, 0) + (excluded.data ->> 'count')::bigint)
+          ELSE ${alertEvent.data} || excluded.data END`,
       },
     })
     // xmax = 0 só na linha recém-inserida (no ON CONFLICT DO UPDATE, a linha atualizada tem xmax).

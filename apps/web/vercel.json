@@ -1,4 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["gru1"]
+  "regions": ["gru1"],
+  "crons": [
+    { "path": "/api/cron/alertas", "schedule": "* * * * *" },
+    { "path": "/api/cron/expiracao", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/vpn", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/limpeza", "schedule": "30 3 * * *" },
+    { "path": "/api/cron/resumo-diario", "schedule": "0 10,11 * * *" }
+  ]
 }
