@@ -6,6 +6,10 @@
  *   `offlineAfterS + minDurationMin` (60 s + 5 min) abre um alerta crítico por gateway; resolve
  *   sozinho quando o gateway volta a sincronizar (último /sync há menos de `offlineAfterS`) ou é
  *   revogado/excluído. Gateway que nunca sincronizou não alerta.
+ * - **Em trânsito** (L23): gateway marcado "Em trânsito" (`in_transit_until` no futuro e `installed_at`
+ *   nulo: ativado na bancada e desligado para envio) não abre alerta de offline, e o alerta que estiver
+ *   aberto se resolve. Passado o prazo (até 30 dias) sem instalar, volta a alertar normalmente. O trânsito
+ *   termina no primeiro /sync depois de marcado (`installed_at`, gravado pelo /sync).
  * - **Minuto reescrito** (`minute_rewritten`, aberto pelo /sync): resolve sozinho depois de
  *   `autoResolveAfterH` (24 h) sem reescrita nova na máquina.
  *
@@ -13,7 +17,7 @@
  * entram com a central de alertas (W10).
  */
 import { alertEvent, gateway } from "@engemase/db"
-import { and, eq, isNotNull, isNull, lte, sql } from "drizzle-orm"
+import { and, eq, isNotNull, isNull, lte, not, sql } from "drizzle-orm"
 import { autoResolveAlerts, ensureSystemRule, findSystemRule, raiseAlert, SYSTEM_RULES } from "../alerts/system"
 import type { GatewayTx } from "../gateway/types"
 import type { CronJob } from "./runner"
@@ -22,6 +26,11 @@ import { minuteWindow } from "./windows"
 function numberParam(params: Record<string, unknown>, key: string, fallback: number): number {
   const value = params[key]
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+/** Gateway "Em trânsito" em `now` (L23): prazo ainda valendo e não instalado. */
+export function inTransitAt(now: Date) {
+  return sql`(${gateway.inTransitUntil} IS NOT NULL AND ${gateway.inTransitUntil} > ${now.toISOString()}::timestamptz AND ${gateway.installedAt} IS NULL)`
 }
 
 async function gatewayOffline(tx: GatewayTx, organizationId: string, now: Date): Promise<{ opened: number; resolved: number }> {
@@ -41,6 +50,7 @@ async function gatewayOffline(tx: GatewayTx, organizationId: string, now: Date):
         isNull(gateway.deletedAt),
         isNotNull(gateway.lastSeenAt),
         lte(gateway.lastSeenAt, alertBefore),
+        not(inTransitAt(now)),
       ),
     )
   let opened = 0
@@ -60,7 +70,7 @@ async function gatewayOffline(tx: GatewayTx, organizationId: string, now: Date):
   }
   if (rule === null) return { opened, resolved: 0 }
 
-  // Volta a resolver: sincronizou há pouco, ou saiu de operação (revogado/excluído).
+  // Resolve: sincronizou há pouco, saiu de operação (revogado/excluído) ou foi marcado "Em trânsito".
   const backOnline = new Date(now.getTime() - offlineAfterS * 1000)
   const resolved = await autoResolveAlerts(
     tx,
@@ -68,7 +78,8 @@ async function gatewayOffline(tx: GatewayTx, organizationId: string, now: Date):
     now,
     sql`EXISTS (
       SELECT 1 FROM gateway g WHERE g.id = ${alertEvent.gatewayId}
-        AND (g.last_seen_at > ${backOnline.toISOString()}::timestamptz OR g.status = 'revoked' OR g.deleted_at IS NOT NULL)
+        AND (g.last_seen_at > ${backOnline.toISOString()}::timestamptz OR g.status = 'revoked' OR g.deleted_at IS NOT NULL
+          OR (g.in_transit_until > ${now.toISOString()}::timestamptz AND g.installed_at IS NULL))
     )`,
   )
   return { opened, resolved }

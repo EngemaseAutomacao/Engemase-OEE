@@ -1,4 +1,4 @@
-import type { OeeIndicators, OeeTotals, OeeWarning, PerformanceStatus } from "./types.js";
+import type { OeeIndicators, OeeTotals, OeeWarning, PerformanceStatus } from "./types";
 
 /** Tolerância para ruído de ponto flutuante ao comparar com 100%. */
 const EPSILON = 1e-9;

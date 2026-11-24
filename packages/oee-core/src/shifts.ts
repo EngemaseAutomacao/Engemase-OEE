@@ -1,5 +1,5 @@
-import { OeeInputError } from "./errors.js";
-import { clipInterval, normalizeIntervals } from "./intervals.js";
+import { OeeInputError } from "./errors";
+import { clipInterval, normalizeIntervals } from "./intervals";
 import {
   addDays,
   assertTimeZone,
@@ -8,8 +8,8 @@ import {
   parsePlainDate,
   parseTimeOfDay,
   type IsoWeekday,
-} from "./timezone.js";
-import type { Instant, Interval, ScheduledWindow } from "./types.js";
+} from "./timezone";
+import type { Instant, Interval, ScheduledWindow } from "./types";
 
 const DAY_MINUTES = 24 * 60;
 

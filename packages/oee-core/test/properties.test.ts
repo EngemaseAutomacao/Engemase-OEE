@@ -16,7 +16,7 @@ import {
   type ShiftDefinition,
   type StateEvent,
   type TimeBreakdown,
-} from "../src/index.js";
+} from "../src/index";
 
 const NUM_RUNS = 300;
 const BASE = Date.UTC(2026, 10, 11, 6, 0, 0);

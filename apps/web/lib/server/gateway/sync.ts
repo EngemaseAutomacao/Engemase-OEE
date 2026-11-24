@@ -751,20 +751,21 @@ async function saveCommandResults(w: Writer, results: readonly CommandResult[], 
 }
 
 /**
- * Dados novos num turno já consolidado (`oee_shift.dirty = false`) marcam o turno como sujo para o
- * cron recalcular (docs/07, "Dados atrasados"). O intervalo do turno é calculado no fuso da unidade
- * (turno noturno termina no dia seguinte).
+ * Dados novos num turno já consolidado marcam o turno como sujo para o cron recalcular (docs/07, "Dados
+ * atrasados"). O intervalo do turno é calculado no fuso da unidade (turno noturno termina no dia seguinte).
+ * Marca também o que já está sujo (mantendo o `dirty_since`): o UPDATE trava a linha e serializa com o
+ * recálculo em andamento (`lib/server/production/oee-shifts.ts`), que assim nunca limpa o `dirty` de um
+ * turno cujos dados novos ele não viu.
  */
 async function markShiftsDirty(w: Writer): Promise<void> {
   const ranges = w.touched.toJson()
   if (ranges.length === 0) return
   await w.tx.execute(sql`
-    UPDATE oee_shift AS o SET dirty = true, dirty_since = ${iso(w.now)}::timestamptz
+    UPDATE oee_shift AS o SET dirty = true, dirty_since = CASE WHEN o.dirty THEN o.dirty_since ELSE ${iso(w.now)}::timestamptz END
     FROM jsonb_to_recordset(${JSON.stringify(ranges)}::jsonb) AS r(machine_id uuid, t_min timestamptz, t_max timestamptz),
          shift AS s,
          unit AS u
     WHERE o.machine_id = r.machine_id
-      AND NOT o.dirty
       AND s.id = o.shift_id
       AND u.id = s.unit_id
       AND o.shift_date BETWEEN (r.t_min AT TIME ZONE 'UTC')::date - 2 AND (r.t_max AT TIME ZONE 'UTC')::date + 1
@@ -804,6 +805,9 @@ async function saveGatewayHealth(w: Writer, req: SyncRequest, refs: References):
         ...(devices.length > 0 ? { devices } : {}),
         received_at: iso(w.now),
       },
+      // "Em trânsito" (L23) termina no primeiro /sync depois de marcado: o gateway chegou ao cliente.
+      installedAt: sql`CASE WHEN ${gateway.installedAt} IS NULL AND ${gateway.inTransitSince} IS NOT NULL
+        AND ${gateway.inTransitSince} <= ${iso(w.now)}::timestamptz THEN ${iso(w.now)}::timestamptz ELSE ${gateway.installedAt} END`,
       updatedAt: w.now,
     })
     .where(eq(gateway.id, w.principal.gatewayId))

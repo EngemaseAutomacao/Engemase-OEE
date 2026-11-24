@@ -52,7 +52,7 @@ describe("tarefas agendadas", () => {
         crons: { path: string; schedule: string }[]
       }
       expect(vercel.crons).toEqual(cronsDoVercel(PLANO_VERCEL))
-      expect(CRON_JOBS.map((j) => j.name)).toEqual(["alertas", "expiracao", "vpn", "limpeza", "resumo-diario"])
+      expect(CRON_JOBS.map((j) => j.name)).toEqual(["alertas", "expiracao", "vpn", "limpeza", "resumo-diario", "turnos"])
       for (const j of CRON_JOBS) {
         const route = new URL(`../../app/api/cron/${j.name}/route.ts`, import.meta.url)
         expect(existsSync(route), j.name).toBe(true)
@@ -62,7 +62,7 @@ describe("tarefas agendadas", () => {
       }
     })
 
-    it("plano da Vercel: no Pro vão os 5 jobs; no Hobby, só os de uma vez por dia", () => {
+    it("plano da Vercel: no Pro vão todos os jobs; no Hobby, só os de uma vez por dia", () => {
       expect(cronsDoVercel("pro")).toEqual(CRON_JOBS.map((j) => ({ path: `/api/cron/${j.name}`, schedule: j.schedule })))
       expect(cronsDoVercel("hobby")).toEqual([
         { path: "/api/cron/limpeza", schedule: "30 3 * * *" },
@@ -158,6 +158,40 @@ describe("tarefas agendadas", () => {
         client.organizationId,
       ])
       expect(resolved).toEqual({ state: "auto_resolved", resolved_at: back })
+    })
+
+    it("gateway \"Em trânsito\" não abre alerta de offline e resolve o aberto; vencido o prazo, volta a alertar (L23)", async () => {
+      const client = await freshClient()
+      const now = new Date("2026-11-26T13:00:00Z")
+      const silentSince = new Date(now.getTime() - 3 * 3_600_000)
+      const open = (gatewayId: string) => count(t, "SELECT 1 FROM alert_event WHERE gateway_id = $1 AND resolved_at IS NULL", [gatewayId])
+      await t.client.query("UPDATE gateway SET last_seen_at = $2 WHERE id = $1", [client.gatewayId, silentSince])
+      await run("alertas", now)
+      expect(await open(client.gatewayId)).toBe(1)
+
+      // Marcado "Em trânsito" pela Engemase: o alerta aberto resolve e nenhum novo abre.
+      await t.client.query("UPDATE gateway SET in_transit_since = $2, in_transit_until = $3 WHERE id = $1", [
+        client.gatewayId,
+        new Date(now.getTime() - 60_000),
+        new Date(now.getTime() + 2 * 24 * 3_600_000),
+      ])
+      await run("alertas", new Date(now.getTime() + 60_000))
+      expect(await open(client.gatewayId)).toBe(0)
+      await run("alertas", new Date(now.getTime() + 24 * 3_600_000))
+      expect(await open(client.gatewayId)).toBe(0)
+
+      // Prazo do trânsito vencido sem instalar: volta a alertar.
+      await run("alertas", new Date(now.getTime() + 3 * 24 * 3_600_000))
+      expect(await open(client.gatewayId)).toBe(1)
+
+      // Já instalado (o primeiro /sync no cliente grava installed_at): o prazo não vale mais, alerta normal.
+      const other = await freshClient()
+      await t.client.query(
+        "UPDATE gateway SET last_seen_at = $2, in_transit_since = $3, in_transit_until = $4, installed_at = $5 WHERE id = $1",
+        [other.gatewayId, silentSince, new Date(now.getTime() - 3_600_000), new Date(now.getTime() + 24 * 3_600_000), new Date(now.getTime() - 30 * 60_000)],
+      )
+      await run("alertas", new Date(now.getTime() + 2 * 60_000))
+      expect(await open(other.gatewayId)).toBe(1)
     })
 
     it("minuto reescrito resolve sozinho depois de 24 h sem reescrita nova", async () => {
@@ -302,11 +336,64 @@ describe("tarefas agendadas", () => {
 
       const result = await run("limpeza", now)
       expect(result.status).toBe(200)
-      expect(result.body).toMatchObject({ health_samples_deleted: 1, commands_deleted: 1, partitions: expect.stringContaining("pendente") })
+      expect(result.body).toMatchObject({
+        health_samples_deleted: 1,
+        commands_deleted: 1,
+        partitions: { status: "skipped", reason: expect.stringContaining("DATABASE_MAINTENANCE_URL") },
+        audit_retention_days: 1825,
+        failures: 0,
+      })
       expect(Number(result.body.rate_limit_keys_deleted)).toBeGreaterThanOrEqual(1)
       expect(await count(t, "SELECT 1 FROM gateway_health_sample WHERE gateway_id = $1", [client.gatewayId])).toBe(1)
       expect(await count(t, "SELECT 1 FROM gateway_command WHERE gateway_id = $1", [client.gatewayId])).toBe(1)
       expect(await rows(t, "SELECT key FROM api_rate_limit WHERE key LIKE 'teste:%'")).toEqual([{ key: "teste:nova" }])
+    })
+  })
+
+  describe("limpeza: partições e retenção da auditoria", () => {
+    it("com a conexão de manutenção cria as partições que faltam (idempotente); sem ela, pula sem falhar", async () => {
+      // O PGlite conecta como superusuário: serve de "dono das tabelas" no teste.
+      const maintenance = <T>(fn: (db: typeof t.db) => Promise<T>) => fn(t.db)
+      const future = new Date("2027-01-20T03:30:00Z")
+      const first = await run("limpeza", future, { maintenance })
+      expect(first.status).toBe(200)
+      const parts = first.body.partitions as { status: string; created: string[]; dropped: string[] }
+      expect(parts.status).toBe("ok")
+      expect(parts.created).toEqual(expect.arrayContaining(["production_minute_p2027_03", "production_minute_p2027_04"]))
+      expect(parts.dropped).toEqual([])
+      expect(await count(t, "SELECT 1 FROM pg_class WHERE relname = 'production_minute_p2027_04'")).toBe(1)
+      const again = await run("limpeza", new Date(future.getTime() + 24 * 3_600_000), { maintenance })
+      expect((again.body.partitions as { created: string[] }).created).toEqual([])
+
+      const failing = await run("limpeza", new Date(future.getTime() + 2 * 24 * 3_600_000), {
+        maintenance: async () => {
+          throw new Error("sem conexão")
+        },
+      })
+      expect(failing.status).toBe(500)
+      expect(failing.body.partitions).toMatchObject({ status: "error" })
+    })
+
+    it("apaga a auditoria mais velha que AUDITORIA_RETENCAO_DIAS; valor inválido não apaga nada e aparece como falha", async () => {
+      const client = await freshClient()
+      const now = new Date()
+      const at = (days: number) => new Date(now.getTime() - days * 24 * 3_600_000)
+      await t.client.query(
+        `INSERT INTO audit_log (organization_id, actor_type, action, at) VALUES
+         ($1, 'system', 'teste.retencao', $2), ($1, 'system', 'teste.retencao', $3), (NULL, 'system', 'teste.retencao', $4)`,
+        [client.organizationId, at(800), at(400), at(900)],
+      )
+      const day = (offset: number) => new Date(now.getTime() + offset * 24 * 3_600_000)
+      const invalid = await run("limpeza", day(10), { env: { AUDITORIA_RETENCAO_DIAS: "30" } })
+      expect(invalid.status).toBe(500)
+      expect(invalid.body).toMatchObject({ audit_retention_days: null, audit_logs_deleted: 0 })
+
+      // 20 dias à frente: prazo de 730 dias corta em ~710 dias atrás (o banco exige pelo menos 365).
+      const ok = await run("limpeza", day(20), { env: { AUDITORIA_RETENCAO_DIAS: "730" } })
+      expect(ok.status).toBe(200)
+      expect(ok.body).toMatchObject({ audit_retention_days: 730, audit_purge_complete: true })
+      expect(Number(ok.body.audit_logs_deleted)).toBeGreaterThanOrEqual(2)
+      expect(await rows(t, "SELECT organization_id FROM audit_log WHERE action = 'teste.retencao'")).toEqual([{ organization_id: client.organizationId }])
     })
   })
 
