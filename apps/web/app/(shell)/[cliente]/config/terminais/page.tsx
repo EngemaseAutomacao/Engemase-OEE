@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { getClientBySlug, getConfigAccess, getCurrentUser, getLines, getMachines, getTerminals, getUnits } from "@/lib/mock"
@@ -5,6 +6,8 @@ import { ago, date } from "@/lib/format"
 import { ConfigAccessProvider, EngemaseManagedNote } from "@/components/config/engemase-managed"
 import { TerminalsManager } from "@/components/settings/terminals-manager"
 import type { TerminalRow } from "@/components/settings/types"
+
+export const metadata: Metadata = { title: "Terminais" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/terminais">) {
   const { cliente } = await params

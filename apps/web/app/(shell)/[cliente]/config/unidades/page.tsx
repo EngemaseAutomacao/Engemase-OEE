@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { FactoryIcon, RouterIcon, UsersIcon } from "lucide-react"
 
@@ -7,6 +8,8 @@ import { SectionCard } from "@/components/dashboard/section-card"
 import { ConfigAccessProvider, EngemaseManagedNote } from "@/components/config/engemase-managed"
 import { UsageMeter, type UsageItem } from "@/components/config/plan-usage"
 import { UnitsManager, type AreaNode, type LineNode, type UnitNode } from "@/components/config/units-manager"
+
+export const metadata: Metadata = { title: "Unidades e linhas" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/unidades">) {
   const { cliente } = await params

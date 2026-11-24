@@ -1,9 +1,12 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { getClientBySlug, getCurrentUser, getUnits } from "@/lib/mock"
 import { buildAlerts, buildDevices, buildScope } from "@/components/account/account-data"
 import { AlertCenter } from "@/components/account/alert-center"
 import { EnablePushButton } from "@/components/account/push-devices"
+
+export const metadata: Metadata = { title: "Notificações" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/notificacoes">) {
   const { cliente } = await params

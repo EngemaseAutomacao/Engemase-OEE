@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ChartNoAxesCombinedIcon, ListOrderedIcon, RouterIcon } from "lucide-react"
@@ -10,6 +11,8 @@ import { SoftLink } from "@/components/refresh/soft-action"
 import { addDays } from "@/components/reports/report-utils"
 import { buildStopRecords } from "@/components/reports/stops-data"
 import { StopsReport } from "@/components/reports/stops-report"
+
+export const metadata: Metadata = { title: "Paradas (Pareto)" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/relatorios/paradas">) {
   const { cliente } = await params

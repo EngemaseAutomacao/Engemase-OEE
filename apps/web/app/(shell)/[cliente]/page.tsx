@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import {
@@ -42,6 +43,8 @@ const TIMELINE_ICON = {
   gateway: { icon: WifiOffIcon, tone: "orange" },
   now: { icon: ClockIcon, tone: "blue" },
 } as const
+
+export const metadata: Metadata = { title: "Visão geral" }
 
 export default async function Page({ params }: PageProps<"/[cliente]">) {
   const { cliente } = await params

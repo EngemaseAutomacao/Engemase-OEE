@@ -1,8 +1,11 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { getClientBySlug } from "@/lib/mock"
 import { buildAudit } from "@/components/settings/audit-data"
 import { AuditLog } from "@/components/settings/audit-log"
+
+export const metadata: Metadata = { title: "Auditoria" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/auditoria">) {
   const { cliente } = await params

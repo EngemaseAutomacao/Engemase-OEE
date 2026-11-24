@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ChartNoAxesCombinedIcon, ListOrderedIcon, RouterIcon } from "lucide-react"
@@ -11,6 +12,8 @@ import { OeeReport } from "@/components/reports/oee-report"
 
 /** Histórico carregado: 28 dias = período máximo do filtro (14) + período anterior para comparação. */
 const HISTORY_DAYS = 28
+
+export const metadata: Metadata = { title: "Relatório de OEE" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/relatorios/oee">) {
   const { cliente } = await params

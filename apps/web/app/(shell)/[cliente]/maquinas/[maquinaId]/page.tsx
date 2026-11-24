@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { LifeBuoyIcon, MonitorIcon, OctagonAlertIcon, Settings2Icon, TabletSmartphoneIcon, UnplugIcon, WifiOffIcon } from "lucide-react"
@@ -61,6 +62,8 @@ export async function generateStaticParams({ params }: { params: { cliente: stri
 }
 
 const HOUR_MS = 60 * 60 * 1000
+
+export const metadata: Metadata = { title: "Máquina" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[maquinaId]">) {
   const { cliente, maquinaId } = await params

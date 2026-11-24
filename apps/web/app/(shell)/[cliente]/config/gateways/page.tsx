@@ -1,9 +1,12 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { getAuditLog, getClientBySlug, getConfigAccess, getDevices, getGateways, getMachines, getUnits } from "@/lib/mock"
 import { freshCodeExpiresLabel, gatewayRow } from "@/components/access/gateway-view"
 import { GatewaysView } from "@/components/access/gateways-view"
 import { ConfigAccessProvider } from "@/components/config/engemase-managed"
+
+export const metadata: Metadata = { title: "Gateways" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/gateways">) {
   const { cliente } = await params

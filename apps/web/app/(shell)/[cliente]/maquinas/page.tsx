@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { AlertTriangleIcon, FactoryIcon, GaugeIcon, PackageCheckIcon, PlusIcon } from "lucide-react"
@@ -12,6 +13,8 @@ import { MachineExplorer } from "@/components/monitoring/machine-explorer"
 import { currentShift, productionTotals, stateCounts, unclassifiedStops } from "@/components/monitoring/queries"
 import { ShiftStatus } from "@/components/monitoring/shift-status"
 import { PageTitle } from "@/components/refresh/page-title"
+
+export const metadata: Metadata = { title: "Máquinas" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/maquinas">) {
   const { cliente } = await params

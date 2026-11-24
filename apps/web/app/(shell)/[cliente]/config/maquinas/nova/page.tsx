@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeftIcon, LockIcon } from "lucide-react"
@@ -9,6 +10,8 @@ import { ConfigAccessProvider, EngemaseManagedNote } from "@/components/config/e
 import { MACHINE_TYPES, STATE_MODE_LABEL, ttyFromSerial, ttyPortsFor } from "@/components/config/labels"
 import { NewMachineWizard } from "@/components/config/new-machine-wizard"
 import type { MachineTemplate, WizardDevice, WizardGateway, WizardLine, WizardUnit } from "@/components/config/wizard-model"
+
+export const metadata: Metadata = { title: "Nova máquina" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/maquinas/nova">) {
   const { cliente } = await params

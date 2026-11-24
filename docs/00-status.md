@@ -18,6 +18,7 @@ Telas no layout novo (menu em degradê, busca Ctrl+K, cartões com ícones, barr
 - **Configurações:** unidades e linhas, máquinas e assistente de nova máquina (Modbus TCP, RTU e RTU sobre TCP), gateways, produtos, turnos, motivos, usuários, terminais, aparência e auditoria.
 - **Chão de fábrica:** TV Andon, tela do operador e o **terminal pareado** (`/terminal`, `/terminal/parear`), separado da sessão de pessoa.
 - **Console Engemase:** visão geral, clientes (lista, detalhe, novo), gateways, usuários, auditoria e acesso remoto.
+- **Erros e títulos (24/11/2026):** página 404 e de erro em português (`app/not-found.tsx`, `app/error.tsx`, `app/global-error.tsx`), título próprio na aba em todas as telas e animações desligadas para quem pede menos movimento no sistema.
 - **Conferido:** todas as rotas respondem sem erro de console, sem "NaN" e sem rolagem horizontal, em desktop (1440 px) e celular (390 px). O OEE agregado soma as bases (docs/07), nunca faz média de OEEs.
 
 ## Fase 0: o que está pronto

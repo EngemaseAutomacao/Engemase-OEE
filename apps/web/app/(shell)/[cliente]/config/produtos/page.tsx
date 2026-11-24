@@ -1,8 +1,11 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { getClientBySlug, getConfigAccess, getLines, getMachineLive, getMachines, getProducts, getUnits } from "@/lib/mock"
 import { ConfigAccessProvider, EngemaseManagedNote } from "@/components/config/engemase-managed"
 import { ProductsManager, type ProductMachine, type ProductRow } from "@/components/config/products-manager"
+
+export const metadata: Metadata = { title: "Produtos" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/produtos">) {
   const { cliente } = await params

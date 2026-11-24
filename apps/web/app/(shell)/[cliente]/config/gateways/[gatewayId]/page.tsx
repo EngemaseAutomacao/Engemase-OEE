@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { MOCK_NOW, gatewayParams, getClientBySlug, getConfigAccess, getGateway } from "@/lib/mock"
@@ -9,6 +10,8 @@ import { ConfigAccessProvider } from "@/components/config/engemase-managed"
 export async function generateStaticParams({ params }: { params: { cliente: string } }) {
   return gatewayParams(params.cliente)
 }
+
+export const metadata: Metadata = { title: "Gateway" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/gateways/[gatewayId]">) {
   const { cliente, gatewayId } = await params

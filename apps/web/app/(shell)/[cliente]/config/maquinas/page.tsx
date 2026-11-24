@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { PlusIcon } from "lucide-react"
@@ -15,6 +16,8 @@ import {
 import { ConfigAccessProvider, EngemaseManagedNote, EngemaseOnlyChip } from "@/components/config/engemase-managed"
 import { serialPortsFor } from "@/components/config/labels"
 import { PageTitle } from "@/components/refresh/page-title"
+
+export const metadata: Metadata = { title: "Cadastro de máquinas" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/maquinas">) {
   const { cliente } = await params
