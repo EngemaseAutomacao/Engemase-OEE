@@ -129,6 +129,11 @@ describe("catálogo do banco", () => {
         return !(p.roles === "app_user" && p.table === "organization" && p.cmd === "SELECT")
       if (p.policy === "lookup_by_slug")
         return !(p.roles === "app_lookup" && p.table === "organization" && p.cmd === "SELECT")
+      // Retenção da auditoria (0014): só o app_lookup, dono de app.audit_log_purge, lê e apaga.
+      if (p.policy === "audit_retention_read")
+        return !(p.roles === "app_lookup" && p.table === "audit_log" && p.cmd === "SELECT")
+      if (p.policy === "audit_retention_delete")
+        return !(p.roles === "app_lookup" && p.table === "audit_log" && p.cmd === "DELETE")
       if (p.policy === "lookup_by_token_hash") {
         return !(
           p.roles === "app_lookup" &&
@@ -167,6 +172,7 @@ describe("catálogo do banco", () => {
   it("as funções SECURITY DEFINER pertencem a app_lookup e fixam o search_path", async () => {
     const functions = await securityDefinerFunctions(t.client)
     expect(functions.map((f) => f.name)).toEqual([
+      "audit_log_purge",
       "cron_claim",
       "cron_finish",
       "cron_organizations",
@@ -189,7 +195,7 @@ describe("catálogo do banco", () => {
 
   it("as funções SECURITY DEFINER só podem ser executadas pelo app_user (nunca PUBLIC)", async () => {
     const executors = await securityDefinerFunctionExecutors(t.client)
-    expect(executors.length).toBe(13)
+    expect(executors.length).toBe(14)
     for (const f of executors) expect(f.executors, f.name).toBe("app_lookup,app_user")
     // auth_service não resolve token nem slug (não precisa: lê organization pela própria política).
     const authCanExecute = await t.client.query<{ n: number }>(`

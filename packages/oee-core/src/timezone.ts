@@ -1,5 +1,5 @@
-import { OeeInputError } from "./errors.js";
-import type { Instant } from "./types.js";
+import { OeeInputError } from "./errors";
+import type { Instant } from "./types";
 
 /**
  * Conversões entre horário local da planta (fuso IANA) e UTC, sem dependências externas

@@ -6,8 +6,8 @@ import {
   subtractIntervals,
   type ProductionMinute,
   type ShiftDefinition,
-} from "../src/index.js";
-import { ev, MINUTE, pct, t } from "./helpers.js";
+} from "../src/index";
+import { ev, MINUTE, pct, t } from "./helpers";
 
 /**
  * Caso golden do docs/07 ("Exemplo"):

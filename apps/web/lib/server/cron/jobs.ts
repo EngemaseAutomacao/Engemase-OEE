@@ -1,16 +1,17 @@
 /**
- * As 5 tarefas agendadas da L17 (docs/17), com a rota `/api/cron/<nome>` e o horário (UTC). O `vercel.json`
+ * As 5 tarefas agendadas da L17 (docs/17) e o fechamento de turno (W7), com a rota `/api/cron/<nome>` e o horário (UTC). O `vercel.json`
  * agenda as que o plano da Vercel aceita (`cronsDoVercel()`); o teste `test/cron/cron.test.ts` confere.
  */
-import { getDb } from "../db"
+import { getDb, maintenanceDbRunner } from "../db"
 import { alertsJob } from "./alerts"
 import { cleanupJob } from "./cleanup"
 import { dailySummaryJob } from "./daily-summary"
 import { expirationJob } from "./expiration"
 import { type CronJob, runCronJob } from "./runner"
+import { shiftsJob } from "./shifts"
 import { vpnJob } from "./vpn"
 
-export const CRON_JOBS: readonly CronJob[] = [alertsJob, expirationJob, vpnJob, cleanupJob, dailySummaryJob]
+export const CRON_JOBS: readonly CronJob[] = [alertsJob, expirationJob, vpnJob, cleanupJob, dailySummaryJob, shiftsJob]
 
 /**
  * Plano da Vercel em que o projeto está. No gratuito (Hobby) a Vercel recusa o deploy inteiro se o `vercel.json`
@@ -40,5 +41,5 @@ export function cronsDoVercel(plano: "hobby" | "pro" = PLANO_VERCEL): { path: st
 export function handleCronRoute(request: Request, name: string): Promise<Response> {
   const job = CRON_JOBS.find((j) => j.name === name)
   if (job === undefined) throw new Error(`job desconhecido: ${name}`)
-  return runCronJob(request, job, { db: getDb(), secret: process.env.CRON_SECRET })
+  return runCronJob(request, job, { db: getDb(), secret: process.env.CRON_SECRET, maintenance: maintenanceDbRunner() })
 }

@@ -51,8 +51,10 @@ migrations/      0000_init.sql (drizzle-kit) e 0001_rls.sql (MANUAL: papéis, RL
                  0011_auth_two_factor_session_throttle.sql (drizzle-kit: two_factor, auth_login_throttle,
                    session.remember_me/last_active_at)
                  0012_auth_grants.sql (MANUAL: tabelas novas do login só para auth_service)
-                 0013_w2b_partitions_maintenance.sql (MANUAL: partições e app.maintain_partitions; fica por
-                   último porque o teste a aplica sobre um banco já com dados)
+                 0013_w2b_partitions_maintenance.sql (MANUAL: partições e app.maintain_partitions; o teste a
+                   aplica, com as seguintes, sobre um banco já com dados)
+                 0014_w7_audit_retention.sql (MANUAL: app.audit_log_purge, retenção da auditoria, dona app_lookup)
+                 0015_w7_audit_log_at_index.sql (drizzle-kit: índice audit_log_at_idx para a retenção)
 ```
 
 ## Isolamento por cliente
@@ -104,6 +106,7 @@ const machines = await withTenant(db, ctx.organizationId, (tx) => tx.select().fr
 | `app.cron_claim(job, janela, agora, prazo_s)` · `app.cron_finish(job, janela, agora, ok, resultado)` | Uma execução por janela; erro libera a janela |
 | `app.cron_purge(antes)` | Apaga o histórico antigo dos crons |
 | `app.cron_organizations()` | Ids de todos os clientes, para o cron rodar um `withTenant` por cliente |
+| `app.audit_log_purge(antes, lote)` | Retenção da auditoria (0014): apaga até `lote` registros (1 a 50.000) com `at < antes`, de todos os clientes. **Recusa `antes` mais novo que `now() - 365 dias`** (relógio do banco): nem um bug nem SQL rodando como `app_user` apaga auditoria recente. Lê e apaga pelas políticas `audit_retention_read`/`audit_retention_delete`, só do `app_lookup`; o `app_user` continua sem DELETE |
 
 `gateway_health_sample` (histórico de saúde do gateway, 5 min) é tabela de cliente comum (RLS forçada), com `DELETE` para a retenção de 30 dias rodar como `app_user`. `alert_rule.system_key` marca as regras-preset criadas pela plataforma (uma por cliente, índice único parcial).
 
@@ -136,7 +139,8 @@ GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE;
 - **Tarefa agendada diária** (L17): `maintainPartitions(db)` (`app.maintain_partitions(now, dry_run)`) cria o período atual e os seguintes e apaga partições inteiras mais velhas que a retenção. Idempotente; devolve as ações para o log. Precisa conectar com o papel **dono das tabelas** (DDL): não é SECURITY DEFINER e ninguém tem EXECUTE (nem o `app_user`). Configuração em `app.partitioned_table`.
 - Gravar além das partições criadas **falha alto** (`no partition of relation … found for row`): a folga de 3 meses / 8 semanas cobre semanas sem a tarefa. Dado antigo (antes da partição atual) cai na `_legacy` enquanto ela existir.
 - Toda partição tem RLS forçada com a política de cliente (`app.enable_tenant_rls`, o catálogo confere) e **nenhum GRANT**: o app acessa só pela tabela-mãe. O drizzle-kit não enxerga partições (para ele são tabelas comuns).
-- Fora, de propósito: `machine_state_event` e `audit_log` têm chave só em `id` (o `/sync` usa `ON CONFLICT (id)`); particionar mudaria a chave. A retenção de 5 anos da auditoria fica para quando houver dados de 5 anos.
+- Fora, de propósito: `machine_state_event` e `audit_log` têm chave só em `id` (o `/sync` usa `ON CONFLICT (id)`); particionar mudaria a chave. A retenção da auditoria (5 anos, D6) é feita em lotes pela limpeza diária (`app.audit_log_purge`, 0014, com o índice `audit_log_at_idx`, 0015).
+- A limpeza diária da web (`/api/cron/limpeza`) chama `maintainPartitions()` pela conexão `DATABASE_MAINTENANCE_URL` (dono das tabelas, direta); sem ela, registra e pula.
 
 ## Seed sintético e branch-semente
 
@@ -171,12 +175,10 @@ GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE;
 
 - **Seed a partir do mock do protótipo** (`apps/web/lib/mock`): o seed sintético (`src/seed`) já serve ao desenvolvimento e ao branch-semente; usar os mesmos nomes e números do protótipo exigiria mover o mock para um pacote compartilhado. Atenção: o mock tem o estado `PLANNED_STOP`, que no banco não é estado bruto (é classificação por motivo). `oee_shift` não é semeado: sai do cálculo (W7).
 - **Branch-semente na Neon** (N1): criar o branch, rodar `db:seed` nele com um papel com BYPASSRLS e apontar a integração da Vercel para ele.
-- **Rota da tarefa diária de partições** (outro especialista, W7): chamar `maintainPartitions(db)` com uma conexão do dono das tabelas e registrar as ações no log.
 - **Script de migração contra a Neon** (`db:migrate` com `pg`, numa transação só; nunca o migrator de `neon-http`) e bootstrap da organização "Engemase Lab" + primeiro super admin: dependem das contas (N1). O projeto Neon fica em AWS `sa-east-1` (São Paulo, D7).
-- **Retenção da auditoria** (5 anos, D6): sem partição (chave em `id`); limpeza a decidir antes de 2031.
 - **Better Auth (W5):** login, sessão, bloqueio e 2FA feitos (apps/web/lib/server/auth). Falta o fluxo "criar conta + membro + escopo na mesma transação" (docs/15, seção 5) e como ele convive com o papel `auth_service`. Esse fluxo deve achar a pessoa pelo e-mail no servidor e nunca aceitar `user_id` do navegador (revisão W11: o `app_user` consegue gravar `member` com qualquer `user_id`).
 - **Usuários de login na implantação:** o do Better Auth (`AUTH_DATABASE_URL`) precisa HERDAR `auth_service` (`CREATE ROLE auth_login LOGIN PASSWORD '…' IN ROLE auth_service;`), porque o Better Auth não troca de papel por consulta. O do app (`DATABASE_URL`) pode ser `NOINHERIT` com `GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE`: a camada de acesso sempre roda em `withTenant` (`SET LOCAL ROLE app_user`), inclusive a busca do slug. Testado localmente assim (W5).
 - **Console da Engemase:** leituras entre clientes (lista de clientes, frota de gateways) e eventos de plataforma na auditoria precisam de um papel de plataforma próprio (ainda não criado).
 - **Confirmar na Neon** se o papel dono das tabelas tem `BYPASSRLS` (com `FORCE`, sem ele o dono não lê dados de cliente). Dentro de migração, o padrão `NO FORCE` → `UPDATE` → `FORCE` (0005) dispensa o `BYPASSRLS`; backfill e scripts fora de migração ainda precisam dele.
 - `machine_template` e `oee_hour` (F2/opcional) e `remote_access_recording` (Fase C) ainda não existem.
-- **Regras de aplicação do W2b** (o banco não garante): turnos sem sobreposição na mesma unidade (L2); prazo do lançamento atrasado e registro do estorno na auditoria (L3); operador da mesma unidade da máquina (L19); fim do trânsito no primeiro `/sync` no cliente e supressão do alerta de offline enquanto `in_transit_until > now()` e `installed_at` nulo (L23).
+- **Regras de aplicação do W2b** (o banco não garante): feitas na web em 24/11/2026 — turnos sem sobreposição (L2), prazo do lançamento atrasado e estorno com auditoria (L3) e operador da mesma unidade (L19) em `apps/web/lib/server/production`; fim do trânsito no primeiro `/sync` e supressão do alerta de offline (L23) no `/sync` e no cron de alertas. Falta as telas (W8) chamarem essas funções.

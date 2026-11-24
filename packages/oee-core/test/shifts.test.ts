@@ -9,8 +9,8 @@ import {
   timeZoneOffsetMs,
   zonedDateTimeToInstant,
   type ShiftDefinition,
-} from "../src/index.js";
-import { HOUR, t } from "./helpers.js";
+} from "../src/index";
+import { HOUR, t } from "./helpers";
 
 describe("fuso horário da planta", () => {
   it("converte horário local de São Paulo (−03:00) para UTC", () => {

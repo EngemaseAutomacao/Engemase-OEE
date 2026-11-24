@@ -65,3 +65,26 @@ export function getAuthDb(): GatewayDb | null {
   cachedAuth = connect(url, cachedAuth, "auth")
   return cachedAuth.db
 }
+
+/** Roda `fn` com uma conexão de manutenção aberta só para isso. */
+export type MaintenanceDbRunner = <T>(fn: (db: GatewayDb) => Promise<T>) => Promise<T>
+
+/**
+ * Conexão de MANUTENÇÃO (`DATABASE_MAINTENANCE_URL`): o papel DONO das tabelas, usado só pela limpeza
+ * diária para criar e apagar partições (`maintainPartitions()`, que é DDL). Conexão direta (sem pooler),
+ * aberta para a tarefa e fechada no fim: nunca fica num pool da aplicação. Sem a variável devolve `null`,
+ * e a limpeza registra e pula as partições.
+ */
+export function maintenanceDbRunner(): MaintenanceDbRunner | null {
+  const url = process.env.DATABASE_MAINTENANCE_URL?.trim()
+  if (url === undefined || url === "") return null
+  return async (fn) => {
+    const pool = new Pool({ connectionString: url, max: 1, connectionTimeoutMillis: 10_000, idleTimeoutMillis: 1_000 })
+    pool.on("error", (error) => console.error("[db] erro na conexão de manutenção", error))
+    try {
+      return await fn(drizzle({ client: pool }))
+    } finally {
+      await pool.end().catch(() => undefined)
+    }
+  }
+}

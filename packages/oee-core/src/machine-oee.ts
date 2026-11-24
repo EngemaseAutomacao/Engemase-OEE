@@ -1,10 +1,10 @@
-import { computeIndicators, indicatorWarnings, performanceStatus } from "./indicators.js";
-import type { OeeSummary } from "./aggregate.js";
-import { summarizeCounts, type ProductCount } from "./counts.js";
-import { OeeInputError } from "./errors.js";
-import { intersectIntervals, subtractIntervals, totalDurationMs, unionIntervals } from "./intervals.js";
-import { resolveOptions } from "./options.js";
-import { resolveStateTimeline, type SegmentCategory, type StateSegment } from "./states.js";
+import { computeIndicators, indicatorWarnings, performanceStatus } from "./indicators";
+import type { OeeSummary } from "./aggregate";
+import { summarizeCounts, type ProductCount } from "./counts";
+import { OeeInputError } from "./errors";
+import { intersectIntervals, subtractIntervals, totalDurationMs, unionIntervals } from "./intervals";
+import { resolveOptions } from "./options";
+import { resolveStateTimeline, type SegmentCategory, type StateSegment } from "./states";
 import type {
   IdealCycleTable,
   Interval,
@@ -15,7 +15,7 @@ import type {
   QualityAdjustment,
   ScheduledWindow,
   StateEvent,
-} from "./types.js";
+} from "./types";
 
 export interface MachineOeeInput {
   /** Janela de cálculo `[t0, t1)`. Para o turno corrente, use `t1 = agora` (passado pelo chamador). */
