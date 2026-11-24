@@ -87,6 +87,8 @@ describe("migrações", () => {
       "0004_organization_slug_check",
       "0005_member_machine_owner_decisions",
       "0006_client_limits_machines_required",
+      "0007_auth_two_factor_session_throttle",
+      "0008_auth_grants",
     ])
   })
 

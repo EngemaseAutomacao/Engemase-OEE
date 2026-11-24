@@ -50,6 +50,20 @@
       "when": 1794526145003,
       "tag": "0006_client_limits_machines_required",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795551358905,
+      "tag": "0007_auth_two_factor_session_throttle",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795551362324,
+      "tag": "0008_auth_grants",
+      "breakpoints": true
     }
   ]
 }
