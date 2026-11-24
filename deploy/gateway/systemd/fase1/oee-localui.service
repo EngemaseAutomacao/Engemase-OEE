@@ -1,5 +1,5 @@
-# FASE 1 — NÃO EMPACOTADO AINDA. O agente da Fase 0 não tem o subcomando
-# "oee-gateway localui serve".
+# FASE 1 — NÃO EMPACOTADO AINDA. O subcomando "oee-gateway localui serve" existe como
+# esqueleto (gateway/internal/localui, socket pelo internal/sdlisten), sem as telas/operações.
 # Esta unit entra no nfpm.yaml (e no postinst/prerm/postrm/install.sh) junto com
 # esse código; até lá, fica só como contrato. Ver deploy/gateway/README.md §2.
 #

@@ -131,7 +131,7 @@ Em 12/11/2026 o dono do produto decidiu D1, D5, D6, D7, D11, D12, D13, D26, D28 
 
 | # | Tema | O que falta | Quando |
 |---|---|---|---|
-| L1 | Contrato `/sync`, `/enroll`, `/config` | **Fechada:** `packages/contracts` e `docs/04`. Pendente só o que é da F1: `logs.upload`/`log.level` mínimos, `/releases/latest`, `409 config_outdated` e `429` | F0 ✓ |
+| L1 | Contrato `/sync`, `/enroll`, `/config` | **Fechada:** `packages/contracts` e `docs/04`. Pendente só o que é da F1: `logs.upload`/`log.level` mínimos (já no agente, `gateway/internal/commands/ops.go`, com a proposta de payload e resultado; falta entrar no contrato e na nuvem), `/releases/latest`, `409 config_outdated` e `429` | F0 ✓ |
 | L2 | Turnos e calendário | Dia do turno noturno, feriados, exceções, turnos sobrepostos, produção fora do turno, vigência, "dia produtivo" | F1 |
 | L3 | Refugo manual e troca de produto | Soma ou substituição do refugo do CLP, motivos de refugo, retrabalho, lançamentos atrasados e estornos | F1 |
 | L4 | Metas e faixas de OEE | `oee_target` (onde e quem define) e faixas 85/60 documentadas | F1 |
@@ -148,7 +148,7 @@ Em 12/11/2026 o dono do produto decidiu D1, D5, D6, D7, D11, D12, D13, D26, D28 
 | L15 | Documentação para o usuário | Guias por papel e notas de versão. Já feitos: 10 runbooks (RB-01 a RB-10, inclusive contagem divergente, restauração PITR, rotação de token e troca de hardware), ficha de TI, roteiro de bancada e guia por fabricante (`docs/operacao/`). Faltam os guias por papel e as notas de versão | Piloto |
 | L23 | Gateway em trânsito | Gateway ativado na bancada e desligado para envio gera "Gateway offline" no cliente. Falta um estado "em trânsito/não instalado" que suprime o alerta | F1 |
 | L24 | Revisão do agente no campo | Diagnóstico de RS-485 pelo técnico depende de leituras pela API local do agente (o `tecnico` não para o agente nem acessa a serial) | F1 |
-| L25 | Rollback do agente × esquema do buffer | Um agente anterior recusa um `buffer.db` com `user_version` maior e reinicia sem parar. Até aqui as mudanças no buffer são só colunas acrescentadas (o `user_version` fica em 1, e o rollback funciona). Antes da primeira migração que suba o `user_version`, o atualizador (G4b) precisa saber a versão de esquema de cada pacote (no manifesto) e recusar o rollback automático para um pacote de esquema anterior | F1 (com G4b) |
+| L25 | Rollback do agente × esquema do buffer | Um agente anterior recusa um `buffer.db` com `user_version` maior e reinicia sem parar. Até aqui as mudanças no buffer são só colunas acrescentadas (o `user_version` fica em 1, e o rollback funciona). Antes da primeira migração que suba o `user_version`, o atualizador (G4b) precisa saber a versão de esquema de cada pacote (no manifesto) e recusar o rollback automático para um pacote de esquema anterior. **Regra pronta no agente:** `buffer_schema` no manifesto (`oee-gateway version --buffer-schema` no build; ausente = 1), `update.CheckAutoRollback` e `buffer.FileSchemaVersion` (`gateway/internal/update`); falta o `oee-updater` usá-la | F1 (com G4b) |
 | L16 | Modelo de dados consolidado | Tabelas dos docs 12–15 no `docs/06` (sendo implementadas em `packages/db`) | F0 |
 | L17 | Jobs agendados | Alertas, reconciliação da VPN, expiração de concessões e tokens, partições | F1 |
 | L18 | i18n | Biblioteca e catálogos de texto | F2 |
