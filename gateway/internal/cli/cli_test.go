@@ -192,3 +192,13 @@ func TestDiagStub(t *testing.T) {
 		t.Fatalf("sem arquivo deveria avisar: %d", code)
 	}
 }
+
+// Fora do systemd, localui e helper pedem o socket (ou --listen, só bancada).
+func TestServicesNeedSocket(t *testing.T) {
+	for _, args := range [][]string{{"localui", "serve"}, {"helper", "serve"}} {
+		_, errOut, code := run(t, args...)
+		if code == 0 || !strings.Contains(errOut, "--listen") {
+			t.Fatalf("%v: %q (%d)", args, errOut, code)
+		}
+	}
+}

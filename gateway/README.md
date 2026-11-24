@@ -40,6 +40,9 @@ flowchart LR
 | `internal/uplink` | Cliente HTTP (gzip, Bearer, User-Agent, proxy por `HTTPS_PROXY` com a falha do CONNECT tipada, CA extra, TLS 1.2+), backoff com jitter e o `Syncer` (ritmo por `next_sync_s`, envio imediato em mudança de estado) |
 | `internal/commands` | Executor dos comandos da nuvem: deduplicação por id, `expired` pelo relógio corrigido pelo `server_time`, até 4 em paralelo, prazo por tipo, resultados até a nuvem confirmar. Handlers de `tag.read`, `device.test`, `config.reload` e `agent.restart` (payloads validados como no Zod, com os mesmos ids de regra); tipo sem handler volta `rejected/unsupported`. As leituras passam pela fila do poller dono do transporte (`Access`) |
 | `internal/contracts` | Tipos Go do `/sync`, `/enroll` e eventos |
+| `internal/sdlisten` | Sockets da ativação por socket do systemd (`LISTEN_FDS`/`LISTEN_FDNAMES`), sem libsystemd |
+| `internal/localui` | Esqueleto do `oee-localui` (`oee-gateway localui serve`): HTTPS no fd `https` com chave ECDSA P-256 estável, recusa de endereço local fora da OT/serviço/loopback e de `Host` por nome (DNS rebinding), só GET/HEAD, CSP. As telas e o login com senha local entram com a API local do agente |
+| `internal/helper` | Esqueleto do `oee-helper` (`oee-gateway helper serve`): uma linha JSON por conexão no fd `helper`, chamador pelo `SO_PEERCRED` (root ou grupo `oee`, reset de fábrica só root), lista fechada de operações (só `ping` implementada; rede, relógio, reset e pendrive respondem `not_implemented`), sai ocioso |
 | `internal/update` | Regras do OTA mínimo sem rede nem root: manifesto do pacote (com `buffer_schema`) e `CheckAutoRollback`, que recusa o rollback automático para um pacote que não abre o esquema atual do `buffer.db` (L25) |
 | `internal/ids` | UUIDv7 monotônico com timestamp injetável |
 
