@@ -15,7 +15,7 @@ Os testes aplicam as migrações num banco vazio e provam, com dois clientes com
 | Arquivo | O que garante |
 |---|---|
 | `test/catalog.test.ts` | Toda tabela com `organization_id` tem RLS **habilitada e forçada** e a política restritiva; **toda tabela que o `app_user` pode ler** (inclusive `organization` e `"user"`) tem RLS forçada; FK sempre composta com o cliente; papéis sem `BYPASSRLS`; políticas permissivas só as previstas; funções SECURITY DEFINER donas `app_lookup`, com `search_path` fixo e EXECUTE só para `app_user`. Inclui testes que criam tabelas "esquecidas" e conferem que elas são pegas |
-| `test/rls.test.ts` | Com `app.org_id = A`: `SELECT` em cada tabela (e em `organization`) só mostra A; `INSERT`/`UPDATE`/`DELETE` em B bloqueados; sem cliente definido não se vê nada; GRANTs (auditoria só inserção, `client_account` só leitura, `organization` só leitura). Caso próprio para o escopo por máquina (`member_machine`). Também fixa o **limite** documentado abaixo (`set_config` direto troca o cliente) |
+| `test/rls.test.ts` | Com `app.org_id = A`: `SELECT` em cada tabela (e em `organization`) só mostra A; `INSERT`/`UPDATE`/`DELETE` em B bloqueados; sem cliente definido não se vê nada; GRANTs (auditoria só inserção, `client_account` só leitura, `organization` só leitura). Caso próprio para o escopo por máquina (`member_machine`). Também fixa o **limite** documentado abaixo (`set_config` direto troca o cliente), o login `NOINHERIT` (consulta fora do `withTenant` falha alto) e o limite do vínculo de pessoa de outro cliente em `member` (revisão W11) |
 | `test/composite-fk.test.ts` | Impossível ligar o gateway de A a uma máquina de B (mesmo como dono do banco); tag só em máquina ligada ao gateway do dispositivo; gateway e máquina da mesma unidade; escopo de pessoa (`member_unit`, `member_machine`) só com unidade/máquina do mesmo cliente; estorno de qualidade só de lançamento existente do mesmo cliente |
 | `test/lookups.test.ts` | Busca por hash de token antes de saber o cliente (gateway, ativação, terminal, tokens próprios), **estado** da credencial (código usado/vencido, token revogado/rotacionado) e slug da URL → cliente |
 | `test/migrations.test.ts` | Migrações aplicam do zero e são idempotentes; **schema TS e migrações não divergem** (falha se esquecerem o `db:generate`); a 0005 liga `managed_by_engemase` dos clientes que já existiam mesmo com um dono de tabelas **sem `BYPASSRLS`** (como na Neon); a 0006 para se algum cliente não tiver `limits.machines` |
@@ -76,7 +76,12 @@ const machines = await withTenant(db, ctx.organizationId, (tx) => tx.select().fr
 
 Nenhuma linha = segredo desconhecido (400 `activation_code_invalid` / 401 `unauthorized`). Os ids dos estados não válidos servem para auditoria e **nunca** voltam na resposta ao gateway. Para o `token_revoked` funcionar, a revogação do gateway deve manter o `token_hash`.
 
-Na implantação, criar os usuários de login **por SQL** (não pelo console da Neon), sem segredo em migração, por exemplo `CREATE ROLE app_login LOGIN PASSWORD '…' IN ROLE app_user;`.
+Na implantação, criar os usuários de login **por SQL** (não pelo console da Neon), sem segredo em migração e **sem herdar** o `app_user` (revisão W11, `docs/operacao/revisao-seguranca-w11.md` §3.3): o login só ganha privilégios no `SET LOCAL ROLE app_user` do `withTenant`, então uma consulta fora dele falha alto em vez de usar um cliente que tenha sobrado na sessão do pool.
+
+```sql
+CREATE ROLE app_login LOGIN NOINHERIT PASSWORD '…';
+GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE;
+```
 
 ### Ao criar uma tabela nova
 

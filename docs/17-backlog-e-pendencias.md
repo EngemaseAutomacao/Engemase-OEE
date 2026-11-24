@@ -51,7 +51,7 @@ Premissas: 2 desenvolvedores (**Web** e **Gateway**), semana 1 = 16/11/2026, sem
   - alertas e ajuda depois do piloto;
   - configuração de rede pela nuvem só na F2.
 
-**Já adiantado:** a parte de código de W1, X1, W2a, W3, W4 e G0, e boa parte de W2b (RLS completa e FKs compostas) e de G4 (`.deb`, units, firewall, imagem). Ficam pendentes as partes que dependem de contas (deploy, Neon, PoC com 100 gateways) e de hardware (bancada, pacote de suporte ao R1000).
+**Já adiantado:** a parte de código de W1, X1, W2a, W3, W4 e G0, boa parte de W2b (RLS completa e FKs compostas) e de G4 (`.deb`, units, firewall, imagem), e de W11 os cabeçalhos HTTP (CSP, HSTS...) e a revisão do limite da RLS ([operacao/revisao-seguranca-w11.md](operacao/revisao-seguranca-w11.md); faltam Firewall, Playwright no CI e os testes de isolamento de nível 3 e 4, que dependem da W5). Ficam pendentes as partes que dependem de contas (deploy, Neon, PoC com 100 gateways) e de hardware (bancada, pacote de suporte ao R1000).
 
 ## 3. Decisões
 
