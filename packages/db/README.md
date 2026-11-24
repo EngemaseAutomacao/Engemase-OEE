@@ -34,6 +34,10 @@ migrations/      0000_init.sql (drizzle-kit) e 0001_rls.sql (MANUAL: papéis, RL
                  0005_member_machine_owner_decisions.sql (drizzle-kit + MANUAL: member_machine com RLS,
                    decisões D1, D5, D11 e D13; liga managed_by_engemase dos clientes existentes)
                  0006_client_limits_machines_required.sql (drizzle-kit: `limits.machines` obrigatório, D1)
+                 0007_gateway_api_w6.sql (drizzle-kit: gateway.uplink, alert_rule.system_key,
+                   gateway_health_sample, api_rate_limit, cron_run)
+                 0008_gateway_api_w6_rls.sql (MANUAL: RLS de gateway_health_sample; funções do
+                   limitador de taxa e dos crons, donas app_lookup)
 ```
 
 ## Isolamento por cliente
@@ -73,6 +77,20 @@ const machines = await withTenant(db, ctx.organizationId, (tx) => tx.select().fr
 | `app.resolve_gateway_enrollment_state(hash)` | `resolveGatewayEnrollmentState(db, h)` | `(id, organization_id, gateway_id, state)`: `valid` · `used` / `expired` (410) · `gateway_revoked` (400 `activation_code_invalid`) |
 | `app.resolve_terminal_token(hash)` · `app.resolve_account_token(hash)` | `resolveByTokenHash(db, "terminalToken" \| "accountToken", h)` | `(id, organization_id)` só de token válido |
 | `app.resolve_org_slug(slug)` | `resolveOrganizationSlug(db, slug)` | `(id)` do cliente |
+
+### Tabelas de plataforma (sem `organization_id`, 0007/0008)
+
+`api_rate_limit` (limitador de taxa da API dos gateways) e `cron_run` (janelas das tarefas agendadas) não dão nenhum privilégio ao `app_user`: o acesso é só pelas funções abaixo (SECURITY DEFINER, donas `app_lookup`, `search_path` fixo, EXECUTE só para `app_user`), cada uma com uma operação fechada.
+
+| Função SQL | Uso |
+|---|---|
+| `app.rate_limit_take(chave, intervalo_ms, rajada, agora)` | GCRA por chave: `allowed` e, se recusada, `retry_after_ms` |
+| `app.rate_limit_purge(antes)` | Apaga chaves vencidas (limpeza diária) |
+| `app.cron_claim(job, janela, agora, prazo_s)` · `app.cron_finish(job, janela, agora, ok, resultado)` | Uma execução por janela; erro libera a janela |
+| `app.cron_purge(antes)` | Apaga o histórico antigo dos crons |
+| `app.cron_organizations()` | Ids de todos os clientes, para o cron rodar um `withTenant` por cliente |
+
+`gateway_health_sample` (histórico de saúde do gateway, 5 min) é tabela de cliente comum (RLS forçada), com `DELETE` para a retenção de 30 dias rodar como `app_user`. `alert_rule.system_key` marca as regras-preset criadas pela plataforma (uma por cliente, índice único parcial).
 
 Nenhuma linha = segredo desconhecido (400 `activation_code_invalid` / 401 `unauthorized`). Os ids dos estados não válidos servem para auditoria e **nunca** voltam na resposta ao gateway. Para o `token_revoked` funcionar, a revogação do gateway deve manter o `token_hash`.
 

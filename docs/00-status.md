@@ -62,9 +62,8 @@ pnpm --filter web test:e2e
 **Depende de hardware:** bancada com o R1000 (roteiro em `docs/operacao/verificacao-bancada-r1000.md`), pacote de suporte ao R1000 (overlay e RTC, sem o qual as RS-485 não têm alimentação) e a primeira imagem gravada.
 
 **Código da Fase 1 (resumo; lista completa no docs/17 e nos READMEs):**
-- Web: login e permissões (Better Auth), publicador de config e gerador de códigos de ativação, troca do mock pelo banco, tarefas agendadas, alertas.
+- Web: login e permissões (Better Auth), troca do mock pelo banco, alertas na central. **Prontos (W6/W7, 24/11/2026):** publicador de config, gerador de códigos de ativação, fila de comandos, `429`/`409 config_outdated`, histórico de saúde, alerta de minuto reescrito e as 5 tarefas agendadas da L17 (`apps/web/README.md`). Falta o fechamento de turno e o recálculo dos turnos sujos.
 - Gateway: handlers de `tag.read`, `device.test`, `config.reload` e `agent.restart`; página local reduzida (`oee-localui`) e ajudante privilegiado (`oee-helper`); OTA mínimo.
-- Pendências conhecidas da API: alerta de minuto reescrito, `409 config_outdated`, histórico de saúde.
 
 **Limite aceito por enquanto (D38):** a RLS usa uma variável de sessão (`app.org_id`) que qualquer SQL rodando como a aplicação pode trocar. Ver `packages/db/README.md`.
 
