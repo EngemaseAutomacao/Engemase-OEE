@@ -23,6 +23,7 @@ Os testes aplicam as migrações num banco vazio e provam, com dois clientes com
 | `test/partitions.test.ts` | `production_minute` (mês) e `tag_sample` (semana) particionadas, com chave, CHECKs e FKs na tabela-mãe; `ON CONFLICT` na chave funciona; RLS pela tabela-mãe e partição sem GRANT; `maintainPartitions()` cria os períodos seguintes, é idempotente, tem dry-run e apaga só partições inteiras além da retenção; a 0013 sobre tabela com dados mantém todas as linhas (sem cópia) com dono **sem `BYPASSRLS`** |
 | `test/calendar-quality-operators.test.ts` | Tabelas novas do W2b (`unit_holiday`, `reject_reason`, `unit_operator`): RLS por cliente (SELECT/INSERT/UPDATE/DELETE), FKs compostas (inclusive motivo e operador em `quality_entry`, `production_run`, `machine_state_event`), unicidades; estorno de refugo (motivo obrigatório, quantidade oposta, mesma máquina, um só, não estorna estorno); gateway "Em trânsito" (até 30 dias) |
 | `test/seed.test.ts` | Seed sintético só com `ENGEMASE_SEED=sintetico` e fora de produção; recusa banco com cliente real e conexão sem `BYPASSRLS`; determinístico, idempotente e respeitando a RLS |
+| `test/seed-platform.test.ts` | Seed de plataforma: liberação (e confirmação em produção), conexão de dono, idempotência, link de uso único só como hash, auditoria, recusa de promover pessoa existente |
 | `test/enums.test.ts` | "Enums" e faixas do banco iguais aos de `@engemase/contracts` (inclusive `fault_code` uint32 em `bigint` e o formato do slug do cliente, `org` do /enroll); campos de minuto/live do contrato têm coluna; CHECKs recusam valores inválidos (escopo `machines` aceito, admin só com `all`, concessão de suporte sem aprovação, limites inteiros >= 0 com `machines` obrigatório) |
 
 ## Estrutura
@@ -32,7 +33,9 @@ src/schema/      tabelas por domínio (auth, assets, access, connectivity, produ
 src/tenancy.ts   withTenant(), papéis, lista das tabelas de cliente
 src/lookups.ts   sha256Hex(), busca por hash de token (e estado da credencial) e por slug (funções SECURITY DEFINER)
 src/partitions.ts maintainPartitions(): manutenção diária das partições (cria as futuras, apaga pela retenção)
-src/seed/        seed sintético (`@engemase/db/seed`); scripts/seed.ts é o `db:seed`
+src/seed/        seeds sintético e de plataforma (`@engemase/db/seed`); scripts/seed.ts é o `db:seed`,
+                 scripts/seed-plataforma.ts o `db:seed:plataforma`
+src/account-token.ts  token "definir senha" (gera, hash, link com o token no fragmento)
 migrations/      0000_init.sql (drizzle-kit) e 0001_rls.sql (MANUAL: papéis, RLS, GRANTs, funções)
                  0002_contract_columns_quality_reversal.sql (drizzle-kit, com o UNIQUE movido para antes da FK)
                  0003_organization_rls_state_lookups.sql (MANUAL: RLS em organization, funções de estado e slug)
@@ -147,6 +150,22 @@ GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE;
 - Imprime o token em claro só dos gateways criados naquela execução (o banco guarda o hash), para apontar o simulador para o banco local.
 - `db:seed` aplica as migrações antes (com `pg`, numa transação só); `--sem-migrar` pula, `--dias N` muda o período.
 
+## Seed de plataforma (Engemase Lab + primeiro super admin)
+
+`src/seed/platform.ts` (`db:seed:plataforma`) grava a organização interna **"Engemase Lab"** (`engemase-lab`, ativa, 10 máquinas de bancada, unidade "Bancada Engemase" + área "Geral") e o **primeiro super admin**, membro da Lab, sem senha, com um link "definir senha" de uso único (24 h) que o script mostra **uma vez** (docs/15, seção 7). Diferente do sintético, roda também em produção:
+
+```bash
+ENGEMASE_SEED=plataforma DATABASE_URL=postgres://dono:…@host/engemase \
+ENGEMASE_SEED_ADMIN_EMAIL=nome@engemase.com.br ENGEMASE_SEED_ADMIN_NOME="Nome Sobrenome" \
+BETTER_AUTH_URL=https://engemase-oee.vercel.app \
+  pnpm --filter @engemase/db db:seed:plataforma        # em produção, também ENGEMASE_SEED_PRODUCAO=confirmo
+```
+
+- **Proteções:** liberação por `ENGEMASE_SEED=plataforma` (e `ENGEMASE_SEED_PRODUCAO=confirmo` com `VERCEL_ENV`/`NODE_ENV` = production); conexão de dono (SUPERUSER/BYPASSRLS); só acrescenta (ids fixos, `ON CONFLICT DO NOTHING`), nada é apagado nem sobrescrito; recusa promover a super admin uma pessoa que já existe sem esse papel; auditoria `platform.seed` (ator `system`) sem token nem e-mail.
+- Rodar de novo não duplica nada: se a pessoa ainda não tem senha, sai um link novo e o anterior deixa de valer; se já tem, nenhum link (ela usa "Esqueci minha senha").
+- O seed sintético aceita banco com a Engemase Lab (o slug `engemase-lab` não conta como "cliente real").
+- O token vai no fragmento do link (`/definir-senha#t=…`, `src/account-token.ts`); o banco guarda só o SHA-256 (`account_token`).
+
 ## Decisões
 
 - **UUIDv7 gerado no banco** (`uuidv7()` nativo do Postgres 18; Neon e PGlite 0.5 já são 18). Eventos da borda trazem o próprio id.
@@ -172,9 +191,9 @@ GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE;
 - **Seed a partir do mock do protótipo** (`apps/web/lib/mock`): o seed sintético (`src/seed`) já serve ao desenvolvimento e ao branch-semente; usar os mesmos nomes e números do protótipo exigiria mover o mock para um pacote compartilhado. Atenção: o mock tem o estado `PLANNED_STOP`, que no banco não é estado bruto (é classificação por motivo). `oee_shift` não é semeado: sai do cálculo (W7).
 - **Branch-semente na Neon** (N1): criar o branch, rodar `db:seed` nele com um papel com BYPASSRLS e apontar a integração da Vercel para ele.
 - **Rota da tarefa diária de partições** (outro especialista, W7): chamar `maintainPartitions(db)` com uma conexão do dono das tabelas e registrar as ações no log.
-- **Script de migração contra a Neon** (`db:migrate` com `pg`, numa transação só; nunca o migrator de `neon-http`) e bootstrap da organização "Engemase Lab" + primeiro super admin: dependem das contas (N1). O projeto Neon fica em AWS `sa-east-1` (São Paulo, D7).
+- **Script de migração contra a Neon** (`db:migrate` com `pg`, numa transação só; nunca o migrator de `neon-http`): depende das contas (N1). O bootstrap da "Engemase Lab" + primeiro super admin já existe (`db:seed:plataforma`, acima); falta rodá-lo na Neon (N1). O projeto Neon fica em AWS `sa-east-1` (São Paulo, D7).
 - **Retenção da auditoria** (5 anos, D6): sem partição (chave em `id`); limpeza a decidir antes de 2031.
-- **Better Auth (W5):** login, sessão, bloqueio e 2FA feitos (apps/web/lib/server/auth). Falta o fluxo "criar conta + membro + escopo na mesma transação" (docs/15, seção 5) e como ele convive com o papel `auth_service`. Esse fluxo deve achar a pessoa pelo e-mail no servidor e nunca aceitar `user_id` do navegador (revisão W11: o `app_user` consegue gravar `member` com qualquer `user_id`).
+- **Better Auth (W5):** login, sessão, bloqueio, 2FA, convite/"definir senha", "esqueci minha senha" e reinício do 2FA feitos (apps/web/lib/server/auth e lib/server/users). O convite acha a pessoa pelo e-mail no servidor (nunca `user_id` do navegador; revisão W11 §3.2): a conta nasce pelo `auth_service` e vínculo + papel + escopo + token + auditoria vão numa transação do `app_user` (não há transação única entre os dois papéis; uma conta sem vínculo não dá acesso e é reaproveitada). Opcional, numa migração futura: gatilho que recuse `UPDATE` de `member.user_id`.
 - **Usuários de login na implantação:** o do Better Auth (`AUTH_DATABASE_URL`) precisa HERDAR `auth_service` (`CREATE ROLE auth_login LOGIN PASSWORD '…' IN ROLE auth_service;`), porque o Better Auth não troca de papel por consulta. O do app (`DATABASE_URL`) pode ser `NOINHERIT` com `GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE`: a camada de acesso sempre roda em `withTenant` (`SET LOCAL ROLE app_user`), inclusive a busca do slug. Testado localmente assim (W5).
 - **Console da Engemase:** leituras entre clientes (lista de clientes, frota de gateways) e eventos de plataforma na auditoria precisam de um papel de plataforma próprio (ainda não criado).
 - **Confirmar na Neon** se o papel dono das tabelas tem `BYPASSRLS` (com `FORCE`, sem ele o dono não lê dados de cliente). Dentro de migração, o padrão `NO FORCE` → `UPDATE` → `FORCE` (0005) dispensa o `BYPASSRLS`; backfill e scripts fora de migração ainda precisam dele.
