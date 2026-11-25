@@ -27,6 +27,8 @@ describe("limpeza do login", () => {
       env: {},
       fetch,
       log: () => undefined,
+      maintenance: null,
+      remainingMs: () => 60_000,
       async forEachOrganization(fn) {
         const results = []
         for (const organizationId of [a.organizationId]) {
