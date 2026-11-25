@@ -2,25 +2,32 @@
 # atualização. Fica num pacote separado (oee-gateway-updater) para sobreviver a
 # um agente novo que não sobe.
 #
-# Contrato com o binário oee-updater (gateway/cmd/oee-updater, a implementar):
-#  1. Confere de novo a assinatura Ed25519 do manifesto, o SHA-256 do .deb, o
-#     Package (oee-gateway), a arquitetura e a versão mínima (sem downgrade fora
-#     de allowed_rollback_to).
-#     O manifesto traz buffer_schema (oee-gateway version --buffer-schema no
-#     build; ausente = 1). No rollback automático (passo 4), recusa reinstalar um
-#     pacote cujo buffer_schema é menor que o user_version do buffer.db no disco
-#     (L25: update.CheckAutoRollback + buffer.FileSchemaVersion, gateway/internal/update).
-#  2. Guarda o .deb instalado em $STATE_DIRECTORY (root, fora do alcance do oee).
+# O que o oee-updater apply faz (gateway/cmd/oee-updater, gateway/internal/update):
+#  1. Copia manifesto, assinatura e .deb do diretório do agente para
+#     $STATE_DIRECTORY/staging (root 0700; sem seguir link simbólico) e confere
+#     NA CÓPIA: assinatura Ed25519 (chaves de /usr/share/oee-gateway-updater/keys),
+#     tamanho e SHA-256, Package/Version/Architecture do .deb (dpkg-deb) contra o
+#     manifesto e a máquina, e a versão: mais antiga que a instalada só se estiver
+#     no allowed_rollback_to do manifesto instalado.
+#     L25: recusa um pacote cujo buffer_schema (ausente = 1) é menor que o
+#     user_version do buffer.db no disco, na instalação e no rollback automático.
+#  2. O pacote instalado fica em $STATE_DIRECTORY/current (registrado na bancada
+#     com "oee-updater seed"; sem ele o OTA é recusado: não haveria para onde voltar).
 #  3. dpkg -i --force-confdef --force-confold (sem perguntas sobre conffiles).
-#  4. Espera até 5 min pelo update/health.json do agente novo; sem ele, reinstala
-#     o anterior e grava update/result.json = rolled_back.
-#  5. Remove ou renomeia request.json ao terminar.
+#  4. Reinicia o agente e espera até 5 min pelo update/health.json da versão nova
+#     (o agente grava depois do 1º /sync aceito); sem ele, reinstala o current/
+#     e grava update/result.json = rolled_back (ou rollback_refused, pela L25).
+#  5. Apaga request.json e os arquivos baixados ao terminar; result.json fica.
+# Uma queda de energia no meio deixa $STATE_DIRECTORY/state.json: o
+# oee-gateway-update-check.service enfileira esta unit no boot, que retoma.
 [Unit]
 Description=Engemase OEE - aplica a atualização do agente (OTA)
 Documentation=file:/usr/share/doc/oee-gateway-updater/README.md
 RequiresMountsFor=/var/lib/oee-gateway
 After=oee-gateway-update-check.service
-ConditionPathExists=/var/lib/oee-gateway/update/request.json
+# Pedido novo do agente ou atualização em curso (retomada depois de um reboot).
+ConditionPathExists=|/var/lib/oee-gateway/update/request.json
+ConditionPathExists=|/var/lib/oee-gateway-updater/state.json
 
 [Service]
 Type=oneshot

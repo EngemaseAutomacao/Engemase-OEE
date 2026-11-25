@@ -1,14 +1,15 @@
-// Package localui é o esqueleto do oee-localui (docs/16 §6): a página local de
+// Package localui é o oee-localui (docs/16 §6, D30): a página local reduzida de
 // comissionamento, processo separado do agente (usuário oee-ui, sem rede própria),
 // que recebe do systemd a porta 443 só na interface OT (oee-localui.socket) e fala
-// com o agente só por /run/oee-gateway/ui.sock.
+// com o agente só por /run/oee-gateway/ui.sock (internal/localapi, só leitura).
 //
-// Já estão aqui as proteções da fronteira, que não mudam com as telas: HTTPS com
-// chave ECDSA P-256 estável (gerada no primeiro start, 0600), recusa de endereço
-// local fora da OT/serviço/loopback, recusa de Host que não seja IP (DNS rebinding),
-// só GET/HEAD e cabeçalhos de segurança. As telas (login com senha local e bloqueio,
-// Status, Diagnóstico, Rede, Leitura ao vivo, Tags e máquinas, Logs) entram com a API
-// local do agente (Fase 1).
+// Proteções da fronteira: HTTPS com chave ECDSA P-256 estável (a do factory init,
+// tls.crt/tls.key, ou gerada no primeiro start), recusa de endereço local fora da
+// OT/serviço/loopback, recusa de Host que não seja IP (DNS rebinding), só GET/HEAD e
+// o POST do login/saída com Origin conferido, cabeçalhos de segurança e CSP sem
+// script. Login só com a senha local do cartão lacrado (argon2id), com bloqueio por
+// tentativas (auth.go). Telas do MVP: status das conexões com os CLPs, últimas
+// leituras, fila pendente e conectividade com a nuvem, em português e só leitura.
 package localui
 
 import (
@@ -22,34 +23,65 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"html/template"
+	"io/fs"
 	"log/slog"
 	"math/big"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
-	"github.com/engemaseautomacao/engemase-oee/gateway/internal/buildinfo"
+	"github.com/engemaseautomacao/engemase-oee/gateway/internal/localapi"
 )
 
-// DefaultTLSDir é onde ficam a chave e o certificado (StateDirectory da unit).
-const DefaultTLSDir = "/var/lib/oee-localui/tls"
+// DefaultStateDir é o estado da página (StateDirectory=oee-localui): senha, bloqueio
+// e chave TLS.
+const DefaultStateDir = "/var/lib/oee-localui"
+
+// DefaultTLSDir é onde fica a chave gerada pela própria página (sem a do factory init).
+const DefaultTLSDir = DefaultStateDir + "/tls"
+
+// StatusSource é de onde vem o retrato do agente (localapi.Client no gateway).
+type StatusSource interface {
+	Status(ctx context.Context) (*localapi.Status, error)
+}
 
 // Server é a página local.
 type Server struct {
-	// TLSDir guarda key.pem e cert.pem.
+	// StateDir guarda a senha (password.argon2id), o bloqueio (lock.json) e, se o
+	// factory init gerou, tls.crt/tls.key.
+	StateDir string
+	// TLSDir guarda key.pem e cert.pem gerados pela página (sem os do factory init).
 	TLSDir string
+	Agent  StatusSource
 	Log    *slog.Logger
+	Now    func() time.Time
+
+	once     sync.Once
+	sess     *sessions
+	lim      *limiter
+	verifyMu sync.Mutex // um argon2id por vez: memória limitada e força bruta mais lenta
+}
+
+func (s *Server) init() {
+	s.once.Do(func() {
+		if s.Log == nil {
+			s.Log = slog.Default()
+		}
+		if s.Now == nil {
+			s.Now = time.Now
+		}
+		s.sess = newSessions()
+		s.lim = newLimiter(s.StateDir)
+	})
 }
 
 // Serve atende HTTPS no listener até o contexto acabar.
 func (s *Server) Serve(ctx context.Context, l net.Listener) error {
-	if s.Log == nil {
-		s.Log = slog.Default()
-	}
-	cert, err := LoadOrCreateCert(s.TLSDir)
+	s.init()
+	cert, err := LoadServerCert(s.StateDir, s.TLSDir)
 	if err != nil {
 		return err
 	}
@@ -78,39 +110,29 @@ func (s *Server) Serve(ctx context.Context, l net.Listener) error {
 
 // Handler monta as rotas com as proteções da fronteira.
 func (s *Server) Handler() http.Handler {
+	s.init()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = page.Execute(w, map[string]string{"Version": buildinfo.Version})
-	})
+	mux.HandleFunc("GET /{$}", s.status)
+	mux.HandleFunc("GET /entrar", s.loginPage)
+	mux.HandleFunc("POST /entrar", s.login)
+	mux.HandleFunc("POST /sair", s.logout)
 	return guard(mux)
 }
-
-var page = template.Must(template.New("p").Parse(`<!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Gateway OEE · página local</title>
-<style>body{font-family:system-ui,sans-serif;margin:2rem;max-width:40rem;color:#1f2933}code{background:#eef2f6;padding:0 .25rem}</style>
-</head><body>
-<h1>Gateway OEE Engemase</h1>
-<p>Agente <code>{{.Version}}</code>.</p>
-<p>Página local de comissionamento em construção. Status, diagnóstico, rede, leitura ao vivo,
-tags e máquinas e logs entram na Fase 1, com login pela senha local do cartão lacrado.</p>
-<p>Até lá, use <code>sudo -u oee oee-gateway diag</code> no terminal do gateway.</p>
-</body></html>`))
 
 // guard aplica as proteções da fronteira antes de qualquer rota.
 func guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
-		h.Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Cache-Control", "no-store")
+		h.Set("Strict-Transport-Security", "max-age=31536000")
 		if la, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok && !allowedLocal(la) {
 			http.Error(w, "endereço fora da rede OT", http.StatusForbidden)
 			return
@@ -119,7 +141,16 @@ func guard(next http.Handler) http.Handler {
 			http.Error(w, "use o endereço IP do gateway", http.StatusMisdirectedRequest)
 			return
 		}
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead:
+		case http.MethodPost:
+			// CSRF: o POST só vale vindo da própria página (o navegador manda o Origin).
+			if r.Header.Get("Origin") != "https://"+r.Host {
+				http.Error(w, "origem do formulário recusada", http.StatusForbidden)
+				return
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+		default:
 			http.Error(w, "método não permitido", http.StatusMethodNotAllowed)
 			return
 		}
@@ -160,6 +191,25 @@ func allowedHost(host string) bool {
 		host = host[1 : len(host)-1]
 	}
 	return net.ParseIP(host) != nil
+}
+
+// LoadServerCert usa a chave do factory init (stateDir/tls.crt e tls.key, cuja
+// impressão digital vai no cartão lacrado) ou, sem ela, a da própria página
+// (LoadOrCreateCert em tlsDir).
+func LoadServerCert(stateDir, tlsDir string) (tls.Certificate, error) {
+	if stateDir != "" {
+		crt, key := filepath.Join(stateDir, "tls.crt"), filepath.Join(stateDir, "tls.key")
+		if _, err := os.Stat(key); err == nil {
+			c, err := tls.LoadX509KeyPair(crt, key)
+			if err != nil {
+				return tls.Certificate{}, fmt.Errorf("localui: chave TLS do factory init ilegível: %w", err)
+			}
+			return c, nil
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return tls.Certificate{}, err
+		}
+	}
+	return LoadOrCreateCert(tlsDir)
 }
 
 // LoadOrCreateCert lê a chave e o certificado de dir ou, no primeiro start, gera uma

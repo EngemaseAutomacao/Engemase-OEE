@@ -6,7 +6,7 @@ COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo desconhecido)
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -s -w -X $(PKG)/internal/buildinfo.Version=$(VERSION) -X $(PKG)/internal/buildinfo.Commit=$(COMMIT) -X $(PKG)/internal/buildinfo.Date=$(DATE)
 
-.PHONY: test test-race test-integration vet build build-arm64 build-all
+.PHONY: test test-race test-integration vet build build-arm64 build-all build-updater
 
 test:
 	go test ./...
@@ -25,6 +25,10 @@ build:
 
 build-arm64: ## reComputer R1000
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/oee-gateway-linux-arm64 ./cmd/oee-gateway
+
+build-updater: ## oee-updater (OTA, pacote oee-gateway-updater), arm64 e amd64
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/oee-updater-linux-arm64 ./cmd/oee-updater
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/oee-updater-linux-amd64 ./cmd/oee-updater
 
 build-all: build-arm64
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/oee-gateway-linux-amd64 ./cmd/oee-gateway

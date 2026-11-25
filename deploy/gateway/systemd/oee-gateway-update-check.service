@@ -3,10 +3,11 @@
 # queda de energia), roda "dpkg --configure -a" e retoma a verificação ou o
 # rollback a partir de update/state.json. Sem atualização pendente, sai em < 1 s.
 #
-# Atenção (contrato com o oee-updater): como esta unit vem antes do agente, ela
-# NÃO pode esperar pela saúde do agente novo. Se precisar retomar a espera de
-# 5 min, deve só enfileirar o oee-gateway-updater.service (systemctl --no-block)
-# e sair. Os scripts do pacote oee-gateway usam --no-block pelo mesmo motivo.
+# Como esta unit vem antes do agente, ela NÃO espera pela saúde do agente novo:
+# com $STATE_DIRECTORY/state.json presente, roda "dpkg --configure -a",
+# enfileira o oee-gateway-updater.service (systemctl --no-block) e sai; o apply
+# retoma a espera (prazo cheio de 5 min) ou volta ao anterior. Não lê as chaves.
+# Os scripts do pacote oee-gateway usam --no-block pelo mesmo motivo.
 [Unit]
 Description=Engemase OEE - verificação pós-boot da atualização do agente
 Documentation=file:/usr/share/doc/oee-gateway-updater/README.md

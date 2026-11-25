@@ -1,6 +1,7 @@
-// Package update tem as regras do OTA mínimo (M4b, D29) que não dependem de rede
-// nem de root: o manifesto do pacote e a decisão de rollback. O oee-updater (root,
-// pacote oee-gateway-updater) usa este pacote; o contrato dele está em
+// Package update é o OTA mínimo (M4b, D29): o manifesto assinado do pacote, a
+// decisão de rollback (L25), a busca do pacote pelo agente (Fetch, usuário oee) e o
+// atualizador root (Updater: oee-updater apply e boot-check, pacote
+// oee-gateway-updater). O contrato com o systemd está em
 // deploy/gateway/systemd/oee-gateway-updater.service.
 package update
 
@@ -10,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 // legacyBufferSchema é o esquema dos pacotes cujo manifesto não traz buffer_schema:
@@ -28,9 +30,22 @@ type Manifest struct {
 	// ele abre (buffer.SchemaVersion do build; oee-gateway version --buffer-schema).
 	// Ausente nos manifestos antigos: vale 1.
 	BufferSchema *int `json:"buffer_schema,omitempty"`
-	// AllowedRollbackTo lista as versões mais antigas aceitas num rollback manual.
+	// AllowedRollbackTo lista as versões mais antigas para as quais se pode voltar a
+	// partir DESTE pacote (rollback manual da frota). O updater só instala uma versão
+	// mais antiga que a instalada se ela estiver na lista do manifesto instalado.
 	AllowedRollbackTo []string `json:"allowed_rollback_to,omitempty"`
+	// URL é onde baixar o .deb (https; relativa ao endereço do manifesto). Só o
+	// agente usa: o updater confere o arquivo que o agente já baixou.
+	URL string `json:"url,omitempty"`
 }
+
+// MaxPackageSize é o maior .deb aceito (o agente tem ~11 MB; folga para o futuro).
+const MaxPackageSize = 100 << 20
+
+// MaxManifestSize limita o manifesto.
+const MaxManifestSize = 64 << 10
+
+var archs = map[string]bool{"arm64": true, "amd64": true, "armhf": true}
 
 var sha256Re = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
@@ -46,14 +61,23 @@ func ParseManifest(b []byte) (*Manifest, error) {
 		return nil, fmt.Errorf("manifesto: pacote %q inesperado", m.Package)
 	case m.Version == "":
 		return nil, errors.New("manifesto: sem versão")
+	case !ValidVersion(m.Version) || strings.Contains(m.Version, "+"):
+		return nil, fmt.Errorf("manifesto: versão %q não é semver (sem +metadado)", m.Version)
 	case m.Arch == "":
 		return nil, errors.New("manifesto: sem arquitetura")
+	case !archs[m.Arch]:
+		return nil, fmt.Errorf("manifesto: arquitetura %q inesperada", m.Arch)
 	case !sha256Re.MatchString(m.SHA256):
 		return nil, errors.New("manifesto: sha256 inválido")
-	case m.Size <= 0:
+	case m.Size <= 0 || m.Size > MaxPackageSize:
 		return nil, errors.New("manifesto: tamanho inválido")
 	case m.BufferSchema != nil && *m.BufferSchema < 1:
 		return nil, errors.New("manifesto: buffer_schema deve ser ≥ 1")
+	}
+	for _, v := range m.AllowedRollbackTo {
+		if !ValidVersion(v) {
+			return nil, fmt.Errorf("manifesto: allowed_rollback_to com versão inválida %q", v)
+		}
 	}
 	return &m, nil
 }

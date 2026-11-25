@@ -16,13 +16,14 @@ O agente de hoje (`gateway/cmd/oee-gateway`) é o da **Fase 0**. O pacote leva *
 | sysusers, tmpfiles, sysctl, udev (RS-485, LEDs), journald, watchdog do SoC | `sysusers.d/`, `tmpfiles.d/`, `sysctl.d/`, `udev/`, `journald.conf.d/`, `system.conf.d/` | **Fase 0, empacotado** |
 | sudo restrito do `tecnico` | `sudoers.d/oee-tecnico` | **Fase 0, empacotado** (`diag` e `enroll` já existem; `status` e `net` são da Fase 1) |
 | Modelo do firewall | `nftables/oee-gateway.nft` | **Fase 0, empacotado** (renderizado na bancada pelo `install.sh --firewall`; na Fase 1, pelo `oee-helper`) |
-| API local da CLI e da página (`agent.sock`, `ui.sock`) | `systemd/fase1/oee-gateway.socket`, `oee-gateway-ui.socket` | **Fase 1, fora do pacote**: o agente ainda não aceita ativação por socket (`$LISTEN_FDS`) |
-| Página local (`oee-localui`, porta 443 só na OT) | `systemd/fase1/oee-localui.{socket,service}` | **Fase 1, fora do pacote**: falta `oee-gateway localui serve` |
-| Ajudante privilegiado (`oee-helper`) | `systemd/fase1/oee-helper.{socket,service}` | **Fase 1, fora do pacote**: falta `oee-gateway helper serve` |
-| Atualizador OTA (`oee-gateway-updater`) | `nfpm-updater.yaml`, `systemd/oee-gateway-updater.*`, `oee-gateway-update-check.service`, `scripts/oee-gateway-updater/` | **M4b**: falta `gateway/cmd/oee-updater`; o `build-deb.sh` recusa gerar esse pacote com mensagem clara |
+| API local da CLI (`agent.sock`) | `systemd/fase1/oee-gateway.socket` | **Fase 1, fora do pacote**: falta o código (status, `modbus read` pela fila, enroll pelo agente) |
+| API local da página (`ui.sock`, só leitura: `GET /v1/status`) | `systemd/fase1/oee-gateway-ui.socket` | **Código pronto** (`gateway/internal/localapi`; o agente pega o fd `ui` do systemd), **fora do pacote** até a conferência na bancada |
+| Página local (`oee-localui`, porta 443 só na OT) | `systemd/fase1/oee-localui.{socket,service}` | **Código pronto** (`oee-gateway localui serve` e `localui passwd`): login com a senha local (argon2id, bloqueio por tentativas) e as telas do MVP. **Fora do pacote** até a conferência na bancada |
+| Ajudante privilegiado (`oee-helper`) | `systemd/fase1/oee-helper.{socket,service}` | **Código pronto** (`oee-gateway helper serve`: rede com checkpoint do NetworkManager, relógio, reset de fábrica, pendrive). **Fora do pacote** até a conferência na bancada (NetworkManager, busctl e timedatectl reais) |
+| Atualizador OTA (`oee-gateway-updater`) | `nfpm-updater.yaml`, `systemd/oee-gateway-updater.*`, `oee-gateway-update-check.service`, `scripts/oee-gateway-updater/`, `keys/` | **M4b, empacotado** (`build-deb.sh --package oee-gateway-updater` ou `all`). Sem chave em `keys/*.pub`, recusa todo pacote (ver §7) |
 | VPN sob demanda (`oee-remote-access`, usuário `oee-ra`) | — | **F2** ([docs/12](../../docs/12-acesso-remoto-vpn.md)). O usuário `oee-ra` já nasce na imagem |
 
-Quando uma peça da Fase 1 ficar pronta: mova a unit de `systemd/fase1/` para `systemd/`, acrescente no `nfpm.yaml`, nas listas de units do `postinst`/`prerm`/`postrm` e do `install.sh`, e na matriz do `validate.sh`.
+Quando uma peça da Fase 1 for conferida na bancada ([roteiro](../../docs/operacao/verificacao-bancada-r1000.md)): mova a unit de `systemd/fase1/` para `systemd/`, acrescente no `nfpm.yaml`, nas listas de units do `postinst`/`prerm`/`postrm` e do `install.sh`, e na matriz do `validate.sh`.
 
 ## 2. Processos, usuários e caminhos
 
@@ -119,6 +120,23 @@ POSIX `sh`, idempotentes, respeitam `DPKG_ROOT`. Funcionam com o systemd rodando
 - **`prerm`:** na remoção, para o agente; na atualização, não para nada.
 - **`postrm`:** `daemon-reload`; no `purge`, remove os links de habilitação. **Não apaga** `/var/lib/oee-gateway` (buffer não enviado e credencial: princípio 2 do docs/16), os usuários nem os arquivos de rede. Descarte e LGPD: reset de fábrica (docs/16 §7, Fase 1).
 
+### 7.1 Atualizador (OTA mínimo, pacote `oee-gateway-updater`)
+
+Fluxo (docs/16 §3, M4b; código em `gateway/internal/update` e `gateway/cmd/oee-updater`):
+
+1. **Publicar (CI ou bancada):** `oee-updater sign --deb oee-gateway_<v>_<arq>.deb --version <v> --arch <arq> --url <nome ou URL do .deb> --key <privada> --out <dir>` gera `<nome>.manifest.json` (com `sha256`, `size` e `buffer_schema`) e `.sig` (Ed25519, base64). O par de chaves sai de `oee-updater keygen --out ota-AAAA`; a pública vai para `keys/` (ver `keys/README.md`), a privada para o cofre e o segredo do CI.
+2. **Agente (usuário `oee`):** `sudo -u oee oee-gateway update fetch --manifest-url https://.../<nome>.manifest.json` baixa o manifesto e o `.sig`, confere a assinatura, baixa o `.deb` (tamanho e SHA-256) e grava `/var/lib/oee-gateway/update/request.json` por último. Enquanto o contrato v1 não tem comando de atualização vindo da nuvem, é por aqui que se dispara.
+3. **`oee-gateway-updater.path` → `oee-updater apply` (root):** copia tudo para `/var/lib/oee-gateway-updater/staging` sem seguir link simbólico e confere de novo **na cópia** (assinatura, SHA-256, `Package`/`Version`/`Architecture` do `.deb`, versão mais antiga só se estiver no `allowed_rollback_to` do instalado, `buffer_schema` × `user_version` do `buffer.db`, L25). Instala com `dpkg -i --force-confdef --force-confold`, reinicia o agente e espera até 5 min pelo `update/health.json` (o agente novo grava depois do 1º `/sync` aceito). Sem ele, reinstala o anterior (`rolled_back`) ou, se o buffer já migrou para um esquema que o anterior não abre, mantém o novo (`rollback_refused`). O resultado fica em `update/result.json`.
+4. **Queda de energia no meio:** `oee-gateway-update-check.service` (antes do agente) vê `state.json`, roda `dpkg --configure -a` e enfileira o apply, que retoma (até 3 vezes; depois volta ao anterior).
+
+**Antes do primeiro OTA de cada unidade**, registre o pacote instalado (sem ele o updater recusa: não teria para onde voltar):
+
+```sh
+sudo /usr/lib/oee-gateway/oee-updater seed --manifest <nome>.manifest.json --sig <nome>.manifest.json.sig --deb <nome>.deb
+```
+
+O `seed` confere a assinatura e que o `.deb` é exatamente a versão instalada (`dpkg-query`). A bancada faz isso junto com a instalação do pacote.
+
 ## 8. Gerar o `.deb`
 
 Requer Go 1.24 e o nfpm **v2.43.1** (a última que compila com Go 1.24):
@@ -138,7 +156,7 @@ deploy/gateway/build-deb.sh --build --arch amd64 --version 0.1.0-rc.1 --out /tmp
 deploy/gateway/build-deb.sh --build --arch arm64 --version 0.1.0 --out deploy/image/debs
 ```
 
-Saída: `oee-gateway_<versão>_<arq>.deb` (pré-release `-rc.1` vira `~rc.1`). Binários vão para `gateway/dist/<arq>/` (ignorado pelo git). A data dos arquivos vem do último commit (`SOURCE_DATE_EPOCH`): o `.deb` é reproduzível. O `--package oee-gateway-updater` só funciona quando existir o `gateway/cmd/oee-updater` (M4b).
+Saída: `oee-gateway_<versão>_<arq>.deb` (pré-release `-rc.1` vira `~rc.1`). Binários vão para `gateway/dist/<arq>/` (ignorado pelo git). A data dos arquivos vem do último commit (`SOURCE_DATE_EPOCH`): o `.deb` é reproduzível. `--package oee-gateway-updater` (ou `all`) gera também `oee-gateway-updater_<versão>_<arq>.deb`, com o `oee-updater` (`gateway/cmd/oee-updater`) e as chaves de `keys/`.
 
 ## 9. Validar
 
@@ -189,7 +207,8 @@ Proxy corporativo numa bancada: `/etc/oee-gateway/proxy.env` (root:oee 0640) com
 
 ## 12. Decisões tomadas aqui (e divergências dos rascunhos)
 
-- **Só a Fase 0 no pacote.** Units que chamam subcomandos inexistentes ficam em `systemd/fase1/`.
+- **Só a Fase 0 no pacote do agente.** As units da Fase 1 ficam em `systemd/fase1/` até a conferência na bancada, mesmo com o código pronto (página local, API da página e ajudante).
+- **A página local valida o login; o agente só confere quem conecta.** O `ui.sock` expõe uma rota só de leitura (`GET /v1/status`) e o agente aceita só o grupo `oee-ui`, o próprio `oee` e root (`SO_PEERCRED`). A senha (argon2id) e as sessões ficam no `oee-localui`, que não tem rede própria nem acesso ao buffer ou à credencial.
 - **Sudo como `oee`, não root** (`runas_default=oee`). O docs/16 §4 lista os subcomandos; não diz com que usuário. Root deixaria a credencial ilegível para o agente e seria barrado pelo firewall.
 - **Página local na 443, processo `oee-localui` separado, usuário `oee-ui`** (docs/16), e não na 8443 dentro do agente (rascunho de software). **Um ajudante root (`oee-helper`)** no lugar do `oee-netd` (rascunhos).
 - **ETH0 = OT, ETH1 = IT** (docs/16 §5). O rascunho de software (§2.9 e §5.1) diz o contrário; vale o docs/16.
@@ -212,6 +231,8 @@ Proxy corporativo numa bancada: `/etc/oee-gateway/proxy.env` (root:oee 0640) com
 ## 14. Pendências fora da bancada
 
 - E-mail do mantenedor nos `nfpm*.yaml` (`a-definir@engemase.invalid`).
-- Código da Fase 1 no `gateway/`: ativação por socket (`localapi`), `localui serve`, `helper serve`, `status`, `net`, `logs`, `support-bundle`, LEDs; e o `oee-updater` (M4b).
+- Código da Fase 1 no `gateway/` que ainda falta: `agent.sock` (CLI: `status`, `net`, `logs`, `support-bundle`), LEDs, regeneração do nftables pelo `oee-helper` e as telas de rede, diagnóstico e leitura ao vivo da página local.
+- Par de chaves do OTA: gerar (`oee-updater keygen`), guardar a privada no cofre e no CI e pôr a pública em `keys/`. Sem isso o atualizador recusa todo pacote.
+- Comando de atualização vindo da nuvem (contrato v1 sem o tipo): por enquanto o OTA é disparado pelo `oee-gateway update fetch`.
 - Domínio próprio (D28): por enquanto o `gateway.yaml` usa o domínio da Vercel (`https://engemase-oee.vercel.app`, igual ao `config.DefaultCloudURL` do agente); o `homepage` dos dois `nfpm*.yaml` repete o host (só metadado do `.deb`), e o `TestDefaultCloudURLMatchesShippedYAML` do agente confere os três. O `gateway.yaml` é **conffile**: numa atualização, se o pacote novo trouxer outro conteúdo, o dpkg troca sem perguntar o arquivo não editado e, no editado, pergunta (ou mantém o antigo, com `--force-confold`). Por isso o `cloud.url` **não** muda numa versão comum do pacote (trocaria o host de gateways cujo TI ainda não liberou o novo); a migração para o domínio próprio segue o [docs/16 §4](../../docs/16-projeto-do-gateway.md#4-caminhos-usuários-e-identidade-canônico).
 - Assinatura do `.deb`/manifesto (Ed25519, `tools/release-sign`) e publicação no Vercel Blob: fora deste diretório.
