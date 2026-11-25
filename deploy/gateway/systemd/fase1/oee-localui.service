@@ -1,7 +1,6 @@
-# FASE 1 — NÃO EMPACOTADO AINDA. O subcomando "oee-gateway localui serve" existe como
-# esqueleto (gateway/internal/localui, socket pelo internal/sdlisten), sem as telas/operações.
-# Esta unit entra no nfpm.yaml (e no postinst/prerm/postrm/install.sh) junto com
-# esse código; até lá, fica só como contrato. Ver deploy/gateway/README.md §2.
+# FASE 1 — CÓDIGO PRONTO, NÃO EMPACOTADO AINDA: entra no nfpm.yaml (e no
+# postinst/prerm/postrm/install.sh) depois da conferência na bancada
+# (docs/operacao/verificacao-bancada-r1000.md). Ver deploy/gateway/README.md §1.
 #
 # Página local reduzida (docs/16 §6): processo separado do agente, usuário
 # oee-ui, ativado pelo oee-localui.socket. Fala com o agente só por
@@ -19,7 +18,9 @@ ExecStart=/usr/bin/oee-gateway localui serve
 Sockets=oee-localui.socket
 User=oee-ui
 Group=oee-ui
-# Chave TLS estável (ECDSA P-256) e certificado autoassinado.
+# Senha local (password.argon2id, gravada por "oee-gateway localui passwd" ou
+# pelo factory init), bloqueio por tentativas (lock.json) e a chave TLS estável
+# (tls.crt/tls.key do factory init ou tls/ gerada no primeiro start).
 StateDirectory=oee-localui
 StateDirectoryMode=0700
 UMask=0077

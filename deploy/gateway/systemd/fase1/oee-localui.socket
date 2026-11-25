@@ -1,7 +1,6 @@
-# FASE 1 — NÃO EMPACOTADO AINDA. O agente da Fase 0 não tem o subcomando
-# "oee-gateway localui serve".
-# Esta unit entra no nfpm.yaml (e no postinst/prerm/postrm/install.sh) junto com
-# esse código; até lá, fica só como contrato. Ver deploy/gateway/README.md §2.
+# FASE 1 — CÓDIGO PRONTO, NÃO EMPACOTADO AINDA: entra no nfpm.yaml (e no
+# postinst/prerm/postrm/install.sh) depois da conferência na bancada
+# (docs/operacao/verificacao-bancada-r1000.md). Ver deploy/gateway/README.md §1.
 #
 # Página local de comissionamento (docs/16 §6): HTTPS na porta 443, SÓ na
 # interface OT (ETH0) — o que inclui os IPs da OT e o endereço de serviço

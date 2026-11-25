@@ -2,7 +2,7 @@
 
 Agente que roda no gateway Linux da fábrica: lê os CLPs por **Modbus TCP, RTU (RS-485) e RTU sobre TCP**, **somente leitura**, determina o estado de cada máquina, calcula os deltas dos contadores, gera **eventos** e **agregados por minuto**, guarda tudo numa **outbox SQLite** e sincroniza com a nuvem por **HTTPS de saída** (`/api/gateway/v1`). Projeto: [docs/03](../docs/03-gateway.md), [docs/04](../docs/04-protocolo-gateway-nuvem.md), [docs/11](../docs/11-integracao-modbus.md) e [docs/16](../docs/16-projeto-do-gateway.md).
 
-> **Status: esqueleto funcional (Fase 0).** O núcleo (Modbus, motor, buffer, uplink, config) está implementado e testado; o agente coleta, grava e sincroniza de ponta a ponta. A lista do que falta está no fim.
+> **Status: Fase 0 + peças da Fase 1.** O núcleo (Modbus, motor, buffer, uplink, config) está implementado e testado; o agente coleta, grava e sincroniza de ponta a ponta. Já existem também o OTA mínimo (`oee-updater`), o ajudante privilegiado (`oee-helper`) e a página local reduzida (`oee-localui`), testados com interfaces falsas; a conferência deles no Linux real está no roteiro de bancada. A lista do que falta está no fim.
 
 Módulo Go próprio: `github.com/engemaseautomacao/engemase-oee/gateway` (`go 1.24.0`, sem cgo).
 
@@ -28,8 +28,9 @@ flowchart LR
 
 | Pacote | O que faz |
 |---|---|
-| `cmd/oee-gateway` | Binário único (agente + CLI) |
-| `internal/cli` | Comandos cobra: `run`, `enroll`, `version`, `diag`, `modbus read`, `config validate` |
+| `cmd/oee-gateway` | Binário único (agente + CLI + `localui serve` + `helper serve`) |
+| `cmd/oee-updater` | Atualizador root do OTA mínimo (pacote `oee-gateway-updater`, separado do agente): `apply`, `boot-check`, `seed`, `sign`, `keygen` |
+| `internal/cli` | Comandos cobra: `run`, `enroll`, `version`, `diag`, `modbus read`, `config validate`, `update fetch`, `localui serve/passwd`, `helper serve` |
 | `internal/app` | Monta o agente: pollers → motor → buffer → uplink; aplica config nova; `agent_start`/`agent_stop`; `sd_notify`; watchdog do systemd alimentado (a cada `WatchdogSec`/3) só se a verificação de saúde passa: motor com tick recente, gravação no buffer sem tentativa travada nem caminho parado (buffer que só falha, como disco cheio, não reinicia o agente) e o laço de cada leitor dentro do prazo; se não passa, um warn diz qual verificação falhou e o watchdog não é alimentado; sem batimento por `WatchdogSec` (30 s, ~3 verificações seguidas), o systemd reinicia o agente; saúde básica |
 | `internal/config` | `gateway.yaml` (local), `credentials.json` (0600) e a config remota do contrato, com **validação estrutural + todas as regras semânticas** do `packages/contracts` (mesmos ids de regra e caminhos) |
 | `internal/modbus` | Tipos, decodificação (bool, bit, int16/uint16, int32/uint32, float32; ABCD/CDAB/BADC/DCBA), planejador de blocos (≤ 125 registradores / 2000 bits), bloco OEE padrão, cliente **somente leitura** sobre a `github.com/grid-x/modbus` (timeout 500 ms TCP / 300 ms RTU, 1 nova tentativa só em timeout, erros classificados) |
@@ -41,9 +42,11 @@ flowchart LR
 | `internal/commands` | Executor dos comandos da nuvem: deduplicação por id, `expired` pelo relógio corrigido pelo `server_time`, até 4 em paralelo, prazo por tipo, resultados até a nuvem confirmar. Handlers de `tag.read`, `device.test`, `config.reload` e `agent.restart` (payloads validados como no Zod, com os mesmos ids de regra); tipo sem handler volta `rejected/unsupported`. As leituras passam pela fila do poller dono do transporte (`Access`) |
 | `internal/contracts` | Tipos Go do `/sync`, `/enroll` e eventos |
 | `internal/sdlisten` | Sockets da ativação por socket do systemd (`LISTEN_FDS`/`LISTEN_FDNAMES`), sem libsystemd |
-| `internal/localui` | Esqueleto do `oee-localui` (`oee-gateway localui serve`): HTTPS no fd `https` com chave ECDSA P-256 estável, recusa de endereço local fora da OT/serviço/loopback e de `Host` por nome (DNS rebinding), só GET/HEAD, CSP. As telas e o login com senha local entram com a API local do agente |
-| `internal/helper` | Esqueleto do `oee-helper` (`oee-gateway helper serve`): uma linha JSON por conexão no fd `helper`, chamador pelo `SO_PEERCRED` (root ou grupo `oee`, reset de fábrica só root), lista fechada de operações (só `ping` implementada; rede, relógio, reset e pendrive respondem `not_implemented`), sai ocioso |
-| `internal/update` | Regras do OTA mínimo sem rede nem root: manifesto do pacote (com `buffer_schema`) e `CheckAutoRollback`, que recusa o rollback automático para um pacote que não abre o esquema atual do `buffer.db` (L25) |
+| `internal/localui` | `oee-localui` (`oee-gateway localui serve`, D30): HTTPS no fd `https` (chave do factory init `tls.crt`/`tls.key` ou ECDSA P-256 gerada e estável), recusa de endereço local fora da OT/serviço/loopback e de `Host` por nome (DNS rebinding), CSP sem script. **Login só com a senha local** (argon2id `m=19 MiB,t=2`, normalizada como no cartão; 5 erros por endereço = 15 min, 20 no gateway em 1 h = 1 h, gravado em `lock.json`), sessão em cookie `__Host-` (`Secure`, `HttpOnly`, `SameSite=Strict`, 30 min parada, 8 h no máximo), POST só com `Origin` da própria página. Telas do MVP, em português e só leitura: nuvem (situação, último envio, erro, relógio), fila pendente, agente, conexões com os CLPs e últimas leituras, com atualização a cada 15 s. `localui passwd --stdin|--generate` grava o hash (`password.argon2id`) |
+| `internal/localapi` | API local da página no `ui.sock` (fd `ui` do `oee-gateway-ui.socket`, passado ao `run`): uma rota, `GET /v1/status`, com o retrato do agente; chamador pelo `SO_PEERCRED` (grupo `oee-ui`, o próprio `oee` ou root). Falha nela não para a coleta |
+| `internal/helper` | `oee-helper` (`oee-gateway helper serve`): uma linha JSON por conexão no fd `helper`, chamador pelo `SO_PEERCRED` (root ou grupo `oee`; reset de fábrica só root), lista fechada de operações com parâmetros sem campo desconhecido e auditoria no journal. `network.apply` (rede nova inteira ou `profile: factory`; MACs e hostname sempre do `network.json` atual) valida as regras da rede, gera os keyfiles `oee-it`/`oee-ot` (mantém o uuid), o `proxy.env`, as fontes do chrony e o pacote de CAs, cria o checkpoint do NetworkManager (volta sozinho em 120 s) e guarda o backup; `network.confirm`/`network.rollback`; sem confirmação, o ajudante fica vivo até o prazo e devolve os arquivos. `clock.set` (só com o NTP fora de sincronia), `factory.reset` (confirmado com o hostname: apaga credencial, buffer, estado do OTA e a chave TLS própria da página; rede de fábrica), `usb.read` (presença de `OEE/net-reset` e `OEE/diag`, sem ler conteúdo nem seguir link). Sistema por interface (`System`): `busctl`/`nmcli`/`systemctl`/`timedatectl` reais, falsa nos testes |
+| `internal/update` | OTA mínimo (M4b, D29). Manifesto assinado (Ed25519, chaves `*.pub` de `/usr/share/oee-gateway-updater/keys`; sem chave, recusa tudo), `buffer_schema` e `CheckAutoRollback` (L25). `Fetch` (agente, usuário `oee`): manifesto e `.sig` por https, assinatura, `.deb` com tamanho e SHA-256, e o `request.json` por último. `Updater` (root): copia para o estado próprio sem seguir link e confere de novo na cópia (assinatura, hash, `Package`/`Version`/`Architecture` do `.deb`, versão mais antiga só pelo `allowed_rollback_to` do instalado, L25), `dpkg -i`, reinicia o agente e espera 5 min pelo `health.json` (gravado pelo agente novo no 1º `/sync` aceito); sem ele, volta ao anterior (`rolled_back`) ou, se o buffer já migrou, fica o novo (`rollback_refused`). Queda de energia: `state.json` + `boot-check` retomam (até 3 vezes) |
+| `internal/peercred` | `SO_PEERCRED` (uid, gid e pid do chamador num socket Unix) |
 | `internal/ids` | UUIDv7 monotônico com timestamp injetável |
 
 ### Regras que garantem a contagem
@@ -108,6 +111,17 @@ oee-gateway config validate config.json          # estrutura + regras semântica
 oee-gateway modbus read --target tcp://192.168.10.23 --unit 1 --offset 1000 --count 14 --oee-block
 oee-gateway modbus read --target tcp://192.168.10.23 --offset 1000 --count 14 --decode uint32:CDAB@4 --decode bool@13.0
 oee-gateway modbus read --target "rtu:///dev/ttyUSB0?baud=19200&parity=E&stop_bits=1" --unit 2 --area ir --offset 16 --count 2 --json
+
+# Página local (bancada): senha e servidor fora do systemd
+sudo oee-gateway localui passwd --generate                    # mostra a senha uma vez (cartão lacrado)
+oee-gateway localui serve --listen 127.0.0.1:8443 --state-dir /tmp/ui --agent-socket /run/oee-gateway/ui.sock
+
+# OTA mínimo: publicar (CI) e pedir a instalação (gateway, como oee)
+oee-updater keygen --out ota-2026                             # privada no cofre/CI, pública em deploy/gateway/keys/
+oee-updater sign --deb oee-gateway_1.2.0_arm64.deb --version 1.2.0 --arch arm64 --url oee-gateway_1.2.0_arm64.deb --key ota-2026.key --out dist/
+sudo /usr/lib/oee-gateway/oee-updater seed --manifest M --sig M.sig --deb D   # 1 vez por unidade: o pacote instalado
+sudo -u oee oee-gateway update fetch --manifest-url https://.../oee-gateway_1.2.0_arm64.manifest.json
+cat /var/lib/oee-gateway/update/result.json                   # applied | rolled_back | rollback_refused | rejected
 ```
 
 `modbus read` lê **direto**, sem passar pela fila do agente: num barramento RS-485, pare o agente antes (um mestre por barramento).
@@ -131,7 +145,7 @@ Config local: [`examples/gateway.yaml`](examples/gateway.yaml) (arquivo ausente 
 
 ## Decisões deste esqueleto
 
-- **Versões:** `grid-x/modbus v1.5.1`, `modernc.org/sqlite v1.46.1` (a última que declara `go 1.24.0`; da v1.47 em diante exige Go 1.25), `spf13/cobra v1.10.1`, `gopkg.in/yaml.v3`, `santhosh-tekuri/jsonschema/v6 v6.0.3` (testes). O `go.mod` diz `go 1.24.0` porque as dependências declaram `1.24.0` e o `go mod tidy` não aceita `go 1.24` abaixo disso.
+- **Versões:** `grid-x/modbus v1.5.1`, `modernc.org/sqlite v1.46.1` (a última que declara `go 1.24.0`; da v1.47 em diante exige Go 1.25), `spf13/cobra v1.10.1`, `gopkg.in/yaml.v3`, `golang.org/x/crypto v0.45.0` (só o argon2id da senha local; declara `go 1.24.0`), `santhosh-tekuri/jsonschema/v6 v6.0.3` (testes). Ed25519, SHA-256 e TLS do OTA são da biblioteca padrão. O `go.mod` diz `go 1.24.0` porque as dependências declaram `1.24.0` e o `go mod tidy` não aceita `go 1.24` abaixo disso.
 - **Planejador:** tags fora de bloco só se juntam quando encostadas (`max_gap = 0`); vários CLPs respondem exceção 02 em endereço não mapeado.
 - **Debounce padrão 1 s** (contrato/docs/16); `NO_COMM` não tem debounce extra (o próprio `comm_loss_after_s`/`heartbeat_timeout_s` já é o prazo) e começa na primeira falha de leitura depois da última boa (sem falha, só silêncio: na última leitura boa; heartbeat parado: na última mudança dele).
 - **`count_derived`:** `RUNNING` enquanto chega peça dentro da janela ociosa (`idle_after_cycles × ideal_cycle_s`). Leitura falha não é "nenhuma peça": a janela só corre no tempo observado, então falhas curtas não inventam parada e, sem comunicação por `comm_loss_after_s`, a máquina vai para `NO_COMM` (desde a primeira falha), não para `STOPPED`. Com leitura, a parada começa na última peça + janela.
@@ -149,9 +163,13 @@ Config local: [`examples/gateway.yaml`](examples/gateway.yaml) (arquivo ausente 
 
 - Liberação temporária (5 min) no nftables do `device.test` fora da config, pelo `oee-helper` (hoje vale a regra provisória da Fase 0).
 - Máquina de estados da config (observação de 60 s e volta automática à anterior): hoje uma config que passa na validação mas não monta os pollers (ex.: porta lógica ausente no perfil) fica marcada `rejected` e a coleta para até chegar outra.
-- API local (`/run/oee-gateway/agent.sock`) para `status`, `modbus read` e `enroll` passarem pelo agente; `diag` completo (TLS/proxy, NTP, portas seriais, links, integridade do banco).
+- API local da CLI (`/run/oee-gateway/agent.sock`) para `status`, `modbus read` e `enroll` passarem pelo agente (a da página, `ui.sock`, já existe); `diag` completo (TLS/proxy, NTP, portas seriais, links, integridade do banco).
 - Retenção da outbox (30 dias / 1 GB): hoje o `data_loss` só cobre a saída do motor guardada em memória enquanto o buffer não grava (limite de 10 000 itens, `retention_limit`). Fila de amostras `custom`/`speed.actual` (F2), `open_minute` no SIGTERM, `power_loss`; o `clock_jump` já é emitido, mas o motor ainda não trata o passo para trás (a contagem de tempo fica parada até o relógio alcançar a hora anterior).
 - Bisseção do bloco ao receber exceção 02; detector de 2º mestre no RS-485; estatísticas de barramento (`buses[]`).
 - Saúde completa (temperatura, desgaste do eMMC, NTP, links) e logs com redação de segredos e limite de repetição fora do `/sync` (as falhas do `/sync` já têm).
 - Máquina com tags em dois dispositivos: hoje `NO_COMM` só quando **nenhuma** tag de estado/contador lê (regra do docs/03); sinal parado num dispositivo enquanto o outro responde não é detectado.
-- Empacotamento `.deb`, units systemd, sysusers/tmpfiles (`deploy/gateway`), OTA (M4b) e CI (golangci-lint com forbidigo, govulncheck).
+- CI (golangci-lint com forbidigo, govulncheck).
+- **Pendente de bancada** ([verificação §5.7](../docs/operacao/verificacao-bancada-r1000.md)): RS-485, journald real (`logs.upload`, `log.level`), `SO_PEERCRED` com as units de verdade, checkpoint do NetworkManager (`busctl`), relógio, OTA com `dpkg` real e queda de energia, página na porta 443 da OT. As units da página e do ajudante entram no `.deb` depois disso.
+- OTA: par de chaves de produção (`oee-updater keygen`; a pública em `deploy/gateway/keys/`), comando de atualização vindo da nuvem (o contrato v1 ainda não tem o tipo: por enquanto, `oee-gateway update fetch`), `min_image_version` ainda não conferido pelo updater.
+- Ajudante: regenerar o nftables a partir da config e do `network.json`, liberação temporária do `device.test`, drop-in `BindToDevice=` da página pelo MAC da ETH0, montagem do pendrive (`oee-usb-service@`) e a ação do `OEE/net-reset` no agente.
+- Página local: telas de diagnóstico, rede (com o `network.apply` do ajudante), leitura ao vivo e logs; o factory init usa `oee-gateway localui passwd --stdin` (o fallback dele com o utilitário `argon2 -m 16` = 64 MiB não cabe no `MemoryMax=64M` da página e é recusado).
