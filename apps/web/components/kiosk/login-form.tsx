@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { NumericKeypad } from "@/components/kiosk/numeric-keypad"
+import { requestPasswordResetAction } from "@/app/(auth)/senha-actions"
 import { signInAction, type SignInResult, verifyTwoFactorAction } from "@/app/(auth)/login/actions"
 
 const PIN_MAX = 6
@@ -319,17 +320,34 @@ function ForgotPasswordDialog({
 function ForgotPasswordBody({ initialEmail, onDone }: { initialEmail: string; onDone: () => void }) {
   const [email, setEmail] = useState(initialEmail)
   const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
 
-  function send(e: React.FormEvent) {
+  async function send(e: React.FormEvent) {
     e.preventDefault()
+    // O diálogo é um portal dentro do formulário de login: sem isto, o envio sobe (no React) até ele.
+    e.stopPropagation()
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
       setError("Informe o e-mail cadastrado na plataforma.")
       return
     }
-    toast.success("Verifique sua caixa de entrada", {
-      description: `Se ${email.trim()} estiver cadastrado, você receberá um link para criar uma nova senha. O link vale por 30 minutos.`,
-    })
-    onDone()
+    setPending(true)
+    setError(null)
+    try {
+      const result = await requestPasswordResetAction({ email: email.trim() })
+      if (result.status === "error") {
+        setError(result.message)
+        setPending(false)
+        return
+      }
+      // Mesma mensagem exista ou não a conta (não revela quem tem cadastro).
+      toast.success("Verifique sua caixa de entrada", {
+        description: `Se ${email.trim()} estiver cadastrado, você receberá um link para criar uma nova senha. O link vale por 30 minutos.`,
+      })
+      onDone()
+    } catch {
+      setError("Sem conexão com o servidor. Confira a internet e tente de novo.")
+      setPending(false)
+    }
   }
 
   return (
@@ -358,7 +376,10 @@ function ForgotPasswordBody({ initialEmail, onDone }: { initialEmail: string; on
         <Button type="button" variant="outline" onClick={onDone}>
           Cancelar
         </Button>
-        <Button type="submit">Enviar link</Button>
+        <Button type="submit" disabled={pending}>
+          {pending && <Spinner aria-label="Carregando" />}
+          Enviar link
+        </Button>
       </DialogFooter>
     </form>
   )

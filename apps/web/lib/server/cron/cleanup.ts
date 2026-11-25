@@ -14,7 +14,9 @@
  */
 import { gatewayCommand, gatewayEnrollment, gatewayHealthSample } from "@engemase/db"
 import { and, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm"
+import { getAuthDb } from "../db"
 import { queryRows } from "../gateway/types"
+import { cleanupAuth } from "./auth-cleanup"
 import type { CronJob } from "./runner"
 import { utcDay } from "./windows"
 
@@ -69,6 +71,7 @@ export const cleanupJob: CronJob = {
         .returning({ id: gatewayEnrollment.id })
       return { health: health.length, commands: commands.length, codes: codes.length }
     })
+    const auth = await cleanupAuth(ctx, getAuthDb())
     const sum = (k: "health" | "commands" | "codes") => run.results.reduce((n, r) => n + r.value[k], 0)
     return {
       rate_limit_keys_deleted: Number(rate?.n ?? 0),
@@ -77,8 +80,9 @@ export const cleanupJob: CronJob = {
       health_samples_deleted: sum("health"),
       commands_deleted: sum("commands"),
       activation_codes_deleted: sum("codes"),
+      ...auth,
       partitions: "pendente (pg_partman, W2b)",
-      failures: run.failures,
+      failures: run.failures + auth.account_token_failures,
       incomplete: run.incomplete,
     }
   },
