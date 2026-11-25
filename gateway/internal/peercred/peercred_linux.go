@@ -1,4 +1,4 @@
-package helper
+package peercred
 
 import (
 	"errors"
@@ -6,8 +6,8 @@ import (
 	"syscall"
 )
 
-// peerCred lê o chamador do socket Unix (SO_PEERCRED).
-func peerCred(c net.Conn) (Peer, error) {
+// Of lê o chamador do socket Unix (SO_PEERCRED).
+func Of(c net.Conn) (Peer, error) {
 	uc, ok := c.(*net.UnixConn)
 	if !ok {
 		return Peer{}, errors.New("conexão não é de socket Unix")
