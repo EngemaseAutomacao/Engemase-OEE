@@ -1,8 +1,12 @@
 /**
  * Dados da frota de gateways (console Engemase), montados a partir de `@/lib/mock`.
- * Usado SÓ por páginas (servidor). Devolve objetos serializáveis; "agora" = MOCK_NOW.
+ * Usado SÓ por páginas (servidor). Devolve objetos serializáveis; "agora" = r.agoraIso().
  */
-import { MOCK_NOW, getClients, getDevices, getGateways, getMachines, getUnit, getUnits, type ClientStatus, type GatewayStatus } from "@/lib/mock"
+import {
+  type ClientStatus,
+  type GatewayStatus,
+} from "@/lib/mock"
+import { repositorioMock, type Repositorio } from "@/lib/data/admin/repositorio"
 import { ago, date, dateTime, duration } from "@/lib/format"
 import { compareVersions } from "./labels"
 
@@ -93,15 +97,15 @@ function versionState(v: string | null, latest: string): VersionState {
   return "current"
 }
 
-export function buildFleet(): FleetData {
-  const clients = getClients()
-  const gws = getGateways()
+export function buildFleet(r: Repositorio = repositorioMock): FleetData {
+  const clients = r.getClients()
+  const gws = r.getGateways()
   const versions = gws.map((g) => g.agentVersion).filter((v): v is string => !!v && !v.includes("-"))
   const latest = versions.reduce((max, v) => (compareVersions(v, max) > 0 ? v : max), versions[0] ?? "1.0.0")
 
   const rows: FleetRow[] = gws.map((g) => {
     const c = clients.find((x) => x.id === g.clientId)!
-    const u = getUnit(g.unitId)
+    const u = r.getUnit(g.unitId)
     const vState = versionState(g.agentVersion, latest)
     const configState: ConfigState = g.configApplied === null ? "none" : g.configApplied < g.configVersion ? "pending" : "synced"
     const abs = g.clockOffsetMs === null ? null : Math.abs(g.clockOffsetMs)
@@ -138,8 +142,8 @@ export function buildFleet(): FleetData {
       bufferState,
       clockOffsetMs: g.clockOffsetMs,
       clockState,
-      machines: getMachines(c.id).filter((m) => m.gatewayId === g.id).length,
-      devices: getDevices(g.id).length,
+      machines: r.getMachines(c.id).filter((m) => m.gatewayId === g.id).length,
+      devices: r.getDevices(g.id).length,
       ipIt: g.ipIt,
       ipOt: g.ipOt,
       uptime: g.uptimeS !== null ? duration(g.uptimeS) : null,
@@ -155,7 +159,7 @@ export function buildFleet(): FleetData {
     ...stableVersions.map((v) => ({
       version: v,
       channel: "stable" as const,
-      publishedAt: STABLE_PUBLISHED[v] ?? MOCK_NOW,
+      publishedAt: STABLE_PUBLISHED[v] ?? r.agoraIso(),
       publishedLabel: STABLE_PUBLISHED[v] ? date(STABLE_PUBLISHED[v]) : "—",
       notes: STABLE_NOTES[v] ?? [],
     })),
@@ -165,7 +169,7 @@ export function buildFleet(): FleetData {
     rows,
     latest,
     releases,
-    clients: clients.map((c) => ({ id: c.id, name: c.name, status: c.status, units: getUnits(c.id).map((u) => ({ id: u.id, name: u.name })) })),
-    generatedAt: dateTime(MOCK_NOW),
+    clients: clients.map((c) => ({ id: c.id, name: c.name, status: c.status, units: r.getUnits(c.id).map((u) => ({ id: u.id, name: u.name })) })),
+    generatedAt: dateTime(r.agoraIso()),
   }
 }

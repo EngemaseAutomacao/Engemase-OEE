@@ -8,6 +8,7 @@ import { ActivationSteps, useActivationCode } from "./activation-steps"
 
 /** Instruções de ativação de um gateway já criado (status "aguardando ativação"). */
 export function ActivationDialog({
+  gatewayId,
   gatewayName,
   code: initialCode,
   expired = false,
@@ -16,6 +17,8 @@ export function ActivationDialog({
   triggerLabel = "Instruções de ativação",
   triggerVariant = "outline",
 }: {
+  /** Com banco: gerar código chama o servidor. */
+  gatewayId?: string
   gatewayName: string
   code: string
   expired?: boolean
@@ -25,7 +28,7 @@ export function ActivationDialog({
   triggerLabel?: string
   triggerVariant?: "outline" | "default" | "secondary"
 }) {
-  const act = useActivationCode(gatewayName, { code: initialCode, expired, expiresLabel }, freshExpiresLabel)
+  const act = useActivationCode(gatewayName, { code: initialCode, expired, expiresLabel }, freshExpiresLabel, gatewayId)
 
   return (
     <Dialog>

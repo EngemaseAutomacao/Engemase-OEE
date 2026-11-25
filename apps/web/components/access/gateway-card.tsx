@@ -133,15 +133,20 @@ export function GatewayCard({ row, href, freshExpiresLabel }: { row: GatewayRow;
               <div className={cn("font-mono text-lg font-semibold tracking-[0.16em]", row.codeExpired && "text-muted-foreground line-through")}>
                 {row.enrollmentCode ?? "—"}
               </div>
-              <div className={cn("text-xs", row.codeExpired ? "font-medium text-state-fault" : "text-muted-foreground")}>
-                {row.codeExpired ? `Expirou em ${row.codeExpiresLabel}` : `Válido até ${row.codeExpiresLabel}`}
-              </div>
+              {row.enrollmentCode ? (
+                <div className={cn("text-xs", row.codeExpired ? "font-medium text-state-fault" : "text-muted-foreground")}>
+                  {row.codeExpired ? `Expirou em ${row.codeExpiresLabel}` : `Válido até ${row.codeExpiresLabel}`}
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground">Só aparece na hora em que é gerado</div>
+              )}
             </div>
-            {row.enrollmentCode && (
+            {pending && (
               <EditOnly fallback={<span className="text-xs text-muted-foreground">A equipe Engemase instala e ativa este gateway.</span>}>
                 <ActivationDialog
+                  gatewayId={row.local ? undefined : row.id}
                   gatewayName={row.name}
-                  code={row.enrollmentCode}
+                  code={row.enrollmentCode ?? ""}
                   expired={row.codeExpired}
                   expiresLabel={row.codeExpiresLabel}
                   freshExpiresLabel={freshExpiresLabel}

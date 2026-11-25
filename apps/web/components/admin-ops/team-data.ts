@@ -2,22 +2,13 @@
  * Dados da equipe Engemase (console), montados a partir de `@/lib/mock`.
  * Atribuições de engenheiros de campo e concessões de suporte ainda não existem em lib/mock:
  * são DERIVADAS da atividade real dos mocks (auditoria e sessões de acesso remoto).
- * Usado SÓ por páginas (servidor). "Agora" = MOCK_NOW.
+ * Usado SÓ por páginas (servidor). "Agora" = r.agoraIso().
  */
 import {
-  getAuditLog,
-  getClientById,
-  getClientUsers,
-  getClients,
-  getCurrentUser,
-  getGateways,
-  getPlatformUsers,
-  getRemoteAccessSessions,
-  getUnits,
-  nowMs,
   type PlatformRole,
   type UserStatus,
 } from "@/lib/mock"
+import { repositorioMock, type Repositorio } from "@/lib/data/admin/repositorio"
 import { ago, date, dateTime } from "@/lib/format"
 import { SUPPORT_MAX_HOURS } from "./labels"
 
@@ -80,21 +71,21 @@ export interface TeamData {
   meId: string
 }
 
-function unitLabel(clientId: string, unitIds: Set<string>): { units: string[] | "all"; label: string } {
-  const all = getUnits(clientId)
+function unitLabel(clientId: string, unitIds: Set<string>, r: Repositorio): { units: string[] | "all"; label: string } {
+  const all = r.getUnits(clientId)
   if (unitIds.size === 0 || all.every((u) => unitIds.has(u.id))) return { units: "all", label: all.length === 1 ? all[0]!.name : "Todas as unidades" }
   const names = all.filter((u) => unitIds.has(u.id)).map((u) => u.name)
   return { units: [...unitIds], label: names.join(", ") }
 }
 
-export function buildTeam(): TeamData {
-  const me = getCurrentUser()
-  const now = nowMs()
-  const platform = getPlatformUsers()
+export function buildTeam(r: Repositorio = repositorioMock): TeamData {
+  const me = r.getCurrentUser()
+  const now = Date.parse(r.agoraIso())
+  const platform = r.getPlatformUsers()
   const superAdmin = platform.find((u) => u.platformRole === "super_admin")?.name ?? "Super admin"
-  const sessions = getRemoteAccessSessions()
-  const audit = getAuditLog()
-  const gateways = getGateways()
+  const sessions = r.getRemoteAccessSessions()
+  const audit = r.getAuditLog()
+  const gateways = r.getGateways()
 
   const members: MemberRow[] = platform.map((u) => ({
     id: u.id,
@@ -124,12 +115,12 @@ export function buildTeam(): TeamData {
       touch(a.clientId!, a.at, a.entity === "gateway" ? gateways.find((g) => g.name === a.entityName)?.unitId : undefined)
     }
     for (const [clientId, info] of byClient) {
-      const c = getClientById(clientId)
+      const c = r.getClientById(clientId)
       if (!c) continue
       const onboarding = c.status === "onboarding"
       const from = onboarding ? Math.min(info.first, Date.parse(c.createdAt)) : info.first
       const until = from + (onboarding ? 60 : 120) * DAY
-      const scope = unitLabel(clientId, info.units)
+      const scope = unitLabel(clientId, info.units, r)
       assignments.push({
         id: `asg_${u.id}_${clientId}`,
         userId: u.id,
@@ -161,7 +152,7 @@ export function buildTeam(): TeamData {
         userId: u.id,
         userName: u.name,
         clientId: s.clientId,
-        clientName: getClientById(s.clientId)?.name ?? s.clientId,
+        clientName: r.getClientById(s.clientId)?.name ?? s.clientId,
         ticket: s.ticket,
         reason: s.reason,
         startedAt: s.requestedAt,
@@ -182,7 +173,7 @@ export function buildTeam(): TeamData {
         userId: u.id,
         userName: u.name,
         clientId: a.clientId!,
-        clientName: getClientById(a.clientId!)?.name ?? a.clientId!,
+        clientName: r.getClientById(a.clientId!)?.name ?? a.clientId!,
         ticket,
         reason: a.details ?? "Sessão de suporte",
         startedAt: a.at,
@@ -201,12 +192,12 @@ export function buildTeam(): TeamData {
     members,
     assignments,
     grants,
-    clients: getClients().map((c) => ({
+    clients: r.getClients().map((c) => ({
       id: c.id,
       name: c.name,
       status: c.status,
-      units: getUnits(c.id).map((u) => ({ id: u.id, name: u.name })),
-      admins: getClientUsers(c.id)
+      units: r.getUnits(c.id).map((u) => ({ id: u.id, name: u.name })),
+      admins: r.getClientUsers(c.id)
         .filter((u) => u.memberships.some((m) => m.clientId === c.id && m.role === "client_admin"))
         .map((u) => u.name),
     })),

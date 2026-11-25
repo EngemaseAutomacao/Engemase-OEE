@@ -215,7 +215,7 @@ export function UnitsSection({ units, slug }: { units: UnitRow[]; slug: string }
                 <td className={TD}>
                   <div className="font-semibold">{u.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {u.city}/{u.state}
+                    {u.city ? `${u.city}/${u.state}` : "—"}
                   </div>
                 </td>
                 <td className={cn(TD, "text-xs whitespace-nowrap")}>{u.timezone}</td>

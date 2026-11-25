@@ -26,6 +26,9 @@ import { Button } from "@/components/ui/button"
 import { IconCircle, type IconTone } from "@/components/dashboard/icon-circle"
 import { SectionCard } from "@/components/dashboard/section-card"
 import { UsageMeter } from "@/components/config/plan-usage"
+import { consultarComandoAction, criarMaquinaAction, enviarComandoAction } from "@/app/(shell)/[cliente]/config/actions"
+import { useFonteDados } from "@/components/config/fonte-dados"
+import { Spinner } from "@/components/ui/spinner"
 import { isNetworkProtocol } from "@/lib/mock/types"
 import { PROTOCOL_LABEL, PROTOCOL_SHORT, ROLE_DEFAULTS, STATE_MODE_LABEL, seconds } from "@/components/config/labels"
 import { ConnectionStep, type ConnTest } from "@/components/config/wizard-connection"
@@ -145,6 +148,9 @@ export function NewMachineWizard({
   const [test, setTest] = useState<ConnTest>({ status: "idle" })
   const [readingKeys, setReadingKeys] = useState<string[]>([])
   const [activated, setActivated] = useState<{ name: string; version: number; gatewayId: string; pending: boolean } | null>(null)
+  const [activating, setActivating] = useState(false)
+  const fonte = useFonteDados()
+  const banco = fonte.banco && fonte.slug !== null
   const counter = useRef(0)
   const nextKey = () => `t${++counter.current}`
 
@@ -202,8 +208,46 @@ export function NewMachineWizard({
     })
   }
 
+  /** Com banco: teste de conexão de verdade (comando device.test na fila do gateway). */
+  const runRealTest = async () => {
+    if (!gateway || !fonte.slug) return
+    const signature = connSignature(conn)
+    setTest({ status: "testing" })
+    const falhou = (descricao: string) => {
+      setTest({ status: "idle" })
+      toast.error("Teste de conexão falhou", { description: descricao })
+    }
+    try {
+      const params = { host: conn.host.trim(), port: Number(conn.port), unit_id: Number(conn.tcpUnitId), timeout_ms: Number(conn.tcpTimeout) }
+      const sent = await enviarComandoAction({
+        slug: fonte.slug,
+        gatewayId: gateway.id,
+        type: "device.test",
+        payload: { connection: { protocol: conn.protocol, params } },
+      })
+      if (!sent.ok) return falhou(sent.problemas?.[0]?.mensagem ?? sent.mensagem)
+      const inicio = Date.now()
+      while (Date.now() - inicio < 45_000) {
+        await new Promise((r) => window.setTimeout(r, 1500))
+        const st = await consultarComandoAction({ slug: fonte.slug, commandId: sent.dados.commandId })
+        if (!st.ok || st.dados.ok === null) continue
+        if (!st.dados.ok) return falhou(st.dados.result)
+        setTest({ status: "ok", latencyMs: st.dados.durationMs ?? undefined, signature })
+        toast.success("Conexão OK", { description: `${gateway.name}: ${st.dados.result}` })
+        return
+      }
+      falhou("O gateway não respondeu em 45 s. Confira se ele está online.")
+    } catch {
+      falhou("Não foi possível falar com o servidor. Tente de novo.")
+    }
+  }
+
   const runTest = () => {
     if (!gateway) return
+    if (banco) {
+      void runRealTest()
+      return
+    }
     const signature = connSignature(conn)
     setTest({ status: "testing" })
     window.setTimeout(() => {
@@ -220,6 +264,11 @@ export function NewMachineWizard({
 
   const readTags = (keys: string[]) => {
     if (keys.length === 0) return
+    if (banco) {
+      // A leitura de teste (tag.read) precisa do CLP já cadastrado: depois de ativar, use "Ler agora" na aba Tags do gateway.
+      toast.info("Leitura disponível depois de ativar", { description: "Ative a máquina e use “Ler agora” na aba Tags do gateway." })
+      return
+    }
     setReadingKeys((r) => [...new Set([...r, ...keys])])
     keys.forEach((key, i) => {
       window.setTimeout(
@@ -300,9 +349,53 @@ export function NewMachineWizard({
     goTo(step + 1)
   }
 
+  /** Com banco: grava máquina, CLP e sinais e publica a config do gateway. */
+  const activateReal = async () => {
+    if (!gateway || !fonte.slug) return
+    setActivating(true)
+    try {
+      const res = await criarMaquinaAction({
+        slug: fonte.slug,
+        ident: { name: ident.name.trim(), code: ident.code.trim(), unitId: ident.unitId, lineId: ident.lineId },
+        conn: { gatewayId: gateway.id, protocol: conn.protocol, host: conn.host.trim(), port: conn.port, unitId: conn.tcpUnitId, timeoutMs: conn.tcpTimeout },
+        tags: tags.map((t) => ({ name: t.name, role: t.role, area: t.area, address: t.address, dataType: t.dataType, byteOrder: t.byteOrder, pollMs: t.pollMs })),
+        rules: {
+          stateMode: rules.stateMode,
+          idealCycleS: rules.idealCycleS.trim() === "" ? undefined : rules.idealCycleS.replace(",", "."),
+          microStopS: rules.microStopS,
+          debounceS: rules.debounceS.trim() === "" ? undefined : rules.debounceS.replace(",", "."),
+          commLossS: rules.commLossS.trim() === "" ? undefined : rules.commLossS,
+          idleAfterCycles: rules.idleAfterCycles.trim() === "" ? undefined : rules.idleAfterCycles,
+          stateMap: rules.stateMap.map((r) => ({ code: r.code, state: r.state })),
+        },
+      })
+      if (!res.ok) {
+        toast.error("Máquina não cadastrada", { description: res.problemas?.[0] ? `${res.mensagem} (${res.problemas[0].mensagem})` : res.mensagem })
+        return
+      }
+      const d = res.dados
+      setActivated({ name: ident.name.trim(), version: d.version, gatewayId: d.gatewayId, pending: d.pending || !d.published })
+      if (d.aviso) toast.warning(`${ident.name.trim()} cadastrada`, { description: d.aviso })
+      else
+        toast.success(`${ident.name.trim()} ativada`, {
+          description: d.pending
+            ? `Configuração v${d.version} publicada. Fica pendente até ${gateway.name} se conectar.`
+            : `Configuração v${d.version} publicada em ${gateway.name}. O gateway aplica no próximo sincronismo.`,
+        })
+    } catch {
+      toast.error("Sem conexão", { description: "Não foi possível falar com o servidor. Tente de novo." })
+    } finally {
+      setActivating(false)
+    }
+  }
+
   const activate = () => {
     setShown([true, true, true, true, true])
     if (!allValid || !gateway || atLimit) return
+    if (banco) {
+      void activateReal()
+      return
+    }
     const pending = !canTest
     setActivated({ name: ident.name.trim(), version: gateway.configVersion + 1, gatewayId: gateway.id, pending })
     toast.success(`${ident.name.trim()} ativada`, {
@@ -585,9 +678,9 @@ export function NewMachineWizard({
                   <ArrowRightIcon />
                 </Button>
               ) : (
-                <Button type="button" onClick={activate} disabled={!allValid || !gateway || atLimit}>
-                  <RocketIcon />
-                  Ativar máquina
+                <Button type="button" onClick={activate} disabled={!allValid || !gateway || atLimit || activating}>
+                  {activating ? <Spinner /> : <RocketIcon />}
+                  {activating ? "Ativando…" : "Ativar máquina"}
                 </Button>
               )}
             </div>

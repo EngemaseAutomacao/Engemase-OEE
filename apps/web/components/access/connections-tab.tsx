@@ -138,7 +138,7 @@ export function ConnectionsTab({
       if (d.status === "disabled") return { ok: false, result: "Conexão desativada na configuração", durationMs: 4 }
       const ms = (d.latencyMs ?? 20) + 3
       return { ok: true, result: `Conectado · unit id ${d.unitId} respondeu em ${ms} ms`, durationMs: ms }
-    })
+    }, d.comando)
     if (!out) return
     if (out.ok) toast.success(`${d.name}: conexão OK`, { description: out.result })
     else toast.error(`${d.name}: falha no teste`, { description: out.result })

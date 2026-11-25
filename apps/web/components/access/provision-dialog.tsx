@@ -10,6 +10,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { criarGatewayAction } from "@/app/(shell)/[cliente]/config/actions"
+import { useFonteDados } from "@/components/config/fonte-dados"
+import { Spinner } from "@/components/ui/spinner"
 import { ActivationSteps } from "./activation-steps"
 import type { GatewayRow } from "./gateway-view"
 import { activationCode } from "./labels"
@@ -35,6 +38,9 @@ export function ProvisionGatewayDialog({
   const [location, setLocation] = useState("")
   const [touched, setTouched] = useState(false)
   const [code, setCode] = useState("")
+  const [codeExpires, setCodeExpires] = useState(expiresLabel)
+  const [sending, setSending] = useState(false)
+  const fonte = useFonteDados()
 
   const atLimit = used >= limit
   const nameError = name.trim().length < 3 ? "Informe um nome com pelo menos 3 caracteres." : null
@@ -49,16 +55,38 @@ export function ProvisionGatewayDialog({
     setCode("")
   }
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setTouched(true)
-    if (nameError || unitError || atLimit) return
-    const c = activationCode(`${name.trim()}|${unitId}|${used}`)
+    if (nameError || unitError || atLimit || sending) return
+    let c = activationCode(`${name.trim()}|${unitId}|${used}`)
+    let id = `gw_novo_${c}`
+    let expires = expiresLabel
+    if (fonte.banco && fonte.slug) {
+      // Com banco: grava o gateway (aguardando ativação) e gera o código no servidor.
+      setSending(true)
+      try {
+        const res = await criarGatewayAction({ slug: fonte.slug, unitId, name: name.trim() })
+        if (!res.ok) {
+          toast.error("Gateway não criado", { description: res.mensagem })
+          return
+        }
+        c = res.dados.code
+        id = res.dados.gatewayId
+        expires = res.dados.expiresLabel
+      } catch {
+        toast.error("Sem conexão", { description: "Não foi possível falar com o servidor. Tente de novo." })
+        return
+      } finally {
+        setSending(false)
+      }
+    }
     setCode(c)
+    setCodeExpires(expires)
     setStep("activate")
     const unitName = units.find((u) => u.id === unitId)?.name ?? ""
     onCreated?.({
-      id: `gw_novo_${c}`,
+      id,
       name: name.trim(),
       hostname: "—",
       unitId,
@@ -83,11 +111,11 @@ export function ProvisionGatewayDialog({
       machines: 0,
       enrollmentCode: c,
       codeExpired: false,
-      codeExpiresLabel: expiresLabel,
+      codeExpiresLabel: expires,
       issues: [{ kind: "pending", tone: "info", text: "Aguardando a instalação e ativação do agente no local" }],
-      local: true,
+      local: !fonte.banco,
     })
-    toast.success("Gateway criado", { description: `${name.trim()} · código de ativação ${c} (válido até ${expiresLabel})` })
+    toast.success("Gateway criado", { description: `${name.trim()} · código de ativação ${c} (válido até ${expires})` })
   }
 
   return (
@@ -175,9 +203,9 @@ export function ProvisionGatewayDialog({
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={atLimit}>
-                Gerar código de ativação
-                <ArrowRightIcon />
+              <Button type="submit" disabled={atLimit || sending}>
+                {sending ? "Gerando…" : "Gerar código de ativação"}
+                {sending ? <Spinner /> : <ArrowRightIcon />}
               </Button>
             </DialogFooter>
           </form>
@@ -187,7 +215,7 @@ export function ProvisionGatewayDialog({
               <DialogTitle>Ative o {name.trim()}</DialogTitle>
               <DialogDescription>Execute os comandos no terminal do gateway. Deixe esta janela aberta para conferir o status ao final.</DialogDescription>
             </DialogHeader>
-            <ActivationSteps code={code} expiresLabel={expiresLabel} />
+            <ActivationSteps code={code} expiresLabel={codeExpires} />
             <DialogFooter>
               <Button type="button" onClick={() => setOpen(false)}>
                 Concluir

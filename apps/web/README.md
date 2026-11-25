@@ -62,6 +62,26 @@ lib/
    - cores: azul Engemase (primária), azul-marinho, teal `#0e9384` e laranja `#e96549` só em ícones decorativos; estados de máquina sempre com `STATE_META`;
    - barras de rolagem já estão ocultas globalmente (não reintroduzir).
 
+## Dados das telas: banco ou simulado (W8)
+
+A demonstração na Vercel não tem banco. Por isso as telas leem por `lib/data/`: cada função usa o banco quando
+`DATABASE_URL` existe (`usarBanco()` em `lib/data/fonte.ts`) e os dados simulados quando não existe.
+
+- **Console Engemase e cadastros** (`lib/data/admin/*`, `lib/data/config/*`): os montadores dos componentes
+  (`buildClientDetail`, `buildFleet`, `buildGatewayDetail`...) recebem um `Repositorio` (`lib/data/admin/repositorio.ts`):
+  `repositorioMock` ou `repositorioEmMemoria(foto)`, com a foto do banco lida em `snapshot.ts` nos tipos do protótipo.
+  Cadastro de um cliente: `carregarCliente`/`exigirCliente` (`requireTenant` + permissão; sem acesso, 404). Console:
+  `exigirEquipe` (papel de plataforma + 2FA) e um `withTenant` por cliente (`app.cron_organizations()`).
+- Com banco, as páginas leem o pedido: o conteúdo fica num componente dentro de `<Suspense>` (esqueleto em
+  `components/shell/carregando.tsx`). "Agora" passa a ser o relógio real no pedido (`usarRelogioReal`, `lib/mock/clock.ts`).
+- **Gravações** por Server Actions validadas com zod, que conferem de novo sessão, cliente e permissão e registram na
+  auditoria: `app/(admin)/admin/actions.ts` (novo cliente, só super admin) e `app/(shell)/[cliente]/config/actions.ts`
+  (unidade, área, linha, gateway + código de ativação, nova máquina com CLP e sinais + publicação da config, comandos
+  `tag.read`/`device.test`/`config.reload`/`agent.restart`). Os componentes sabem a fonte por `FonteDadosProvider`
+  (`components/config/fonte-dados.tsx`): sem banco, continuam simulando com `toast`.
+- Ainda simulados com banco: dados ao vivo, OEE, notificações, acesso remoto, terminais, aparência; turnos, produtos,
+  motivos, usuários do cliente (telas de config fora da W8); concessões/atribuições da equipe; reverter versão de config.
+
 ## Checagens
 
 ```bash
@@ -147,7 +167,7 @@ Better Auth (senha, sessão, 2FA) + autorização nossa ([docs/15](../../docs/15
 - **2FA** (TOTP + 10 códigos de recuperação, plugin two-factor): cadastro em `/conta/seguranca`; obrigatório para a equipe Engemase e o admin do cliente (D14) — sem ele, `requireTenant` manda para o cadastro.
 - **`/api/auth/*` fechado por padrão** (`lib/server/auth/routes.ts`): só `get-session`, `sign-out`, `sign-in/email` e a verificação do 2FA; o teste falha se o Better Auth ganhar rota não classificada.
 - **`requireTenant(slug)`** (`lib/server/access/require-tenant.ts`; para route handlers, `tenantForRequest` em `route.ts`): sessão → cliente da URL → vínculo, papel, escopo, estado do cliente e concessão Engemase, lidos sob RLS (`load.ts`) e decididos por `decideAccess` (`context.ts`, função pura). Sem acesso → 404. Dados de cliente só por funções que recebem o `TenantContext` (`data.ts`) e aplicam o escopo (`scope.ts`). Exemplo real: `GET /api/clientes/{cliente}/maquinas`.
-- **Proxy** (`proxy.ts`): com `AUTH_ENFORCED` ligado, tela do sistema sem cookie de sessão vai para `/login?next=…` (checagem otimista; a autorização é no servidor). As telas do mock ainda não usam `requireTenant` (W8).
+- **Proxy** (`proxy.ts`): com `AUTH_ENFORCED` ligado, tela do sistema sem cookie de sessão vai para `/login?next=…` (checagem otimista; a autorização é no servidor). Com banco, a casca do cliente e as telas de cadastro passam por `requireTenant` (W8).
 
 | Variável | Para quê |
 |---|---|

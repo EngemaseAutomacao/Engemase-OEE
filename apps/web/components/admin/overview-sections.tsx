@@ -110,7 +110,7 @@ export function OverviewClientsTable({ rows }: { rows: ClientRow[] }) {
                   <Link href={`/admin/clientes/${r.id}`} className="group block min-w-0 leading-tight">
                     <span className="block truncate font-semibold group-hover:text-primary">{r.name}</span>
                     <span className="block max-w-52 truncate text-xs text-muted-foreground">
-                      {r.city}/{r.state} · {PLAN_LABEL[r.plan]} · {r.machinesLimit} máq. contratadas
+                      {r.city ? `${r.city}/${r.state}` : "—"} · {PLAN_LABEL[r.plan]} · {r.machinesLimit} máq. contratadas
                     </span>
                   </Link>
                 </td>

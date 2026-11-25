@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { Building2Icon, FactoryIcon, PauseCircleIcon, PlusIcon, RocketIcon } from "lucide-react"
@@ -5,14 +6,23 @@ import { Building2Icon, FactoryIcon, PauseCircleIcon, PlusIcon, RocketIcon } fro
 import { num, pct } from "@/lib/format"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { Button } from "@/components/ui/button"
-import { buildClientRows } from "@/components/admin/admin-data"
+import { dadosClientes } from "@/lib/data/admin/console"
 import { PageTitle } from "@/components/admin/bits"
 import { ClientsTable } from "@/components/admin/clients-table"
+import { CarregandoPagina } from "@/components/shell/carregando"
 
 export const metadata: Metadata = { title: "Clientes" }
 
 export default function Page() {
-  const rows = buildClientRows()
+  return (
+    <Suspense fallback={<CarregandoPagina cartoes={4} />}>
+      <ListaDeClientes />
+    </Suspense>
+  )
+}
+
+async function ListaDeClientes() {
+  const rows = await dadosClientes()
   const count = (s: string) => rows.filter((r) => r.status === s).length
   const used = rows.reduce((s, r) => s + r.machines, 0)
   const limit = rows.reduce((s, r) => s + r.machinesLimit, 0)

@@ -1,15 +1,25 @@
+import { Suspense } from "react"
 import type { Metadata } from "next"
 import { ClipboardListIcon, HeadsetIcon, ShieldCheckIcon, UsersIcon } from "lucide-react"
 
 import { StatCard } from "@/components/dashboard/stat-card"
 import { AuditConsole } from "@/components/admin-ops/audit-console"
-import { buildAudit } from "@/components/admin-ops/audit-data"
+import { dadosAuditoria } from "@/lib/data/admin/console"
 import { OpsTitle } from "@/components/admin-ops/bits"
+import { CarregandoPagina } from "@/components/shell/carregando"
 
 export const metadata: Metadata = { title: "Auditoria global" }
 
 export default function Page() {
-  const data = buildAudit()
+  return (
+    <Suspense fallback={<CarregandoPagina cartoes={4} />}>
+      <Auditoria />
+    </Suspense>
+  )
+}
+
+async function Auditoria() {
+  const data = await dadosAuditoria()
   const rows = data.rows
   const platform = rows.filter((r) => r.category === "platform")
   const support = rows.filter((r) => r.category === "support")

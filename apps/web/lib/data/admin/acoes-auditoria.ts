@@ -1,0 +1,20 @@
+/** Rótulos das ações gravadas na auditoria pelo servidor (W8), para as telas de atividade e auditoria. */
+export const ROTULOS_DO_BANCO: Record<string, string> = {
+  "client.create": "Criou cliente",
+  "unit.create": "Cadastrou unidade",
+  "unit.update": "Alterou unidade",
+  "area.create": "Cadastrou área",
+  "line.create": "Cadastrou linha",
+  "line.update": "Alterou linha",
+  "machine.create": "Cadastrou máquina",
+  "member.create": "Adicionou usuário",
+  "gateway.create": "Provisionou gateway",
+  "gateway.enrolled": "Gateway ativado",
+  "gateway.activation_code_created": "Gerou código de ativação",
+  "gateway.config_published": "Publicou configuração",
+  "gateway.command_created": "Enviou comando ao gateway",
+  "gateway.command_cancelled": "Cancelou comando",
+  "engemase.access": "Entrada da Engemase",
+  "production_minute.rewritten": "Minuto de produção reescrito",
+  "support_access_grant.expired": "Concessão de suporte encerrada",
+}

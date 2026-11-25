@@ -70,11 +70,14 @@ export function TagsTab({ tags, devices, run }: { tags: TagVM[]; devices: Device
       t.deviceError
         ? { ok: false, result: t.deviceError, durationMs: 1000 }
         : { ok: true, result: `Valor ${t.readValue} (${t.ref})`, durationMs: (t.latencyMs ?? 20) + 4 },
+      t.comando,
     )
     if (!out) return
     if (out.ok) {
-      setLive((l) => ({ ...l, [t.id]: { value: t.readValue, quality: "good", fresh: true } }))
-      toast.success(`${t.name}: ${t.readValue}`, { description: `${t.machineName} · ${t.areaShort} ${t.address} (${t.ref}) · ${out.durationMs} ms` })
+      // Com banco, o valor vem da resposta do gateway ("Valor 123"); sem banco, da simulação.
+      const value = t.comando ? out.result.replace(/^Valor /, "") : t.readValue
+      setLive((l) => ({ ...l, [t.id]: { value, quality: "good", fresh: true } }))
+      toast.success(`${t.name}: ${value}`, { description: `${t.machineName} · ${t.areaShort} ${t.address} (${t.ref}) · ${out.durationMs} ms` })
     } else {
       setLive((l) => ({ ...l, [t.id]: { value: "—", quality: "bad", fresh: true } }))
       toast.error(`Falha ao ler ${t.name}`, { description: out.result })

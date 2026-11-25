@@ -1,10 +1,11 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
+import { Suspense } from "react"
 import { Building2Icon, CpuIcon, FactoryIcon, HistoryIcon, LayoutDashboardIcon, PaletteIcon, ShieldCheckIcon, UsersIcon } from "lucide-react"
 
-import { adminClientParams, getClientById } from "@/lib/mock"
+import { dadosCliente, nomeDoCliente } from "@/lib/data/admin/console"
+import { CarregandoPagina } from "@/components/shell/carregando"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { buildClientDetail } from "@/components/admin/admin-data"
 import { ClientDetailProvider } from "@/components/admin/client-detail-context"
 import { ClientDetailHeader } from "@/components/admin/client-detail-header"
 import { AppearanceSection, GatewaysSection, MachinesSection, OeeCard, OverviewStats, UnitsSection, UsersSection } from "@/components/admin/detail-sections"
@@ -13,13 +14,9 @@ import { LifecycleTab } from "@/components/admin/lifecycle-tab"
 import { ContactsCard, RegistryCard } from "@/components/admin/registry-card"
 import { UsageCard } from "@/components/admin/usage-card"
 
-export function generateStaticParams() {
-  return adminClientParams()
-}
-
 export async function generateMetadata({ params }: PageProps<"/admin/clientes/[clienteId]">): Promise<Metadata> {
   const { clienteId } = await params
-  return { title: getClientById(clienteId)?.name ?? "Cliente" }
+  return { title: await nomeDoCliente(clienteId) }
 }
 
 function Count({ n }: { n: number }) {
@@ -29,9 +26,17 @@ function Count({ n }: { n: number }) {
 const TRIGGER =
   "h-8 flex-none rounded-lg px-3 text-[13px] data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-primary/15 dark:data-[state=active]:text-primary"
 
-export default async function Page({ params }: PageProps<"/admin/clientes/[clienteId]">) {
+export default function Page({ params }: PageProps<"/admin/clientes/[clienteId]">) {
+  return (
+    <Suspense fallback={<CarregandoPagina />}>
+      <DetalheDoCliente params={params} />
+    </Suspense>
+  )
+}
+
+async function DetalheDoCliente({ params }: { params: PageProps<"/admin/clientes/[clienteId]">["params"] }) {
   const { clienteId } = await params
-  const d = buildClientDetail(clienteId)
+  const d = await dadosCliente(clienteId)
   if (!d) notFound()
   const c = d.client
 
