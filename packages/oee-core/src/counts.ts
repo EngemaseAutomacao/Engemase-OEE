@@ -1,5 +1,5 @@
-import { OeeInputError } from "./errors.js";
-import type { IdealCycleTable, Interval, ProductionMinute, QualityAdjustment } from "./types.js";
+import { OeeInputError } from "./errors";
+import type { IdealCycleTable, Interval, ProductionMinute, QualityAdjustment } from "./types";
 
 const MINUTE_MS = 60_000;
 

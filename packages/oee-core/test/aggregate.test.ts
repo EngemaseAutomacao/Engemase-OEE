@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { aggregateOee, calculateMachineOee, computeIndicators, EMPTY_TOTALS, sumTotals, type OeeTotals } from "../src/index.js";
-import { iv, minutesBetween } from "./helpers.js";
+import { aggregateOee, calculateMachineOee, computeIndicators, EMPTY_TOTALS, sumTotals, type OeeTotals } from "../src/index";
+import { iv, minutesBetween } from "./helpers";
 
 /** Máquina do caso golden: 450 min planejados, 405 de operação, 3.600 peças, 72 refugos, ciclo 6 s (OEE 78,4%). */
 const golden: OeeTotals = {

@@ -7,8 +7,8 @@ import {
   resolveStateTimeline,
   type MachineOeeInput,
   type ShiftDefinition,
-} from "../src/index.js";
-import { ev, iv, minutesBetween, pct, t } from "./helpers.js";
+} from "../src/index";
+import { ev, iv, minutesBetween, pct, t } from "./helpers";
 
 /** Turno simples em UTC 08:00–09:00, sem pausas, máquina rodando o tempo todo. */
 function hourInput(overrides: Partial<MachineOeeInput> = {}): MachineOeeInput {

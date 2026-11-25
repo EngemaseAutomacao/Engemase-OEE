@@ -1,5 +1,5 @@
-import { computeIndicators, indicatorWarnings, performanceStatus, DEFAULT_PERFORMANCE_ALERT_THRESHOLD } from "./indicators.js";
-import type { OeeIndicators, OeeTotals, OeeWarning, PerformanceStatus } from "./types.js";
+import { computeIndicators, indicatorWarnings, performanceStatus, DEFAULT_PERFORMANCE_ALERT_THRESHOLD } from "./indicators";
+import type { OeeIndicators, OeeTotals, OeeWarning, PerformanceStatus } from "./types";
 
 /** Resultado consolidado: totais aditivos, indicadores e avisos. */
 export interface OeeSummary {

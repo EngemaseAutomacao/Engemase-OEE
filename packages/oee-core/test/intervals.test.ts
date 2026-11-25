@@ -8,7 +8,7 @@ import {
   subtractIntervals,
   totalDurationMs,
   unionIntervals,
-} from "../src/index.js";
+} from "../src/index";
 
 const i = (start: number, end: number) => ({ start, end });
 

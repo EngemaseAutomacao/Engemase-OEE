@@ -1,6 +1,6 @@
-import { OeeInputError } from "./errors.js";
-import { DEFAULT_PERFORMANCE_ALERT_THRESHOLD } from "./indicators.js";
-import type { OeeOptions } from "./types.js";
+import { OeeInputError } from "./errors";
+import { DEFAULT_PERFORMANCE_ALERT_THRESHOLD } from "./indicators";
+import type { OeeOptions } from "./types";
 
 /** Opções padrão (docs/07): setup e NO_COMM como perda; produção em parada planejada volta a contar. */
 export const DEFAULT_OEE_OPTIONS: OeeOptions = {
