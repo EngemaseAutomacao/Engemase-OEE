@@ -124,4 +124,41 @@ describe("tabelas de plataforma", () => {
     })
     expect(await count(t.client, "SELECT 1 FROM gateway_health_sample WHERE organization_id = $1", [b.organizationId])).toBe(1)
   })
+
+  it("platform_create_client/platform_update_client (0018): o console cria e altera o cliente", async () => {
+    const row = await t.client.transaction(async (tx) => {
+      await tx.exec("SET LOCAL ROLE app_user")
+      const created = await tx.query<{ id: string }>("SELECT app.platform_create_client($1, $2, $3, $4, $5::jsonb) AS id", [
+        "novo-cliente-w8",
+        "Novo Cliente",
+        JSON.stringify({ cnpj: "1" }),
+        "pro",
+        JSON.stringify({ machines: 5, gateways: 1 }),
+      ])
+      const id = created.rows[0]?.id ?? ""
+      const ok = await tx.query<{ ok: boolean }>("SELECT app.platform_update_client($1, 'Renomeado', NULL, 'suspended', NULL, NULL) AS ok", [id])
+      await tx.exec("RESET ROLE")
+      const r = await tx.query<Record<string, unknown>>(
+        `SELECT o.name, a.status, a.plan, (a.limits->>'machines')::int AS machines, o.metadata, a.suspended_at IS NOT NULL AS suspended
+         FROM client_account a JOIN organization o ON o.id = a.organization_id WHERE o.id = $1`,
+        [id],
+      )
+      await tx.rollback()
+      return { ok: ok.rows[0]?.ok, ...r.rows[0] }
+    })
+    expect(row).toEqual({ ok: true, name: "Renomeado", status: "suspended", plan: "pro", machines: 5, metadata: '{"cnpj":"1"}', suspended: true })
+  })
+
+  it("platform_create_client recusa slug repetido e limites sem máquinas; o app_user não grava direto", async () => {
+    const existing = await t.client.query<{ slug: string }>("SELECT slug FROM organization WHERE id = $1", [a.organizationId])
+    const slug = existing.rows[0]?.slug ?? ""
+    await expect(
+      asTenant(t.client, null, (tx) => tx.query(`SELECT app.platform_create_client($1, 'X', NULL, 'pro', '{"machines": 1}'::jsonb)`, [slug])),
+    ).rejects.toThrow(/organization_slug_uq|duplicate/)
+    await expect(
+      asTenant(t.client, null, (tx) => tx.query("SELECT app.platform_create_client('outro-w8', 'X', NULL, 'pro', '{}'::jsonb)")),
+    ).rejects.toThrow(/client_account_limits_chk/)
+    await expect(asTenant(t.client, null, (tx) => tx.query("INSERT INTO organization (name, slug) VALUES ('Y', 'y-w8')"))).rejects.toThrow(DENIED)
+    await expect(asTenant(t.client, a.organizationId, (tx) => tx.query("UPDATE client_account SET plan = 'x'"))).rejects.toThrow(DENIED)
+  })
 })

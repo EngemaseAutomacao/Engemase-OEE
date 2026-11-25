@@ -129,6 +129,11 @@ describe("catálogo do banco", () => {
         return !(p.roles === "app_user" && p.table === "organization" && p.cmd === "SELECT")
       if (p.policy === "lookup_by_slug")
         return !(p.roles === "app_lookup" && p.table === "organization" && p.cmd === "SELECT")
+      // 0018: o console cria e altera clientes só pelas funções platform_* (donas app_lookup).
+      if (p.policy === "platform_client_write")
+        return !(p.roles === "app_lookup" && ((p.table === "organization" && p.cmd === "INSERT") || (p.table === "client_account" && p.cmd === "ALL")))
+      if (p.policy === "platform_client_update")
+        return !(p.roles === "app_lookup" && p.table === "organization" && p.cmd === "UPDATE")
       if (p.policy === "lookup_by_token_hash") {
         return !(
           p.roles === "app_lookup" &&
@@ -171,6 +176,8 @@ describe("catálogo do banco", () => {
       "cron_finish",
       "cron_organizations",
       "cron_purge",
+      "platform_create_client",
+      "platform_update_client",
       "rate_limit_purge",
       "rate_limit_take",
       "resolve_account_token",
@@ -189,7 +196,7 @@ describe("catálogo do banco", () => {
 
   it("as funções SECURITY DEFINER só podem ser executadas pelo app_user (nunca PUBLIC)", async () => {
     const executors = await securityDefinerFunctionExecutors(t.client)
-    expect(executors.length).toBe(13)
+    expect(executors.length).toBe(15)
     for (const f of executors) expect(f.executors, f.name).toBe("app_lookup,app_user")
     // auth_service não resolve token nem slug (não precisa: lê organization pela própria política).
     const authCanExecute = await t.client.query<{ n: number }>(`

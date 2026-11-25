@@ -51,8 +51,10 @@ migrations/      0000_init.sql (drizzle-kit) e 0001_rls.sql (MANUAL: papéis, RL
                  0011_auth_two_factor_session_throttle.sql (drizzle-kit: two_factor, auth_login_throttle,
                    session.remember_me/last_active_at)
                  0012_auth_grants.sql (MANUAL: tabelas novas do login só para auth_service)
-                 0013_w2b_partitions_maintenance.sql (MANUAL: partições e app.maintain_partitions; fica por
-                   último porque o teste a aplica sobre um banco já com dados)
+                 0013_w2b_partitions_maintenance.sql (MANUAL: partições e app.maintain_partitions; o teste a
+                   aplica sobre um banco já com dados, só com as migrações anteriores a ela)
+                 0018_platform_client_admin.sql (MANUAL, W8: app.platform_create_client/platform_update_client,
+                   SECURITY DEFINER donas app_lookup: o console cria e altera organization + client_account)
 ```
 
 ## Isolamento por cliente
@@ -176,7 +178,7 @@ GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE;
 - **Retenção da auditoria** (5 anos, D6): sem partição (chave em `id`); limpeza a decidir antes de 2031.
 - **Better Auth (W5):** login, sessão, bloqueio e 2FA feitos (apps/web/lib/server/auth). Falta o fluxo "criar conta + membro + escopo na mesma transação" (docs/15, seção 5) e como ele convive com o papel `auth_service`. Esse fluxo deve achar a pessoa pelo e-mail no servidor e nunca aceitar `user_id` do navegador (revisão W11: o `app_user` consegue gravar `member` com qualquer `user_id`).
 - **Usuários de login na implantação:** o do Better Auth (`AUTH_DATABASE_URL`) precisa HERDAR `auth_service` (`CREATE ROLE auth_login LOGIN PASSWORD '…' IN ROLE auth_service;`), porque o Better Auth não troca de papel por consulta. O do app (`DATABASE_URL`) pode ser `NOINHERIT` com `GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE`: a camada de acesso sempre roda em `withTenant` (`SET LOCAL ROLE app_user`), inclusive a busca do slug. Testado localmente assim (W5).
-- **Console da Engemase:** leituras entre clientes (lista de clientes, frota de gateways) e eventos de plataforma na auditoria precisam de um papel de plataforma próprio (ainda não criado).
+- **Console da Engemase:** as leituras entre clientes (lista de clientes, frota de gateways) usam `app.cron_organizations()` + um `withTenant` por cliente (W8), e a criação/alteração de cliente usa as funções da 0018. Eventos de plataforma na auditoria (sem `organization_id`) continuam sem leitura pelo app: precisam de um papel de plataforma próprio (ainda não criado).
 - **Confirmar na Neon** se o papel dono das tabelas tem `BYPASSRLS` (com `FORCE`, sem ele o dono não lê dados de cliente). Dentro de migração, o padrão `NO FORCE` → `UPDATE` → `FORCE` (0005) dispensa o `BYPASSRLS`; backfill e scripts fora de migração ainda precisam dele.
 - `machine_template` e `oee_hour` (F2/opcional) e `remote_access_recording` (Fase C) ainda não existem.
 - **Regras de aplicação do W2b** (o banco não garante): turnos sem sobreposição na mesma unidade (L2); prazo do lançamento atrasado e registro do estorno na auditoria (L3); operador da mesma unidade da máquina (L19); fim do trânsito no primeiro `/sync` no cliente e supressão do alerta de offline enquanto `in_transit_until > now()` e `installed_at` nulo (L23).

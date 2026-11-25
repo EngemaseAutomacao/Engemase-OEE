@@ -238,7 +238,9 @@ describe("0013 (partições) aplicada sobre tabelas que já tinham dados", () =>
     cpSync(MIGRATIONS_FOLDER, folder, { recursive: true })
     writeFileSync(
       join(folder, "meta", "_journal.json"),
-      JSON.stringify({ ...journal, entries: journal.entries.filter((e) => e.tag !== PARTITIONS_TAG) }, null, 2),
+      // Banco "de antes": só as migrações anteriores à 0013 (o migrator do Drizzle não aplica uma
+      // migração mais antiga que a última aplicada, então as posteriores também ficam para depois).
+      JSON.stringify({ ...journal, entries: journal.entries.slice(0, journal.entries.findIndex((e) => e.tag === PARTITIONS_TAG)) }, null, 2),
     )
     client = new PGlite()
     await migrate(drizzle({ client }), { migrationsFolder: folder })
