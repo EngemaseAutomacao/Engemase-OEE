@@ -2,7 +2,7 @@
 
 Plataforma de monitoramento de **OEE (Overall Equipment Effectiveness)** para máquinas industriais, **independente da marca do CLP**.
 
-> **Status:** planejamento em revisão final (ADRs aguardando aceite formal, ver [D37 em `docs/17`](docs/17-backlog-e-pendencias.md#3-decisões-pendentes-do-dono-do-produto)), **protótipo da interface** em andamento em [`apps/web`](apps/web/) (dados simulados, roda localmente) e **Fase 0 do sistema real** com código e testes: contrato gateway↔nuvem, cálculo de OEE, banco com RLS, simulador de CLP e esqueleto do agente do gateway (ver [`docs/00-status.md`](docs/00-status.md)). Arquitetura e plano em [`docs/`](docs/).
+> **Status:** planejamento em revisão final (ADRs aguardando aceite formal, ver [D37 em `docs/17`](docs/17-backlog-e-pendencias.md#3-decisões)), **protótipo da interface** em andamento em [`apps/web`](apps/web/) (dados simulados, roda localmente) e **Fase 0 do sistema real** com código e testes: contrato gateway↔nuvem, cálculo de OEE, banco com RLS, simulador de CLP e esqueleto do agente do gateway (ver [`docs/00-status.md`](docs/00-status.md)). Arquitetura e plano em [`docs/`](docs/).
 
 ## Em uma frase
 
