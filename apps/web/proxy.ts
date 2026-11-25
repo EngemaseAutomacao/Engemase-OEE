@@ -7,7 +7,8 @@
  * confere a sessão no banco, o cliente, o papel e o escopo. As telas do protótipo ainda usam dados
  * simulados (lib/mock) e só passam por esta checagem; a troca pelo banco é da W8.
  *
- * Ficam abertas: a apresentação (/), o login, o aviso de cliente suspenso, as APIs (gateways e
+ * Ficam abertas: a apresentação (/), o login, as telas de senha (definir/redefinir, com token próprio),
+ * o aviso de cliente suspenso, as APIs (gateways e
  * /api/auth têm autenticação própria), os terminais pareados (/terminal, token de dispositivo) e os
  * arquivos estáticos.
  */
@@ -15,7 +16,7 @@ import { getSessionCookie } from "better-auth/cookies"
 import { type NextRequest, NextResponse } from "next/server"
 import { AUTH_COOKIE_PREFIX, authEnforced } from "@/lib/server/auth/env"
 
-const PUBLIC_EXACT = new Set(["/", "/login", "/acesso-suspenso", "/produto"])
+const PUBLIC_EXACT = new Set(["/", "/login", "/acesso-suspenso", "/produto", "/definir-senha", "/redefinir-senha"])
 const PUBLIC_PREFIXES = ["/api/", "/terminal", "/_next/", "/brand/"]
 
 export function isPublicPath(pathname: string): boolean {

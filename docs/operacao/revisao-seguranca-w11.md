@@ -86,6 +86,8 @@ Migrações `0000`–`0006`, `src/tenancy.ts`, `src/lookups.ts`, os testes de `p
 
 **Por que não foi corrigido no banco:** o fluxo único de entrada de usuário (docs/15 §5) cria a conta "se não existir" e adiciona o membro na mesma transação — ou seja, vincular uma pessoa que já existe em outro cliente é legítimo, e a RLS não tem como saber se o vínculo foi pedido por quem pode. Tirar o `INSERT` em `member` do `app_user` decide como a W5 (Better Auth, em andamento) grava membros; fica para ela.
 
+**Feito na W5 (25/11/2026):** o convite (`apps/web/lib/server/users/invite.ts`) acha ou cria a pessoa pelo e-mail digitado, no servidor, e ignora qualquer `userId` vindo do navegador (teste em `test/access/users.test.ts`); nenhuma ação muda `member.user_id`. O gatilho opcional abaixo continua pendente (pede migração).
+
 **Regra para a W5:** a Server Action resolve a pessoa **pelo e-mail digitado, no servidor**, e nunca recebe `user_id` do navegador; `member.user_id` nunca muda depois de criado (trocar de pessoa = remover o vínculo e criar outro). Opcional, quando a W5 fechar o fluxo: um gatilho que recuse `UPDATE` de `member.user_id` (aditivo). `rls.test.ts` fixa o comportamento atual ("limite (revisão W11)") e deve mudar junto.
 
 ### 3.3 Login da aplicação sem herança (baixa)
@@ -121,8 +123,8 @@ Se um cliente exigir mais (contrato), as opções, da mais barata para a mais ca
 |---|---|---|
 | 1 | Catálogo (toda tabela de cliente com RLS forçada) | Feito (`packages/db/test/catalog.test.ts`) |
 | 2 | RLS direto no banco | Feito (`rls.test.ts`, `composite-fk.test.ts`, `lookups.test.ts`), com os 2 testes novos desta revisão |
-| 3 | Cada rota e Server Action com usuário de A tentando ids de B | Só a API dos gateways (`apps/web/test/gateway/isolation.test.ts`). Telas e Server Actions: W5 |
-| 4 | Exportações e relatórios, com escopo por unidade e por máquina | **Não existe ainda**: relatórios e exportação são do protótipo (dados simulados). Fazer junto da primeira exportação real: usuário de A com escopo `units`/`machines` não pode ver linha de outra unidade/máquina nem de B, inclusive em CSV e PDF |
+| 3 | Cada rota e Server Action com usuário de A tentando ids de B | API dos gateways (`apps/web/test/gateway/isolation.test.ts`), camada de acesso (`test/access/isolation.test.ts`) e, desde 25/11/2026 (W5), convite, reenvio e reinício do 2FA com unidade, máquina e vínculo de B (`test/access/users.test.ts`). Telas reais: a cada troca do mock (W8) |
+| 4 | Exportações e relatórios, com escopo por unidade e por máquina | Desde 25/11/2026 (W5): totais de produção por máquina/linha/unidade, CSV, alertas abertos e auditoria com escopo `units`/`machines` e cliente B no banco (`lib/server/access/summary.ts`, `test/access/summary.test.ts`). PDF e as telas de relatório usam essas funções quando saírem do protótipo (W8/W9) |
 
 ## 4. Verificações desta revisão
 

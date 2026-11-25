@@ -1,6 +1,6 @@
 # apps/web — Plataforma Engemase OEE (Next.js)
 
-Protótipo da interface. **Por enquanto usa dados simulados** (`lib/mock`) e roda só localmente.
+Interface da plataforma. As telas de acompanhamento leem o banco quando `DATABASE_URL` existe (ver "Dados das telas"); sem banco, e nas telas ainda não trocadas, usam os dados simulados (`lib/mock`).
 
 ## Rodar localmente
 
@@ -44,6 +44,16 @@ lib/
   states.ts cores e rótulos dos estados de máquina, faixas de OEE
   roles.ts  rótulos de papéis, planos e status
 ```
+
+## Dados das telas: banco ou simulado (`lib/data`)
+
+As telas trocadas pelo banco leem só da camada `lib/data/`. Cada função usa o banco quando `DATABASE_URL` existe e os dados simulados (`lib/mock`) quando não (a demonstração na Vercel não tem banco): `usarBanco()` em `lib/data/fonte.ts`.
+
+- **Acompanhamento do cliente (W9)** — `lib/data/cliente`: `getClientData(slug, necessidades)` devolve um `ClienteDados` com as mesmas consultas do protótipo (`getMachinesWithLive`, `getTimeline`, `getHourlyProduction`, `getDailyOee`, `getShiftHistory`, `getStopRecords`, `getPareto`, `aggregateOee`, `getNotifications`...). Usado por visão geral, máquinas, máquina, linha, relatórios de OEE e de paradas, notificações, ajuda, Andon e tela do operador (e pelo menu/cabeçalho do layout, com `somenteCadastro`).
+  - Com banco: `requireTenant(slug)` (sessão, papel, escopo; sem acesso → 404) e leitura sob RLS (`banco.ts`); o cálculo é do `@engemase/oee-core` (`calculo.ts`, puro, testado em `test/data`). Turno corrente = janela do turno que contém "agora" (fora do horário, o último que terminou). Turnos fechados: `oee_shift` quando o fechamento gravou e não está sujo; senão, calculado dos eventos e minutos (histórico somado em blocos de 15 min). Conexões e tags só com leitura técnica.
+  - "Dados atrasados": `machine_live.at` com mais de 30 s ou gateway sem `/sync` há mais de 6 min (fica fora do OEE agregado, como no protótipo).
+  - As páginas leem dentro de `<Suspense>` (esqueleto em `components/shell/page-skeleton.tsx`), sem `generateStaticParams`. O layout `(shell)/[cliente]` mantém `generateStaticParams`/`instant = false` enquanto as telas de `config/*` não tiverem `<Suspense>`.
+  - `/terminal/[id]` é só simulação: com banco responde 404 (o terminal real abre pelo token do aparelho, ainda não implementado).
 
 ## Convenções (importante com Cache Components)
 
@@ -136,19 +146,35 @@ Lógica em `lib/server/cron/` (`runner.ts` + um arquivo por job); os `route.ts` 
 > `lib/server/cron/jobs.ts` e o `vercel.json` agenda só `limpeza` (03:30) e `resumo-diario` (só às 10h, sem a
 > 2ª tentativa das 11h). `alertas`, `expiracao` e `vpn` continuam no código, sem agendamento: rodam só à mão (curl
 > abaixo). **Antes de clientes usarem os alertas**, passe o projeto para o Pro, troque `PLANO_VERCEL` para `"pro"`
-> e ponha no `vercel.json` as 5 entradas da tabela (o teste `test/cron/cron.test.ts` confere que os dois batem).
+> e ponha no `vercel.json` as 6 entradas da tabela (o teste `test/cron/cron.test.ts` confere que os dois batem).
+> Enquanto for Hobby, o fechamento de turno (`turnos`) também só roda à mão.
 
 | Rota | Quando | O que faz |
 |---|---|---|
-| `/api/cron/alertas` | 1 min | Gateway sem `/sync` há mais de 6 min → alerta crítico (resolve ao voltar); minuto reescrito resolve em 24 h |
+| `/api/cron/alertas` | 1 min | Gateway sem `/sync` há mais de 6 min → alerta crítico (resolve ao voltar); gateway "Em trânsito" (L23: `in_transit_until` no futuro e `installed_at` nulo) não alerta e o alerta aberto resolve; minuto reescrito resolve em 24 h |
 | `/api/cron/expiracao` | 5 min | Comandos, concessões de suporte e token anterior vencidos |
 | `/api/cron/vpn` | 15 min | Pedidos de acesso sem decisão (24 h); `vpn.disable`/`ot.forward.close` para sessões e encaminhamentos vencidos |
-| `/api/cron/limpeza` | 03:30 UTC | Limitador, histórico dos crons, saúde (30 dias), comandos (90 dias), códigos antigos; partições pendentes (W2b) |
+| `/api/cron/limpeza` | 03:30 UTC | Limitador, histórico dos crons, saúde (30 dias), comandos (90 dias), códigos antigos; login (`auth-cleanup.ts`: bloqueios vencidos, verificações e links "definir senha" antigos); auditoria além de `AUDITORIA_RETENCAO_DIAS` (padrão 5 anos, D6; `app.audit_log_purge`, lotes de 5.000); partições de `production_minute`/`tag_sample` com `maintainPartitions()` pela conexão de manutenção (sem `DATABASE_MAINTENANCE_URL`, registra e pula) |
 | `/api/cron/resumo-diario` | 10h e 11h UTC | Resumo por cliente para a equipe Engemase pelo Resend (a 2ª chamada só envia se a 1ª falhou) |
+| `/api/cron/turnos` | :10 de cada hora | Fechamento de turno (W7): cada turno terminado há 5 min ou mais, nos últimos 7 dias, ganha uma linha em `oee_shift` por máquina ativa, calculada pelo `@engemase/oee-core` (feriado da unidade não tem turno); depois recalcula os turnos sujos (`dirty`: dado atrasado do `/sync`, refugo lançado depois). Até 300 cálculos por cliente por execução; o resto aparece em `shifts_pending` e sai na hora seguinte |
 
 - Protegidas por `CRON_SECRET` (a Vercel manda `Authorization: Bearer <CRON_SECRET>`): sem a variável, 503; segredo errado, 401.
 - Uma execução por janela (`cron_run`, `app.cron_claim`): chamada repetida responde `skipped`; erro libera a janela.
 - Para rodar à mão: `curl -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/cron/limpeza`.
+- Fechamento e recálculo de turno em `lib/server/production/oee-shifts.ts`; o `/sync` marca o turno sujo com um
+  UPDATE que trava a linha, e o recálculo pega a linha com `FOR UPDATE SKIP LOCKED`: dado que chega durante o
+  recálculo deixa o turno sujo de novo, nunca se perde.
+
+### Regras de produção conferidas no servidor (`lib/server/production`)
+
+Funções para as telas da W8 chamarem (a rota confere login, permissão e escopo antes). Erros esperados saem como
+`ProductionRuleError` (código + mensagem em português; status HTTP em `PRODUCTION_ERROR_STATUS`).
+
+| Função | Regra |
+|---|---|
+| `saveShift` (`shifts.ts`) | Turnos da mesma unidade não se sobrepõem (dias da semana, vigência e turno noturno, L2); turno com turnos já fechados não muda horário, dias nem pausas (encerre a vigência e crie outro); pausas dentro do turno; auditoria |
+| `recordQualityEntry` (`quality.ts`) | Refugo manual soma ao do CLP; prazo até o fim do turno seguinte, depois só supervisor ou admin do cliente (L3); motivo ativo; operador ativo da mesma unidade (L19); marca o turno consolidado como sujo; auditoria |
+| `reverseQualityEntry` (`quality.ts`) | Estorno com motivo, um por lançamento, mesmo prazo do lançamento; auditoria |
 
 ### Variáveis de ambiente
 
@@ -157,6 +183,8 @@ Lógica em `lib/server/cron/` (`runner.ts` + um arquivo por job); os `route.ts` 
 | `DATABASE_URL` | sim | Banco (ver acima) |
 | `DATABASE_POOL_MAX` | não | Conexões por instância (padrão 5) |
 | `CRON_SECRET` | sim, para os crons | Segredo das rotas `/api/cron/*` (a Vercel envia sozinha) |
+| `DATABASE_MAINTENANCE_URL` | não | Conexão direta (sem pooler) com o papel DONO das tabelas, só para a limpeza diária criar/apagar partições (DDL). Aberta e fechada na tarefa. Sem ela, as partições não são mantidas (a 0013 deixou 3 meses / 8 semanas adiante) e o log avisa |
+| `AUDITORIA_RETENCAO_DIAS` | não | Dias que a auditoria fica guardada (padrão 1825 = 5 anos, D6; mínimo 365, que o banco também confere). Valor inválido: a auditoria não é limpa e a tarefa responde 500 |
 | `RESEND_API_KEY` · `RESUMO_DIARIO_DE` · `RESUMO_DIARIO_PARA` | não | Resumo diário por e-mail (remetente verificado no Resend; destinatários separados por vírgula). Sem elas o resumo não é enviado |
 
 ## Login e acesso por cliente (W5)
@@ -165,7 +193,13 @@ Better Auth (senha, sessão, 2FA) + autorização nossa ([docs/15](../../docs/15
 
 - **Login** (`app/(auth)/login`): a tela do protótipo chama Server Actions (`actions.ts`) que usam `auth.api.*` no servidor. Senha ≥ 12 sem regra de composição; senha nova conferida contra vazamentos (k-anonimato, `lib/server/auth/password.ts`; sem rede, aceita). 5 senhas erradas em 15 min → 15 min bloqueado (`throttle.ts`, tabela `auth_login_throttle`, chave = hash do e-mail). Sessão de 12 h renovada com o uso; "manter conectado" até 30 dias, nunca para a equipe Engemase (`session-policy.ts`).
 - **2FA** (TOTP + 10 códigos de recuperação, plugin two-factor): cadastro em `/conta/seguranca`; obrigatório para a equipe Engemase e o admin do cliente (D14) — sem ele, `requireTenant` manda para o cadastro.
-- **`/api/auth/*` fechado por padrão** (`lib/server/auth/routes.ts`): só `get-session`, `sign-out`, `sign-in/email` e a verificação do 2FA; o teste falha se o Better Auth ganhar rota não classificada.
+- **`/api/auth/*` fechado por padrão** (`lib/server/auth/routes.ts`): só `get-session`, `sign-out`, `sign-in/email` e a verificação do 2FA; o teste falha se o Better Auth ganhar rota não classificada. Redefinição de senha e "definir senha" passam só por Server Actions.
+- **Convite e "definir senha"** (`lib/server/users/invite.ts`, `lib/server/auth/set-password.ts`, tela `/definir-senha`): o admin do cliente (ou o super admin) convida pelo **e-mail** — a pessoa é achada/criada no servidor, nunca por `user_id` do navegador (revisão W11 §3.2); unidades e máquinas do escopo são conferidas sob a RLS (id de outro cliente é recusado). Conta nova recebe um link de uso único (72 h) com o token no **fragmento** (`/definir-senha#t=…`, fora de logs); o banco guarda o hash (`account_token`). Quem já tem senha só recebe o aviso do novo acesso. Reenvio troca o link. Server Actions em `app/(shell)/[cliente]/config/usuarios/actions.ts` (a tela ainda é o protótipo; ligar é da W8).
+- **Esqueci minha senha** (diálogo do login → `app/(auth)/senha-actions.ts` → `lib/server/auth/password-reset.ts`; tela `/redefinir-senha`): resposta igual exista ou não a conta, envio depois da resposta (`after`), limite de 3 pedidos/h por e-mail e 10/h por IP (`attempts.ts`, mesma tabela `auth_login_throttle` com chaves próprias), link de 30 min com o token no fragmento e guardado como hash (`verification.storeIdentifier`). Salvar derruba as sessões e o bloqueio. Envio de token: 20/15 min por IP.
+- **Aviso de conta bloqueada** (`lock-notice.ts`): no 5º erro, e-mail à dona da conta (só se a conta existe e não está banida).
+- **Reiniciar o 2FA de outra pessoa** (`lib/server/users/two-factor-reset.ts`): admin do cliente para membros do próprio cliente que não são admin nem têm vínculo com outro cliente; super admin para qualquer membro do cliente; nunca a si mesmo nem a equipe Engemase; suporte e engenheiro de campo não podem (sem `users.manage`). Apaga segredo e códigos, desliga o 2FA, encerra as sessões, audita antes (`user.two_factor_reset`) e avisa a pessoa.
+- **E-mail** (`lib/server/email`): Resend com `RESEND_API_KEY` + `EMAIL_FROM`; sem eles, só registra no log (destinatário mascarado e assunto; o texto com o link só fora de produção).
+- **Resumos com escopo** (`lib/server/access/summary.ts`, D11): totais de produção por máquina/linha/unidade, CSV, alertas abertos e auditoria somam só o que o escopo deixa (escopo por máquinas: a linha e a unidade somam só as máquinas permitidas).
 - **`requireTenant(slug)`** (`lib/server/access/require-tenant.ts`; para route handlers, `tenantForRequest` em `route.ts`): sessão → cliente da URL → vínculo, papel, escopo, estado do cliente e concessão Engemase, lidos sob RLS (`load.ts`) e decididos por `decideAccess` (`context.ts`, função pura). Sem acesso → 404. Dados de cliente só por funções que recebem o `TenantContext` (`data.ts`) e aplicam o escopo (`scope.ts`). Exemplo real: `GET /api/clientes/{cliente}/maquinas`.
 - **Proxy** (`proxy.ts`): com `AUTH_ENFORCED` ligado, tela do sistema sem cookie de sessão vai para `/login?next=…` (checagem otimista; a autorização é no servidor). Com banco, a casca do cliente e as telas de cadastro passam por `requireTenant` (W8).
 
@@ -175,5 +209,6 @@ Better Auth (senha, sessão, 2FA) + autorização nossa ([docs/15](../../docs/15
 | `BETTER_AUTH_SECRET` | Segredo (≥ 32 caracteres, `openssl rand -base64 32`), diferente por ambiente. Sem ele o login fica indisponível (com `AUTH_ENFORCED=false`, a tela entra em modo demonstração e vai para `/inicio`) |
 | `BETTER_AUTH_URL` | Endereço canônico (ex.: `https://engemase-oee.vercel.app`); única origem confiável |
 | `AUTH_DATABASE_URL` | Conexão do Better Auth com um usuário do papel `auth_service` (ver packages/db/README.md). Sem ela usa `DATABASE_URL`, o que só funciona em banco local com superusuário |
+| `EMAIL_FROM` + `RESEND_API_KEY` | E-mails da conta (convite, redefinição, bloqueio, 2FA reiniciado). Sem eles nada é enviado (só log); configure antes de convidar pessoas em produção |
 
-Testes (`pnpm --filter web test`): `test/access` (isolamento entre clientes, escopo, papéis, Engemase, suspenso, 2FA; rota com login real) e `test/auth` (Better Auth de verdade no PGlite: bloqueio, sessão, 2FA, política de senha, lista de rotas).
+Testes (`pnpm --filter web test`): `test/access` (isolamento entre clientes, escopo, papéis, Engemase, suspenso, 2FA; rota com login real; `users.test.ts` convite/definir senha/2FA e **nível 3**; `summary.test.ts` agregados, CSV, alertas e auditoria com escopo, **nível 4**), `test/auth` (Better Auth de verdade no PGlite: bloqueio, sessão, 2FA, política de senha, lista de rotas, redefinição de senha, aviso de bloqueio, envio de e-mail) e `test/cron/auth-cleanup.test.ts` (limpeza do login no job `limpeza`).

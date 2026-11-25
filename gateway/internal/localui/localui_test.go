@@ -46,7 +46,8 @@ func TestServeAndGuard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &Server{TLSDir: filepath.Join(t.TempDir(), "tls"), Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	state := t.TempDir()
+	s := &Server{StateDir: state, TLSDir: filepath.Join(state, "tls"), Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- s.Serve(ctx, l) }()
@@ -80,8 +81,9 @@ func TestServeAndGuard(t *testing.T) {
 		b, _ := io.ReadAll(resp.Body)
 		return resp, string(b)
 	}
+	// Sem sessão, "/" leva ao login (o cliente segue o 303).
 	resp, body := get("/", "", http.MethodGet)
-	if resp.StatusCode != 200 || !strings.Contains(body, "Gateway OEE") || resp.Header.Get("Content-Security-Policy") == "" ||
+	if resp.StatusCode != 200 || !strings.Contains(body, "Gateway OEE") || resp.Request.URL.Path != "/entrar" || resp.Header.Get("Content-Security-Policy") == "" ||
 		resp.Header.Get("X-Frame-Options") != "DENY" {
 		t.Fatalf("página: %d %v", resp.StatusCode, resp.Header)
 	}
@@ -91,8 +93,11 @@ func TestServeAndGuard(t *testing.T) {
 	if resp, _ = get("/", "gateway.exemplo.com", http.MethodGet); resp.StatusCode != http.StatusMisdirectedRequest {
 		t.Fatalf("Host por nome (DNS rebinding): %d", resp.StatusCode)
 	}
-	if resp, _ = get("/", "", http.MethodPost); resp.StatusCode != http.StatusMethodNotAllowed {
-		t.Fatalf("POST: %d", resp.StatusCode)
+	if resp, _ = get("/", "", http.MethodPost); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("POST sem Origin: %d", resp.StatusCode)
+	}
+	if resp, _ = get("/", "", http.MethodPut); resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("PUT: %d", resp.StatusCode)
 	}
 }
 

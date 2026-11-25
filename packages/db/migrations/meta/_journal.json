@@ -103,6 +103,20 @@
     {
       "idx": 14,
       "version": "7",
+      "when": 1795563484556,
+      "tag": "0014_w7_audit_retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1795563513600,
+      "tag": "0015_w7_audit_log_at_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
       "when": 1795564085110,
       "tag": "0018_platform_client_admin",
       "breakpoints": true

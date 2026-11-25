@@ -1,5 +1,5 @@
-import { OeeInputError } from "./errors.js";
-import type { Interval } from "./types.js";
+import { OeeInputError } from "./errors";
+import type { Interval } from "./types";
 
 /**
  * Álgebra de intervalos semiabertos `[start, end)` em milissegundos.

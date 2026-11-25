@@ -9,11 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/buffer"
@@ -40,6 +42,9 @@ type Options struct {
 	TickEvery time.Duration
 	// CredentialsPollEvery é o intervalo para perceber credencial nova (padrão 10 s).
 	CredentialsPollEvery time.Duration
+	// UIListener é o ui.sock da página local (oee-gateway-ui.socket, fd "ui");
+	// nil = sem API local.
+	UIListener net.Listener
 }
 
 // maxUnsentItems limita a saída do motor guardada em memória enquanto o buffer não
@@ -133,6 +138,9 @@ type agent struct {
 	// beats são os batimentos que o watchdog confere (ver healthCheck).
 	beats beats
 
+	// updateHealthOnce: o health.json do OTA é gravado uma vez por processo.
+	updateHealthOnce atomic.Bool
+
 	mu              sync.Mutex
 	cfg             *config.GatewayConfig
 	cfgStatus       *contracts.ConfigStatus
@@ -213,6 +221,13 @@ func Run(ctx context.Context, o Options) error {
 	start("credencial", a.watchCredentials)
 	start("config", a.configLoop)
 	start("watchdog", a.watchdog)
+	if o.UIListener != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			a.serveLocalAPI(runCtx)
+		}()
+	}
 	_ = sdNotify("READY=1\nSTATUS=" + a.statusLine())
 
 	var (
@@ -999,6 +1014,7 @@ func (a *agent) startSync(ctx context.Context, creds *config.Credentials, cancel
 		// Falhas e volta do /sync e o marcador no log do agente (journald), com o nível dele.
 		Log: a.log,
 		OnResponse: func(resp *contracts.SyncResponse) {
+			a.markUpdateHealthy()
 			a.onConfirmed(a.cmds.Confirm())
 			a.cmds.Handle(resp.Commands, a.cloudNow())
 			if a.wantsConfig(resp.Config.LatestVersion) {

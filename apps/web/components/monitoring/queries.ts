@@ -1,6 +1,6 @@
 /**
  * Agregações das telas de monitoramento (usadas pelas páginas, no servidor).
- * Tudo é derivado de @/lib/mock e de MOCK_NOW — nada de relógio do sistema.
+ * O turno e o "agora" vêm dos dados da tela (`@/lib/data/cliente`); `buildAlerts` ainda é do protótipo.
  */
 import {
   MOCK_NOW,
@@ -15,6 +15,7 @@ import {
   type MachineWithLive,
   type StateEvent,
 } from "@/lib/mock"
+import type { JanelaTurno } from "@/lib/data/cliente/tipos"
 import { dec, num, time } from "@/lib/format"
 import { STATE_ORDER } from "@/lib/states"
 import { GATEWAY_STATUS_LABEL } from "@/lib/roles"
@@ -31,11 +32,12 @@ export interface ShiftInfo {
   progress: number
 }
 
-export function currentShift(): ShiftInfo {
-  const s = Date.parse(SHIFT_START)
-  const e = Date.parse(SHIFT_END)
-  const n = Date.parse(MOCK_NOW)
-  return { name: "1º turno", start: SHIFT_START, end: SHIFT_END, now: MOCK_NOW, progress: Math.min(1, Math.max(0, (n - s) / (e - s))) }
+/** Turno corrente (dos dados da tela: banco ou simulado) no formato do cabeçalho das telas. */
+export function currentShift(shift: Pick<JanelaTurno, "name" | "start" | "end"> = { name: "1º turno", start: SHIFT_START, end: SHIFT_END }, nowIso: string = MOCK_NOW): ShiftInfo {
+  const s = Date.parse(shift.start)
+  const e = Date.parse(shift.end)
+  const n = Date.parse(nowIso)
+  return { name: shift.name, start: shift.start, end: shift.end, now: nowIso, progress: e > s ? Math.min(1, Math.max(0, (n - s) / (e - s))) : 0 }
 }
 
 // ---------------------------------------------------------------------------

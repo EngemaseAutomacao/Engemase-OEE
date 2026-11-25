@@ -6,16 +6,12 @@ import {
   getAccessibleClients,
   getClientSummary,
   getCurrentUser,
-  getGateways,
-  getLines,
-  getMachines,
-  getNotifications,
   getUnit,
-  getUnits,
   seededRandom,
   type AlertSeverity,
   type AlertType,
 } from "@/lib/mock"
+import type { ClienteDados } from "@/lib/data/cliente/tipos"
 import { ago, date, dateTime } from "@/lib/format"
 import { CLIENT_ROLE_LABEL, CLIENT_STATUS_LABEL, PLAN_LABEL, PLATFORM_ROLE_LABEL, scopeSummary } from "@/lib/roles"
 
@@ -48,12 +44,12 @@ export interface AlertVM {
 }
 
 /** Máquina, gateway ou linha a que o alerta se refere (pelo link e pelo texto do alerta). */
-function resolveEntity(clientId: string, type: AlertType, href: string, text: string): AlertEntity | null {
-  const machines = getMachines(clientId)
-  const gateways = getGateways(clientId)
+function resolveEntity(data: ClienteDados, type: AlertType, href: string, text: string): AlertEntity | null {
+  const machines = data.machines
+  const gateways = data.gateways
 
   if (type === "oee_below_target" || type === "unclassified_stops") {
-    const lines = getLines(clientId).filter((l) => text.includes(l.name))
+    const lines = data.lines.filter((l) => text.includes(l.name))
     if (lines.length > 0) return { kind: "line", name: lines.map((l) => l.name).join(" e ") }
   }
   const machineId = href.match(/\/(?:maquinas|operador)\/([^/?#]+)/)?.[1]
@@ -69,9 +65,10 @@ function resolveEntity(clientId: string, type: AlertType, href: string, text: st
   return null
 }
 
-export function buildAlerts(clientId: string): AlertVM[] {
-  return getNotifications(clientId).map((n) => {
-    const unit = n.unitId ? getUnit(n.unitId) : undefined
+/** Alertas do cliente para a central de notificações (dados da tela: banco ou simulados). */
+export function buildAlerts(data: ClienteDados): AlertVM[] {
+  return data.getNotifications().map((n) => {
+    const unit = n.unitId ? data.getUnit(n.unitId) : undefined
     return {
       id: n.id,
       type: n.type,
@@ -81,11 +78,11 @@ export function buildAlerts(clientId: string): AlertVM[] {
       title: n.title,
       body: n.body,
       href: n.href,
-      ago: ago(n.at),
+      ago: ago(n.at, data.now),
       at: dateTime(n.at),
       unitId: n.unitId,
       unitName: unit?.name ?? null,
-      entity: resolveEntity(clientId, n.type, n.href, `${n.title} ${n.body}`),
+      entity: resolveEntity(data, n.type, n.href, `${n.title} ${n.body}`),
       acknowledgedBy: n.acknowledgedBy ?? null,
     }
   })
@@ -100,12 +97,12 @@ export interface ScopeUnit {
   machines: { id: string; name: string; line: string }[]
 }
 
-export function buildScope(clientId: string): ScopeUnit[] {
-  const lines = getLines(clientId)
-  return getUnits(clientId).map((u) => ({
+export function buildScope(data: ClienteDados): ScopeUnit[] {
+  const lines = data.lines
+  return data.units.map((u) => ({
     id: u.id,
     name: u.name,
-    machines: getMachines(clientId, { unitId: u.id }).map((m) => ({
+    machines: data.machines.filter((m) => m.unitId === u.id).map((m) => ({
       id: m.id,
       name: m.name,
       line: lines.find((l) => l.id === m.lineId)?.name ?? "",

@@ -1,32 +1,30 @@
 /**
- * Monta os dados (serializáveis) da Visão geral a partir de @/lib/mock.
- * Funções puras: seguras em componente de servidor (sem relógio do sistema).
+ * Monta os dados (serializáveis) da Visão geral a partir dos dados da tela (`@/lib/data/cliente`: banco
+ * ou simulado). Função pura: o "agora" vem dos dados, nunca do relógio do sistema.
  */
-import {
-  MOCK_NOW,
-  SHIFT_END,
-  SHIFT_START,
-  aggregateOee,
-  getDailyOee,
-  getDowntimeReason,
-  getGateways,
-  getHourlyProduction,
-  getLine,
-  getMachinesWithLive,
-  getTimeline,
-  seededRandom,
-  type MachineState,
-} from "@/lib/mock"
+import type { ClienteDados } from "@/lib/data/cliente/tipos"
+import { DEFAULT_TZ, seededRandom, type MachineState } from "@/lib/mock"
 import { duration, initials, time } from "@/lib/format"
 import { STATE_META } from "@/lib/states"
 
 const MIN = 60_000
-const NOW = Date.parse(MOCK_NOW)
+/** Meta de OEE quando nenhuma linha tem meta cadastrada (L4 do docs/17). */
 export const OEE_TARGET = 0.75
 
-export function buildOverview(clientId: string, slug: string) {
-  const machines = getMachinesWithLive(clientId)
-  const agg = aggregateOee(machines)
+export function buildOverview(data: ClienteDados) {
+  const slug = data.client.slug
+  const clientId = data.client.id
+  const NOW = data.nowMs
+  const shift = data.shiftWindow()
+  const SHIFT_START = shift.start
+  const SHIFT_END = shift.end
+  const getDailyOee = data.getDailyOee
+  const getDowntimeReason = data.getDowntimeReason
+  const getHourlyProduction = data.getHourlyProduction
+  const getLine = data.getLine
+  const getTimeline = data.getTimeline
+  const machines = data.getMachinesWithLive()
+  const agg = data.aggregateOee(machines)
   const withData = machines.filter((m) => m.live && !m.live.stale && m.live.countShift > 0)
 
   // ---- KPIs ---------------------------------------------------------------
@@ -37,8 +35,9 @@ export function buildOverview(clientId: string, slug: string) {
   const total = machines.reduce((s, m) => s + (m.live?.countShift ?? 0), 0)
   const reject = machines.reduce((s, m) => s + (m.live?.rejectShift ?? 0), 0)
   const good = total - reject
+  // Variação de peças boas: só no protótipo (no banco, a comparação com o turno de ontem fica para o relatório).
   const r = seededRandom(`overview:${clientId}`)
-  const goodDelta = good > 0 ? Math.round((r() * 15 - 6) * 10) / 10 : null
+  const goodDelta = data.fonte === "simulado" && good > 0 ? Math.round((r() * 15 - 6) * 10) / 10 : null
 
   const running = machines.filter((m) => m.live?.state === "RUNNING").length
 
@@ -73,7 +72,8 @@ export function buildOverview(clientId: string, slug: string) {
     .filter((s) => s.count > 0 || s.key === "RUNNING" || s.key === "STOPPED" || s.key === "FAULT")
 
   // ---- Meta de OEE (mês) --------------------------------------------------
-  const monthDays = daily.length ? daily[0].filter((d) => d.date >= "2026-11-01").map((d) => d.date) : []
+  const monthStart = `${new Date(NOW).toLocaleDateString("en-CA", { timeZone: DEFAULT_TZ }).slice(0, 7)}-01`
+  const monthDays = daily.length ? daily[0].filter((d) => d.date >= monthStart).map((d) => d.date) : []
   const monthOee = monthDays.length
     ? monthDays.reduce((s, date) => s + daily.reduce((a, d) => a + (d.find((x) => x.date === date)?.oee ?? 0), 0) / daily.length, 0) / monthDays.length
     : 0
@@ -146,8 +146,16 @@ export function buildOverview(clientId: string, slug: string) {
       subtitle: `${firstSetup.name}${firstSetup.reasonId ? ` · ${getDowntimeReason(firstSetup.reasonId)?.name ?? ""}` : ""}`,
       at: Date.parse(firstSetup.start),
     })
-  events.push({ id: "break", kind: "break", title: "Refeição", subtitle: "Parada planejada · 30 min", at: Date.parse("2026-11-11T13:00:00.000Z") })
-  const downGw = getGateways(clientId).find((g) => g.status === "offline" && g.lastSeen)
+  const firstBreak = shift.breaks.find((b) => Date.parse(b.start) <= NOW)
+  if (firstBreak)
+    events.push({
+      id: "break",
+      kind: "break",
+      title: "Pausa programada",
+      subtitle: `Parada planejada · ${duration((Date.parse(firstBreak.end) - Date.parse(firstBreak.start)) / 1000)}`,
+      at: Date.parse(firstBreak.start),
+    })
+  const downGw = data.gateways.find((g) => g.status === "offline" && g.lastSeen)
   if (downGw) events.push({ id: "gw", kind: "gateway", title: "Gateway offline", subtitle: downGw.name, at: Date.parse(downGw.lastSeen!) })
   events.push({ id: "now", kind: "now", title: "Agora", subtitle: `OEE ${(agg.oee * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`, at: NOW })
   const timeline = events
@@ -170,7 +178,7 @@ export function buildOverview(clientId: string, slug: string) {
     } else actual.push(null)
   }
   const elapsedH = (NOW - Date.parse(SHIFT_START)) / 3_600_000
-  const remainingH = (Date.parse(SHIFT_END) - NOW) / 3_600_000
+  const remainingH = Math.max(0, (Date.parse(SHIFT_END) - NOW) / 3_600_000)
   const rate = elapsedH > 0 ? good / elapsedH : 0
   const predicted = Math.round(good + rate * remainingH)
   const best = Math.round(good + rate * 1.12 * remainingH)
@@ -202,7 +210,8 @@ export function buildOverview(clientId: string, slug: string) {
     stopSummary,
     kpis: { oee: agg.oee, oeeDelta, good, goodDelta, reject, running, total: machines.length, withData: agg.machinesWithData },
     stages,
-    target: { monthOee, target: OEE_TARGET, last12 },
+    target: { monthOee, target: data.oeeTarget ?? OEE_TARGET, last12 },
+    shift: { name: shift.name, start: shift.start, end: shift.end, emAndamento: shift.emAndamento },
     donut,
     donutTotal,
     ranking,

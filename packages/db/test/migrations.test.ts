@@ -98,6 +98,8 @@ describe("migrações", () => {
       "0011_auth_two_factor_session_throttle",
       "0012_auth_grants",
       "0013_w2b_partitions_maintenance",
+      "0014_w7_audit_retention",
+      "0015_w7_audit_log_at_index",
       "0018_platform_client_admin",
     ])
   })

@@ -384,6 +384,8 @@ export const auditLog = pgTable(
   (t) => [
     index("audit_log_org_at_idx").on(t.organizationId, t.at),
     index("audit_log_entity_idx").on(t.entityType, t.entityId),
+    // Retenção (limpeza diária, `app.audit_log_purge`, 0014): apaga os mais velhos de todos os clientes.
+    index("audit_log_at_idx").on(t.at),
     check("audit_log_actor_type_chk", oneOf(t.actorType, AUDIT_ACTOR_TYPES)),
   ],
 )

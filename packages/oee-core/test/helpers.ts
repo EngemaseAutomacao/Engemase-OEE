@@ -1,4 +1,4 @@
-import type { Interval, ProductionMinute, StateEvent } from "../src/index.js";
+import type { Interval, ProductionMinute, StateEvent } from "../src/index";
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;

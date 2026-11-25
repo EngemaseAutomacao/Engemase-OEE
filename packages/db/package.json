@@ -27,7 +27,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "db:seed:plataforma": "tsx scripts/seed-plataforma.ts"
   },
   "dependencies": {
     "@engemase/contracts": "workspace:*",

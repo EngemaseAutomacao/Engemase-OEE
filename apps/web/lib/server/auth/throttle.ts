@@ -101,10 +101,22 @@ export async function clearLoginFailures(db: ThrottleDb, key: string): Promise<v
   await db.delete(authLoginThrottle).where(eq(authLoginThrottle.key, key))
 }
 
-/** Limpeza: linhas sem bloqueio e com janela vencida (para uma rotina periódica). */
-export async function pruneLoginThrottle(db: ThrottleDb, now: Date): Promise<void> {
-  const cutoff = new Date(now.getTime() - LOGIN_WINDOW_MS - LOGIN_LOCK_MS)
-  await db
+/**
+ * Quanto tempo uma linha sem bloqueio ativo fica guardada depois da última mudança (24 h: cobre a maior
+ * janela que usa esta tabela, a de 1 h dos pedidos de redefinição de senha em `attempts.ts`).
+ */
+export const THROTTLE_RETENTION_MS = 24 * 3_600_000
+
+/**
+ * Limpeza (cron diário `limpeza`, `lib/server/cron/auth-cleanup.ts`): apaga as linhas paradas há mais de
+ * `THROTTLE_RETENTION_MS` e sem bloqueio em vigor. Devolve quantas apagou. Apagar antes da hora só
+ * zeraria uma contagem já vencida (as janelas são de no máximo 1 h).
+ */
+export async function pruneLoginThrottle(db: ThrottleDb, now: Date): Promise<number> {
+  const cutoff = new Date(now.getTime() - THROTTLE_RETENTION_MS)
+  const gone = await db
     .delete(authLoginThrottle)
     .where(sql`${authLoginThrottle.updatedAt} < ${cutoff} AND (${authLoginThrottle.lockedUntil} IS NULL OR ${authLoginThrottle.lockedUntil} < ${now})`)
+    .returning({ key: authLoginThrottle.key })
+  return gone.length
 }

@@ -1,22 +1,31 @@
 import type { Metadata } from "next"
-import { notFound } from "next/navigation"
+import { Suspense } from "react"
 
-import { getClientBySlug } from "@/lib/mock"
+import { getClientData } from "@/lib/data/cliente"
 import { ContactCard, PlatformStatusCard } from "@/components/support/help-aside"
 import { HelpCenter } from "@/components/support/help-center"
 import { buildHelp, buildPlatformStatus } from "@/components/support/help-data"
 import { HelpProvider, OpenTicketButton } from "@/components/support/help-provider"
 import { TicketsCard } from "@/components/support/help-tickets"
+import { PageSkeleton } from "@/components/shell/page-skeleton"
 
 export const metadata: Metadata = { title: "Central de ajuda" }
 
-export default async function Page({ params }: PageProps<"/[cliente]/ajuda">) {
-  const { cliente } = await params
-  const client = getClientBySlug(cliente)
-  if (!client) notFound()
+export default function Page({ params }: PageProps<"/[cliente]/ajuda">) {
+  return (
+    <Suspense fallback={<PageSkeleton cards={0} blocks={2} />}>
+      <Help params={params} />
+    </Suspense>
+  )
+}
 
-  const d = buildHelp(client)
-  const status = buildPlatformStatus(client)
+async function Help({ params }: { params: PageProps<"/[cliente]/ajuda">["params"] }) {
+  const { cliente } = await params
+  const data = await getClientData(cliente, { somenteCadastro: true })
+  const { client } = data
+
+  const d = buildHelp(data)
+  const status = buildPlatformStatus(data)
   const b = `/${client.slug}`
 
   return (
@@ -39,7 +48,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/ajuda">) {
             <>
               <ContactCard remoteHref={`${b}/acesso-remoto`} />
               <TicketsCard pendingRemote={d.pendingRemote} remoteHref={`${b}/acesso-remoto`} />
-              <PlatformStatusCard {...status} gatewaysHref={`${b}/config/gateways`} />
+              <PlatformStatusCard {...status} gatewaysHref={`${b}/config/gateways`} checkedAt={data.now} />
             </>
           }
         />

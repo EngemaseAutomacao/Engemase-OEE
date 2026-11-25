@@ -2,6 +2,7 @@ import { Suspense } from "react"
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
+import { usarBanco } from "@/lib/data/fonte"
 import { getClientById, getMachine, getTerminal, terminalParams } from "@/lib/mock"
 import { OperatorScreen, OperatorSkeleton } from "@/components/kiosk/operator-screen"
 import { TerminalBranding } from "@/components/kiosk/terminal-branding"
@@ -20,6 +21,8 @@ export async function generateMetadata({ params }: PageProps<"/terminal/[termina
 /** Tela do operador aberta por um tablet pareado; só aceita máquinas do escopo do terminal. */
 export default async function Page({ params }: PageProps<"/terminal/[terminalId]/[maquinaId]">) {
   const { terminalId, maquinaId } = await params
+  // Só a demonstração simula o aparelho pela URL (ver /terminal/[terminalId]).
+  if (usarBanco()) notFound()
   const terminal = getTerminal(terminalId)
   if (!terminal || terminal.kind !== "operator_tablet" || !terminal.scope.machineIds?.includes(maquinaId)) notFound()
   const client = getClientById(terminal.clientId)

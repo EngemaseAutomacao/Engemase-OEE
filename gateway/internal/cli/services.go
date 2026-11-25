@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
@@ -16,6 +19,7 @@ import (
 
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/app"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/helper"
+	"github.com/engemaseautomacao/engemase-oee/gateway/internal/localapi"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/localui"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/sdlisten"
 )
@@ -31,13 +35,12 @@ func newLocalUICmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			listen, _ := cmd.Flags().GetString("listen")
+			state := localUIStateDir(cmd)
 			dir, _ := cmd.Flags().GetString("tls-dir")
 			if dir == "" {
-				dir = localui.DefaultTLSDir
-				if sd := os.Getenv("STATE_DIRECTORY"); sd != "" {
-					dir = filepath.Join(sd, "tls")
-				}
+				dir = filepath.Join(state, "tls")
 			}
+			sock, _ := cmd.Flags().GetString("agent-socket")
 			l, err := serviceListener("https", listen)
 			if err != nil {
 				return err
@@ -46,13 +49,84 @@ func newLocalUICmd() *cobra.Command {
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			log.Info("página local iniciada", "endereco", l.Addr().String())
-			return (&localui.Server{TLSDir: dir, Log: log}).Serve(ctx, l)
+			return (&localui.Server{StateDir: state, TLSDir: dir, Agent: localapi.NewClient(sock), Log: log}).Serve(ctx, l)
 		},
 	}
 	serve.Flags().String("listen", "", "endereço próprio (só bancada/desenvolvimento, ex.: 127.0.0.1:8443); padrão: socket do systemd")
-	serve.Flags().String("tls-dir", "", "diretório da chave e do certificado (padrão: $STATE_DIRECTORY/tls ou "+localui.DefaultTLSDir+")")
-	root.AddCommand(serve)
+	serve.Flags().String("tls-dir", "", "chave e certificado gerados pela página (padrão: <state-dir>/tls)")
+	serve.Flags().String("agent-socket", localapi.DefaultSocket, "API local do agente")
+
+	passwd := &cobra.Command{
+		Use:   "passwd",
+		Short: "Define a senha local da página (bancada; root)",
+		Long: "Grava o hash argon2id da senha local em <state-dir>/" + localui.PasswordFile + ".\n" +
+			"--stdin lê a senha da entrada (uma linha; usado pelo factory init); --generate gera uma\n" +
+			"senha nova e a mostra UMA vez (anote no cartão lacrado). A senha é normalizada como no\n" +
+			"cartão: sem hífens nem espaços, em maiúsculas.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			fromStdin, _ := cmd.Flags().GetBool("stdin")
+			gen, _ := cmd.Flags().GetBool("generate")
+			if fromStdin == gen {
+				return errors.New("use --stdin ou --generate")
+			}
+			var pw string
+			if gen {
+				p, err := localui.GeneratePassword()
+				if err != nil {
+					return err
+				}
+				pw = p
+			} else {
+				line, err := bufio.NewReader(io.LimitReader(cmd.InOrStdin(), 1024)).ReadString('\n')
+				if err != nil && line == "" {
+					return errors.New("senha não recebida na entrada")
+				}
+				pw = line
+			}
+			phc, err := localui.HashPassword(localui.NormalizePassword(pw))
+			if err != nil {
+				return err
+			}
+			state := localUIStateDir(cmd)
+			if err := localui.WritePasswordHash(state, phc); err != nil {
+				return err
+			}
+			// A página roda como oee-ui (StateDirectory=oee-localui, 0700): o arquivo
+			// gravado pelo root passa a ser dela.
+			if os.Geteuid() == 0 {
+				if u, err := user.Lookup(app.UIGroup); err == nil {
+					uid, _ := strconv.Atoi(u.Uid)
+					gid, _ := strconv.Atoi(u.Gid)
+					_ = os.Chown(state, uid, gid)
+					if err := os.Chown(filepath.Join(state, localui.PasswordFile), uid, gid); err != nil {
+						return err
+					}
+				}
+			}
+			if gen {
+				fmt.Fprintln(cmd.OutOrStdout(), "Senha local (mostrada só agora; anote no cartão lacrado):", pw)
+			} else {
+				fmt.Fprintln(cmd.OutOrStdout(), "senha local gravada")
+			}
+			return nil
+		},
+	}
+	passwd.Flags().Bool("stdin", false, "lê a senha da entrada padrão")
+	passwd.Flags().Bool("generate", false, "gera e mostra uma senha nova")
+	root.PersistentFlags().String("state-dir", "", "estado da página (padrão: $STATE_DIRECTORY ou "+localui.DefaultStateDir+")")
+	root.AddCommand(serve, passwd)
 	return root
+}
+
+func localUIStateDir(cmd *cobra.Command) string {
+	if d, _ := cmd.Flags().GetString("state-dir"); d != "" {
+		return d
+	}
+	if sd := os.Getenv("STATE_DIRECTORY"); sd != "" {
+		return sd
+	}
+	return localui.DefaultStateDir
 }
 
 func newHelperCmd() *cobra.Command {
@@ -78,9 +152,14 @@ func newHelperCmd() *cobra.Command {
 			} else {
 				log.Warn("grupo do agente não encontrado: só root é atendido", "grupo", group, "erro", err)
 			}
+			paths := helper.DefaultPaths()
+			if sd := os.Getenv("STATE_DIRECTORY"); sd != "" {
+				paths.StateDir = sd
+			}
+			ops := &helper.Ops{Sys: helper.OSSystem{}, Paths: paths, AgentGroup: group}
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return (&helper.Server{AgentGID: gid, IdleExit: idle, Log: log}).Serve(ctx, l)
+			return (&helper.Server{AgentGID: gid, IdleExit: idle, Log: log, Ops: ops}).Serve(ctx, l)
 		},
 	}
 	serve.Flags().String("listen", "", "socket Unix próprio (só bancada/desenvolvimento); padrão: socket do systemd")

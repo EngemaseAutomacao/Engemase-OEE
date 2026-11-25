@@ -238,8 +238,7 @@ describe("0013 (partições) aplicada sobre tabelas que já tinham dados", () =>
     cpSync(MIGRATIONS_FOLDER, folder, { recursive: true })
     writeFileSync(
       join(folder, "meta", "_journal.json"),
-      // Banco "de antes": só as migrações anteriores à 0013 (o migrator do Drizzle não aplica uma
-      // migração mais antiga que a última aplicada, então as posteriores também ficam para depois).
+      // Só as migrações ANTERIORES à 0013: as seguintes (0014+) rodam junto com ela, no dono sem BYPASSRLS.
       JSON.stringify({ ...journal, entries: journal.entries.slice(0, journal.entries.findIndex((e) => e.tag === PARTITIONS_TAG)) }, null, 2),
     )
     client = new PGlite()

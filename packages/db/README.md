@@ -23,6 +23,7 @@ Os testes aplicam as migrações num banco vazio e provam, com dois clientes com
 | `test/partitions.test.ts` | `production_minute` (mês) e `tag_sample` (semana) particionadas, com chave, CHECKs e FKs na tabela-mãe; `ON CONFLICT` na chave funciona; RLS pela tabela-mãe e partição sem GRANT; `maintainPartitions()` cria os períodos seguintes, é idempotente, tem dry-run e apaga só partições inteiras além da retenção; a 0013 sobre tabela com dados mantém todas as linhas (sem cópia) com dono **sem `BYPASSRLS`** |
 | `test/calendar-quality-operators.test.ts` | Tabelas novas do W2b (`unit_holiday`, `reject_reason`, `unit_operator`): RLS por cliente (SELECT/INSERT/UPDATE/DELETE), FKs compostas (inclusive motivo e operador em `quality_entry`, `production_run`, `machine_state_event`), unicidades; estorno de refugo (motivo obrigatório, quantidade oposta, mesma máquina, um só, não estorna estorno); gateway "Em trânsito" (até 30 dias) |
 | `test/seed.test.ts` | Seed sintético só com `ENGEMASE_SEED=sintetico` e fora de produção; recusa banco com cliente real e conexão sem `BYPASSRLS`; determinístico, idempotente e respeitando a RLS |
+| `test/seed-platform.test.ts` | Seed de plataforma: liberação (e confirmação em produção), conexão de dono, idempotência, link de uso único só como hash, auditoria, recusa de promover pessoa existente |
 | `test/enums.test.ts` | "Enums" e faixas do banco iguais aos de `@engemase/contracts` (inclusive `fault_code` uint32 em `bigint` e o formato do slug do cliente, `org` do /enroll); campos de minuto/live do contrato têm coluna; CHECKs recusam valores inválidos (escopo `machines` aceito, admin só com `all`, concessão de suporte sem aprovação, limites inteiros >= 0 com `machines` obrigatório) |
 
 ## Estrutura
@@ -32,7 +33,9 @@ src/schema/      tabelas por domínio (auth, assets, access, connectivity, produ
 src/tenancy.ts   withTenant(), papéis, lista das tabelas de cliente
 src/lookups.ts   sha256Hex(), busca por hash de token (e estado da credencial) e por slug (funções SECURITY DEFINER)
 src/partitions.ts maintainPartitions(): manutenção diária das partições (cria as futuras, apaga pela retenção)
-src/seed/        seed sintético (`@engemase/db/seed`); scripts/seed.ts é o `db:seed`
+src/seed/        seeds sintético e de plataforma (`@engemase/db/seed`); scripts/seed.ts é o `db:seed`,
+                 scripts/seed-plataforma.ts o `db:seed:plataforma`
+src/account-token.ts  token "definir senha" (gera, hash, link com o token no fragmento)
 migrations/      0000_init.sql (drizzle-kit) e 0001_rls.sql (MANUAL: papéis, RLS, GRANTs, funções)
                  0002_contract_columns_quality_reversal.sql (drizzle-kit, com o UNIQUE movido para antes da FK)
                  0003_organization_rls_state_lookups.sql (MANUAL: RLS em organization, funções de estado e slug)
@@ -52,7 +55,9 @@ migrations/      0000_init.sql (drizzle-kit) e 0001_rls.sql (MANUAL: papéis, RL
                    session.remember_me/last_active_at)
                  0012_auth_grants.sql (MANUAL: tabelas novas do login só para auth_service)
                  0013_w2b_partitions_maintenance.sql (MANUAL: partições e app.maintain_partitions; o teste a
-                   aplica sobre um banco já com dados, só com as migrações anteriores a ela)
+                   aplica, com as seguintes, sobre um banco já com dados)
+                 0014_w7_audit_retention.sql (MANUAL: app.audit_log_purge, retenção da auditoria, dona app_lookup)
+                 0015_w7_audit_log_at_index.sql (drizzle-kit: índice audit_log_at_idx para a retenção)
                  0018_platform_client_admin.sql (MANUAL, W8: app.platform_create_client/platform_update_client,
                    SECURITY DEFINER donas app_lookup: o console cria e altera organization + client_account)
 ```
@@ -106,6 +111,7 @@ const machines = await withTenant(db, ctx.organizationId, (tx) => tx.select().fr
 | `app.cron_claim(job, janela, agora, prazo_s)` · `app.cron_finish(job, janela, agora, ok, resultado)` | Uma execução por janela; erro libera a janela |
 | `app.cron_purge(antes)` | Apaga o histórico antigo dos crons |
 | `app.cron_organizations()` | Ids de todos os clientes, para o cron rodar um `withTenant` por cliente |
+| `app.audit_log_purge(antes, lote)` | Retenção da auditoria (0014): apaga até `lote` registros (1 a 50.000) com `at < antes`, de todos os clientes. **Recusa `antes` mais novo que `now() - 365 dias`** (relógio do banco): nem um bug nem SQL rodando como `app_user` apaga auditoria recente. Lê e apaga pelas políticas `audit_retention_read`/`audit_retention_delete`, só do `app_lookup`; o `app_user` continua sem DELETE |
 
 `gateway_health_sample` (histórico de saúde do gateway, 5 min) é tabela de cliente comum (RLS forçada), com `DELETE` para a retenção de 30 dias rodar como `app_user`. `alert_rule.system_key` marca as regras-preset criadas pela plataforma (uma por cliente, índice único parcial).
 
@@ -138,7 +144,8 @@ GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE;
 - **Tarefa agendada diária** (L17): `maintainPartitions(db)` (`app.maintain_partitions(now, dry_run)`) cria o período atual e os seguintes e apaga partições inteiras mais velhas que a retenção. Idempotente; devolve as ações para o log. Precisa conectar com o papel **dono das tabelas** (DDL): não é SECURITY DEFINER e ninguém tem EXECUTE (nem o `app_user`). Configuração em `app.partitioned_table`.
 - Gravar além das partições criadas **falha alto** (`no partition of relation … found for row`): a folga de 3 meses / 8 semanas cobre semanas sem a tarefa. Dado antigo (antes da partição atual) cai na `_legacy` enquanto ela existir.
 - Toda partição tem RLS forçada com a política de cliente (`app.enable_tenant_rls`, o catálogo confere) e **nenhum GRANT**: o app acessa só pela tabela-mãe. O drizzle-kit não enxerga partições (para ele são tabelas comuns).
-- Fora, de propósito: `machine_state_event` e `audit_log` têm chave só em `id` (o `/sync` usa `ON CONFLICT (id)`); particionar mudaria a chave. A retenção de 5 anos da auditoria fica para quando houver dados de 5 anos.
+- Fora, de propósito: `machine_state_event` e `audit_log` têm chave só em `id` (o `/sync` usa `ON CONFLICT (id)`); particionar mudaria a chave. A retenção da auditoria (5 anos, D6) é feita em lotes pela limpeza diária (`app.audit_log_purge`, 0014, com o índice `audit_log_at_idx`, 0015).
+- A limpeza diária da web (`/api/cron/limpeza`) chama `maintainPartitions()` pela conexão `DATABASE_MAINTENANCE_URL` (dono das tabelas, direta); sem ela, registra e pula.
 
 ## Seed sintético e branch-semente
 
@@ -148,6 +155,22 @@ GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE;
 - Determinístico (ids por hash do nome lógico, séries com semente por máquina e dia) e idempotente (`ON CONFLICT DO NOTHING`).
 - Imprime o token em claro só dos gateways criados naquela execução (o banco guarda o hash), para apontar o simulador para o banco local.
 - `db:seed` aplica as migrações antes (com `pg`, numa transação só); `--sem-migrar` pula, `--dias N` muda o período.
+
+## Seed de plataforma (Engemase Lab + primeiro super admin)
+
+`src/seed/platform.ts` (`db:seed:plataforma`) grava a organização interna **"Engemase Lab"** (`engemase-lab`, ativa, 10 máquinas de bancada, unidade "Bancada Engemase" + área "Geral") e o **primeiro super admin**, membro da Lab, sem senha, com um link "definir senha" de uso único (24 h) que o script mostra **uma vez** (docs/15, seção 7). Diferente do sintético, roda também em produção:
+
+```bash
+ENGEMASE_SEED=plataforma DATABASE_URL=postgres://dono:…@host/engemase \
+ENGEMASE_SEED_ADMIN_EMAIL=nome@engemase.com.br ENGEMASE_SEED_ADMIN_NOME="Nome Sobrenome" \
+BETTER_AUTH_URL=https://engemase-oee.vercel.app \
+  pnpm --filter @engemase/db db:seed:plataforma        # em produção, também ENGEMASE_SEED_PRODUCAO=confirmo
+```
+
+- **Proteções:** liberação por `ENGEMASE_SEED=plataforma` (e `ENGEMASE_SEED_PRODUCAO=confirmo` com `VERCEL_ENV`/`NODE_ENV` = production); conexão de dono (SUPERUSER/BYPASSRLS); só acrescenta (ids fixos, `ON CONFLICT DO NOTHING`), nada é apagado nem sobrescrito; recusa promover a super admin uma pessoa que já existe sem esse papel; auditoria `platform.seed` (ator `system`) sem token nem e-mail.
+- Rodar de novo não duplica nada: se a pessoa ainda não tem senha, sai um link novo e o anterior deixa de valer; se já tem, nenhum link (ela usa "Esqueci minha senha").
+- O seed sintético aceita banco com a Engemase Lab (o slug `engemase-lab` não conta como "cliente real").
+- O token vai no fragmento do link (`/definir-senha#t=…`, `src/account-token.ts`); o banco guarda só o SHA-256 (`account_token`).
 
 ## Decisões
 
@@ -173,12 +196,10 @@ GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE;
 
 - **Seed a partir do mock do protótipo** (`apps/web/lib/mock`): o seed sintético (`src/seed`) já serve ao desenvolvimento e ao branch-semente; usar os mesmos nomes e números do protótipo exigiria mover o mock para um pacote compartilhado. Atenção: o mock tem o estado `PLANNED_STOP`, que no banco não é estado bruto (é classificação por motivo). `oee_shift` não é semeado: sai do cálculo (W7).
 - **Branch-semente na Neon** (N1): criar o branch, rodar `db:seed` nele com um papel com BYPASSRLS e apontar a integração da Vercel para ele.
-- **Rota da tarefa diária de partições** (outro especialista, W7): chamar `maintainPartitions(db)` com uma conexão do dono das tabelas e registrar as ações no log.
-- **Script de migração contra a Neon** (`db:migrate` com `pg`, numa transação só; nunca o migrator de `neon-http`) e bootstrap da organização "Engemase Lab" + primeiro super admin: dependem das contas (N1). O projeto Neon fica em AWS `sa-east-1` (São Paulo, D7).
-- **Retenção da auditoria** (5 anos, D6): sem partição (chave em `id`); limpeza a decidir antes de 2031.
-- **Better Auth (W5):** login, sessão, bloqueio e 2FA feitos (apps/web/lib/server/auth). Falta o fluxo "criar conta + membro + escopo na mesma transação" (docs/15, seção 5) e como ele convive com o papel `auth_service`. Esse fluxo deve achar a pessoa pelo e-mail no servidor e nunca aceitar `user_id` do navegador (revisão W11: o `app_user` consegue gravar `member` com qualquer `user_id`).
+- **Script de migração contra a Neon** (`db:migrate` com `pg`, numa transação só; nunca o migrator de `neon-http`): depende das contas (N1). O bootstrap da "Engemase Lab" + primeiro super admin já existe (`db:seed:plataforma`, acima); falta rodá-lo na Neon (N1). O projeto Neon fica em AWS `sa-east-1` (São Paulo, D7).
+- **Better Auth (W5):** login, sessão, bloqueio, 2FA, convite/"definir senha", "esqueci minha senha" e reinício do 2FA feitos (apps/web/lib/server/auth e lib/server/users). O convite acha a pessoa pelo e-mail no servidor (nunca `user_id` do navegador; revisão W11 §3.2): a conta nasce pelo `auth_service` e vínculo + papel + escopo + token + auditoria vão numa transação do `app_user` (não há transação única entre os dois papéis; uma conta sem vínculo não dá acesso e é reaproveitada). Opcional, numa migração futura: gatilho que recuse `UPDATE` de `member.user_id`.
 - **Usuários de login na implantação:** o do Better Auth (`AUTH_DATABASE_URL`) precisa HERDAR `auth_service` (`CREATE ROLE auth_login LOGIN PASSWORD '…' IN ROLE auth_service;`), porque o Better Auth não troca de papel por consulta. O do app (`DATABASE_URL`) pode ser `NOINHERIT` com `GRANT app_user TO app_login WITH INHERIT FALSE, SET TRUE`: a camada de acesso sempre roda em `withTenant` (`SET LOCAL ROLE app_user`), inclusive a busca do slug. Testado localmente assim (W5).
 - **Console da Engemase:** as leituras entre clientes (lista de clientes, frota de gateways) usam `app.cron_organizations()` + um `withTenant` por cliente (W8), e a criação/alteração de cliente usa as funções da 0018. Eventos de plataforma na auditoria (sem `organization_id`) continuam sem leitura pelo app: precisam de um papel de plataforma próprio (ainda não criado).
 - **Confirmar na Neon** se o papel dono das tabelas tem `BYPASSRLS` (com `FORCE`, sem ele o dono não lê dados de cliente). Dentro de migração, o padrão `NO FORCE` → `UPDATE` → `FORCE` (0005) dispensa o `BYPASSRLS`; backfill e scripts fora de migração ainda precisam dele.
 - `machine_template` e `oee_hour` (F2/opcional) e `remote_access_recording` (Fase C) ainda não existem.
-- **Regras de aplicação do W2b** (o banco não garante): turnos sem sobreposição na mesma unidade (L2); prazo do lançamento atrasado e registro do estorno na auditoria (L3); operador da mesma unidade da máquina (L19); fim do trânsito no primeiro `/sync` no cliente e supressão do alerta de offline enquanto `in_transit_until > now()` e `installed_at` nulo (L23).
+- **Regras de aplicação do W2b** (o banco não garante): feitas na web em 24/11/2026 — turnos sem sobreposição (L2), prazo do lançamento atrasado e estorno com auditoria (L3) e operador da mesma unidade (L19) em `apps/web/lib/server/production`; fim do trânsito no primeiro `/sync` e supressão do alerta de offline (L23) no `/sync` e no cron de alertas. Falta as telas (W8) chamarem essas funções.

@@ -4,7 +4,7 @@
 
 ## Resumo
 
-- **Documentação:** arquitetura (docs 01–16), backlog (17) e operação (`docs/operacao/`), conferida contra o código.
+- **Documentação:** arquitetura (docs 01–16), backlog (17) e operação (`docs/operacao/`), conferida contra o código. Para o usuário final: [guias por papel](guias/README.md) e [notas de versão](notas-de-versao.md) (L15, 24/11/2026).
 - **Protótipo da interface** (`apps/web`, dados simulados): completo para validação com clientes.
 - **Fase 0 de código:** pronta e testada sem contas na nuvem e sem hardware. Contrato, cálculo de OEE, banco com RLS, API real dos gateways, agente Go revisado, simulador de CLP, pacote `.deb`, receita da imagem e CI. Um teste de ponta a ponta liga tudo: simulador → agente → API → banco.
 - **Bloqueios para seguir:** contas (Vercel, Neon, domínio) e hardware de bancada. As decisões foram todas tomadas em 12/11/2026.

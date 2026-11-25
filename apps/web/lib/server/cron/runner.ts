@@ -16,6 +16,7 @@
 import { createHash, timingSafeEqual } from "node:crypto"
 import { withTenant } from "@engemase/db"
 import { sql } from "drizzle-orm"
+import type { MaintenanceDbRunner } from "../db"
 import { type GatewayDb, type GatewayTx, queryRows } from "../gateway/types"
 
 /** Duração máxima das funções de cron (s); o laço por cliente para antes, em `budgetMs`. */
@@ -29,6 +30,13 @@ export interface CronContext {
   readonly env: Readonly<Record<string, string | undefined>>
   readonly fetch: typeof fetch
   readonly log: (message: string, error?: unknown) => void
+  /**
+   * Conexão do dono das tabelas (`DATABASE_MAINTENANCE_URL`), para DDL como as partições. `null` quando
+   * não configurada: quem precisa registra e pula.
+   */
+  readonly maintenance: MaintenanceDbRunner | null
+  /** Milissegundos que ainda restam do tempo do job (`budgetMs`). */
+  remainingMs(): number
 }
 
 export interface OrganizationRun<T> {
@@ -63,6 +71,8 @@ export interface CronDeps {
   readonly logError?: (message: string, error: unknown) => void
   /** Tempo do laço por cliente (padrão: 45 s, com folga para o limite de 60 s da função). */
   readonly budgetMs?: number
+  /** Conexão de manutenção (dono das tabelas); padrão: nenhuma. */
+  readonly maintenance?: MaintenanceDbRunner | null
 }
 
 function digest(value: string): Buffer {
@@ -119,6 +129,8 @@ export async function runCronJob(request: Request, job: CronJob, deps: CronDeps)
     env: deps.env ?? process.env,
     fetch: deps.fetch ?? fetch,
     log: (message, error) => logError(`[cron] ${job.name}: ${message}`, error),
+    maintenance: deps.maintenance ?? null,
+    remainingMs: () => budgetMs - (Date.now() - started),
     async forEachOrganization(fn) {
       const results: { organizationId: string; value: Awaited<ReturnType<typeof fn>> }[] = []
       let failures = 0

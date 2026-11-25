@@ -12,6 +12,7 @@
  */
 import { alertEvent, alertRule, gateway, organization, productionMinute } from "@engemase/db"
 import { and, count, eq, gte, isNull, lte, sql } from "drizzle-orm"
+import { inTransitAt } from "./alerts"
 import type { CronJob } from "./runner"
 import { localDay } from "./windows"
 
@@ -68,7 +69,9 @@ export const dailySummaryJob: CronJob = {
       const [gw] = await tx
         .select({
           total: count(),
-          offline: sql<number>`count(*) FILTER (WHERE ${gateway.status} = 'active' AND ${gateway.lastSeenAt} <= ${offlineBefore.toISOString()}::timestamptz)`,
+          // "Em trânsito" (L23) não conta como sem comunicação.
+          offline: sql<number>`count(*) FILTER (WHERE ${gateway.status} = 'active' AND ${gateway.lastSeenAt} <= ${offlineBefore.toISOString()}::timestamptz
+            AND NOT ${inTransitAt(now)})`,
         })
         .from(gateway)
         .where(isNull(gateway.deletedAt))

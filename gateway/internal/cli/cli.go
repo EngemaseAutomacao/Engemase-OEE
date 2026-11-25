@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -18,6 +19,7 @@ import (
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/buffer"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/buildinfo"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/config"
+	"github.com/engemaseautomacao/engemase-oee/gateway/internal/sdlisten"
 )
 
 // ExitError carrega o código de saída (ex.: diag devolve 1 para avisos e 2 para falhas).
@@ -66,7 +68,7 @@ func NewRoot(stdout, stderr io.Writer) *cobra.Command {
 	root.SetErr(stderr)
 	root.PersistentFlags().String("config", config.DefaultLocalPath, "config local (gateway.yaml)")
 	root.AddCommand(newRunCmd(), newVersionCmd(), newEnrollCmd(), newDiagCmd(), newModbusCmd(), newConfigCmd(),
-		newLocalUICmd(), newHelperCmd())
+		newLocalUICmd(), newHelperCmd(), newUpdateCmd())
 	return root
 }
 
@@ -94,9 +96,17 @@ func newRunCmd() *cobra.Command {
 			// O nível é ajustável em execução pelo comando log.level (volta sozinho).
 			log, level := app.NewLeveledLogger(local.Log.Level)
 			slog.SetDefault(log)
+			// API local da página (oee-gateway-ui.socket, FileDescriptorName=ui): só
+			// com a ativação por socket; sem ela, o agente roda igual.
+			var ui net.Listener
+			if ls, err := sdlisten.Listeners(); err != nil {
+				log.Warn("sockets do systemd ilegíveis; API local da página desligada", "erro", err)
+			} else if l, err := sdlisten.One(ls, "ui"); err == nil {
+				ui = l
+			}
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return runAgent(ctx, app.Options{Local: local, Logger: log, LogLevel: level})
+			return runAgent(ctx, app.Options{Local: local, Logger: log, LogLevel: level, UIListener: ui})
 		},
 	}
 }
