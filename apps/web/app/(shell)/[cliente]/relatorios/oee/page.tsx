@@ -1,27 +1,37 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { Suspense } from "react"
 import { ChartNoAxesCombinedIcon, ListOrderedIcon, RouterIcon } from "lucide-react"
 
-import { getClientBySlug, getConfigAccess, getLines, getMachines, getShiftHistory, getUnits } from "@/lib/mock"
+import { getClientData } from "@/lib/data/cliente"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { PageTitle } from "@/components/refresh/page-title"
 import { SoftLink } from "@/components/refresh/soft-action"
 import { OeeReport } from "@/components/reports/oee-report"
+import { PageSkeleton } from "@/components/shell/page-skeleton"
 
 /** Histórico carregado: 28 dias = período máximo do filtro (14) + período anterior para comparação. */
 const HISTORY_DAYS = 28
 
 export const metadata: Metadata = { title: "Relatório de OEE" }
 
-export default async function Page({ params }: PageProps<"/[cliente]/relatorios/oee">) {
-  const { cliente } = await params
-  const client = getClientBySlug(cliente)
-  if (!client) notFound()
+export default function Page({ params }: PageProps<"/[cliente]/relatorios/oee">) {
+  return (
+    <Suspense fallback={<PageSkeleton blocks={2} />}>
+      <Report params={params} />
+    </Suspense>
+  )
+}
 
-  const allMachines = getMachines(client.id)
-  const rows = getShiftHistory(
+async function Report({ params }: { params: PageProps<"/[cliente]/relatorios/oee">["params"] }) {
+  const { cliente } = await params
+  // Dias de calendário a ler: 28 dias COM turno (domingos e feriados não têm) para a comparação de 14 + 14.
+  const data = await getClientData(cliente, { diasTurnos: HISTORY_DAYS + 14 })
+  const { client } = data
+
+  const allMachines = data.machines
+  const rows = data.getShiftHistory(
     allMachines.map((m) => m.id),
     HISTORY_DAYS,
   )
@@ -31,10 +41,10 @@ export default async function Page({ params }: PageProps<"/[cliente]/relatorios/
     .map((m) => ({ id: m.id, name: m.name, code: m.code, unitId: m.unitId, lineId: m.lineId }))
   const lineIds = new Set(machines.map((m) => m.lineId))
   const unitIds = new Set(machines.map((m) => m.unitId))
-  const lines = getLines(client.id)
+  const lines = data.lines
     .filter((l) => lineIds.has(l.id))
     .map((l) => ({ id: l.id, name: l.name, unitId: l.unitId }))
-  const units = getUnits(client.id)
+  const units = data.units
     .filter((u) => unitIds.has(u.id))
     .map((u) => ({ id: u.id, name: u.name }))
 
@@ -59,7 +69,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/relatorios/
             <EmptyTitle>Ainda não há turnos fechados</EmptyTitle>
             <EmptyDescription>
               {allMachines.length === 0
-                ? getConfigAccess(client.id).canConfigure
+                ? data.access.canConfigure
                   ? "Cadastre as máquinas e vincule cada uma a um CLP de um gateway. O relatório aparece depois do primeiro turno completo com dados."
                   : "A equipe Engemase cadastra as máquinas e liga cada uma ao CLP. O relatório aparece depois do primeiro turno completo com dados."
                 : "As máquinas ainda não enviaram contagens e eventos de estado. Assim que o gateway estiver online e o primeiro turno fechar, o relatório é gerado automaticamente."}

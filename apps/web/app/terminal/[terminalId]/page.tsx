@@ -5,6 +5,7 @@ import { notFound } from "next/navigation"
 import { ChevronRightIcon, TabletIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { usarBanco } from "@/lib/data/fonte"
 import { STATE_META } from "@/lib/states"
 import { getClientById, getLine, getMachine, getMachineLive, getTerminal, terminalParams } from "@/lib/mock"
 import { AndonBoard, AndonSkeleton } from "@/components/kiosk/andon-board"
@@ -27,6 +28,9 @@ export async function generateMetadata({ params }: PageProps<"/terminal/[termina
  */
 export default async function Page({ params }: PageProps<"/terminal/[terminalId]">) {
   const { terminalId } = await params
+  // Só a demonstração simula o aparelho pela URL. Com banco, o terminal real abre pelo token do aparelho
+  // (pareamento ainda não implementado): nada de dado de cliente a partir de um id na URL.
+  if (usarBanco()) notFound()
   const terminal = getTerminal(terminalId)
   if (!terminal) notFound()
   const client = getClientById(terminal.clientId)

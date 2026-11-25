@@ -1,9 +1,9 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { Suspense } from "react"
 import { AlertTriangleIcon, FactoryIcon, GaugeIcon, PackageCheckIcon, PlusIcon } from "lucide-react"
 
-import { aggregateOee, getClientBySlug, getConfigAccess, getLines, getMachinesWithLive, getTimeline, getUnits } from "@/lib/mock"
+import { getClientData } from "@/lib/data/cliente"
 import { num, pct } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
@@ -13,22 +13,32 @@ import { MachineExplorer } from "@/components/monitoring/machine-explorer"
 import { currentShift, productionTotals, stateCounts, unclassifiedStops } from "@/components/monitoring/queries"
 import { ShiftStatus } from "@/components/monitoring/shift-status"
 import { PageTitle } from "@/components/refresh/page-title"
+import { PageSkeleton } from "@/components/shell/page-skeleton"
 
 export const metadata: Metadata = { title: "Máquinas" }
 
-export default async function Page({ params }: PageProps<"/[cliente]/maquinas">) {
-  const { cliente } = await params
-  const client = getClientBySlug(cliente)
-  if (!client) notFound()
+export default function Page({ params }: PageProps<"/[cliente]/maquinas">) {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <Machines params={params} />
+    </Suspense>
+  )
+}
 
-  const machines = getMachinesWithLive(client.id)
-  const units = getUnits(client.id).filter((u) => machines.some((m) => m.unitId === u.id))
-  const lines = getLines(client.id).filter((l) => machines.some((m) => m.lineId === l.id))
+async function Machines({ params }: { params: PageProps<"/[cliente]/maquinas">["params"] }) {
+  const { cliente } = await params
+  const data = await getClientData(cliente)
+  const { client } = data
+
+  const machines = data.getMachinesWithLive()
+  const units = data.units.filter((u) => machines.some((m) => m.unitId === u.id))
+  const lines = data.lines.filter((l) => machines.some((m) => m.lineId === l.id))
   const counts = stateCounts(machines)
-  const oee = aggregateOee(machines)
+  const oee = data.aggregateOee(machines)
   const production = productionTotals(machines)
   const unplanned = counts.FAULT + counts.STOPPED
-  const pendingStops = machines.reduce((s, m) => s + unclassifiedStops(getTimeline(m.id), m.microStopThresholdS).length, 0)
+  const pendingStops = machines.reduce((s, m) => s + unclassifiedStops(data.getTimeline(m.id), m.microStopThresholdS).length, 0)
+  const canConfigure = data.access.canConfigure
 
   return (
     <div className="flex flex-col gap-5 p-4 md:p-6">
@@ -39,7 +49,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas">)
             ? `${machines.length} ${machines.length === 1 ? "máquina" : "máquinas"} · estado ao vivo, contagens e OEE do turno corrente`
             : "Estado ao vivo, contagens e OEE do turno corrente"
         }
-        actions={<ShiftStatus shift={currentShift()} />}
+        actions={<ShiftStatus shift={currentShift(data.shiftWindow(), data.now)} />}
       />
 
       {machines.length === 0 ? (
@@ -50,12 +60,12 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas">)
             </EmptyMedia>
             <EmptyTitle>Nenhuma máquina cadastrada</EmptyTitle>
             <EmptyDescription>
-              {getConfigAccess(client.id).canConfigure
+              {canConfigure
                 ? "Cadastre a primeira máquina e vincule-a a um CLP do gateway para começar a medir o OEE."
                 : "A equipe Engemase cadastra as máquinas e liga cada uma ao CLP. Elas aparecem aqui assim que a coleta começar."}
             </EmptyDescription>
           </EmptyHeader>
-          {getConfigAccess(client.id).canConfigure && (
+          {canConfigure && (
             <EmptyContent>
               <Button asChild>
                 <Link href={`/${client.slug}/config/maquinas/nova`}>
@@ -119,6 +129,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas">)
             units={units.map((u) => ({ id: u.id, name: u.name }))}
             lines={lines.map((l) => ({ id: l.id, name: l.name, code: l.code, unitId: l.unitId }))}
             clientSlug={client.slug}
+            now={data.now}
           />
         </>
       )}

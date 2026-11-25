@@ -1,6 +1,6 @@
 # apps/web — Plataforma Engemase OEE (Next.js)
 
-Protótipo da interface. **Por enquanto usa dados simulados** (`lib/mock`) e roda só localmente.
+Interface da plataforma. As telas de acompanhamento leem o banco quando `DATABASE_URL` existe (ver "Dados das telas"); sem banco, e nas telas ainda não trocadas, usam os dados simulados (`lib/mock`).
 
 ## Rodar localmente
 
@@ -44,6 +44,16 @@ lib/
   states.ts cores e rótulos dos estados de máquina, faixas de OEE
   roles.ts  rótulos de papéis, planos e status
 ```
+
+## Dados das telas: banco ou simulado (`lib/data`)
+
+As telas trocadas pelo banco leem só da camada `lib/data/`. Cada função usa o banco quando `DATABASE_URL` existe e os dados simulados (`lib/mock`) quando não (a demonstração na Vercel não tem banco): `usarBanco()` em `lib/data/fonte.ts`.
+
+- **Acompanhamento do cliente (W9)** — `lib/data/cliente`: `getClientData(slug, necessidades)` devolve um `ClienteDados` com as mesmas consultas do protótipo (`getMachinesWithLive`, `getTimeline`, `getHourlyProduction`, `getDailyOee`, `getShiftHistory`, `getStopRecords`, `getPareto`, `aggregateOee`, `getNotifications`...). Usado por visão geral, máquinas, máquina, linha, relatórios de OEE e de paradas, notificações, ajuda, Andon e tela do operador (e pelo menu/cabeçalho do layout, com `somenteCadastro`).
+  - Com banco: `requireTenant(slug)` (sessão, papel, escopo; sem acesso → 404) e leitura sob RLS (`banco.ts`); o cálculo é do `@engemase/oee-core` (`calculo.ts`, puro, testado em `test/data`). Turno corrente = janela do turno que contém "agora" (fora do horário, o último que terminou). Turnos fechados: `oee_shift` quando o fechamento gravou e não está sujo; senão, calculado dos eventos e minutos (histórico somado em blocos de 15 min). Conexões e tags só com leitura técnica.
+  - "Dados atrasados": `machine_live.at` com mais de 30 s ou gateway sem `/sync` há mais de 6 min (fica fora do OEE agregado, como no protótipo).
+  - As páginas leem dentro de `<Suspense>` (esqueleto em `components/shell/page-skeleton.tsx`), sem `generateStaticParams`. O layout `(shell)/[cliente]` mantém `generateStaticParams`/`instant = false` enquanto as telas de `config/*` não tiverem `<Suspense>`.
+  - `/terminal/[id]` é só simulação: com banco responde 404 (o terminal real abre pelo token do aparelho, ainda não implementado).
 
 ## Convenções (importante com Cache Components)
 

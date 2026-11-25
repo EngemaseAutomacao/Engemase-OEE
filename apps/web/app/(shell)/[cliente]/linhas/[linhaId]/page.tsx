@@ -1,25 +1,13 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { Suspense } from "react"
 import { ActivityIcon, GaugeIcon, PackageCheckIcon, TrendingDownIcon, MonitorIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { STATE_META, STATE_ORDER, TONE_HEX, oeeTone } from "@/lib/states"
 import { duration, num, pct, time } from "@/lib/format"
-import {
-  aggregateOee,
-  getAreas,
-  getClientBySlug,
-  getDowntimeReasons,
-  getHourlyProduction,
-  getLine,
-  getMachinesWithLive,
-  getPareto,
-  getTimeline,
-  getUnit,
-  lineParams,
-  nowMs,
-} from "@/lib/mock"
+import { getClientData } from "@/lib/data/cliente"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -38,39 +26,43 @@ import { HourlyProductionChart, type HourlyPoint } from "@/components/monitoring
 import { currentShift, productionTotals, stateCounts, stateDurations } from "@/components/monitoring/queries"
 import { PageTitle } from "@/components/refresh/page-title"
 import { SoftLink } from "@/components/refresh/soft-action"
+import { PageSkeleton } from "@/components/shell/page-skeleton"
 
 const HOUR_MS = 60 * 60 * 1000
 
-export async function generateStaticParams({ params }: { params: { cliente: string } }) {
-  return lineParams(params.cliente)
-}
-
-export async function generateMetadata({ params }: PageProps<"/[cliente]/linhas/[linhaId]">): Promise<Metadata> {
-  const { linhaId } = await params
-  return { title: getLine(linhaId)?.name ?? "Linha" }
-}
+export const metadata: Metadata = { title: "Linha" }
 
 /** Tela da linha (RF05): estado das máquinas, OEE da linha pela soma das bases (docs/07) e a máquina que mais perde. */
-export default async function Page({ params }: PageProps<"/[cliente]/linhas/[linhaId]">) {
+export default function Page({ params }: PageProps<"/[cliente]/linhas/[linhaId]">) {
+  return (
+    <Suspense fallback={<PageSkeleton blocks={3} />}>
+      <LineDetail params={params} />
+    </Suspense>
+  )
+}
+
+async function LineDetail({ params }: { params: PageProps<"/[cliente]/linhas/[linhaId]">["params"] }) {
   const { cliente, linhaId } = await params
-  const client = getClientBySlug(cliente)
-  const line = getLine(linhaId)
-  if (!client || !line || line.clientId !== client.id) notFound()
+  const data = await getClientData(cliente, { paradas: true })
+  const { client } = data
+  // Linha de outro cliente ou sem nenhuma máquina no escopo da pessoa: 404.
+  const line = data.getLine(linhaId)
+  if (!line) notFound()
 
   const slug = client.slug
-  const unit = getUnit(line.unitId)
-  const area = getAreas(line.unitId).find((a) => a.id === line.areaId)
-  const machines = getMachinesWithLive(client.id, { lineId: line.id })
-  const shift = currentShift()
-  const agg = aggregateOee(machines)
+  const unit = data.getUnit(line.unitId)
+  const area = data.getAreas(line.unitId).find((a) => a.id === line.areaId)
+  const machines = data.getMachinesWithLive({ lineId: line.id })
+  const shift = currentShift(data.shiftWindow(line.unitId), data.now)
+  const agg = data.aggregateOee(machines)
   const hasData = agg.machinesWithData > 0
   const totals = productionTotals(machines)
   const counts = stateCounts(machines)
-  const now = nowMs()
+  const now = data.nowMs
 
   // Por máquina: OEE do turno, tempo em cada estado e linha do tempo.
   const rows = machines.map((m) => {
-    const events = getTimeline(m.id)
+    const events = data.getTimeline(m.id)
     const d = stateDurations(events)
     const lostS = d.STOPPED + d.FAULT + d.SETUP + d.NO_COMM
     const ok = !!m.live && !m.live.stale && m.live.countShift > 0
@@ -87,7 +79,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/linhas/[lin
   const donutTotalMin = donut.reduce((s, x) => s + x.value, 0)
 
   // Produção por hora da linha = soma das máquinas.
-  const series = machines.map((m) => getHourlyProduction(m.id))
+  const series = machines.map((m) => data.getHourlyProduction(m.id))
   const hourly: HourlyPoint[] = (series[0] ?? []).map((h, i) => {
     const hs = Date.parse(h.hour)
     const future = hs >= now
@@ -97,9 +89,9 @@ export default async function Page({ params }: PageProps<"/[cliente]/linhas/[lin
     return { label: time(h.hour), good: future ? null : total - reject, reject: future ? null : reject, target, partial: !future && hs + HOUR_MS > now }
   })
 
-  const reasonNames = Object.fromEntries(getDowntimeReasons(client.id).map((r) => [r.id, r.name]))
+  const reasonNames = Object.fromEntries(data.reasons.map((r) => [r.id, r.name]))
 
-  const pareto = getPareto(machines.map((m) => m.id)).slice(0, 5)
+  const pareto = data.getPareto(machines.map((m) => m.id)).slice(0, 5)
   const paretoMax = pareto[0]?.minutes ?? 1
 
   return (
@@ -128,7 +120,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/linhas/[lin
             <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-xs font-medium text-muted-foreground">{line.code}</span>
           </span>
         }
-        description={[area?.name, unit ? `${unit.name} (${unit.city}/${unit.state})` : undefined, `${shift.name} · ${time(shift.start)}–${time(shift.end)}`]
+        description={[area?.name, unit ? (unit.city ? `${unit.name} (${unit.city}/${unit.state})` : unit.name) : undefined, `${shift.name} · ${time(shift.start)}–${time(shift.end)}`]
           .filter(Boolean)
           .join(" · ")}
         actions={
