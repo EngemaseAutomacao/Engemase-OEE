@@ -17,7 +17,9 @@
  */
 import { gatewayCommand, gatewayEnrollment, gatewayHealthSample, maintainPartitions } from "@engemase/db"
 import { and, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm"
+import { getAuthDb } from "../db"
 import { queryRows } from "../gateway/types"
+import { cleanupAuth } from "./auth-cleanup"
 import type { CronContext, CronJob } from "./runner"
 import { utcDay } from "./windows"
 
@@ -140,6 +142,7 @@ export const cleanupJob: CronJob = {
         .returning({ id: gatewayEnrollment.id })
       return { health: health.length, commands: commands.length, codes: codes.length }
     })
+    const auth = await cleanupAuth(ctx, getAuthDb())
     const sum = (k: "health" | "commands" | "codes") => run.results.reduce((n, r) => n + r.value[k], 0)
     const parts = await partitions(ctx)
     const audit = await purgeAudit(ctx)
@@ -150,11 +153,16 @@ export const cleanupJob: CronJob = {
       health_samples_deleted: sum("health"),
       commands_deleted: sum("commands"),
       activation_codes_deleted: sum("codes"),
+      ...auth,
       partitions: parts,
       audit_retention_days: audit.retentionDays,
       audit_logs_deleted: audit.deleted,
       audit_purge_complete: audit.complete,
-      failures: run.failures + (parts.status === "error" ? 1 : 0) + (audit.retentionDays === null ? 1 : 0),
+      failures:
+        run.failures +
+        auth.account_token_failures +
+        (parts.status === "error" ? 1 : 0) +
+        (audit.retentionDays === null ? 1 : 0),
       incomplete: run.incomplete,
     }
   },

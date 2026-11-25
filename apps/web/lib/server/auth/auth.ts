@@ -4,7 +4,10 @@
  *
  * O que está ligado e por quê:
  * - e-mail e senha, SEM cadastro aberto (`disableSignUp`): contas nascem pelas nossas Server Actions
- *   (fluxo "definir senha", docs/15 seção 5 — ainda não feito);
+ *   (convite + "definir senha" com token próprio, `lib/server/users/invite.ts` e `set-password.ts`);
+ * - "esqueci minha senha" pelo fluxo do Better Auth, chamado só no servidor (`password-reset.ts`): o
+ *   link leva o token no FRAGMENTO (`/redefinir-senha#t=...`, docs/15 item 9), vale 30 min e o token é
+ *   guardado como hash (`verification.storeIdentifier`); redefinir derruba as sessões e o bloqueio;
  * - senha >= 12, sem regra de composição; senha nova conferida contra vazamentos (`password.ts`);
  * - bloqueio por conta: 5 senhas erradas em 15 min → 15 min (`throttle.ts`), checado ANTES de
  *   conferir a senha;
@@ -25,6 +28,7 @@ import { nextCookies } from "better-auth/next-js"
 import { twoFactor } from "better-auth/plugins/two-factor"
 import { AUTH_COOKIE_PREFIX } from "./env"
 import { isPasswordPwned, newPasswordError, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./password"
+import { RESET_PASSWORD_PATH, RESET_PASSWORD_TTL_MS } from "./reset-link"
 import { initialExpiry, rememberAllowed, SESSION_REMEMBER_MS } from "./session-policy"
 import { clearLoginFailures, lockedUntil, recordLoginFailure, type ThrottleDb, throttleKey } from "./throttle"
 
@@ -50,8 +54,19 @@ export interface CreateAuthOptions {
   readonly now?: () => Date
   /** Consulta de vazamento (padrão: Pwned Passwords com tempo-limite; `null` = não sei → aceita). */
   readonly pwned?: (password: string) => Promise<boolean | null>
-  /** Conta bloqueada agora (L20: avisar por e-mail; sem serviço de e-mail ainda, registra no log). */
+  /** Conta bloqueada agora (L20: o app avisa por e-mail, `lib/server/auth/index.ts`). */
   readonly onLock?: (notice: LockNotice) => void | Promise<void>
+  /**
+   * Envia o link de redefinição (só para conta que existe e não está bloqueada). `url` já é o link
+   * final, com o token no fragmento. Padrão: registra no log que não há envio (sem o token).
+   */
+  readonly sendResetPassword?: (data: ResetPasswordMail) => void | Promise<void>
+}
+
+export interface ResetPasswordMail {
+  readonly user: { readonly id: string; readonly email: string; readonly name: string }
+  readonly url: string
+  readonly expiresInMs: number
 }
 
 const NEW_PASSWORD_FIELDS: Readonly<Record<string, string>> = {
@@ -69,6 +84,10 @@ function bodyString(body: unknown, field: string): string | null {
   return typeof value === "string" ? value : null
 }
 
+function defaultSendResetPassword(data: ResetPasswordMail): void {
+  console.warn(`[auth] pedido de redefinição de senha sem envio de e-mail configurado (pessoa ${data.user.id})`)
+}
+
 function defaultOnLock(notice: LockNotice): void {
   console.warn(`[auth] conta bloqueada por 15 min após 5 senhas erradas (conta ${notice.key.slice(0, 12)}…)`)
 }
@@ -77,6 +96,7 @@ export function createAuth(options: CreateAuthOptions) {
   const now = options.now ?? (() => new Date())
   const pwned = options.pwned ?? ((password: string) => isPasswordPwned(password))
   const onLock = options.onLock ?? defaultOnLock
+  const sendResetPassword = options.sendResetPassword ?? defaultSendResetPassword
   const secure = options.baseURL.startsWith("https://")
 
   return betterAuth({
@@ -103,7 +123,24 @@ export function createAuth(options: CreateAuthOptions) {
       minPasswordLength: PASSWORD_MIN_LENGTH,
       maxPasswordLength: PASSWORD_MAX_LENGTH,
       revokeSessionsOnPasswordReset: true,
+      resetPasswordTokenExpiresIn: RESET_PASSWORD_TTL_MS / 1000,
+      // O `url` do Better Auth leva o token no caminho (/reset-password/<token>); usamos o nosso link,
+      // com o token no fragmento. Pessoa bloqueada (`banned`) não recebe.
+      sendResetPassword: async ({ user: target, token }) => {
+        if ((target as { banned?: unknown }).banned === true) return
+        await sendResetPassword({
+          user: { id: target.id, email: target.email, name: target.name },
+          url: `${options.baseURL}${RESET_PASSWORD_PATH}#t=${token}`,
+          expiresInMs: RESET_PASSWORD_TTL_MS,
+        })
+      },
+      // Senha nova: o bloqueio por senhas erradas deixa de valer.
+      onPasswordReset: async ({ user: target }) => {
+        await clearLoginFailures(options.db, throttleKey(target.email))
+      },
     },
+    // Tokens de redefinição e do 2FA guardados como hash (quem lê o banco não usa o link).
+    verification: { storeIdentifier: "hashed" },
     session: {
       // Teto do cookie e do Better Auth; a regra real (12 h / 30 dias) é de session-policy.ts.
       expiresIn: SESSION_REMEMBER_MS / 1000,
