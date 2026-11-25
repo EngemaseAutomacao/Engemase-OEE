@@ -2,21 +2,8 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { FactoryIcon, LogOutIcon } from "lucide-react"
 
-import {
-  DEFAULT_TZ,
-  aggregateOee,
-  getAreas,
-  getClientBySlug,
-  getDevice,
-  getDowntimeReason,
-  getGateway,
-  getLine,
-  getMachinesWithLive,
-  getTimeline,
-  getUnit,
-  type MachineState,
-  type MachineWithLive,
-} from "@/lib/mock"
+import { getClientData, type ClienteDados } from "@/lib/data/cliente"
+import { DEFAULT_TZ, type MachineState, type MachineWithLive } from "@/lib/mock"
 import { ago, duration, num, pct } from "@/lib/format"
 import { STATE_META, STATE_ORDER, TONE_TEXT, oeeTone } from "@/lib/states"
 import { cn } from "@/lib/utils"
@@ -26,6 +13,7 @@ import { Brand } from "@/components/shell/brand"
 import { AndonClock, FullscreenButton } from "@/components/kiosk/andon-live"
 import { AndonTile, type AndonTileData } from "@/components/kiosk/andon-tile"
 import { currentShift, expectedByNow } from "@/components/kiosk/shift-info"
+import { ClockBase } from "@/components/kiosk/use-mock-clock"
 
 /** Moldura de tela cheia da TV: tema escuro fixo e altura da tela em telas grandes. */
 export function AndonFrame({ children }: { children: React.ReactNode }) {
@@ -71,12 +59,14 @@ function tvCols(n: number) {
   return TV_COLS[5]
 }
 
-function commDetail(m: MachineWithLive): string {
-  const gateway = m.gatewayId ? getGateway(m.gatewayId) : undefined
-  const device = m.deviceId ? getDevice(m.deviceId) : undefined
+function commDetail(data: ClienteDados, m: MachineWithLive): string {
+  const gateway = m.gatewayId ? data.getGateway(m.gatewayId) : undefined
+  const device = m.deviceId ? data.getDevice(m.deviceId) : undefined
   if (!gateway) return "Máquina sem gateway configurado"
   if (gateway.status === "pending") return "Gateway aguardando ativação"
-  if (gateway.status === "offline") return `Gateway offline · último sinal ${ago(gateway.lastSeen)}`
+  if (gateway.status === "offline") return `Gateway offline · último sinal ${ago(gateway.lastSeen, data.now)}`
+  // Sem leitura técnica a pessoa não vê o CLP (conexão e endereços): só o resumo.
+  if (!data.access.canSeeTechnical) return "Sem leitura do CLP"
   if (!device) return "CLP ainda não configurado no gateway"
   if (device.status === "disabled") return "Leitura do CLP desativada"
   if (device.status === "error") return `CLP sem resposta · ${device.lastError ?? "verifique cabo e endereço"}`
@@ -87,27 +77,33 @@ function commDetail(m: MachineWithLive): string {
 /** `terminal`: aberto por uma TV pareada (/terminal); some o "Sair do modo TV" (não há sessão de pessoa). */
 export async function AndonBoard({ params, terminal }: { params: Promise<{ cliente: string; linhaId: string }>; terminal?: { name: string } }) {
   const { cliente, linhaId } = await params
-  const client = getClientBySlug(cliente)
-  const line = getLine(linhaId)
-  if (!client || !line || line.clientId !== client.id) notFound()
+  const data = await getClientData(cliente)
+  const { client } = data
+  // Linha de outro cliente ou fora do escopo da pessoa: 404.
+  const line = data.getLine(linhaId)
+  if (!line) notFound()
 
-  const unit = getUnit(line.unitId)
-  const area = getAreas(line.unitId).find((a) => a.id === line.areaId)
+  const unit = data.getUnit(line.unitId)
+  const area = data.getAreas(line.unitId).find((a) => a.id === line.areaId)
   const tz = unit?.timezone ?? DEFAULT_TZ
-  const machines = getMachinesWithLive(client.id, { lineId: line.id })
-  const shift = currentShift(client.id, line.unitId)
-  const agg = aggregateOee(machines)
+  const machines = data.getMachinesWithLive({ lineId: line.id })
+  const shift = currentShift(
+    data.shifts.filter((s) => s.unitId === line.unitId),
+    tz,
+    data.now,
+  )
+  const agg = data.aggregateOee(machines)
   const lineOee = agg.machinesWithData > 0 ? agg : null
 
   const tiles: AndonTileData[] = machines.map((m) => {
-    const current = getTimeline(m.id).at(-1)
+    const current = data.getTimeline(m.id).at(-1)
     const live = m.live
     const sameState = current && live && current.state === live.state
     return {
       machine: m,
-      reasonName: sameState ? getDowntimeReason(current.reasonId)?.name : undefined,
+      reasonName: sameState ? data.getDowntimeReason(current.reasonId)?.name : undefined,
       awaitingReason: Boolean(sameState && (live.state === "STOPPED" || live.state === "FAULT") && current.reasonId === null),
-      commDetail: live?.state === "NO_COMM" || !live ? commDetail(m) : undefined,
+      commDetail: live?.state === "NO_COMM" || !live ? commDetail(data, m) : undefined,
       expected: live && !live.stale ? expectedByNow(live.targetShift, shift) : null,
     }
   })
@@ -128,6 +124,7 @@ export async function AndonBoard({ params, terminal }: { params: Promise<{ clien
   const delta = expectedTotal > 0 ? total - expectedTotal : null
 
   return (
+    <ClockBase value={data.nowMs}>
     <AndonFrame>
         {/* Cabeçalho: linha, OEE da linha, produção, relógio e turno */}
         <header className="grid shrink-0 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)] xl:gap-[clamp(1rem,1.1vw,1.5rem)]">
@@ -290,5 +287,6 @@ export async function AndonBoard({ params, terminal }: { params: Promise<{ clien
           </div>
         </footer>
     </AndonFrame>
+    </ClockBase>
   )
 }

@@ -88,6 +88,7 @@ export function PlatformStatusCard({
   agentVersion,
   outdatedAgents,
   gatewaysHref,
+  checkedAt = MOCK_NOW,
 }: {
   gatewaysOnline: number
   gatewaysTotal: number
@@ -95,12 +96,14 @@ export function PlatformStatusCard({
   agentVersion: string | null
   outdatedAgents: boolean
   gatewaysHref: string
+  /** Momento da leitura (ISO); sem ele, o "agora" do protótipo. */
+  checkedAt?: string
 }) {
   const gwOk = offlineNames.length === 0
   return (
     <SectionCard
       title="Status da plataforma"
-      description={`Verificado às ${time(MOCK_NOW)}`}
+      description={`Verificado às ${time(checkedAt)}`}
       action={
         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-state-running/12 px-2.5 py-1 text-[11px] font-semibold text-state-running">
           <span className="size-1.5 animate-pulse rounded-full bg-state-running" />
@@ -164,7 +167,7 @@ export function PlatformStatusCard({
         </div>
         <div className="min-w-0">
           <dt className="truncate text-[11px] text-muted-foreground">Atualizado em</dt>
-          <dd className="truncate text-sm font-semibold tabular-nums">{date(MOCK_NOW)}</dd>
+          <dd className="truncate text-sm font-semibold tabular-nums">{date(checkedAt)}</dd>
         </div>
       </dl>
     </SectionCard>

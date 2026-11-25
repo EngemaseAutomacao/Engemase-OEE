@@ -73,7 +73,7 @@ function SortHead({
 }
 
 /** Tabela densa de máquinas com ordenação local. Clique na linha abre o detalhe. */
-export function MachineTable({ rows, clientSlug }: { rows: MachineRow[]; clientSlug: string }) {
+export function MachineTable({ rows, clientSlug, now }: { rows: MachineRow[]; clientSlug: string; now?: string }) {
   const router = useRouter()
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "state", dir: "asc" })
 
@@ -141,7 +141,7 @@ export function MachineTable({ rows, clientSlug }: { rows: MachineRow[]; clientS
                     </div>
                   )}
                 </TableCell>
-                <TableCell className="text-muted-foreground tabular-nums">{live && data ? since(live.stateSince) : "—"}</TableCell>
+                <TableCell className="text-muted-foreground tabular-nums">{live && data ? since(live.stateSince, now) : "—"}</TableCell>
                 <TableCell>
                   <div className="max-w-44 truncate">{live?.productName ?? "Sem produto"}</div>
                   <div className="text-xs text-muted-foreground">{live?.productCode ?? "—"}</div>
@@ -183,10 +183,10 @@ export function MachineTable({ rows, clientSlug }: { rows: MachineRow[]; clientS
                   ) : live.stale ? (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-state-stopped">
                       <WifiOffIcon className="size-3.5" />
-                      Atrasado · {ago(live.lastUpdate)}
+                      Atrasado · {ago(live.lastUpdate, now)}
                     </span>
                   ) : (
-                    <span className="text-xs text-muted-foreground tabular-nums">{ago(live.lastUpdate)}</span>
+                    <span className="text-xs text-muted-foreground tabular-nums">{ago(live.lastUpdate, now)}</span>
                   )}
                 </TableCell>
               </TableRow>

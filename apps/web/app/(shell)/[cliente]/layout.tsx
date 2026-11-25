@@ -1,20 +1,9 @@
-import { notFound } from "next/navigation"
+import { Suspense } from "react"
 import { PauseCircleIcon } from "lucide-react"
 
-import {
-  clientParams,
-  getAccessibleClients,
-  getClientBranding,
-  getClientBySlug,
-  getConfigAccess,
-  getCurrentUser,
-  getGateways,
-  getLines,
-  getMachines,
-  getNotifications,
-} from "@/lib/mock"
+import { getClientData } from "@/lib/data/cliente"
+import { clientParams } from "@/lib/mock"
 import { ago, initials } from "@/lib/format"
-import { CLIENT_ROLE_LABEL, PLATFORM_ROLE_LABEL } from "@/lib/roles"
 import {
   Sidebar,
   SidebarContent,
@@ -24,43 +13,80 @@ import {
   SidebarProvider,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { Skeleton } from "@/components/ui/skeleton"
 import { AppHeader } from "@/components/shell/app-header"
 import { ClientSwitcher } from "@/components/shell/client-switcher"
 import { HelpCard } from "@/components/shell/help-card"
 import { ClientNavMenu } from "@/components/shell/nav-menu"
 
+/**
+ * Fica a lista da demonstração: as rotas de configuração (`config/gateways/[gatewayId]`) ainda geram os
+ * parâmetros a partir dela. Com banco, os clientes reais são renderizados no pedido (`dynamicParams`).
+ */
 export function generateStaticParams() {
   return clientParams()
 }
 
-/** Protótipo com dados simulados: navegação pode bloquear (a versão real usará <Suspense>). */
+/**
+ * As telas de acompanhamento já leem os dados dentro de `<Suspense>`; as de configuração (`config/*`, outra
+ * entrega) ainda leem `params` fora dele. Sai quando elas também tiverem `<Suspense>`.
+ */
 export const instant = false
 
-export default async function ClientLayout({ children, params }: LayoutProps<"/[cliente]">) {
-  const { cliente } = await params
-  const client = getClientBySlug(cliente)
-  if (!client) notFound()
+/** Esqueleto do menu e do cabeçalho enquanto a sessão e o cliente são conferidos. */
+function ShellSkeleton() {
+  return (
+    <div className="flex min-h-dvh">
+      <div className="hidden w-64 shrink-0 flex-col gap-3 border-r bg-sidebar p-3 md:flex">
+        <Skeleton className="h-12 rounded-xl" />
+        {Array.from({ length: 8 }, (_, i) => (
+          <Skeleton key={i} className="h-8 rounded-lg" />
+        ))}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Skeleton className="h-14 rounded-none" />
+        <div className="grid gap-4 p-4 md:p-6">
+          <Skeleton className="h-10 w-64" />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }, (_, i) => (
+              <Skeleton key={i} className="h-28 rounded-2xl" />
+            ))}
+          </div>
+          <Skeleton className="h-72 rounded-2xl" />
+        </div>
+      </div>
+    </div>
+  )
+}
 
-  const me = getCurrentUser()
-  const membership = me.memberships.find((m) => m.clientId === client.id)
-  const roleLabel = me.platformRole ? `Engemase · ${PLATFORM_ROLE_LABEL[me.platformRole]}` : membership ? CLIENT_ROLE_LABEL[membership.role] : ""
-  const access = getConfigAccess(client.id)
+export default function ClientLayout({ children, params }: LayoutProps<"/[cliente]">) {
+  return (
+    <Suspense fallback={<ShellSkeleton />}>
+      <ClientShell params={params}>{children}</ClientShell>
+    </Suspense>
+  )
+}
+
+/** Menu, cabeçalho e sino com os dados do cliente (banco com a sessão, ou simulados). */
+async function ClientShell({ children, params }: { children: React.ReactNode; params: LayoutProps<"/[cliente]">["params"] }) {
+  const { cliente } = await params
+  const data = await getClientData(cliente, { somenteCadastro: true, notificacoes: true })
+  const { client, viewer: me, access, branding } = data
   const perms = { canConfigure: access.canConfigure, canManageUsers: access.canManageUsers }
-  const branding = getClientBranding(client.id)
-  const firstMachine = getMachines(client.id)[0]
-  const firstLine = getLines(client.id)[0]
-  const bellItems = getNotifications(client.id).map((n) => ({
+  const firstMachine = data.machines[0]
+  const firstLine = data.lines[0]
+  const bellItems = data.getNotifications().map((n) => ({
     id: n.id,
     severity: n.severity,
     title: n.title,
     body: n.body,
     href: n.href,
-    ago: ago(n.at),
+    ago: ago(n.at, data.now),
     read: n.read,
   }))
   const entities = [
-    ...getMachines(client.id).map((m) => ({ kind: "machine" as const, label: m.name, hint: m.code, href: `/${client.slug}/maquinas/${m.id}` })),
-    ...getGateways(client.id).map((g) => ({ kind: "gateway" as const, label: g.name, hint: g.hostname, href: `/${client.slug}/config/gateways/${g.id}` })),
+    ...data.machines.map((m) => ({ kind: "machine" as const, label: m.name, hint: m.code, href: `/${client.slug}/maquinas/${m.id}` })),
+    ...data.gateways.map((g) => ({ kind: "gateway" as const, label: g.name, hint: g.hostname, href: `/${client.slug}/config/gateways/${g.id}` })),
   ]
 
   return (
@@ -73,8 +99,8 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/[
         <SidebarHeader>
           <ClientSwitcher
             current={{ slug: client.slug, name: client.name }}
-            clients={getAccessibleClients().map((c) => ({ slug: c.slug, name: c.name, status: c.status }))}
-            isPlatform={Boolean(me.platformRole)}
+            clients={[...data.accessibleClients]}
+            isPlatform={me.isPlatform}
           />
         </SidebarHeader>
         <SidebarContent>
@@ -96,12 +122,12 @@ export default async function ClientLayout({ children, params }: LayoutProps<"/[
           slug={client.slug}
           kiosk={{ machineId: firstMachine?.id, lineId: firstLine?.id }}
           perms={perms}
-          user={{ name: me.name, email: me.email ?? me.username ?? "", roleLabel, initials: initials(me.name), isPlatform: Boolean(me.platformRole) }}
+          user={{ name: me.name, email: me.email, roleLabel: me.roleLabel, initials: initials(me.name), isPlatform: me.isPlatform }}
           bell={bellItems}
           entities={entities}
           platformNotice={
-            me.platformRole
-              ? `Você está acessando ${client.name} como equipe Engemase (${PLATFORM_ROLE_LABEL[me.platformRole]}). As ações ficam registradas na auditoria visível ao cliente.`
+            me.isPlatform
+              ? `Você está acessando ${client.name} como equipe Engemase (${me.roleLabel.replace(/^Engemase · /, "")}). As ações ficam registradas na auditoria visível ao cliente.`
               : undefined
           }
         />

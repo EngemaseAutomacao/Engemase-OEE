@@ -40,11 +40,14 @@ export function MachineExplorer({
   units,
   lines,
   clientSlug,
+  now,
 }: {
   machines: MachineWithLive[]
   units: ExplorerUnit[]
   lines: ExplorerLine[]
   clientSlug: string
+  /** "Agora" da leitura (ISO), para "há X min" (relógio real no banco; MOCK_NOW na demonstração). */
+  now?: string
 }) {
   const [view, setView] = useState<View>("grid")
   const [query, setQuery] = useState("")
@@ -224,11 +227,11 @@ export function MachineExplorer({
       ) : view === "grid" ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           {rows.map((m) => (
-            <MachineTile key={m.id} machine={m} href={`/${clientSlug}/maquinas/${m.id}`} lineName={m.lineName} unitName={m.unitName} />
+            <MachineTile key={m.id} machine={m} href={`/${clientSlug}/maquinas/${m.id}`} lineName={m.lineName} unitName={m.unitName} now={now} />
           ))}
         </div>
       ) : (
-        <MachineTable rows={rows} clientSlug={clientSlug} />
+        <MachineTable rows={rows} clientSlug={clientSlug} now={now} />
       )}
     </div>
   )

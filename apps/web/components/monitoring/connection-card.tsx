@@ -91,6 +91,7 @@ export function ConnectionCard({
   tags,
   stateMode,
   canConfigure,
+  now,
 }: {
   clientSlug: string
   gateway: Gateway | undefined
@@ -101,6 +102,8 @@ export function ConnectionCard({
   stateMode: StateMode
   /** Usuário atual é da equipe Engemase com permissão de configurar (getConfigAccess). */
   canConfigure: boolean
+  /** "Agora" da leitura (ISO); sem ele, o do protótipo. */
+  now?: string
 }) {
   const gatewayOffline = !gateway || gateway.status === "offline" || gateway.status === "pending"
   const readCtx = { gatewayOffline, deviceError: device?.lastError, latencyMs: device?.latencyMs ?? null }
@@ -139,7 +142,7 @@ export function ConnectionCard({
             />
             <Fields
               items={[
-                ["Último contato", gateway.lastSeen ? ago(gateway.lastSeen) : "nunca conectou"],
+                ["Último contato", gateway.lastSeen ? ago(gateway.lastSeen, now) : "nunca conectou"],
                 ["Host", gateway.hostname],
                 ["IP rede OT", gateway.ipOt ?? "—"],
                 [
