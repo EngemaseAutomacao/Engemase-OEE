@@ -48,7 +48,7 @@ export function assertSeedAllowed(env: Readonly<Record<string, string | undefine
   }
 }
 
-function rowsOf<T>(result: unknown): T[] {
+export function rowsOf<T>(result: unknown): T[] {
   if (Array.isArray(result)) return result as T[]
   if (result !== null && typeof result === "object" && "rows" in result) {
     const rows = (result as { rows: unknown }).rows
@@ -57,22 +57,32 @@ function rowsOf<T>(result: unknown): T[] {
   return []
 }
 
-/**
- * Recusa o seed num banco que já tem cliente de verdade (slug sem o prefixo `demo-`) ou numa conexão que não
- * enxerga todas as linhas (sem SUPERUSER nem BYPASSRLS: a checagem de clientes daria "vazio" sem ser).
- */
-export async function assertSyntheticDatabase(db: SeedDatabase): Promise<void> {
+/** Slug da organização interna da Engemase (bancada, testes; docs/15 seção 3), gravada pelo seed de plataforma. */
+export const ENGEMASE_LAB_SLUG = "engemase-lab"
+
+/** Recusa conexão que não enxerga todas as linhas (sem SUPERUSER nem BYPASSRLS, com a RLS forçada). */
+export async function assertOwnerConnection(db: SeedDatabase, label: string): Promise<void> {
   const role = rowsOf<{ ok: boolean }>(
     await db.execute(sql`SELECT (rolsuper OR rolbypassrls) AS ok FROM pg_catalog.pg_roles WHERE rolname = current_user`),
   )
   if (role[0]?.ok !== true) {
     throw new SeedRefusedError(
-      "Seed sintético bloqueado: a conexão precisa ser superusuário ou ter BYPASSRLS (as tabelas de cliente têm RLS forçada).",
+      `${label} bloqueado: a conexão precisa ser superusuário ou ter BYPASSRLS (as tabelas de cliente têm RLS forçada).`,
     )
   }
+}
+
+/**
+ * Recusa o seed num banco que já tem cliente de verdade (slug sem o prefixo `demo-`; a organização interna
+ * "Engemase Lab" não conta) ou numa conexão que não enxerga todas as linhas (sem SUPERUSER nem BYPASSRLS: a
+ * checagem de clientes daria "vazio" sem ser).
+ */
+export async function assertSyntheticDatabase(db: SeedDatabase): Promise<void> {
+  await assertOwnerConnection(db, "Seed sintético")
   const real = rowsOf<{ slug: string }>(
     await db.execute(
-      sql`SELECT slug FROM public.organization WHERE left(slug, ${SEED_SLUG_PREFIX.length}) <> ${SEED_SLUG_PREFIX} LIMIT 5`,
+      sql`SELECT slug FROM public.organization
+          WHERE left(slug, ${SEED_SLUG_PREFIX.length}) <> ${SEED_SLUG_PREFIX} AND slug <> ${ENGEMASE_LAB_SLUG} LIMIT 5`,
     ),
   )
   if (real.length > 0) {
