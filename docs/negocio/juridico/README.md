@@ -56,7 +56,7 @@
 | D2 Hardware | **Aberta** (provisório: comodato) | Anexo H com as três alternativas |
 | D3 Inadimplência | **Aberta** (provisório: aviso em 5 dias, suspensão em 30) | Contrato, cl. 14 |
 | D4 Encerramento | **Aberta** (provisório: 30 + 30 dias, CSV, devolução do gateway em 30 dias) | Contrato, cl. 16; Anexo H |
-| D14 2FA | **Aberta** (provisório: obrigatório para Engemase e admin do cliente) | Termos, 2.4 |
+| D14 2FA | **Decidida em 26/11/2026**: opcional para todos | Termos, 2.4 |
 | D18 e L19 Operador escolhido numa lista; lista por unidade | **Abertas** (provisório) | Nota do operador de chão |
 | D20 Aprovação de cada sessão de acesso remoto | **Aberta** (provisório: cada sessão aprovada pelo admin) | Contrato, cl. 9.6 |
 

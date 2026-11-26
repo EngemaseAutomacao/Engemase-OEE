@@ -42,7 +42,7 @@ flowchart LR
 
 | Controle | Como |
 |---|---|
-| Autenticação | Better Auth com `/api/auth/*` fechado por lista de permissão; tokens próprios de uso único para definir/redefinir senha (no fragmento da URL, fora de logs). **2FA obrigatório para a equipe Engemase no MVP**; para o cliente, conforme política. Ver [15](15-multi-cliente-e-acesso.md) |
+| Autenticação | Better Auth com `/api/auth/*` fechado por lista de permissão; tokens próprios de uso único para definir/redefinir senha (no fragmento da URL, fora de logs). **2FA opcional para todos** (D14, 26/11/2026), ativado por QR code no aplicativo autenticador. Ver [15](15-multi-cliente-e-acesso.md) |
 | Autorização | Papel × escopo de unidades × estado do cliente, calculado a cada requisição (`requireTenant`). RLS no nível do cliente. Equipe Engemase só com papel de plataforma, concessão de suporte ou atribuição, sempre visível ao cliente ([15](15-multi-cliente-e-acesso.md)) |
 | API dos gateways | Token por gateway, guardado como hash. Validação de que cada máquina e tag pertence ao gateway. Schemas Zod. Limite de payload |
 | Rate limiting | Vercel Firewall (regras de taxa por IP/rota) + limite por gateway na aplicação |

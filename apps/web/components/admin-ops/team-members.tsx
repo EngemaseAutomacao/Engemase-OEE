@@ -96,7 +96,7 @@ export function TeamMembers() {
   }
 
   return (
-    <SectionCard title="Membros" description="Toda a equipe entra com e-mail, senha e 2FA obrigatório" bodyClassName="px-0 pb-2">
+    <SectionCard title="Membros" description="Toda a equipe entra com e-mail e senha; a verificação em duas etapas é opcional" bodyClassName="px-0 pb-2">
       {members.length === 0 ? (
         <div className="px-5 pb-3">
           <Empty className="border border-dashed">

@@ -49,12 +49,14 @@ Clique no seu nome, no canto de cima, e em "Meu perfil". A tela "Minha conta" te
 
 ### Verificação em duas etapas
 
-**Obrigatória** para o admin do cliente e para a equipe Engemase. Recomendada para todos.
+**Opcional**: você decide se quer ativar. Recomendada para o admin do cliente e para a equipe Engemase.
 
 1. Em "Senha e 2 etapas", comece a ativação e confirme sua senha atual.
-2. Abra um aplicativo autenticador no celular (Google Authenticator, Microsoft Authenticator, Authy…), escolha adicionar conta e digite a chave mostrada.
+2. Abra um aplicativo autenticador no celular (Google Authenticator, Microsoft Authenticator, Authy…), escolha adicionar conta e **aponte a câmera para o QR code** da tela. Se não der para escanear, digite a chave mostrada ao lado; se você já está no celular, toque em "Abrir no aplicativo autenticador".
 3. Digite o código de 6 dígitos que o aplicativo mostrar.
 4. **Guarde os códigos de recuperação** num lugar seguro. Eles servem para entrar se você perder o celular.
+
+Para desligar, volte à mesma tela, clique em "Desativar a verificação em duas etapas" e confirme a senha. O login volta a pedir só e-mail e senha.
 
 ## Notificações
 

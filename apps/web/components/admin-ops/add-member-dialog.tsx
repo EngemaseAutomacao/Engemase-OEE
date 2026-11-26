@@ -203,8 +203,8 @@ export function AddMemberButton() {
             <p className="flex items-start gap-2 rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
               <FingerprintIcon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
               <span>
-                <strong className="font-semibold text-foreground">2FA obrigatório.</strong> O cadastro do 2FA é feito pelo link do e-mail; sem ele, a pessoa não entra na
-                plataforma. O convite expira em 72 h.
+                <strong className="font-semibold text-foreground">2FA opcional.</strong> A pessoa cria a senha pelo link do e-mail e pode ativar a verificação em duas
+                etapas depois, em &quot;Segurança da conta&quot;. O convite expira em 72 h.
               </span>
             </p>
 

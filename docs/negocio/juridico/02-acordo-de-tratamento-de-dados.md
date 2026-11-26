@@ -260,7 +260,7 @@ Resumo do desenho de [docs/08](../../08-seguranca-e-operacao.md) e [docs/15](../
 |---|---|
 | **Isolamento entre clientes** | Cliente vindo da URL e conferido em toda entrada do servidor; camada de acesso a dados obrigatória; Row-Level Security forçada em todas as tabelas de cliente, com o limite da cláusula 7.2; chaves estrangeiras compostas; testes automáticos de isolamento no CI; nenhum dado de cliente em cache compartilhado |
 | **Escopo por pessoa** | Cliente inteiro, unidades ou máquinas (D11), fail-closed: nada listado = nenhum acesso. Agregados, relatórios e exportações somam só o permitido |
-| **Autenticação** | **[PADRÃO PROPOSTO — L20]** Senha com 12 ou mais caracteres, recusada se aparecer em vazamentos conhecidos; bloqueio temporário após 5 erros; 2FA obrigatório para a Equipe Engemase e **[PADRÃO PROPOSTO — D14]** para o Admin do Cliente; links de definir senha de uso único, fora de logs |
+| **Autenticação** | **[PADRÃO PROPOSTO — L20]** Senha com 12 ou mais caracteres, recusada se aparecer em vazamentos conhecidos; bloqueio temporário após 5 erros; 2FA opcional (D14), disponível para a Equipe Engemase e para todos os usuários do Cliente; links de definir senha de uso único, fora de logs |
 | **Acesso da Engemase** | Concessão com prazo ou atribuição com validade; faixa na tela; auditoria visível ao Cliente |
 | **Terminais** | Pareamento por código; token próprio guardado só como hash; revogação em um clique; nunca combinado com sessão de pessoa |
 | **Gateways** | Só conexões de saída (HTTPS 443); somente leitura no CLP; sem roteamento entre a rede das máquinas e a da empresa; firewall local; token próprio guardado só como hash e revogável; atualizações assinadas com volta automática |

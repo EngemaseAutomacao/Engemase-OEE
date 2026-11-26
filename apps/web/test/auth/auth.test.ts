@@ -253,6 +253,43 @@ describe("login (Better Auth)", () => {
       )
       expect(reused.status).toBe(401)
     })
+
+    it("é opcional: desativar pede a senha, apaga a chave e o login volta a ser só com senha", async () => {
+      const p = await createUserWithPassword(h)
+      let cookie = cookiesFrom((await signIn(h, p.email, p.password)).headers)
+      const enabled = await h.auth.api.enableTwoFactor({
+        body: { password: p.password, method: "totp" },
+        headers: browserHeaders(cookie),
+      })
+      if (enabled.method !== "totp") throw new Error("esperava o método totp")
+      const confirmed = await h.auth.api.verifyTOTP({
+        body: { code: totpCode(enabled.totpURI) },
+        headers: browserHeaders(cookie),
+        asResponse: true,
+      })
+      cookie = cookiesFrom(confirmed.headers, cookie)
+
+      const wrong = await outcome(
+        h.auth.api.disableTwoFactor({ body: { password: "senha errada bem longa" }, headers: browserHeaders(cookie), asResponse: true }),
+      )
+      expect(wrong.status).toBeGreaterThanOrEqual(400)
+      const [still] = await h.t.db.select().from(s.user).where(eq(s.user.id, p.id))
+      expect(still?.twoFactorEnabled).toBe(true)
+
+      const disabled = await h.auth.api.disableTwoFactor({
+        body: { password: p.password },
+        headers: browserHeaders(cookie),
+        asResponse: true,
+      })
+      expect(disabled.status).toBe(200)
+      const [after] = await h.t.db.select().from(s.user).where(eq(s.user.id, p.id))
+      expect(after?.twoFactorEnabled).toBe(false)
+      expect(await h.t.db.select().from(s.twoFactor).where(eq(s.twoFactor.userId, p.id))).toHaveLength(0)
+
+      const again = await signIn(h, p.email, p.password)
+      expect(again.status).toBe(200)
+      expect(cookiesFrom(again.headers)).toMatch(/session_token/)
+    })
   })
 
   describe("senha nova", () => {

@@ -272,7 +272,7 @@ Segue o padrão provisório da D4 ([contrato, cl. 16](juridico/01-contrato-de-as
 | Semana | Engemase | Cliente | Passo do [docs/15 §7](../15-multi-cliente-e-acesso.md#7-console-engemase-e-autogestão) |
 |---|---|---|---|
 | 0 | Reunião de início; atualiza plano e limites no console; turnos, feriados, produtos, motivos e metas | Ficha de TI devolvida e **teste de liberação** feito; lista final de máquinas; lista de operadores | A, B |
-| 0 | Envia o e-mail "definir senha" ao **admin do cliente**; ele ativa o 2FA | Admin entra | C |
+| 0 | Envia o e-mail "definir senha" ao **admin do cliente**; ele pode ativar o 2FA (opcional) | Admin entra | C |
 | 1–2 | Bancada: gateways testados e **registrados no cliente**, com a rede do cliente gravada ([docs/16 §5](../16-projeto-do-gateway.md#5-rede-e-instalação)); bloco OEE nos CLPs (serviço) | Libera acesso aos CLPs e à planta | D |
 | 2–4 | Instala gateways; cadastra máquinas e tags; testa leituras; confere contagens em 3 turnos | Acompanha; supervisores conferem o OEE | E |
 | 3–4 | Pareia TVs e tablets; treina por papel (seção 9) | Admin convida a equipe (papéis e escopos) | F, G |
@@ -292,7 +292,7 @@ O estado **Ativo** ([docs/15 §6](../15-multi-cliente-e-acesso.md#6-ciclo-de-vid
 | A4 | Gateways **online há 72 h seguidas**, relógio certo, fila zerada | Suporte | Tela de gateways |
 | A5 | Turnos, feriados, produtos com ciclo ideal, motivos de parada e metas de OEE cadastrados | Engenharia de campo | Console |
 | A6 | Terminais contratados pareados e testados | Engenharia de campo | Lista de terminais |
-| A7 | **Admin do cliente** ativo, **com 2FA** (D14 provisória), e pelo menos um usuário de cada papel combinado | Suporte | Lista de usuários |
+| A7 | **Admin do cliente** ativo (2FA opcional, D14; recomendado), e pelo menos um usuário de cada papel combinado | Suporte | Lista de usuários |
 | A8 | Alerta de "gateway offline" testado e chegando à engenharia do cliente e ao suporte Engemase | Suporte | Teste registrado |
 | A9 | Treinamento por papel feito (seção 9) | Engenharia de campo | Lista de presença |
 | A10 | Contatos de TI, manutenção, cobrança e privacidade cadastrados; ficha de TI assinada | Comercial | Cadastro |

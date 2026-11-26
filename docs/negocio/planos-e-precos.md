@@ -63,7 +63,7 @@ O mínimo de 5 máquinas segue o mercado (a FourJaw exige 5 em todos os planos) 
 | **Pessoas e acesso** | | | |
 | Usuários incluídos (padrão do console) | 15 | 30 | 100 |
 | Escopo por cliente, unidades ou máquinas (MVP, D11) | ✓ | ✓ | ✓ |
-| 2FA (MVP; obrigatório para o admin, D14 provisória) | ✓ | ✓ | ✓ |
+| 2FA (MVP; opcional, com QR code, D14) | ✓ | ✓ | ✓ |
 | **Histórico** | | | |
 | Dados por minuto: 2 anos (D6) | ✓ | ✓ | ✓ |
 | Consolidados por hora e turno: enquanto durar o contrato | ✓ | ✓ | ✓ |

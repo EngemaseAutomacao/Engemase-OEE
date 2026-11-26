@@ -16,7 +16,7 @@ export default function Page() {
       <NewPasswordForm
         submit={setPasswordAction}
         doneTitle="Senha criada"
-        doneText="Agora entre com o seu e-mail e a nova senha. Administradores cadastram em seguida o aplicativo autenticador (verificação em duas etapas)."
+        doneText="Agora entre com o seu e-mail e a nova senha. Se quiser mais proteção, ative depois a verificação em duas etapas em &quot;Segurança da conta&quot;."
         invalidText="Este link já foi usado, venceu ou está incompleto. Peça um novo convite ao administrador da sua empresa."
       />
     </AuthCard>

@@ -99,7 +99,7 @@ export function RoleCards() {
                 Só {supers} super admin. Recomendado ter 2 ou 3: o último super admin não pode ser removido nem rebaixado.
               </p>
             )}
-            {r !== "super_admin" && <p className="mt-auto text-[11px] text-muted-foreground">2FA obrigatório. Toda entrada num cliente aparece com faixa na tela e na auditoria visível ao cliente.</p>}
+            {r !== "super_admin" && <p className="mt-auto text-[11px] text-muted-foreground">Toda entrada num cliente aparece com faixa na tela e na auditoria visível ao cliente.</p>}
           </div>
         )
       })}

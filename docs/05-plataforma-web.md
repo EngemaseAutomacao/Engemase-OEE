@@ -23,7 +23,7 @@
 Rotas do protótipo em `apps/web/app` (grupos `(auth)`, `(shell)`, `(kiosk)` e `(admin)`). As marcadas com "(prevista)" ainda não existem no protótipo.
 
 ```
-/login                                   Entrada (e-mail + senha; 2FA quando exigido)
+/login                                   Entrada (e-mail + senha; 2FA se a pessoa ativou)
 /definir-senha                           (prevista) Definir senha pelo link do e-mail (token próprio no fragmento #, ver 15 §5)
 /                                        Escolha do cliente (quem tem vínculo com mais de um)
 /conta                                   Perfil, senha, 2FA, sessões, tema, dispositivos com push

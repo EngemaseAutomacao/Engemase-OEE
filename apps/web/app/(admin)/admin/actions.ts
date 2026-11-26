@@ -16,7 +16,7 @@ import type { MetadadosCliente } from "@/lib/data/admin/snapshot"
 import { getAuthDb } from "@/lib/server/db"
 import { queryRows } from "@/lib/server/gateway/types"
 
-const SEM_ACESSO: Resultado<never> = { ok: false, mensagem: "Só o super admin da Engemase (com verificação em duas etapas) cria clientes. Entre de novo." }
+const SEM_ACESSO: Resultado<never> = { ok: false, mensagem: "Só o super admin da Engemase cria clientes. Entre de novo." }
 
 const Limite = z.coerce.number().int().min(0).max(100_000)
 

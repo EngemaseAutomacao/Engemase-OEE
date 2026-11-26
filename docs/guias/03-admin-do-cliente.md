@@ -8,11 +8,11 @@
 
 O resto da configuração (unidades, linhas, máquinas, gateways, turnos, produtos, motivos de parada, TV e tablets, aparência) é feito pela **equipe Engemase**. Você vê tudo isso em "Configurações", sem editar. Para pedir uma mudança, use "Abrir chamado".
 
-Antes de começar, leia [Entrar e minha conta](00-entrar-e-minha-conta.md). Para você a **verificação em duas etapas é obrigatória**.
+Antes de começar, leia [Entrar e minha conta](00-entrar-e-minha-conta.md). A **verificação em duas etapas é opcional**, mas recomendada para o seu papel.
 
 ## Primeiro acesso
 
-A Engemase cadastra você quando cria a empresa na plataforma. Você recebe um **convite por e-mail para definir a senha**. Depois de entrar, ative a verificação em duas etapas em "Meu perfil" › "Senha e 2 etapas".
+A Engemase cadastra você quando cria a empresa na plataforma. Você recebe um **convite por e-mail para definir a senha**. Depois de entrar, se quiser, ative a verificação em duas etapas em "Meu perfil" › "Senha e 2 etapas".
 
 ## Cadastrar a equipe
 

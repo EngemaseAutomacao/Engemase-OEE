@@ -1,7 +1,7 @@
 /**
  * `requireTenant` para route handlers (respostas JSON em vez de redirecionar): sessão pelo cookie do
  * pedido, cliente da URL, vínculo/escopo sob RLS. Sem login 401; sem acesso (ou cliente inexistente)
- * 404; papel sem a permissão 404; cliente suspenso 403; 2FA pendente 403. Sempre `no-store`.
+ * 404; papel sem a permissão 404; cliente suspenso 403. Sempre `no-store`.
  */
 import { isIP } from "node:net"
 import type { Auth } from "@/lib/server/auth/auth"
@@ -19,11 +19,6 @@ const DENIAL_RESPONSE: Record<AccessDenial, { status: number; code: string; mess
   not_found: { status: 404, code: "not_found", message: "Não encontrado." },
   forbidden: { status: 404, code: "not_found", message: "Não encontrado." },
   client_suspended: { status: 403, code: "client_suspended", message: "O acesso da sua empresa está suspenso." },
-  two_factor_required: {
-    status: 403,
-    code: "two_factor_required",
-    message: "Ative a verificação em duas etapas em /conta/seguranca para continuar.",
-  },
 }
 
 export function denialResponse(reason: AccessDenial): Response {

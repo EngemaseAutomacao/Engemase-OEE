@@ -230,9 +230,9 @@ describe("isolamento entre clientes e escopo (requireTenant)", () => {
       expect(ok(await load(suspended.slug, supportWithGrant)).clientStatus).toBe("suspended")
     })
 
-    it("2FA obrigatório para admin do cliente e equipe Engemase (D14); opcional para os outros", async () => {
-      expect(await load(a.slug, a.adminNo2fa)).toEqual({ ok: false, reason: "two_factor_required" })
-      expect(await load(a.slug, superAdminNo2fa)).toEqual({ ok: false, reason: "two_factor_required" })
+    it("2FA opcional para todos (D14): admin do cliente e equipe Engemase entram sem ele", async () => {
+      expect(ok(await load(a.slug, a.adminNo2fa)).access).toMatchObject({ kind: "member", role: "client_admin" })
+      expect(ok(await load(a.slug, superAdminNo2fa)).access).toMatchObject({ kind: "engemase", role: "super_admin" })
       expect((await load(a.slug, a.viewerAll)).ok).toBe(true)
     })
 
