@@ -149,7 +149,7 @@ export function ProductsManager({
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         <StatCard icon={PackageIcon} tone="blue" label="Produtos" value={num(products.length)} hint={`${running} em uso nas máquinas agora`} />
         <StatCard icon={TimerIcon} tone="navy" label="Ciclos ideais definidos" value={num(combos)} hint="produto × máquina" />
         <StatCard
@@ -173,7 +173,7 @@ export function ProductsManager({
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-12">
+      <div className="grid items-start gap-4 xl:grid-cols-12">
         <SectionCard
           title="Catálogo de produtos"
           description={`${plural(visible.length, "produto", "produtos")}${q ? ` para “${query.trim()}”` : ""}`}
@@ -246,7 +246,7 @@ export function ProductsManager({
               </EmptyContent>
             </Empty>
           ) : (
-            <Table className="min-w-[640px]">
+            <Table className="min-w-[640px] xl:min-w-[560px]">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-16 text-xs">Código</TableHead>

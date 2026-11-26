@@ -89,7 +89,7 @@ export function RemotePolicies() {
   const { policies } = useRemote()
   return (
     <SectionCard title="Políticas dos clientes" description="Definidas pelo admin de cada cliente · vale a regra mais restritiva entre cliente, unidade e gateway">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
         {policies.map((p) => {
           const off = p.mode === "disabled" || p.clientStatus === "suspended"
           return (

@@ -177,8 +177,8 @@ export function GatewayDetailView({ data, nowLabel }: { data: GatewayDetail; now
       </Link>
       <EngemaseManagedNote clientSlug={data.clientSlug} subject="Gateway, conexões com os CLPs, tags e publicação de configuração" />
 
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex min-w-0 items-center gap-4">
+      <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-center md:justify-between">
+        <div className="flex min-w-0 items-center gap-4 md:flex-[1_1_28rem]">
           <IconCircle icon={RouterIcon} tone={STATUS_TONE[data.status]} soft size="lg" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -192,7 +192,7 @@ export function GatewayDetailView({ data, nowLabel }: { data: GatewayDetail; now
           </div>
         </div>
         {!pending && canEdit && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 md:ml-auto md:justify-end">
             <EngemaseOnlyChip className="h-8 px-2.5" />
             <Button variant="outline" size="sm" onClick={() => reload(published)} disabled={reloading}>
               {reloading ? <Spinner /> : <RefreshCwIcon />}
@@ -241,7 +241,7 @@ export function GatewayDetailView({ data, nowLabel }: { data: GatewayDetail; now
         />
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
             <StatCard
               icon={ActivityIcon}
               tone="teal"

@@ -163,7 +163,7 @@ export function UsersManager({
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         <StatCard
           icon={UsersIcon}
           tone="blue"
@@ -265,7 +265,7 @@ export function UsersManager({
                   return (
                     <tr key={u.id} className={cn("transition-colors hover:bg-muted/30", u.status === "disabled" && "opacity-60")}>
                       <td className="py-3 pr-3 pl-5">
-                        <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex min-w-0 items-center gap-3 xl:max-2xl:max-w-[16rem]">
                           <InitialsAvatar name={u.name} tone={ROLE_TONE[u.role]} />
                           <div className="min-w-0 leading-tight">
                             <div className="flex items-center gap-1.5">
@@ -325,7 +325,7 @@ export function UsersManager({
                         )}
                       </td>
                       <td className="px-3 py-3 text-xs whitespace-nowrap text-muted-foreground tabular-nums">
-                        {u.status === "invited" ? "Aguardando senha" : u.lastLogin}
+                        {u.status === "invited" ? <span className="xl:max-2xl:whitespace-normal">Aguardando senha</span> : u.lastLogin}
                       </td>
                       <td className="py-3 pr-5 pl-3 text-right">
                         {canManage && (
@@ -419,7 +419,7 @@ function Filters({
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as UserStatus | "all")}>
-          <SelectTrigger size="sm" className="w-full lg:w-40" aria-label="Filtrar por situação">
+          <SelectTrigger size="sm" className="w-full lg:w-44" aria-label="Filtrar por situação">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

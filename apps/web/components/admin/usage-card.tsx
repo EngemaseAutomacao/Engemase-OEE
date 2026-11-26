@@ -19,8 +19,8 @@ function Meter({ icon, tone, label, used, limit, freeNote }: { icon: LucideIcon;
       <IconCircle icon={icon} tone={tone} soft size="sm" />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2 text-xs">
-          <span className="truncate font-medium text-muted-foreground">{label}</span>
-          <span className="tabular-nums">
+          <span className="min-w-0 leading-tight font-medium text-muted-foreground">{label}</span>
+          <span className="shrink-0 whitespace-nowrap tabular-nums">
             <span className="text-sm font-bold">{num(used)}</span>
             <span className="text-muted-foreground"> / {num(limit)}</span>
           </span>

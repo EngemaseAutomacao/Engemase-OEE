@@ -23,8 +23,9 @@ function Count({ n }: { n: number }) {
   return <span className="rounded-full bg-muted px-1.5 text-[11px] text-muted-foreground tabular-nums">{n}</span>
 }
 
+// De 1280 a 1535 px os ícones das abas somem para as 8 abas caberem numa linha (sem rolar para o lado).
 const TRIGGER =
-  "h-8 flex-none rounded-lg px-3 text-[13px] data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-primary/15 dark:data-[state=active]:text-primary"
+  "h-8 flex-none rounded-lg px-3 text-[13px] xl:max-2xl:[&>svg]:hidden data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-primary/15 dark:data-[state=active]:text-primary"
 
 export default function Page({ params }: PageProps<"/admin/clientes/[clienteId]">) {
   return (
@@ -62,7 +63,7 @@ async function DetalheDoCliente({ params }: { params: PageProps<"/admin/clientes
 
         <Tabs defaultValue="geral" className="gap-4">
           <div className="-mx-1 overflow-x-auto px-1">
-            <TabsList className="h-10 w-max rounded-xl border bg-card p-1 shadow-xs">
+            <TabsList className="h-10 w-max rounded-xl border bg-card p-1 shadow-xs lg:h-auto lg:min-h-10 lg:w-auto lg:flex-wrap lg:justify-start">
               <TabsTrigger value="geral" className={TRIGGER}>
                 <LayoutDashboardIcon />
                 Visão geral

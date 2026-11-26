@@ -155,7 +155,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/config/usua
         initialUsers={users}
         canManage={access.canManageUsers}
       />
-      <div className="grid items-start gap-4 xl:grid-cols-2">
+      <div className="grid items-start gap-4 2xl:grid-cols-2">
         <EngemaseAccess clientSlug={client.slug} rows={engemaseAccessFor(client)} />
         <RoleMatrix />
       </div>

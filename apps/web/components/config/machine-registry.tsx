@@ -229,7 +229,7 @@ export function MachineRegistry({
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         <StatCard
           icon={FactoryIcon}
           tone="blue"
@@ -300,7 +300,7 @@ export function MachineRegistry({
               </Select>
             )}
             <Select value={proto} onValueChange={(v) => setProto(v as ProtoFilter)}>
-              <SelectTrigger className="w-full sm:w-44" aria-label="Protocolo">
+              <SelectTrigger className="w-full sm:w-48" aria-label="Protocolo">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -311,7 +311,7 @@ export function MachineRegistry({
               </SelectContent>
             </Select>
             <Select value={status} onValueChange={(v) => setStatus(v as StatusFilter)}>
-              <SelectTrigger className="w-full sm:w-36" aria-label="Situação">
+              <SelectTrigger className="w-full sm:w-44" aria-label="Situação">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -370,17 +370,17 @@ export function MachineRegistry({
           </Empty>
         ) : (
           <>
-            <Table className="min-w-[1120px]">
+            <Table className="min-w-[1120px] xl:max-2xl:min-w-[900px]">
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
                   <TableHead className="pl-5">Máquina</TableHead>
-                  <TableHead>Tipo</TableHead>
+                  <TableHead className="xl:max-2xl:hidden">Tipo</TableHead>
                   <TableHead>Unidade / linha</TableHead>
                   <TableHead>Gateway</TableHead>
                   <TableHead>Conexão</TableHead>
                   <TableHead>Modo de estado</TableHead>
                   <TableHead className="text-right">Ciclo ideal</TableHead>
-                  <TableHead>Situação</TableHead>
+                  <TableHead className="xl:max-2xl:hidden">Situação</TableHead>
                   <TableHead className="pr-5 text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -398,14 +398,22 @@ export function MachineRegistry({
                         ) : (
                           <span className="font-medium text-foreground">{m.name}</span>
                         )}
-                        <div className="font-mono text-xs text-muted-foreground">{m.code}</div>
+                        {!m.active && (
+                          <span className="ml-1.5 hidden items-center rounded-full bg-muted px-1.5 py-0.5 align-middle text-[10px] font-semibold text-muted-foreground xl:max-2xl:inline-flex">
+                            Inativa
+                          </span>
+                        )}
+                        <div className="text-xs text-muted-foreground">
+                          <span className="font-mono">{m.code}</span>
+                          <span className="hidden xl:max-2xl:inline"> · {m.type}</span>
+                        </div>
                       </TableCell>
-                      <TableCell>{m.type}</TableCell>
+                      <TableCell className="xl:max-2xl:hidden">{m.type}</TableCell>
                       <TableCell>
                         <div>{line?.name ?? "—"}</div>
                         <div className="text-xs text-muted-foreground">{unitName.get(m.unitId) ?? "—"}</div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="xl:max-2xl:whitespace-normal">
                         {gw ? (
                           <Link
                             href={`/${clientSlug}/config/gateways/${gw.id}`}
@@ -422,7 +430,7 @@ export function MachineRegistry({
                       <TableCell>
                         <ConnCell conn={m.conn} />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="xl:max-2xl:whitespace-normal">
                         <span className="text-sm">{STATE_MODE_LABEL[m.stateMode]}</span>
                         <div className="text-xs text-muted-foreground">{plural(m.tagCount, "sinal", "sinais")}</div>
                       </TableCell>
@@ -430,7 +438,7 @@ export function MachineRegistry({
                         <div>{seconds(m.idealCycleS)}</div>
                         <div className="text-xs text-muted-foreground">{piecesPerHour(m.idealCycleS)}</div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="xl:max-2xl:hidden">
                         {m.active ? (
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-state-running/12 px-2 py-0.5 text-xs font-semibold text-state-running">
                             <span className="size-1.5 rounded-full bg-state-running" />

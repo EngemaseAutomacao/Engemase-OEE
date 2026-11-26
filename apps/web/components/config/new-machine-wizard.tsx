@@ -520,21 +520,23 @@ export function NewMachineWizard({
       <div className="flex min-w-0 flex-col gap-4">
         {/* Etapas em "setas", no estilo do funil da referência */}
         <nav aria-label="Etapas do cadastro" className="rounded-2xl border bg-card p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-          <ol className="grid grid-cols-5 gap-1">
+          <ol className="flex gap-1">
             {STEPS.map((s, i) => {
               const current = i === step
               const done = !current && i < 4 && i <= maxReached && valid[i]
               const reachable = canGoTo(i)
               return (
-                <li key={s.title} className="min-w-0">
+                <li key={s.title} className={cn("min-w-0 flex-1", current && "xl:max-2xl:flex-[3]")}>
                   <button
                     type="button"
                     onClick={() => goTo(i)}
                     disabled={!reachable}
                     aria-current={current ? "step" : undefined}
                     aria-label={`Etapa ${i + 1}: ${s.title}`}
+                    title={s.title}
                     className={cn(
                       "flex h-12 w-full min-w-0 items-center justify-center gap-2 pr-3 pl-4 text-left transition md:justify-start",
+                      !current && "xl:max-2xl:justify-center",
                       current ? "bg-primary text-primary-foreground" : done ? "bg-primary/12 text-primary hover:bg-primary/18" : "bg-muted text-muted-foreground",
                       reachable && !current && "cursor-pointer",
                       !reachable && "cursor-not-allowed opacity-70",
@@ -557,7 +559,7 @@ export function NewMachineWizard({
                     >
                       {done ? <CheckIcon className="size-3.5" /> : i + 1}
                     </span>
-                    <span className="hidden min-w-0 leading-tight md:block">
+                    <span className={cn("hidden min-w-0 leading-tight md:block", !current && "xl:max-2xl:hidden")}>
                       <span className="block truncate text-[13px] font-semibold">{s.title}</span>
                       <span className="block truncate text-[11px] opacity-80">{stepSub[i]}</span>
                     </span>

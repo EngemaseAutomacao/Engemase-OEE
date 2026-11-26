@@ -129,9 +129,12 @@ export function ConnectionCard({
           </SoftLink>
         ))
       }
-      bodyClassName="grid gap-6 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]"
+      bodyClassName="@container"
     >
-      <div className="flex flex-col gap-5">
+      {/* Pela largura do cartão (não da janela): com a barra lateral, em 1280 px não cabem lado a lado
+          os dados do gateway e a tabela de tags (640 px); aí gateway e CLP ficam lado a lado e a tabela embaixo. */}
+      <div className="grid gap-6 @5xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+      <div className="grid content-start gap-5 @2xl:grid-cols-2 @2xl:gap-8 @5xl:grid-cols-1 @5xl:gap-5">
         {gateway ? (
           <div>
             <BlockTitle
@@ -173,7 +176,7 @@ export function ConnectionCard({
         )}
 
         {device ? (
-          <div className="border-t pt-5">
+          <div className="border-t pt-5 @2xl:border-t-0 @2xl:pt-0 @5xl:border-t @5xl:pt-5">
             <BlockTitle
               icon={CpuIcon}
               tone="teal"
@@ -221,7 +224,7 @@ export function ConnectionCard({
             )}
           </div>
         ) : (
-          <div className="border-t pt-5 text-sm text-muted-foreground">
+          <div className="border-t pt-5 text-sm text-muted-foreground @2xl:border-t-0 @2xl:pt-0 @5xl:border-t @5xl:pt-5">
             {canConfigure
               ? "Nenhum CLP vinculado. Cadastre a conexão Modbus TCP ou RTU no gateway."
               : "Nenhum CLP vinculado. A equipe Engemase liga a máquina ao CLP; para pedir, abra um chamado."}
@@ -326,6 +329,7 @@ export function ConnectionCard({
             </Table>
           </div>
         )}
+      </div>
       </div>
     </SectionCard>
   )

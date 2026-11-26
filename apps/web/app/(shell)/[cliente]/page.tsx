@@ -80,7 +80,9 @@ async function Overview({ params }: { params: PageProps<"/[cliente]">["params"] 
   const timeline: TimelineEvent[] = d.timeline.map((e) => ({ ...e, ...TIMELINE_ICON[e.kind] }))
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6">
+    // `@container/page`: as grades seguem a largura útil (já sem a barra lateral), não a da janela. Em 1280 px
+    // sobram ~976 px de conteúdo, pouco para os pares 8/4 e 7/5: aí os cartões empilham.
+    <div className="@container/page flex flex-col gap-5 p-4 md:p-6">
       {/* Saudação + período */}
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
@@ -123,12 +125,15 @@ async function Overview({ params }: { params: PageProps<"/[cliente]">["params"] 
       </div>
 
       {/* Estados + meta */}
-      <div className="grid gap-4 xl:grid-cols-12">
-        <SectionCard title="Máquinas por estado" description="Situação agora · toque para abrir a máquina" href={`${b}/maquinas`} className="xl:col-span-8">
+      <div className="grid gap-4 @5xl/page:grid-cols-12">
+        <SectionCard title="Máquinas por estado" description="Situação agora · toque para abrir a máquina" href={`${b}/maquinas`} className="@5xl/page:col-span-8">
           <StatePipeline stages={d.stages} maxItems={4} />
         </SectionCard>
 
-        <SectionCard title="Meta de OEE do mês" href={`${b}/relatorios/oee`} linkLabel="Ver relatório" className="xl:col-span-4">
+        <SectionCard title="Meta de OEE do mês" href={`${b}/relatorios/oee`} linkLabel="Ver relatório" className="@5xl/page:col-span-4">
+          {/* Cartão largo (linha inteira): números e medidor à esquerda, gráfico à direita. */}
+          <div className="@container">
+            <div className="grid gap-x-8 @2xl:grid-cols-[auto_minmax(0,1fr)] @2xl:items-center">
           <div className="grid grid-cols-[auto_1fr] items-end gap-4">
             <dl className="grid gap-2 text-xs">
               <div>
@@ -147,24 +152,28 @@ async function Overview({ params }: { params: PageProps<"/[cliente]">["params"] 
             <Gauge value={goalFraction} width={190} stroke={20} color="#0e9384" center={pct(goalFraction, 0)} caption="da meta do mês" />
           </div>
           <TargetChart days={d.target.last12} target={d.target.target} />
+            </div>
+          </div>
         </SectionCard>
       </div>
 
       {/* Tempo do turno · ranking · paradas */}
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 @2xl/page:grid-cols-2 @5xl/page:grid-cols-3">
         <SectionCard title="Tempo do turno" description="Soma das máquinas, por estado" href={`${b}/relatorios/paradas`}>
-          <div className="flex flex-col items-center gap-4 sm:flex-row">
+          <div className="@container">
+          <div className="flex flex-col items-center gap-4 @[20rem]:flex-row">
             <Donut segments={d.donut} size={140} stroke={22} center={`${Math.round(d.donutTotal / 60)}h`} caption="máquina-hora" />
             <ul className="grid w-full gap-2 text-xs">
               {d.donut.map((s) => (
                 <li key={s.label} className="flex items-center gap-2">
                   <span className="size-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
-                  <span className="min-w-[4.5rem] flex-1 truncate text-muted-foreground">{s.label}</span>
-                  <span className="font-semibold tabular-nums">{(s.value / 60).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} h</span>
+                  <span className="min-w-0 flex-1 truncate text-muted-foreground">{s.label}</span>
+                  <span className="font-semibold whitespace-nowrap tabular-nums">{(s.value / 60).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} h</span>
                   <span className="w-9 text-right text-muted-foreground tabular-nums">{pct(s.value / (d.donutTotal || 1), 0)}</span>
                 </li>
               ))}
             </ul>
+          </div>
           </div>
         </SectionCard>
 
@@ -200,7 +209,7 @@ async function Overview({ params }: { params: PageProps<"/[cliente]">["params"] 
           description={`${d.pending.length} sem motivo no turno`}
           href={d.pending[0]?.href ?? `${b}/maquinas`}
           linkLabel="Classificar"
-          className="lg:col-span-2 xl:col-span-1"
+          className="@2xl/page:col-span-2 @5xl/page:col-span-1"
         >
           <ul className="divide-y">
             {d.pending.slice(0, 5).map((p) => (
@@ -238,8 +247,8 @@ async function Overview({ params }: { params: PageProps<"/[cliente]">["params"] 
       </div>
 
       {/* Linha do tempo + previsão */}
-      <div className="grid gap-4 xl:grid-cols-12">
-        <SectionCard title="Linha do tempo do turno" description="Principais acontecimentos de hoje" href={`${b}/config/auditoria`} className="xl:col-span-7">
+      <div className="grid gap-4 @5xl/page:grid-cols-12">
+        <SectionCard title="Linha do tempo do turno" description="Principais acontecimentos de hoje" href={`${b}/config/auditoria`} className="@5xl/page:col-span-7">
           <div className="flex h-full flex-col justify-between gap-5 pt-2">
             <ActivityTimeline events={timeline} />
             <dl className="grid grid-cols-2 gap-3 rounded-xl bg-muted/60 p-3 sm:grid-cols-4">
@@ -258,7 +267,7 @@ async function Overview({ params }: { params: PageProps<"/[cliente]">["params"] 
           </div>
         </SectionCard>
 
-        <SectionCard title="Previsão de produção" description="Peças boas acumuladas no turno" href={`${b}/relatorios/oee`} linkLabel="Ver detalhes" className="xl:col-span-5">
+        <SectionCard title="Previsão de produção" description="Peças boas acumuladas no turno" href={`${b}/relatorios/oee`} linkLabel="Ver detalhes" className="@5xl/page:col-span-5">
           <div className="grid grid-cols-[auto_1fr] gap-3">
             <dl className="grid content-start gap-2.5 text-xs">
               <div>

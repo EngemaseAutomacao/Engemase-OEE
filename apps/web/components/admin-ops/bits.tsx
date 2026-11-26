@@ -70,7 +70,7 @@ export function OpsTitle({ title, description, actions }: { title: string; descr
         <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2 md:justify-end lg:shrink-0">{actions}</div>}
     </div>
   )
 }
@@ -91,9 +91,10 @@ export function PersonAvatar({ name, tone = "blue", size = "md" }: { name: strin
   )
 }
 
-/** Classes de cabeçalho e célula das tabelas do console. */
-export const TH = "px-3 py-2.5 text-left text-[11px] font-semibold tracking-wide whitespace-nowrap text-muted-foreground uppercase first:pl-0 last:pr-0"
-export const TD = "px-3 py-3 align-middle first:pl-0 last:pr-0"
+/** Classes de cabeçalho e célula das tabelas do console (de 1280 a 1535 px, com menos folga lateral para caber). */
+const CELL_FIT = "xl:max-2xl:px-2 xl:max-2xl:first:pl-0 xl:max-2xl:last:pr-0"
+export const TH = `px-3 py-2.5 text-left text-[11px] font-semibold tracking-wide whitespace-nowrap text-muted-foreground uppercase first:pl-0 last:pr-0 ${CELL_FIT}`
+export const TD = `px-3 py-3 align-middle first:pl-0 last:pr-0 ${CELL_FIT}`
 
 /** Botão-ícone quadrado e suave (ações de linha). */
 export const squareClass = (tone: Tone = "blue") =>
@@ -125,7 +126,7 @@ export function FilterPills<T extends string>({
 }) {
   return (
     <div className="-mx-1 max-w-full min-w-0 overflow-x-auto px-1">
-      <div role="radiogroup" aria-label={label} className="flex w-max items-center gap-1.5">
+      <div role="radiogroup" aria-label={label} className="flex w-max items-center gap-1.5 md:w-auto md:flex-wrap">
         {options.map((o) => {
           const active = value === o.value
           return (

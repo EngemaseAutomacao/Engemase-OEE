@@ -73,8 +73,8 @@ export function RoleCards() {
             <div className="flex items-center gap-3">
               <IconCircle icon={meta.icon} tone={meta.tone} />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[15px] font-semibold">{meta.label}</div>
-                <div className="truncate text-xs text-muted-foreground">{meta.who}</div>
+                <div className="text-[15px] leading-tight font-semibold">{meta.label}</div>
+                <div className="text-xs text-muted-foreground">{meta.who}</div>
               </div>
               <SoftBadge tone={meta.tone}>{plural(count(r), "pessoa", "pessoas")}</SoftBadge>
             </div>

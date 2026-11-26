@@ -320,7 +320,7 @@ export function SupportGrants({ className }: { className?: string }) {
           </EmptyHeader>
         </Empty>
       ) : (
-        <ul className="grid gap-3">
+        <ul className="grid gap-3 xl:max-2xl:grid-cols-2">
           {active.map((g) => {
             const total = Date.parse(g.endsAt) - Date.parse(g.startedAt)
             const left = Date.parse(g.endsAt) - now

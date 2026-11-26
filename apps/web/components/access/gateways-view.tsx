@@ -102,7 +102,7 @@ export function GatewaysView({
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         <StatCard
           icon={WifiIcon}
           tone="teal"
@@ -144,7 +144,7 @@ export function GatewaysView({
         />
       </div>
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
         <FilterPills label="Filtrar por status" options={pills} value={status} onChange={setStatus} />
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {units.length > 1 && (
@@ -208,7 +208,7 @@ export function GatewaysView({
               </button>
             </p>
           )}
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid gap-4 2xl:grid-cols-2">
             {visible.map((r) => (
               <GatewayCard key={r.id} row={r} href={`/${clientSlug}/config/gateways/${r.id}`} freshExpiresLabel={freshExpiresLabel} />
             ))}

@@ -96,12 +96,12 @@ async function VisaoGeral() {
         />
       </div>
 
-      {/* Clientes + frota */}
-      <div className="grid gap-4 xl:grid-cols-12">
-        <SectionCard title="Clientes" description="OEE do turno corrente e saúde dos gateways" href="/admin/clientes" className="xl:col-span-8">
+      {/* Clientes + frota: lado a lado só a partir de 1400 px (abaixo disso a tabela ficava cortada) */}
+      <div className="grid gap-4 min-[1400px]:grid-cols-12">
+        <SectionCard title="Clientes" description="OEE do turno corrente e saúde dos gateways" href="/admin/clientes" className="min-[1400px]:col-span-8">
           <OverviewClientsTable rows={d.rows} />
         </SectionCard>
-        <SectionCard title="Frota de gateways" description="Situação agora, em todos os clientes" href="/admin/gateways" className="xl:col-span-4">
+        <SectionCard title="Frota de gateways" description="Situação agora, em todos os clientes" href="/admin/gateways" className="min-[1400px]:col-span-4">
           <FleetSummary fleet={d.fleet} versions={d.versions} remote={d.remote} />
         </SectionCard>
       </div>

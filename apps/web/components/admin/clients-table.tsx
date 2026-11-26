@@ -178,14 +178,14 @@ export function ClientsTable({ rows }: { rows: ClientRow[] }) {
         </div>
       ) : (
         <div className="overflow-x-auto px-5 pb-2">
-          <table className="w-full min-w-[980px] text-sm [&_td]:px-2.5 [&_td:first-child]:pl-0 [&_td:last-child]:pr-0 [&_th]:px-2.5 [&_th:first-child]:pl-0 [&_th:last-child]:pr-0">
+          <table className="w-full min-w-[980px] text-sm xl:min-w-0 [&_td]:px-2.5 [&_td:first-child]:pl-0 [&_td:last-child]:pr-0 [&_th]:px-2.5 [&_th:first-child]:pl-0 [&_th:last-child]:pr-0">
             <thead className="border-b">
               <tr>
                 <th className={TH}>Cliente</th>
                 <th className={TH}>CNPJ · cidade/UF</th>
                 <th className={TH}>Plano</th>
                 <th className={TH}>Status</th>
-                <th className={cn(TH, "text-right")}>
+                <th className={cn(TH, "text-right xl:max-2xl:hidden")}>
                   <abbr title="Unidades" className="no-underline">Unid.</abbr>
                 </th>
                 <th className={TH}>
@@ -193,7 +193,7 @@ export function ClientsTable({ rows }: { rows: ClientRow[] }) {
                 </th>
                 <th className={TH}>Gateways</th>
                 <th className={TH}>Usuários</th>
-                <th className={TH}>Criado</th>
+                <th className={cn(TH, "xl:max-2xl:hidden")}>Criado</th>
                 <th className={cn(TH, "text-right")}>
                   <span className="sr-only">Ações</span>
                 </th>
@@ -215,18 +215,23 @@ export function ClientsTable({ rows }: { rows: ClientRow[] }) {
                       <div className="font-mono text-muted-foreground">{r.cnpj}</div>
                       <div>
                         {r.city ? `${r.city}/${r.state}` : "—"}
+                        {/* De 1280 a 1535 px a coluna "Unid." some para a tabela caber: o número vem aqui. */}
+                        <span className="hidden text-muted-foreground xl:max-2xl:inline">
+                          {" "}
+                          · {r.units} unid.
+                        </span>
                       </div>
                     </td>
                     <td className={TD}>
                       <div className="flex flex-col gap-1">
                         <PlanBadge plan={r.plan} />
-                        <span className="text-[11px] whitespace-nowrap text-muted-foreground">cobrança por máquina</span>
+                        <span className="text-[11px] whitespace-nowrap text-muted-foreground xl:max-2xl:hidden">cobrança por máquina</span>
                       </div>
                     </td>
                     <td className={TD}>
                       <ClientStatusBadge status={st} />
                     </td>
-                    <td className={cn(TD, "text-right tabular-nums")}>{r.units}</td>
+                    <td className={cn(TD, "text-right tabular-nums xl:max-2xl:hidden")}>{r.units}</td>
                     <td className={TD}>
                       <div className="w-28" title={`${num(r.machines)} em uso de ${num(r.machinesLimit)} contratadas`}>
                         <span className="text-xs whitespace-nowrap tabular-nums">
@@ -259,7 +264,7 @@ export function ClientsTable({ rows }: { rows: ClientRow[] }) {
                       <span className="font-semibold">{r.users}</span>
                       <span className="text-muted-foreground"> / {r.usersLimit}</span>
                     </td>
-                    <td className={cn(TD, "text-xs whitespace-nowrap text-muted-foreground tabular-nums")}>{r.createdLabel}</td>
+                    <td className={cn(TD, "text-xs whitespace-nowrap text-muted-foreground tabular-nums xl:max-2xl:hidden")}>{r.createdLabel}</td>
                     <td className={TD}>
                       <div className="flex items-center justify-end gap-1.5">
                         <DropdownMenu modal={false}>

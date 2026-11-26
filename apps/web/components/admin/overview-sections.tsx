@@ -209,8 +209,10 @@ export function FleetSummary({
   const total = fleet.reduce((s, f) => s + f.value, 0)
   const latest = versions[0]?.version
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col items-center gap-4 sm:flex-row">
+    // Cartão largo (frota embaixo da tabela, de 768 a 1399 px): rosca e resumo lado a lado.
+    <div className="@container">
+     <div className="flex flex-col gap-4 @2xl:flex-row @2xl:items-center @2xl:gap-8">
+      <div className="flex flex-col items-center gap-4 sm:flex-row @2xl:shrink-0">
         <Donut segments={fleet.map((f) => ({ label: GATEWAY_STATUS_LABEL[f.status], value: f.value, color: f.color }))} size={132} stroke={20} center={total} caption="gateways" />
         <ul className="grid w-full max-w-72 gap-2 text-xs">
           {fleet.map((f) => (
@@ -222,7 +224,7 @@ export function FleetSummary({
           ))}
         </ul>
       </div>
-      <dl className="grid grid-cols-2 gap-3 rounded-xl bg-muted/60 p-3">
+      <dl className="grid grid-cols-2 gap-3 rounded-xl bg-muted/60 p-3 @2xl:flex-1">
         <div className="min-w-0">
           <dt className="truncate text-[11px] text-muted-foreground">Versões do agente</dt>
           <dd className="flex flex-wrap gap-x-2 text-sm font-semibold tabular-nums">
@@ -240,6 +242,7 @@ export function FleetSummary({
           </dd>
         </div>
       </dl>
+     </div>
     </div>
   )
 }

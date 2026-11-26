@@ -95,7 +95,8 @@ async function LineDetail({ params }: { params: PageProps<"/[cliente]/linhas/[li
   const paretoMax = pareto[0]?.minutes ?? 1
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6">
+    // `@container/page`: a grade de baixo segue a largura útil (sem a barra lateral), não a da janela.
+    <div className="@container/page flex flex-col gap-5 p-4 md:p-6">
       <PageTitle
         eyebrow={
           <Breadcrumb>
@@ -160,8 +161,8 @@ async function LineDetail({ params }: { params: PageProps<"/[cliente]/linhas/[li
         />
       </div>
 
-      <SectionCard title="Máquinas da linha" description="Estado ao vivo, OEE do turno e linha do tempo de estados" action={<StateLegend className="hidden lg:flex" />}>
-        <ul className="grid gap-1 px-5 pb-5">
+      <SectionCard title="Máquinas da linha" description="Estado ao vivo, OEE do turno e linha do tempo de estados" action={<StateLegend className="hidden 2xl:flex" />}>
+        <ul className="-mx-2 grid gap-1">
           {rows.map(({ m, events, oee, ok }) => {
             const state = m.live?.state ?? "NO_COMM"
             const progress = ok && m.live!.targetShift > 0 ? Math.min(1, (m.live!.countShift - m.live!.rejectShift) / m.live!.targetShift) : 0
@@ -196,16 +197,15 @@ async function LineDetail({ params }: { params: PageProps<"/[cliente]/linhas/[li
           })}
           {rows.length === 0 && <li className="py-6 text-center text-sm text-muted-foreground">Nenhuma máquina nesta linha.</li>}
         </ul>
+        <StateLegend className="mt-3 hidden border-t pt-3 lg:flex 2xl:hidden" />
       </SectionCard>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <SectionCard title="Produção por hora" description="Peças boas e refugo da linha, contra a meta">
-          <div className="px-3 pb-3">
-            <HourlyProductionChart data={hourly} />
-          </div>
+      <div className="grid gap-4 @5xl/page:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <SectionCard title="Produção por hora" description="Peças boas e refugo da linha, contra a meta" bodyClassName="px-3 sm:px-4">
+          <HourlyProductionChart data={hourly} />
         </SectionCard>
         <SectionCard title="Tempo da linha por estado" description="Soma das máquinas no turno">
-          <div className="flex flex-wrap items-center justify-center gap-6 px-5 pb-5">
+          <div className="flex h-full flex-wrap items-center justify-center gap-6">
             <Donut
               segments={donut}
               center={<span className="text-2xl font-bold tabular-nums">{Math.round(donutTotalMin / 60)}h</span>}
@@ -225,7 +225,7 @@ async function LineDetail({ params }: { params: PageProps<"/[cliente]/linhas/[li
       </div>
 
       <SectionCard title="Principais motivos de parada" description="Linha inteira, últimos 7 dias" href={`/${slug}/relatorios/paradas`} linkLabel="Relatório de paradas">
-        <ul className="grid gap-3 px-5 pb-5">
+        <ul className="grid gap-3">
           {pareto.map((p) => (
             <li key={p.reasonId} className="grid grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto] items-center gap-3 text-sm">
               <span className="truncate">{p.reasonName}</span>

@@ -185,7 +185,7 @@ export function UnitsManager({
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         <StatCard
           icon={Building2Icon}
           tone="blue"
@@ -238,7 +238,7 @@ export function UnitsManager({
           )}
         </Empty>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="grid items-start gap-4 2xl:grid-cols-2">
           {units.map((unit) => (
             <UnitCard
               key={unit.id}

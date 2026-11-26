@@ -124,7 +124,7 @@ export function OeeTable({
           {allOpen ? "Recolher tudo" : "Expandir tudo"}
         </Button>
       </div>
-      <Table className="min-w-[1040px]">
+      <Table className="min-w-[940px]">
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
             {cols.map((col, i) => (

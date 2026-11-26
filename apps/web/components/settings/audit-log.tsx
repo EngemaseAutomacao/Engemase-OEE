@@ -108,7 +108,7 @@ export function AuditLog({ clientName, clientSlug, rows }: { clientName: string;
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         <StatCard icon={HistoryIcon} tone="blue" label="Eventos em 30 dias" value={last30.length} hint={`${plural(rows.length, "evento", "eventos")} no histórico`} />
         <StatCard icon={ShieldCheckIcon} tone="navy" label="Ações da Engemase" value={engemase30.length} hint="Últimos 30 dias, sempre visíveis aqui" />
         <StatCard icon={GlobeLockIcon} tone="orange" label="Pedidos de acesso remoto" value={remote30.length} hint="Últimos 30 dias" />

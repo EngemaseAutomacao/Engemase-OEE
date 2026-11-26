@@ -150,7 +150,7 @@ export function ReasonsManager({
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         <StatCard icon={ListTreeIcon} tone="blue" label="Motivos ativos" value={activeLeaves.length} hint={`em ${plural(groups.filter((g) => g.active).length, "grupo", "grupos")}`} />
         <StatCard icon={ClipboardCheckIcon} tone="navy" label="Paradas classificadas" value={num(totalOcc)} hint={`${duration(totalMin * 60)} nos últimos 7 dias`} />
         <StatCard
