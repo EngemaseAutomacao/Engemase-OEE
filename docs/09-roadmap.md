@@ -65,7 +65,7 @@ gantt
 - [ ] Relatório de OEE por período, turno, máquina e produto.
 - [ ] Cron: `close-shifts`, `recompute-dirty`, `gateway-watchdog`, `expire-commands`.
 - [ ] **Multi-cliente** ([15](15-multi-cliente-e-acesso.md)): `requireTenant`, RLS no nível do cliente, FKs compostas, escopo por unidade, testes de isolamento no CI.
-- [ ] **Console Engemase**: clientes (assistente de 3 passos), detalhe, frota de gateways, equipe, concessões de suporte e atribuições, auditoria. 2FA obrigatório para a equipe Engemase.
+- [ ] **Console Engemase**: clientes (assistente de 3 passos), detalhe, frota de gateways, equipe, concessões de suporte e atribuições, auditoria. 2FA opcional (D14).
 - [ ] Usuários do cliente com papel e escopo, fluxo "definir senha" com token próprio, e-mail transacional (Resend).
 - [ ] Terminais pareados (TV Andon e tablet do operador).
 
@@ -82,7 +82,7 @@ gantt
 - Classificação automática por código de falha.
 - Relatórios: Pareto, MTBF/MTTR, tendências, exportação CSV/Excel.
 - **Alertas em canais externos** (e-mail e WhatsApp; Telegram só para a equipe Engemase, ver [13](13-notificacoes-e-alertas.md#canais)): máquina parada > X min, gateway offline, OEE abaixo da meta. Na Fase 1, esses alertas já aparecem na central do app.
-- 2FA para os admins do cliente, conforme a decisão D14 ([17](17-backlog-e-pendencias.md#3-decisões)). A RLS no nível do cliente e o 2FA da equipe Engemase já entram no MVP ([15](15-multi-cliente-e-acesso.md)).
+- 2FA opcional para todos, conforme a decisão D14 ([17](17-backlog-e-pendencias.md#3-decisões)). A RLS no nível do cliente e o 2FA (opcional) já entram no MVP ([15](15-multi-cliente-e-acesso.md)).
 - **Acesso remoto (VPN) aos gateways** sob demanda, com aprovação do cliente e auditoria ([12](12-acesso-remoto-vpn.md)), depois da PoC com o Tailscale.
 - **Web Push** e escalonamento por e-mail ([13](13-notificacoes-e-alertas.md)); app instalável (PWA).
 - **Cores e logotipos por cliente** com editor e prévia ([14](14-identidade-visual-e-temas.md)).

@@ -7,7 +7,7 @@
 
 Toda entrada sua num cliente aparece para ele numa **faixa na tela** e fica na **auditoria que o cliente vê** (por exemplo: nome, "suporte Engemase", chamado e duração).
 
-Antes de começar, leia [Entrar e minha conta](00-entrar-e-minha-conta.md). Para você a **verificação em duas etapas é obrigatória**.
+Antes de começar, leia [Entrar e minha conta](00-entrar-e-minha-conta.md). A **verificação em duas etapas é opcional**, mas recomendada para o seu papel.
 
 ## Entrar num cliente
 

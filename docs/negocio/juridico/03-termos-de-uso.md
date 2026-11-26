@@ -28,7 +28,7 @@
 
 2.3. **[PADRÃO PROPOSTO — L20]** Use senha com **12 ou mais caracteres** e que você não use em outros sites. A plataforma recusa senhas que já apareceram em vazamentos conhecidos.
 
-2.4. **Verificação em duas etapas (2FA):** obrigatória para a equipe Engemase e para o administrador da empresa **[PADRÃO PROPOSTO — D14]**; opcional para os demais, salvo se sua empresa exigir.
+2.4. **Verificação em duas etapas (2FA):** opcional para todos os usuários (D14, decidida em 26/11/2026); recomendada para a equipe Engemase e para o administrador da empresa.
 
 2.5. **[PADRÃO PROPOSTO — L20]** Depois de 5 tentativas erradas, o acesso fica bloqueado por 15 minutos e você recebe um aviso por e-mail.
 

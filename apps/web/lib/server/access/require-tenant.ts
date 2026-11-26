@@ -8,7 +8,6 @@
  * | sem login             | /login                                           |
  * | cliente não existe ou pessoa sem acesso | 404 (não revela que o cliente existe) |
  * | cliente suspenso      | /acesso-suspenso                                 |
- * | 2FA obrigatório (D14) | /conta/seguranca (cadastrar o aplicativo)        |
  * | papel sem a permissão | 404 (`requirePermission`)                        |
  *
  * Memorizado por pedido (`cache` do React). Lê o pedido: em páginas, chame dentro de `<Suspense>`
@@ -30,8 +29,6 @@ function deny(reason: AccessDenial): never {
       redirect("/login")
     case "client_suspended":
       redirect("/acesso-suspenso")
-    case "two_factor_required":
-      redirect("/conta/seguranca?obrigatorio=1")
     case "not_found":
     case "forbidden":
       notFound()

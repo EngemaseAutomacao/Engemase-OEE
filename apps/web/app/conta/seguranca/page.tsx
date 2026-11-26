@@ -20,7 +20,7 @@ async function SecurityBody() {
   return (
     <SectionCard
       title="Verificação em duas etapas"
-      description="Obrigatória para administradores do cliente e para a equipe Engemase; recomendada para todos."
+      description="Opcional: você decide se quer ativar. Recomendada para administradores e para a equipe Engemase."
     >
       <p className="mb-4 text-sm text-muted-foreground">
         Conta: <span className="font-medium text-foreground">{session.user.email}</span>

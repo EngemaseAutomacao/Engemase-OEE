@@ -2,7 +2,7 @@
  * Reiniciar a verificação em duas etapas de OUTRA pessoa (perdeu o celular e os códigos de recuperação).
  *
  * Quem pode (D12: usuários do cliente são do admin do cliente; D13: a Engemase não mexe em usuários, exceto
- * o super admin; D14: 2FA obrigatório para admin do cliente e equipe Engemase):
+ * o super admin; D14: 2FA opcional para todos):
  *
  * | quem pede                | pessoa-alvo                                                  |
  * |--------------------------|--------------------------------------------------------------|
@@ -17,7 +17,7 @@
  *
  * A pessoa-alvo é identificada pelo id do VÍNCULO no cliente da URL (lido sob a RLS), nunca por `user_id`
  * vindo do navegador. Efeito: apaga o segredo TOTP e os códigos de recuperação, desliga o 2FA e encerra todas
- * as sessões dela; no próximo login, como o papel exige 2FA, ela cadastra de novo. Auditado no cliente
+ * as sessões dela; no próximo login ela entra só com a senha e, se quiser, ativa de novo. Auditado no cliente
  * (visível ao admin, D5) ANTES de executar; se a execução falhar, um segundo registro diz que falhou.
  */
 import { auditLog, CLIENT_ROLES, member, memberAccess, PLATFORM_ROLES, session, twoFactor, user } from "@engemase/db"

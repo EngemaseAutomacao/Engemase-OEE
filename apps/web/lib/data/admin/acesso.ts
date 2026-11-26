@@ -44,7 +44,6 @@ export const exigirEquipe = cache(async (): Promise<Equipe> => {
   if (session === null) redirect("/login?next=/admin")
   const role = papelDePlataforma(session)
   if (role === null || session.user.banned) notFound()
-  if (!session.user.twoFactorEnabled) redirect("/conta/seguranca?obrigatorio=1")
   usarRelogioReal(new Date().toISOString())
   return { session, role, db: bancoObrigatorio() }
 })
@@ -56,12 +55,12 @@ export type Resultado<T = undefined> =
 
 export const falha = (mensagem: string, problemas?: { campo: string; mensagem: string }[]): Resultado<never> => ({ ok: false, mensagem, problemas })
 
-/** Console numa Server Action: sem sessão/papel/2FA → `null` (a action responde com a mensagem). */
+/** Console numa Server Action: sem sessão/papel → `null` (a action responde com a mensagem). */
 export async function equipeNaAcao(papeis: readonly PlatformRole[]): Promise<Equipe | null> {
   const session = await getCurrentSession()
   if (session === null) return null
   const role = papelDePlataforma(session)
-  if (role === null || session.user.banned || !session.user.twoFactorEnabled || !papeis.includes(role)) return null
+  if (role === null || session.user.banned || !papeis.includes(role)) return null
   const db = getDb()
   return db === null ? null : { session, role, db }
 }

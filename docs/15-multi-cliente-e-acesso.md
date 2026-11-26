@@ -17,8 +17,8 @@ Plataforma (Engemase)
 
 | Identidade | Exemplo | Autenticação | Alcance |
 |---|---|---|---|
-| **Usuário de plataforma** | Equipe Engemase | E-mail + senha + **2FA obrigatório** | Ver seção 3 |
-| **Usuário do cliente** | Gerente, engenheiro, supervisor, líder de linha | E-mail + senha (2FA conforme papel/política) | Um cliente; cliente inteiro, algumas unidades ou algumas máquinas |
+| **Usuário de plataforma** | Equipe Engemase | E-mail + senha (2FA opcional, D14) | Ver seção 3 |
+| **Usuário do cliente** | Gerente, engenheiro, supervisor, líder de linha | E-mail + senha (2FA opcional, D14) | Um cliente; cliente inteiro, algumas unidades ou algumas máquinas |
 | **Terminal** | TV Andon, tablet da máquina | Token de dispositivo obtido por **código de pareamento** | Uma unidade; linhas/máquinas fixas |
 | **Operador do chão** | Operador de injetora | Identificado **dentro do terminal** (lista no MVP; PIN/crachá na F2) — **não é conta de login** | Máquinas do terminal |
 | **Gateway** | Gateway Linux | Token próprio ([04](04-protocolo-gateway-nuvem.md)) | Máquinas do próprio gateway |
@@ -177,7 +177,7 @@ Respostas de 12/11/2026 marcadas com a decisão (numeração do [17](17-backlog-
 | P5 | Haverá limites por plano no MVP? Bloqueio ou aviso? | **Respondida em parte (D1):** assinatura cobrada por máquina, com planos; `limits.machines` guarda as máquinas contratadas. Preços em aberto (L9). Bloqueio ou aviso: segue o padrão, bloqueio na criação, com limites editados pelo super admin |
 | P6 | Inadimplência: perde acesso, fica só leitura ou continua? Gateways continuam enviando? | Em aberto (D3). Provisória: aviso com 5 dias de atraso; com 30 dias, cliente **Suspenso** (login bloqueado com aviso); os gateways continuam enviando e os dados ficam guardados; volta ao pagar |
 | P7 | Encerramento: prazos e formato de entrega dos dados; quem recolhe os gateways? | Em aberto (D4). Provisória: 30 dias para exportar (CSV) + 30 para excluir. O cliente devolve os gateways em até 30 dias (coleta agendada pela Engemase, frete do cliente); gateway não devolvido é cobrado pelo valor de reposição |
-| P8 | 2FA obrigatório para admins do cliente no MVP? | Em aberto (D14). Provisória: **obrigatório para a equipe Engemase e para o admin do cliente** (ele gerencia usuários e aprova sessões de acesso remoto); opcional para os demais papéis |
+| P8 | 2FA obrigatório para admins do cliente no MVP? | Decidido em 26/11/2026 (D14): **opcional para todos**, inclusive a equipe Engemase e o admin do cliente; ativa-se com QR code em "Segurança da conta" |
 | P9 | "Área" é nível obrigatório? | Em aberto (D15). Provisória: sim, no banco. Cada unidade nasce com a área "Geral", que a interface esconde quando é a única. Ainda não aplicada: hoje `line.area_id` é opcional ([06](06-banco-de-dados.md)) |
 | P10 | Um grupo com vários CNPJs é um cliente com várias unidades? | Em aberto (D16). Provisória: um cliente = um contrato (CNPJ de cobrança); cada unidade pode ter o próprio CNPJ (opcional; coluna ainda não criada) |
-| P11 | Quem serão os super admins iniciais e quantas pessoas da Engemase usarão a plataforma? | Em aberto (D17). Provisória: 2 super admins da direção técnica (nomes no seed de produção); equipe inicial da Engemase de até 5 pessoas, todas com 2FA |
+| P11 | Quem serão os super admins iniciais e quantas pessoas da Engemase usarão a plataforma? | Em aberto (D17). Provisória: 2 super admins da direção técnica (nomes no seed de produção); equipe inicial da Engemase de até 5 pessoas, 2FA opcional (D14) |

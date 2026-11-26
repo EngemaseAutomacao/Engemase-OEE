@@ -172,7 +172,7 @@ const rollout = [
 
 const security = [
   { icon: LockKeyholeIcon, text: "Cada cliente vê só os próprios dados, com isolamento no banco e testes automáticos." },
-  { icon: ShieldCheckIcon, text: "Verificação em duas etapas para administradores e auditoria de todas as ações." },
+  { icon: ShieldCheckIcon, text: "Verificação em duas etapas opcional, com QR code, e auditoria de todas as ações." },
   { icon: HardDriveIcon, text: "Dados hospedados em São Paulo, com backup e restauração a qualquer instante." },
   { icon: ClipboardCheckIcon, text: "Somente leitura no CLP: o sistema nunca escreve na sua máquina." },
   { icon: RouterIcon, text: "O gateway só faz conexões de saída: nenhuma porta aberta na sua rede." },

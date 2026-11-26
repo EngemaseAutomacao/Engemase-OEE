@@ -15,7 +15,7 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 
 **Para quem usa**
 - **Entrar com e-mail e senha de verdade.** Senha com pelo menos 12 caracteres. Várias tentativas erradas seguidas bloqueiam a entrada por alguns minutos, para proteger a conta.
-- **Verificação em duas etapas** (código do aplicativo autenticador no celular), ativada em "Minha conta" › "Senha e 2 etapas". **Obrigatória** para o admin do cliente e para a equipe Engemase. Vem com códigos de recuperação para quando o celular não estiver à mão.
+- **Verificação em duas etapas** (código do aplicativo autenticador no celular), ativada em "Minha conta" › "Senha e 2 etapas". **Opcional** para todos: quem ativa escaneia um QR code com o aplicativo e pode desativar depois. Vem com códigos de recuperação para quando o celular não estiver à mão.
 - **Cada empresa vê só os seus dados**, e cada pessoa só as unidades ou máquinas do seu acesso. Quem tenta abrir uma página de outra empresa recebe "página não encontrada".
 - **Mensagens de erro em português**, com o botão "Tentar de novo", e página própria para endereço que não existe.
 - **Nome da tela na aba do navegador** em todas as telas, para achar a aba certa.

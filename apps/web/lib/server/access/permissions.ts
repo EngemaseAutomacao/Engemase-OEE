@@ -72,8 +72,3 @@ export function clientRolePermissions(role: ClientRole): ReadonlySet<Permission>
 export function platformRolePermissions(role: PlatformRole): ReadonlySet<Permission> {
   return new Set(PLATFORM_ROLE_PERMISSIONS[role] ?? [])
 }
-
-/** Papéis que exigem 2FA (D14): toda a equipe Engemase e o admin do cliente. */
-export function requiresTwoFactor(access: { readonly platformRole: PlatformRole | null; readonly clientRole: ClientRole | null }): boolean {
-  return access.platformRole !== null || access.clientRole === "client_admin"
-}

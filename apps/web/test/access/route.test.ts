@@ -1,7 +1,7 @@
 /**
  * Rota com dado de cliente, de ponta a ponta (docs/15, seção 4, item 7.3): login real (Better Auth) →
  * cookie → GET /api/clientes/{slug}/maquinas. Pessoa de A pedindo B recebe 404 (igual a cliente
- * inexistente); sem login 401; escopo por unidade aplicado; sessão de pessoa que exige 2FA sem 2FA, 403.
+ * inexistente); sem login 401; escopo por unidade aplicado; admin do cliente sem 2FA entra (2FA opcional).
  */
 import * as s from "@engemase/db"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
@@ -82,11 +82,10 @@ describe("rota de cliente com login real", () => {
     }
   })
 
-  it("admin do cliente sem 2FA: 403 com o pedido para ativar", async () => {
+  it("admin do cliente sem 2FA entra: a verificação em duas etapas é opcional (D14)", async () => {
     const result = await call(a.slug, adminNo2faCookie)
-    if (!("response" in result)) throw new Error("esperava 403")
-    expect(result.response.status).toBe(403)
-    expect(await result.response.json()).toMatchObject({ error: "two_factor_required" })
+    if (!("ctx" in result)) throw new Error("esperava o contexto do cliente")
+    expect(result.ctx.access).toMatchObject({ kind: "member", role: "client_admin" })
   })
 
   it("o route handler sem banco configurado responde 503 (nunca vaza nada)", async () => {

@@ -8,8 +8,9 @@
  * Tudo "fail-closed":
  * - vínculo sem `member_access`, inativo, com papel/escopo desconhecido → sem acesso;
  * - escopo `units`/`machines` sem nenhuma unidade/máquina listada → sem acesso (D11);
- * - técnico sem concessão de suporte ativa nem atribuição válida → sem acesso;
- * - papel que exige 2FA (D14) sem 2FA ligado → bloqueado até cadastrar.
+ * - técnico sem concessão de suporte ativa nem atribuição válida → sem acesso.
+ * A verificação em duas etapas é OPCIONAL para todos (D14, decidida em 26/11/2026): quem ativa passa
+ * a informar o código no login (Better Auth); quem não ativa entra só com a senha.
  * Sem acesso, quem chama responde 404 (não revela que o cliente existe).
  */
 import {
@@ -22,7 +23,7 @@ import {
   PLATFORM_ROLES,
   type PlatformRole,
 } from "@engemase/db"
-import { clientRolePermissions, type Permission, platformRolePermissions, requiresTwoFactor } from "./permissions"
+import { clientRolePermissions, type Permission, platformRolePermissions } from "./permissions"
 
 /** Escopo efetivo do acesso (D11). Listas nunca vazias: vazio = sem acesso, decidido antes. */
 export type Scope =
@@ -91,7 +92,7 @@ export interface AccessFacts {
   readonly assignment: { readonly id: string; readonly unitIds: readonly string[] } | null
 }
 
-/** Por que o acesso foi negado. Quem chama decide a resposta (404, login, cadastro do 2FA...). */
+/** Por que o acesso foi negado. Quem chama decide a resposta (404, login...). */
 export type AccessDenial =
   /** Cliente inexistente OU pessoa sem vínculo/escopo/concessão: responder 404 nos dois casos. */
   | "not_found"
@@ -99,8 +100,6 @@ export type AccessDenial =
   | "unauthenticated"
   /** Cliente suspenso ou encerrado: usuários do cliente não entram (docs/15, seção 6). */
   | "client_suspended"
-  /** Papel exige 2FA (D14) e a pessoa ainda não cadastrou. */
-  | "two_factor_required"
   /** Entrou no cliente, mas o papel não permite a ação. */
   | "forbidden"
 
@@ -194,10 +193,6 @@ export function decideAccess(user: SessionUser, sessionId: string, facts: Access
   // Cliente suspenso ou encerrado: usuários do cliente não entram; a Engemase continua, com registro.
   if (access.kind === "member" && (org.status === "suspended" || org.status === "closed")) {
     return { ok: false, reason: "client_suspended" }
-  }
-  const clientRole = access.kind === "member" ? access.role : null
-  if (requiresTwoFactor({ platformRole, clientRole }) && !user.twoFactorEnabled) {
-    return { ok: false, reason: "two_factor_required" }
   }
 
   const permissions = access.kind === "member" ? clientRolePermissions(access.role) : platformRolePermissions(access.role)

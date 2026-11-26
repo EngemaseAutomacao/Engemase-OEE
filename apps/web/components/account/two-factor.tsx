@@ -13,8 +13,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+import type { QrDrawing } from "@/lib/qr"
+
 import type { TwoFactorSeed } from "./account-data"
-import { IllustrativeQr } from "./illustrative-qr"
+import { QrCode } from "./qr-code"
 
 const STEPS = ["Escanear", "Confirmar", "Guardar códigos"]
 
@@ -77,17 +79,19 @@ function RecoveryCodes({ codes, email }: { codes: string[]; email: string }) {
   )
 }
 
-/** Assistente de ativação: QR ilustrativo → código de 6 dígitos → códigos de recuperação. */
+/** Assistente de ativação: QR code → código de 6 dígitos → códigos de recuperação. */
 function SetupDialog({
   open,
   onOpenChange,
   seed,
+  qr,
   email,
   onDone,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
   seed: TwoFactorSeed
+  qr: QrDrawing
   email: string
   onDone: () => void
 }) {
@@ -144,7 +148,7 @@ function SetupDialog({
         {step === 0 && (
           <div className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
             <div className="flex justify-center">
-              <IllustrativeQr value={seed.otpauth} label="QR code ilustrativo para o aplicativo autenticador" />
+              <QrCode drawing={qr} size={176} label="QR code para o aplicativo autenticador" />
             </div>
             <div className="grid gap-3 text-sm">
               <p>
@@ -159,7 +163,7 @@ function SetupDialog({
                   </Button>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">Protótipo: o QR é ilustrativo e não funciona em aplicativos reais.</p>
+              <p className="text-xs text-muted-foreground">Demonstração: a conta é de exemplo e nada é gravado.</p>
             </div>
           </div>
         )}
@@ -229,17 +233,17 @@ function SetupDialog({
   )
 }
 
-/** Verificação em 2 etapas: estado, ativação com QR ilustrativo e códigos de recuperação. */
+/** Verificação em 2 etapas (opcional): estado, ativação com QR code e códigos de recuperação. */
 export function TwoFactorCard({
   initialEnabled,
-  required,
   seed,
+  qr,
   email,
   className,
 }: {
   initialEnabled: boolean
-  required: boolean
   seed: TwoFactorSeed
+  qr: QrDrawing
   email: string
   className?: string
 }) {
@@ -252,7 +256,7 @@ export function TwoFactorCard({
   return (
     <SectionCard
       title="Verificação em 2 etapas"
-      description={required ? "Obrigatória para a equipe Engemase" : "Recomendada para administradores e engenheiros"}
+      description="Opcional. Recomendada para administradores e para a equipe Engemase"
       className={className}
     >
       <div className="flex items-start gap-3">
@@ -310,14 +314,13 @@ export function TwoFactorCard({
             variant="ghost"
             size="sm"
             className="h-auto max-w-full justify-self-start text-left text-xs whitespace-normal text-muted-foreground"
-            disabled={required}
             onClick={() => {
               setEnabled(false)
               toast.success("Verificação em 2 etapas desativada", { description: "Recomendamos ativar de novo assim que possível." })
             }}
           >
             <ShieldOffIcon />
-            {required ? "Não é possível desativar (obrigatória para a equipe Engemase)" : "Desativar"}
+            Desativar
           </Button>
         </div>
       ) : (
@@ -331,6 +334,7 @@ export function TwoFactorCard({
         open={setupOpen}
         onOpenChange={setSetupOpen}
         seed={seed}
+        qr={qr}
         email={email}
         onDone={() => {
           const wasEnabled = enabled

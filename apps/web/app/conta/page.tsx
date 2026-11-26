@@ -7,6 +7,7 @@ import { Building2Icon, ClockIcon, ShieldCheckIcon, ShieldOffIcon } from "lucide
 import { getAccessibleClients } from "@/lib/mock"
 import { usarBanco } from "@/lib/data/fonte"
 import { initials } from "@/lib/format"
+import { qrDrawing } from "@/lib/qr"
 import { cn } from "@/lib/utils"
 import { SectionCard } from "@/components/dashboard/section-card"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -28,6 +29,7 @@ export default function Page() {
   const clients = buildAccessibleClients()
   const devices = buildDevices()
   const firstClient = getAccessibleClients()[0]
+  const twoFactorSeed = buildTwoFactorSeed()
 
   return (
     <div className="min-h-svh bg-background">
@@ -116,7 +118,7 @@ export default function Page() {
 
             <div id="seguranca" className="grid scroll-mt-32 lg:scroll-mt-20 gap-4 xl:grid-cols-2">
               <PasswordForm email={profile.email} />
-              <TwoFactorCard initialEnabled={profile.twoFactor} required={profile.isPlatform} seed={buildTwoFactorSeed()} email={profile.email} />
+              <TwoFactorCard initialEnabled={profile.twoFactor} seed={twoFactorSeed} qr={qrDrawing(twoFactorSeed.otpauth)} email={profile.email} />
             </div>
 
             <div id="sessoes" className="scroll-mt-32 lg:scroll-mt-20">

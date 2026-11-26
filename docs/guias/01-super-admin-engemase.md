@@ -2,7 +2,7 @@
 
 **Quem é:** 2 a 3 pessoas da direção técnica da Engemase. Acessa **todos os clientes**, sempre com registro. Cria clientes e o primeiro admin de cada um, cuida da equipe Engemase e pode fazer toda a configuração de um cliente.
 
-Antes de começar, leia [Entrar e minha conta](00-entrar-e-minha-conta.md). Para você a **verificação em duas etapas é obrigatória**.
+Antes de começar, leia [Entrar e minha conta](00-entrar-e-minha-conta.md). A **verificação em duas etapas é opcional**, mas recomendada para o seu papel.
 
 ## O que você vê
 
@@ -58,7 +58,7 @@ Pelo menu de cada cliente, ou na aba "Ciclo de vida". Toda mudança pede confirm
 
 Em "Equipe Engemase":
 
-1. "Adicionar membro": nome, e-mail corporativo da Engemase e papel (**Super admin**, **Engenheiro de campo** ou **Suporte**). A pessoa recebe um convite por e-mail para definir a senha e precisa ativar a verificação em duas etapas.
+1. "Adicionar membro": nome, e-mail corporativo da Engemase e papel (**Super admin**, **Engenheiro de campo** ou **Suporte**). A pessoa recebe um convite por e-mail para definir a senha; a verificação em duas etapas é opcional.
 2. Para cada membro: "Alterar papel", reenviar o convite, mandar um link para cadastrar um celular novo na verificação em duas etapas, desativar ou reativar.
 
 Regras: ninguém muda o próprio papel, e o último super admin não pode ser rebaixado. Desativar alguém encerra as sessões e suspende concessões e atribuições; o histórico fica na auditoria. Membros da Engemase **não viram membros** dos clientes.
