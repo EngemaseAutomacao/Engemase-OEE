@@ -1,4 +1,6 @@
 import type { Metadata } from "next"
+import { usarBanco } from "@/lib/data/fonte"
+import { TelaEmBreve } from "@/components/shell/tela-em-breve"
 import { notFound } from "next/navigation"
 
 import { MOCK_NOW, getClientBySlug, getConfigAccess, getDowntimeReasons, getMachines, getShifts, getUnits } from "@/lib/mock"
@@ -31,6 +33,8 @@ export const metadata: Metadata = { title: "Turnos" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/turnos">) {
   const { cliente } = await params
+  // Sem versão real ainda: no sistema real, nunca mostra os dados simulados.
+  if (usarBanco()) return <TelaEmBreve titulo="Turnos" voltarPara={`/${cliente}`} voltarTexto="Voltar ao painel" />
   const client = getClientBySlug(cliente)
   if (!client) notFound()
 

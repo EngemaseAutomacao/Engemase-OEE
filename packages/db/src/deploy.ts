@@ -10,6 +10,7 @@
  * - **Preview**: só migra com `DB_MIGRATE_PREVIEW=1`, que só deve ser ligado quando cada preview tiver o
  *   próprio branch da Neon. Sem isso o preview aponta para o banco de produção, e migração de branch não
  *   revisado não pode chegar lá.
+ * - **Demonstração** (`ENGEMASE_DEMONSTRACAO=1`): nunca migra, mesmo com URL no ambiente.
  * - **Fora da Vercel** (comando manual): migra o banco da URL informada.
  *
  * Usuários de login (criados/atualizados só quando a senha está no ambiente):
@@ -116,6 +117,9 @@ export function planMigration(env: DeployEnv): MigrationPlan {
       reason:
         "preview sem DB_MIGRATE_PREVIEW=1: migrações não rodam (sem branch próprio da Neon, o preview aponta para o banco de produção).",
     }
+  }
+  if (nonEmpty(env.ENGEMASE_DEMONSTRACAO) === "1") {
+    return { run: false, reason: "ambiente de demonstração (ENGEMASE_DEMONSTRACAO=1): sem banco, nada a migrar." }
   }
   if (vercelEnv === "development") {
     return { run: false, reason: "VERCEL_ENV=development: migrações não rodam no build de desenvolvimento." }

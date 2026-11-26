@@ -29,6 +29,10 @@ describe("planMigration", () => {
     )
   })
 
+  it("demonstração nunca migra, mesmo com URL de banco", () => {
+    expect(planMigration({ VERCEL_ENV: "production", ENGEMASE_DEMONSTRACAO: "1", DATABASE_URL_UNPOOLED: OWNER_URL }).run).toBe(false)
+  })
+
   it("desenvolvimento na Vercel não migra", () => {
     expect(planMigration({ VERCEL_ENV: "development", DATABASE_URL: OWNER_URL }).run).toBe(false)
   })

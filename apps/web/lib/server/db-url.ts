@@ -16,6 +16,9 @@
  * Na Vercel, sem o endereço próprio ou a senha, o app e o login ficam sem banco (`null`): as telas seguem
  * com os dados simulados e a API dos gateways responde 503, em vez de conectar como o dono.
  * Fora da Vercel (dev, testes) o `DATABASE_URL` vale como está.
+ *
+ * **Ambiente de demonstração** (`ENGEMASE_DEMONSTRACAO=1`, projeto `engemase-oee-demo` na Vercel): todos os
+ * endereços são `null`, mesmo que alguém ligue um banco ao projeto. As telas usam só os dados simulados.
  */
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -25,6 +28,11 @@ function nonEmpty(value: string | undefined): string | undefined {
   return trimmed === undefined || trimmed === "" ? undefined : trimmed
 }
 
+/** Ambiente de demonstração (só dados simulados, nunca banco)? */
+export function modoDemonstracao(env: Env = process.env): boolean {
+  return nonEmpty(env.ENGEMASE_DEMONSTRACAO) === "1"
+}
+
 function loginUrl(
   env: Env,
   explicitVar: string,
@@ -32,6 +40,7 @@ function loginUrl(
   defaultUser: string,
   passwordVar: string,
 ): string | null {
+  if (modoDemonstracao(env)) return null
   const explicit = nonEmpty(env[explicitVar])
   if (explicit !== undefined) return explicit
 
@@ -65,5 +74,6 @@ export function authDatabaseUrl(env: Env = process.env): string | null {
 
 /** Endereço de manutenção (dono das tabelas, conexão direta), ou `null`. */
 export function maintenanceDatabaseUrl(env: Env = process.env): string | null {
+  if (modoDemonstracao(env)) return null
   return nonEmpty(env.DATABASE_MAINTENANCE_URL) ?? nonEmpty(env.DATABASE_URL_UNPOOLED) ?? null
 }

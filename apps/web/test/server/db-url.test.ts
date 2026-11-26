@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { appDatabaseUrl, authDatabaseUrl, maintenanceDatabaseUrl } from "@/lib/server/db-url"
+import { appDatabaseUrl, authDatabaseUrl, maintenanceDatabaseUrl, modoDemonstracao } from "@/lib/server/db-url"
 
 const POOLED = "postgresql://neondb_owner:segredo@ep-x-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require"
 const DIRECT = "postgresql://neondb_owner:segredo@ep-x.sa-east-1.aws.neon.tech/neondb?sslmode=require"
@@ -57,5 +57,28 @@ describe("maintenanceDatabaseUrl", () => {
     )
     expect(maintenanceDatabaseUrl({ DATABASE_URL_UNPOOLED: DIRECT, DATABASE_URL: POOLED })).toBe(DIRECT)
     expect(maintenanceDatabaseUrl({ DATABASE_URL: POOLED })).toBeNull()
+  })
+})
+
+describe("modo demonstração", () => {
+  it("ENGEMASE_DEMONSTRACAO=1 desliga todos os endereços, mesmo com banco e senhas", () => {
+    const env = {
+      ENGEMASE_DEMONSTRACAO: "1",
+      DATABASE_URL: POOLED,
+      DATABASE_URL_UNPOOLED: DIRECT,
+      APP_DB_PASSWORD: PASSWORD,
+      AUTH_DB_PASSWORD: PASSWORD,
+      APP_DATABASE_URL: "postgresql://a@b/c",
+      DATABASE_MAINTENANCE_URL: DIRECT,
+    }
+    expect(modoDemonstracao(env)).toBe(true)
+    expect(appDatabaseUrl(env)).toBeNull()
+    expect(authDatabaseUrl(env)).toBeNull()
+    expect(maintenanceDatabaseUrl(env)).toBeNull()
+  })
+
+  it("sem a variável (ou com outro valor), não é demonstração", () => {
+    expect(modoDemonstracao({})).toBe(false)
+    expect(modoDemonstracao({ ENGEMASE_DEMONSTRACAO: "0" })).toBe(false)
   })
 })

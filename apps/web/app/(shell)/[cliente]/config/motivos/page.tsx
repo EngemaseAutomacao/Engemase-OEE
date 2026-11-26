@@ -1,4 +1,6 @@
 import type { Metadata } from "next"
+import { usarBanco } from "@/lib/data/fonte"
+import { TelaEmBreve } from "@/components/shell/tela-em-breve"
 import { notFound } from "next/navigation"
 
 import { faultTexts, getClientBySlug, getConfigAccess, getDowntimeReasons, getMachines, getPareto } from "@/lib/mock"
@@ -20,6 +22,8 @@ export const metadata: Metadata = { title: "Motivos de parada" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/motivos">) {
   const { cliente } = await params
+  // Sem versão real ainda: no sistema real, nunca mostra os dados simulados.
+  if (usarBanco()) return <TelaEmBreve titulo="Motivos de parada" voltarPara={`/${cliente}`} voltarTexto="Voltar ao painel" />
   const client = getClientBySlug(cliente)
   if (!client) notFound()
 

@@ -1,5 +1,9 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import { redirect } from "next/navigation"
+import { Suspense } from "react"
+import { member, organization } from "@engemase/db"
+import { asc, eq } from "drizzle-orm"
 import { Building2Icon, CalendarClockIcon, FactoryIcon, HourglassIcon, LogOutIcon, RouterIcon } from "lucide-react"
 
 import {
@@ -22,6 +26,12 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { ClientPicker, type ClientPickerItem } from "@/components/kiosk/client-picker"
 import { ConsoleShortcut } from "@/components/kiosk/console-shortcut"
 import { PageTitle } from "@/components/refresh/page-title"
+import { CarregandoPagina } from "@/components/shell/carregando"
+import { usarBanco } from "@/lib/data/fonte"
+import { getCurrentSession } from "@/lib/server/auth/current"
+import { landingPath } from "@/lib/server/auth/landing"
+import { getAuthDb } from "@/lib/server/db"
+import { signOutAction } from "@/app/(auth)/login/actions"
 
 export const metadata: Metadata = { title: "Escolha o cliente" }
 
@@ -35,7 +45,8 @@ function greeting(iso: string) {
   return "Boa noite"
 }
 
-export default function Page() {
+/** Seletor com os dados simulados: só no ambiente de demonstração (sem banco). */
+function PaginaSimulada() {
   const me = getCurrentUser()
   const clients = getAccessibleClients()
   const roleLabel = me.platformRole ? PLATFORM_ROLE_LABEL[me.platformRole] : null
@@ -185,6 +196,96 @@ export default function Page() {
           <span>Protótipo com dados simulados · referência {dateTime(MOCK_NOW)} (horário de Brasília)</span>
         </div>
       </footer>
+    </div>
+  )
+}
+
+export default function Page() {
+  if (!usarBanco()) return <PaginaSimulada />
+  return (
+    <Suspense fallback={<CarregandoPagina cartoes={0} />}>
+      <InicioReal />
+    </Suspense>
+  )
+}
+
+/**
+ * Sistema real: a equipe Engemase vai para o console e quem tem um cliente só vai para o painel dele
+ * (`landingPath`, a mesma regra do login). Fica aqui quem tem vários clientes (ou nenhum): a lista vem do
+ * banco do login (`member` + `organization`); cada painel confere o acesso de novo (`requireTenant`).
+ */
+async function InicioReal() {
+  const session = await getCurrentSession()
+  if (session === null) redirect("/login?next=/inicio")
+  const db = getAuthDb()
+  if (db === null) redirect("/login")
+  const destino = await landingPath(db, { id: session.user.id, role: session.user.role })
+  if (destino !== "/inicio") redirect(destino)
+
+  const clientes = await db
+    .select({ slug: organization.slug, name: organization.name })
+    .from(member)
+    .innerJoin(organization, eq(organization.id, member.organizationId))
+    .where(eq(member.userId, session.user.id))
+    .orderBy(asc(organization.name))
+  const firstName = session.user.name.split(" ")[0] ?? session.user.name
+
+  return (
+    <div className="relative isolate flex min-h-dvh flex-col overflow-x-clip bg-background">
+      <BrandWatermark className="absolute top-16 -right-28 -z-10 w-[360px] sm:w-[480px] lg:-right-16 lg:w-[620px]" />
+      <header className="sticky top-0 z-20 border-b bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/75">
+        <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 md:px-6">
+          <Link href="/inicio" aria-label="Engemase OEE · início" className="shrink-0 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+            <BrandLogo width={112} priority />
+          </Link>
+          <div className="ml-auto flex items-center gap-1.5">
+            <div className="mr-1 hidden items-center gap-2.5 sm:flex">
+              <div className="grid text-right leading-tight">
+                <span className="text-sm font-semibold">{session.user.name}</span>
+                <span className="text-xs text-muted-foreground">{session.user.email}</span>
+              </div>
+              <Avatar className="size-9">
+                <AvatarFallback className="bg-[#2c4e73] text-xs font-semibold text-white">{initials(session.user.name)}</AvatarFallback>
+              </Avatar>
+            </div>
+            <ThemeToggle />
+            <form action={signOutAction}>
+              <Button variant="ghost" size="sm" type="submit" aria-label="Sair">
+                <LogOutIcon />
+                <span className="hidden sm:inline">Sair</span>
+              </Button>
+            </form>
+          </div>
+        </div>
+      </header>
+      <main className="flex-1">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 p-4 md:p-6">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Olá, {firstName}</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {clientes.length > 0 ? "Escolha o cliente que deseja acompanhar." : "Sua conta ainda não tem acesso a nenhum cliente. Fale com o administrador da sua empresa ou com o suporte Engemase."}
+            </p>
+          </div>
+          {clientes.length > 0 && (
+            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {clientes.map((c) => (
+                <li key={c.slug}>
+                  <Link
+                    href={`/${c.slug}`}
+                    className="flex items-center gap-3 rounded-2xl border bg-card p-4 shadow-xs transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                  >
+                    <Avatar className="size-10">
+                      <AvatarFallback className="bg-[#257bb4] text-sm font-semibold text-white">{initials(c.name)}</AvatarFallback>
+                    </Avatar>
+                    <span className="min-w-0 flex-1 truncate font-semibold">{c.name}</span>
+                    <Building2Icon className="size-4 text-muted-foreground" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </main>
     </div>
   )
 }

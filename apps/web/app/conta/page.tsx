@@ -1,9 +1,11 @@
 import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
+import { redirect } from "next/navigation"
 import { Building2Icon, ClockIcon, ShieldCheckIcon, ShieldOffIcon } from "lucide-react"
 
 import { getAccessibleClients } from "@/lib/mock"
+import { usarBanco } from "@/lib/data/fonte"
 import { initials } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { SectionCard } from "@/components/dashboard/section-card"
@@ -20,6 +22,8 @@ import { TwoFactorCard } from "@/components/account/two-factor"
 export const metadata: Metadata = { title: "Minha conta" }
 
 export default function Page() {
+  // Perfil, sessões e dispositivos ainda são simulados: no sistema real, só a segurança da conta (2FA).
+  if (usarBanco()) redirect("/conta/seguranca")
   const profile = buildProfile()
   const clients = buildAccessibleClients()
   const devices = buildDevices()
