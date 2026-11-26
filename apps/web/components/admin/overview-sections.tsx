@@ -60,7 +60,7 @@ export function AttentionList({ items }: { items: AttentionItem[] }) {
             <IconCircle icon={meta.icon} tone={meta.tone} soft size="sm" className="mt-0.5" />
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="min-w-0 truncate text-sm font-semibold">{it.title}</span>
+                <span className="min-w-0 text-sm font-semibold">{it.title}</span>
                 <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{it.when}</span>
               </div>
               <div className="truncate text-xs text-muted-foreground">{it.subtitle}</div>
@@ -109,7 +109,7 @@ export function OverviewClientsTable({ rows }: { rows: ClientRow[] }) {
                 <td className={TD}>
                   <Link href={`/admin/clientes/${r.id}`} className="group block min-w-0 leading-tight">
                     <span className="block truncate font-semibold group-hover:text-primary">{r.name}</span>
-                    <span className="block max-w-52 truncate text-xs text-muted-foreground">
+                    <span className="block max-w-64 text-xs text-muted-foreground">
                       {r.city ? `${r.city}/${r.state}` : "—"} · {PLAN_LABEL[r.plan]} · {r.machinesLimit} máq. contratadas
                     </span>
                   </Link>
@@ -176,7 +176,7 @@ export function RecentActivity({ items }: { items: ActivityItem[] }) {
             <IconCircle icon={meta.icon} tone={meta.tone} size="sm" className="ring-4 ring-card" />
             <div className="min-w-0 flex-1 leading-tight">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="min-w-0 truncate text-sm font-semibold">
+                <span className="min-w-0 text-sm font-semibold break-words">
                   {a.actionLabel} <span className="font-normal text-muted-foreground">· {a.entityName}</span>
                 </span>
                 <time className="shrink-0 text-[11px] text-muted-foreground tabular-nums" title={a.at}>

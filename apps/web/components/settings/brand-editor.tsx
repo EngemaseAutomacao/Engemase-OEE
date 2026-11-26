@@ -202,7 +202,7 @@ export function BrandEditor({
                         {selected && <CheckIcon className="size-4 text-white" />}
                       </span>
                       <span className="min-w-0 leading-tight">
-                        <span className="block truncate text-xs font-semibold">{p.name}</span>
+                        <span className="block text-xs font-semibold break-words">{p.name}</span>
                         <span className="block font-mono text-[10px] text-muted-foreground uppercase">{p.hex}</span>
                       </span>
                     </button>
@@ -437,7 +437,7 @@ function Seal({ label, ratio, swatch, fg, adjusted, note }: { label: string; rat
         {fg ? "Aa" : ""}
       </span>
       <div className="min-w-0 flex-1 leading-tight">
-        <div className="truncate text-xs text-muted-foreground">{label}</div>
+        <div className="text-xs text-muted-foreground">{label}</div>
         <div className="text-sm font-bold tabular-nums">{ratioLabel(ratio)}</div>
       </div>
       {!ok ? (

@@ -89,7 +89,7 @@ export function ActiveSessions({ className }: { className?: string }) {
                 <div className="flex flex-wrap items-start gap-3">
                   <IconCircle icon={TerminalIcon} tone="teal" soft />
                   <div className="min-w-0 flex-1 leading-tight">
-                    <div className="truncate text-sm font-semibold">{s.gatewayName}</div>
+                    <div className="text-sm font-semibold break-words">{s.gatewayName}</div>
                     <div className="truncate text-xs text-muted-foreground">
                       {s.clientName} · {s.unitName} · <span className="font-mono">{s.hostname}</span>
                     </div>
@@ -184,10 +184,10 @@ export function PendingRequests({ className }: { className?: string }) {
               <div className="flex items-start gap-3">
                 <PersonAvatar name={s.requestedBy} tone="orange" />
                 <div className="min-w-0 flex-1 leading-tight">
-                  <div className="truncate text-sm font-semibold">
+                  <div className="text-sm font-semibold break-words">
                     {s.requestedBy} <span className="font-normal text-muted-foreground">→ {s.gatewayName}</span>
                   </div>
-                  <div className="truncate text-xs text-muted-foreground">
+                  <div className="text-xs text-muted-foreground">
                     {s.clientName} · {s.unitName}
                   </div>
                 </div>
