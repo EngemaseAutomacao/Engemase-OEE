@@ -109,6 +109,13 @@ export type AuditActorType = (typeof AUDIT_ACTOR_TYPES)[number]
 export const GATEWAY_STATUSES = ["pending_enrollment", "active", "revoked"] as const
 export type GatewayStatus = (typeof GATEWAY_STATUSES)[number]
 
+/**
+ * Prazo máximo do estado "Em trânsito" do gateway (L23 do docs/17): de `in_transit_since` até no máximo
+ * 30 dias depois. Não é um valor de `status` (o gateway em trânsito já está `active`, com token): são as
+ * colunas `in_transit_since`/`in_transit_until`, com CHECK `gateway_in_transit_chk`.
+ */
+export const GATEWAY_TRANSIT_MAX_DAYS = 30
+
 /** Estado de um comando na fila (docs/04). */
 export const COMMAND_STATUSES = ["pending", "sent", "ok", "error", "expired", "rejected", "cancelled"] as const
 export type CommandStatus = (typeof COMMAND_STATUSES)[number]

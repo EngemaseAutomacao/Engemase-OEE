@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { faultTexts, getClientBySlug, getConfigAccess, getDowntimeReasons, getMachines, getPareto } from "@/lib/mock"
@@ -14,6 +15,8 @@ const FAULT_SUGGESTION: Record<number, string> = {
   47: "Falta de material",
   58: "Sobrecarga de motor",
 }
+
+export const metadata: Metadata = { title: "Motivos de parada" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/motivos">) {
   const { cliente } = await params

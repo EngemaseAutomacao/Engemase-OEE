@@ -42,6 +42,9 @@ func TestVersion(t *testing.T) {
 	if code != 0 || !strings.HasPrefix(out, "oee-gateway ") {
 		t.Fatalf("version: %q (%d)", out, code)
 	}
+	if out, _, code = run(t, "version", "--buffer-schema"); code != 0 || strings.TrimSpace(out) != "1" {
+		t.Fatalf("version --buffer-schema: %q (%d)", out, code)
+	}
 }
 
 func TestNormalizeActivationCode(t *testing.T) {
@@ -187,5 +190,15 @@ func TestDiagStub(t *testing.T) {
 	}
 	if _, _, code := run(t, "diag", "--config", filepath.Join(t.TempDir(), "x.yaml")); code < 1 {
 		t.Fatalf("sem arquivo deveria avisar: %d", code)
+	}
+}
+
+// Fora do systemd, localui e helper pedem o socket (ou --listen, só bancada).
+func TestServicesNeedSocket(t *testing.T) {
+	for _, args := range [][]string{{"localui", "serve"}, {"helper", "serve"}} {
+		_, errOut, code := run(t, args...)
+		if code == 0 || !strings.Contains(errOut, "--listen") {
+			t.Fatalf("%v: %q (%d)", args, errOut, code)
+		}
 	}
 }

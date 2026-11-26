@@ -2,23 +2,32 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { BellRingIcon, Building2Icon, CalendarClockIcon, CpuIcon, FactoryIcon, PlusIcon } from "lucide-react"
 
-import { MOCK_NOW, getCurrentUser } from "@/lib/mock"
+import { Suspense } from "react"
+
+import { dadosVisaoGeral } from "@/lib/data/admin/console"
 import { date, num, time } from "@/lib/format"
 import { SectionCard } from "@/components/dashboard/section-card"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { Button } from "@/components/ui/button"
-import { buildPlatformOverview } from "@/components/admin/admin-data"
+import { CarregandoPagina } from "@/components/shell/carregando"
 import { AttentionList, FleetSummary, OverviewClientsTable, RecentActivity } from "@/components/admin/overview-sections"
 
 export const metadata: Metadata = { title: "Console da plataforma" }
 
 export default function Page() {
-  const me = getCurrentUser()
+  return (
+    <Suspense fallback={<CarregandoPagina />}>
+      <VisaoGeral />
+    </Suspense>
+  )
+}
+
+async function VisaoGeral() {
+  const { me, agora, overview: d } = await dadosVisaoGeral()
   const firstName = me.name.split(" ")[0]
-  const d = buildPlatformOverview()
   const c = d.counts
-  const weekday = new Date(MOCK_NOW).toLocaleDateString("pt-BR", { weekday: "long", timeZone: "America/Sao_Paulo" })
-  const hour = Number(time(MOCK_NOW).slice(0, 2))
+  const weekday = new Date(agora).toLocaleDateString("pt-BR", { weekday: "long", timeZone: "America/Sao_Paulo" })
+  const hour = Number(time(agora).slice(0, 2))
   const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite"
 
   return (
@@ -34,7 +43,7 @@ export default function Page() {
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex h-9 items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium shadow-xs">
             <CalendarClockIcon className="size-4 text-muted-foreground" />
-            <span className="capitalize">{weekday.split("-")[0]}</span> · {date(MOCK_NOW)} · {time(MOCK_NOW)}
+            <span className="capitalize">{weekday.split("-")[0]}</span> · {date(agora)} · {time(agora)}
           </span>
           <Button asChild>
             <Link href="/admin/clientes/novo">

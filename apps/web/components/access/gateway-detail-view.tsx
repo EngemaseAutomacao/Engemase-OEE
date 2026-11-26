@@ -37,6 +37,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { publicarConfigAction } from "@/app/(shell)/[cliente]/config/actions"
+import { useFonteDados } from "@/components/config/fonte-dados"
 import { ActivationPanel } from "./activation-panel"
 import { useCommandRunner } from "./command-runner"
 import { CommandsTab } from "./commands-tab"
@@ -65,7 +67,10 @@ export function GatewayDetailView({ data, nowLabel }: { data: GatewayDetail; now
   const base = `/${data.clientSlug}`
   const me = data.remote.me.name
 
-  const { commands, run } = useCommandRunner({ initial: data.commands, offline, me, nowLabel })
+  const fonte = useFonteDados()
+  const real = fonte.banco && fonte.slug ? { slug: fonte.slug, gatewayId: data.id } : undefined
+  const { commands, run } = useCommandRunner({ initial: data.commands, offline, me, nowLabel, real })
+  const [publishing, setPublishing] = useState(false)
   const [published, setPublished] = useState(data.configVersion)
   const [applied, setApplied] = useState(data.configApplied)
   const [versions, setVersions] = useState<ConfigVersionVM[]>(data.configVersions)
@@ -76,13 +81,18 @@ export function GatewayDetailView({ data, nowLabel }: { data: GatewayDetail; now
 
   const reload = async (target: number) => {
     setReloading(true)
-    const out = await run("config.reload", `Recarregar configuração · ${data.hostname}`, () => ({
-      ok: true,
-      result: `Configuração v${target} aplicada`,
-      durationMs: 1240,
-    }))
+    const out = await run(
+      "config.reload",
+      `Recarregar configuração · ${data.hostname}`,
+      () => ({ ok: true, result: `Configuração v${target} aplicada`, durationMs: 1240 }),
+      {},
+    )
     setReloading(false)
     if (!out) return
+    if (real && !out.ok) {
+      toast.error("A configuração não foi aplicada", { description: out.result })
+      return
+    }
     setApplied(target)
     toast.success(`Configuração v${target} aplicada`, { description: `${data.name} baixou, validou e confirmou a nova versão.` })
   }
@@ -109,13 +119,41 @@ export function GatewayDetailView({ data, nowLabel }: { data: GatewayDetail; now
 
   const restart = async () => {
     setRestarting(true)
-    const out = await run("agent.restart", `Reiniciar agente · ${data.hostname}`, () => ({
-      ok: true,
-      result: "Serviço reiniciado; primeiro sincronismo em 8 s",
-      durationMs: 7900,
-    }))
+    const out = await run(
+      "agent.restart",
+      `Reiniciar agente · ${data.hostname}`,
+      () => ({ ok: true, result: "Serviço reiniciado; primeiro sincronismo em 8 s", durationMs: 7900 }),
+      {},
+    )
     setRestarting(false)
     if (out) toast.success("Agente reiniciado", { description: "A coleta voltou em 8 s. As leituras do intervalo ficaram no buffer local." })
+  }
+
+  /** Com banco: publica a config do cadastro atual (nova versão só se houver mudança). */
+  const publish = async () => {
+    if (!real) return
+    setPublishing(true)
+    try {
+      const res = await publicarConfigAction({ slug: real.slug, gatewayId: real.gatewayId })
+      if (!res.ok) {
+        toast.error("Configuração não publicada", { description: res.problemas?.[0] ? `${res.mensagem} (${res.problemas[0].campo}: ${res.problemas[0].mensagem})` : res.mensagem })
+        return
+      }
+      if (res.dados.kind === "unchanged") {
+        toast.info(`Nada mudou desde a v${res.dados.version}`, { description: "O cadastro é o mesmo da última versão publicada." })
+        return
+      }
+      setPublished(res.dados.version)
+      setVersions((vs) => [
+        { version: res.dados.version, publishedLabel: nowLabel, publishedAgo: "agora", author: me, summary: "Publicada agora", changes: [{ kind: "change", text: "Config montada do cadastro atual" }] },
+        ...vs,
+      ])
+      toast.success(`v${res.dados.version} publicada`, { description: `${data.name} baixa a versão nova no próximo sincronismo.` })
+    } catch {
+      toast.error("Sem conexão", { description: "Não foi possível falar com o servidor. Tente de novo." })
+    } finally {
+      setPublishing(false)
+    }
   }
 
   // Pendência de configuração recalculada no cliente (muda com recarregar/reverter).
@@ -194,6 +232,7 @@ export function GatewayDetailView({ data, nowLabel }: { data: GatewayDetail; now
         </section>
       ) : pending && data.activation ? (
         <ActivationPanel
+          gatewayId={data.id}
           name={data.name}
           activation={data.activation}
           machines={data.machines}
@@ -312,7 +351,9 @@ export function GatewayDetailView({ data, nowLabel }: { data: GatewayDetail; now
                 offline={offline}
                 reloading={reloading}
                 onReload={() => reload(published)}
-                onRevert={revert}
+                onRevert={real ? undefined : revert}
+                onPublish={real ? publish : undefined}
+                publishing={publishing}
               />
             </TabsContent>
             <TabsContent value="comandos">

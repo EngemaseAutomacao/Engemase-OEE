@@ -2,18 +2,8 @@
  * Monta os dados da central de ajuda a partir de `@/lib/mock`. Usado SÓ pela página (servidor).
  * Devolve objetos serializáveis.
  */
-import {
-  getCurrentUser,
-  getGateways,
-  getHelpArticles,
-  getLine,
-  getMachines,
-  getRemoteAccessSessions,
-  helpCategories,
-  helpFaq,
-  type Client,
-  type RemoteAccessSession,
-} from "@/lib/mock"
+import type { ClienteDados } from "@/lib/data/cliente/tipos"
+import { getHelpArticles, getRemoteAccessSessions, helpCategories, helpFaq, type RemoteAccessSession } from "@/lib/mock"
 import { dateTime } from "@/lib/format"
 import { ARTICLE_BODY, POPULAR_ORDER } from "./help-articles"
 import { normalize, type ArticleBlock, type CategoryVM, type HelpCategoryId, type HelpData, type TicketVM } from "./help-types"
@@ -47,8 +37,9 @@ const TICKET_STATUS: Record<RemoteAccessSession["status"], TicketVM["status"]> =
   revoked: "waiting",
 }
 
-export function buildHelp(client: Client): HelpData {
-  const me = getCurrentUser()
+/** Artigos e perguntas são fixos; destinos do chamado, nome e pedidos vêm dos dados da tela (banco ou simulados). */
+export function buildHelp(data: ClienteDados): HelpData {
+  const { client, viewer: me } = data
 
   const articles = getHelpArticles().map((a) => {
     const body: ArticleBlock[] = ARTICLE_BODY[a.slug] ?? [{ kind: "p", text: a.summary }]
@@ -71,14 +62,14 @@ export function buildHelp(client: Client): HelpData {
 
   const faq = helpFaq.map((f, i) => ({ id: `faq-${i + 1}`, q: f.q, a: f.a, searchText: normalize(`${f.q} ${f.a}`) }))
 
-  const gateways = getGateways(client.id)
+  const gateways = data.gateways
   const targets = [
     ...gateways.map((g) => ({ id: g.id, label: g.name, hint: g.hostname === "—" ? "aguardando ativação" : g.hostname, group: "gateway" as const })),
-    ...getMachines(client.id).map((m) => ({ id: m.id, label: m.name, hint: `${m.code} · ${getLine(m.lineId)?.name ?? ""}`, group: "machine" as const })),
+    ...data.machines.map((m) => ({ id: m.id, label: m.name, hint: [m.code, data.getLine(m.lineId)?.name].filter(Boolean).join(" · "), group: "machine" as const })),
   ]
 
   // Chamados recentes do cliente = chamados que motivaram pedidos de acesso remoto (únicos dados de chamado no protótipo).
-  const sessions = getRemoteAccessSessions({ clientId: client.id })
+  const sessions = data.getRemoteSessions()
   const tickets: TicketVM[] = sessions.map((s) => ({
     id: s.id,
     number: s.ticket,
@@ -90,7 +81,7 @@ export function buildHelp(client: Client): HelpData {
     openedLabel: dateTime(s.requestedAt),
   }))
 
-  const allTickets = getRemoteAccessSessions().map((s) => Number(s.ticket.replace(/\D/g, "")) || 0)
+  const allTickets = (data.fonte === "simulado" ? getRemoteAccessSessions() : sessions).map((s) => Number(s.ticket.replace(/\D/g, "")) || 0)
   const nextTicket = Math.max(1000, ...allTickets) + 1
 
   return {
@@ -108,8 +99,8 @@ export function buildHelp(client: Client): HelpData {
 }
 
 /** Situação dos serviços e dos gateways do cliente, para o cartão "Status da plataforma". */
-export function buildPlatformStatus(client: Client) {
-  const gateways = getGateways(client.id).filter((g) => g.status !== "pending")
+export function buildPlatformStatus(data: ClienteDados) {
+  const gateways = data.gateways.filter((g) => g.status !== "pending")
   const online = gateways.filter((g) => g.status === "online" || g.status === "degraded").length
   const offline = gateways.filter((g) => g.status === "offline").map((g) => g.name)
   const agentVersions = [...new Set(gateways.map((g) => g.agentVersion).filter((v): v is string => Boolean(v)))].sort().reverse()

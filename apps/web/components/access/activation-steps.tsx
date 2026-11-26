@@ -4,6 +4,8 @@ import { useState } from "react"
 import { DownloadIcon, GlobeIcon, RefreshCwIcon, ShieldCheckIcon, TriangleAlertIcon } from "lucide-react"
 import { toast } from "sonner"
 
+import { gerarCodigoAction } from "@/app/(shell)/[cliente]/config/actions"
+import { useFonteDados } from "@/components/config/fonte-dados"
 import { GATEWAY_URL, PLATFORM_HOST } from "@/lib/site"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -13,10 +15,34 @@ import { LATEST_AGENT as AGENT_VERSION, activationCode } from "./labels"
 
 type Arch = "arm64" | "amd64"
 
-/** Estado do código de ativação (com "gerar novo código"). Novo código vale 24 h a partir de agora. */
-export function useActivationCode(seed: string, initial: { code: string; expired: boolean; expiresLabel: string }, freshExpiresLabel: string) {
+/**
+ * Estado do código de ativação (com "gerar novo código"). Novo código vale 24 h a partir de agora.
+ * Com banco e `gatewayId`, o código é gerado no servidor (só o hash fica no banco; o código em claro
+ * aparece só nesta tela).
+ */
+export function useActivationCode(
+  seed: string,
+  initial: { code: string; expired: boolean; expiresLabel: string },
+  freshExpiresLabel: string,
+  gatewayId?: string,
+) {
   const [state, setState] = useState({ ...initial, round: 0 })
-  const regenerate = () => {
+  const fonte = useFonteDados()
+  const regenerate = async () => {
+    if (fonte.banco && fonte.slug && gatewayId) {
+      try {
+        const res = await gerarCodigoAction({ slug: fonte.slug, gatewayId })
+        if (!res.ok) {
+          toast.error("Código não gerado", { description: res.mensagem })
+          return
+        }
+        setState((s) => ({ code: res.dados.code, expired: false, expiresLabel: res.dados.expiresLabel, round: s.round + 1 }))
+        toast.success("Novo código de ativação gerado", { description: `${res.dados.code} · válido por 24 h. Códigos anteriores deixaram de valer.` })
+      } catch {
+        toast.error("Sem conexão", { description: "Não foi possível falar com o servidor. Tente de novo." })
+      }
+      return
+    }
     const next = activationCode(`${seed}:${state.code}:${state.round + 1}`)
     setState((s) => ({ code: next, expired: false, expiresLabel: freshExpiresLabel, round: s.round + 1 }))
     toast.success("Novo código de ativação gerado", { description: `${next} · válido por 24 h. O código anterior (${state.code}) deixou de valer.` })
@@ -74,7 +100,9 @@ export function ActivationSteps({
       >
         <div className="flex flex-col gap-2">
           <span className="text-xs font-medium text-muted-foreground uppercase">Código de ativação</span>
-          {expired ? (
+          {code === "" ? (
+            <span className="text-sm text-muted-foreground">Por segurança o código só aparece na hora em que é gerado. Gere um código novo para ativar.</span>
+          ) : expired ? (
             <span className="w-fit rounded-md border bg-muted/60 px-3 py-1.5 font-mono text-xl font-semibold tracking-[0.18em] text-muted-foreground line-through sm:text-2xl">
               {code}
             </span>
@@ -83,7 +111,7 @@ export function ActivationSteps({
           )}
         </div>
         <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:items-end sm:text-right">
-          {expired ? (
+          {code === "" ? null : expired ? (
             <span className="inline-flex items-center gap-1.5 font-medium text-state-fault">
               <TriangleAlertIcon className="size-3.5" />
               Expirou em {expiresLabel}
@@ -135,7 +163,7 @@ export function ActivationSteps({
               O código anterior venceu. Gere um novo código para liberar o comando de ativação.
             </p>
           ) : (
-            <CopyBlock code={`sudo oee-gateway enroll --url ${GATEWAY_URL} --code ${code}`} />
+            <CopyBlock code={`sudo oee-gateway enroll --url ${GATEWAY_URL} --code ${code || "<código>"}`} />
           )}
         </Step>
         <Step n={3} title="Inicie o serviço e habilite na inicialização">

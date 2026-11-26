@@ -61,9 +61,17 @@ type Poller struct {
 	// Definido antes de Run.
 	Logger *slog.Logger
 	target modbus.Target
+	key    string // TransportKey do alvo (Registry)
 	open   func(modbus.Target) (modbus.Reader, error)
 	groups []*group
 	now    func() time.Time
+
+	// reqs recebe as leituras avulsas (comandos da nuvem, CLI, página local): sem
+	// buffer, o pedido só entra quando o laço de leitura o atende (ver Read).
+	reqs chan *request
+	// sinceCmd conta as leituras da coleta desde o último pedido avulso atendido
+	// (só a goroutine de Run mexe).
+	sinceCmd int
 
 	mu      sync.Mutex
 	devices map[string]*devState
@@ -171,7 +179,8 @@ func Build(cfg *config.GatewayConfig, local *config.Local) ([]*Poller, error) {
 }
 
 func newPoller(name string, t modbus.Target) *Poller {
-	return &Poller{Name: name, target: t, open: modbus.Open, now: time.Now, devices: map[string]*devState{}}
+	return &Poller{Name: name, target: t, key: TransportKey(t), open: modbus.Open, now: time.Now,
+		devices: map[string]*devState{}, reqs: make(chan *request), sinceCmd: cmdEvery - 1}
 }
 
 // addDevice compila os grupos de leitura do dispositivo: os blocos da config e as
@@ -221,11 +230,12 @@ func (p *Poller) addDevice(dev *config.Device) {
 }
 
 // Run lê até o contexto acabar, entregando os resultados em out (bloqueia se o
-// motor estiver atrasado: contrapressão, nada é descartado em silêncio).
+// motor estiver atrasado: contrapressão, nada é descartado em silêncio). Entre as
+// leituras da coleta, atende os pedidos avulsos (Read, Exclusive): o transporte tem
+// um mestre só.
 func (p *Poller) Run(ctx context.Context, out chan<- Reading) error {
 	if len(p.groups) == 0 {
-		<-ctx.Done() // sem laço de leitura: Liveness fica zerado, nada a conferir
-		return ctx.Err()
+		return p.runIdle(ctx) // sem laço de leitura: Liveness fica zerado, nada a conferir
 	}
 	// Abrir o transporte conta como volta do laço: o supervisor que reinicia o poller
 	// depois de uma falha está vivo, mesmo que a porta não exista.
@@ -234,7 +244,11 @@ func (p *Poller) Run(ctx context.Context, out chan<- Reading) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", p.Name, err)
 	}
-	defer reader.Close()
+	defer func() {
+		if reader != nil {
+			_ = reader.Close()
+		}
+	}()
 
 	now := p.now()
 	for i, g := range p.groups {
@@ -252,14 +266,33 @@ func (p *Poller) Run(ctx context.Context, out chan<- Reading) error {
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-timer.C:
+			case r := <-p.reqs:
+				timer.Stop()
+				if reader, err = p.serve(reader, r); err != nil {
+					return err
+				}
+				continue
 			}
 		} else if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		// Com a coleta atrasada, um pedido avulso entra no máximo a cada cmdEvery
+		// transações: o comando interativo vem primeiro, sem matar o polling.
+		if p.sinceCmd >= cmdEvery-1 {
+			select {
+			case r := <-p.reqs:
+				if reader, err = p.serve(reader, r); err != nil {
+					return err
+				}
+				continue
+			default:
+			}
 		}
 
 		start := p.now()
 		raw, rerr := reader.ReadBlock(ctx, g.unit, g.span)
 		at := p.now()
+		p.sinceCmd++
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}

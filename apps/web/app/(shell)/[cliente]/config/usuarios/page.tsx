@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import {
@@ -102,6 +103,8 @@ function engemaseAccessFor(client: Client): EngemaseAccessRow[] {
   const rank = { permanent: 0, active: 1, ended: 2 } as const
   return rows.sort((a, b) => rank[a.status] - rank[b.status]).filter((r, i, all) => r.status !== "ended" || all.slice(0, i).filter((x) => x.status === "ended").length < 3)
 }
+
+export const metadata: Metadata = { title: "Usuários" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/usuarios">) {
   const { cliente } = await params

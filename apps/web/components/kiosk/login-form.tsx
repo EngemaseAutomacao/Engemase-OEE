@@ -24,11 +24,18 @@ import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { NumericKeypad } from "@/components/kiosk/numeric-keypad"
+import { requestPasswordResetAction } from "@/app/(auth)/senha-actions"
+import { signInAction, type SignInResult, verifyTwoFactorAction } from "@/app/(auth)/login/actions"
 
 const PIN_MAX = 6
 const PIN_MIN = 4
 
-/** Formulário de login do protótipo: e-mail/senha e acesso rápido do operador (usuário + PIN). */
+/**
+ * Formulário de login: e-mail/senha com o login real (Better Auth, via Server Actions de
+ * app/(auth)/login/actions.ts), seguido do código do aplicativo autenticador quando a conta tem 2FA.
+ * Sem o login configurado e com AUTH_ENFORCED desligado, segue em modo demonstração (vai para /inicio).
+ * A aba do operador (usuário + PIN) continua só demonstração: operadores do chão usam o terminal.
+ */
 export function LoginForm({ operatorHref }: { operatorHref: string }) {
   const [tab, setTab] = useState("email")
   return (
@@ -53,16 +60,32 @@ export function LoginForm({ operatorHref }: { operatorHref: string }) {
   )
 }
 
+/** `next` da URL (de onde a pessoa veio); o servidor só aceita caminho relativo seguro. */
+function nextParam(): string | undefined {
+  const value = new URLSearchParams(window.location.search).get("next")
+  return value ?? undefined
+}
+
 function EmailLogin() {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [remember, setRemember] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
+  const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({})
   const [pending, setPending] = useState(false)
   const [forgotOpen, setForgotOpen] = useState(false)
+  const [twoFactor, setTwoFactor] = useState(false)
 
-  function submit(e: React.FormEvent) {
+  function follow(result: SignInResult): boolean {
+    if (result.status === "ok" || result.status === "demo") {
+      router.push(result.redirectTo)
+      return true
+    }
+    return false
+  }
+
+  async function submit(e: React.FormEvent) {
     e.preventDefault()
     const next: typeof errors = {}
     if (!email.trim()) next.email = "Informe seu e-mail."
@@ -71,8 +94,34 @@ function EmailLogin() {
     setErrors(next)
     if (Object.keys(next).length > 0) return
     setPending(true)
-    // Protótipo: sem autenticação real.
-    window.setTimeout(() => router.push("/inicio"), 500)
+    try {
+      const result = await signInAction({ email: email.trim(), password, remember, next: nextParam() })
+      if (follow(result)) return
+      if (result.status === "two_factor") {
+        setPassword("")
+        setTwoFactor(true)
+      } else if (result.status === "error") {
+        setErrors(
+          result.field === "email" ? { email: result.message } : result.field === "password" ? { password: result.message } : { form: result.message },
+        )
+      }
+      setPending(false)
+    } catch {
+      setErrors({ form: "Sem conexão com o servidor. Confira a internet e tente de novo." })
+      setPending(false)
+    }
+  }
+
+  if (twoFactor) {
+    return (
+      <TwoFactorStep
+        onDone={follow}
+        onBack={() => {
+          setTwoFactor(false)
+          setErrors({})
+        }}
+      />
+    )
   }
 
   return (
@@ -137,12 +186,18 @@ function EmailLogin() {
         </Field>
 
         <div className="flex items-center gap-2.5">
-          <Checkbox id="login-remember" defaultChecked />
+          <Checkbox id="login-remember" checked={remember} onCheckedChange={(v) => setRemember(v === true)} />
           <Label htmlFor="login-remember" className="font-normal">
             Manter conectado neste dispositivo
           </Label>
         </div>
       </FieldGroup>
+
+      {errors.form && (
+        <p role="alert" className="text-sm font-medium text-destructive">
+          {errors.form}
+        </p>
+      )}
 
       <Button type="submit" size="lg" className="h-11 w-full text-base" disabled={pending}>
         {pending && <Spinner aria-label="Carregando" />}
@@ -153,11 +208,93 @@ function EmailLogin() {
         <ShieldCheckIcon className="text-primary" />
         <AlertTitle>Verificação em duas etapas</AlertTitle>
         <AlertDescription>
-          Administradores, engenheiros e a equipe Engemase confirmam o acesso com o código de 6 dígitos do aplicativo autenticador, logo após a senha.
+          Administradores do cliente e a equipe Engemase confirmam o acesso com o código de 6 dígitos do aplicativo autenticador, logo após a senha.
         </AlertDescription>
       </Alert>
 
       <ForgotPasswordDialog open={forgotOpen} onOpenChange={setForgotOpen} initialEmail={email} />
+    </form>
+  )
+}
+
+/** Segunda etapa: código de 6 dígitos do aplicativo autenticador ou um código de recuperação. */
+function TwoFactorStep({ onDone, onBack }: { onDone: (result: SignInResult) => boolean; onBack: () => void }) {
+  const [method, setMethod] = useState<"totp" | "backup">("totp")
+  const [code, setCode] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!code.trim()) {
+      setError(method === "totp" ? "Informe o código de 6 dígitos." : "Informe um código de recuperação.")
+      return
+    }
+    setPending(true)
+    setError(null)
+    try {
+      const result = await verifyTwoFactorAction({ method, code: code.trim(), next: nextParam() })
+      if (onDone(result)) return
+      if (result.status === "error") setError(result.message)
+      setPending(false)
+    } catch {
+      setError("Sem conexão com o servidor. Confira a internet e tente de novo.")
+      setPending(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="flex flex-col gap-6">
+      <Alert className="border-primary/20 bg-primary/5">
+        <ShieldCheckIcon className="text-primary" />
+        <AlertTitle>Verificação em duas etapas</AlertTitle>
+        <AlertDescription>
+          {method === "totp"
+            ? "Digite o código de 6 dígitos que aparece no seu aplicativo autenticador."
+            : "Digite um dos códigos de recuperação que você guardou ao ativar a verificação. Cada código vale uma vez."}
+        </AlertDescription>
+      </Alert>
+      <Field data-invalid={Boolean(error)}>
+        <FieldLabel htmlFor="login-2fa-code">{method === "totp" ? "Código do aplicativo" : "Código de recuperação"}</FieldLabel>
+        <Input
+          id="login-2fa-code"
+          inputMode={method === "totp" ? "numeric" : "text"}
+          autoComplete="one-time-code"
+          autoCapitalize="none"
+          spellCheck={false}
+          maxLength={method === "totp" ? 6 : 32}
+          placeholder={method === "totp" ? "000000" : "xxxxx-xxxxx"}
+          className="h-11 text-lg tracking-widest"
+          value={code}
+          onChange={(e) => {
+            setError(null)
+            setCode(e.target.value)
+          }}
+          aria-invalid={Boolean(error)}
+          autoFocus
+        />
+        {error && <FieldError>{error}</FieldError>}
+      </Field>
+      <Button type="submit" size="lg" className="h-11 w-full text-base" disabled={pending}>
+        {pending && <Spinner aria-label="Carregando" />}
+        {pending ? "Confirmando…" : "Confirmar"}
+      </Button>
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <button type="button" className="font-medium text-primary underline-offset-4 hover:underline" onClick={onBack}>
+          Voltar
+        </button>
+        <button
+          type="button"
+          className="font-medium text-primary underline-offset-4 hover:underline"
+          onClick={() => {
+            setMethod((m) => (m === "totp" ? "backup" : "totp"))
+            setCode("")
+            setError(null)
+          }}
+        >
+          {method === "totp" ? "Usar um código de recuperação" : "Usar o aplicativo autenticador"}
+        </button>
+      </div>
     </form>
   )
 }
@@ -183,17 +320,34 @@ function ForgotPasswordDialog({
 function ForgotPasswordBody({ initialEmail, onDone }: { initialEmail: string; onDone: () => void }) {
   const [email, setEmail] = useState(initialEmail)
   const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
 
-  function send(e: React.FormEvent) {
+  async function send(e: React.FormEvent) {
     e.preventDefault()
+    // O diálogo é um portal dentro do formulário de login: sem isto, o envio sobe (no React) até ele.
+    e.stopPropagation()
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
       setError("Informe o e-mail cadastrado na plataforma.")
       return
     }
-    toast.success("Verifique sua caixa de entrada", {
-      description: `Se ${email.trim()} estiver cadastrado, você receberá um link para criar uma nova senha. O link vale por 30 minutos.`,
-    })
-    onDone()
+    setPending(true)
+    setError(null)
+    try {
+      const result = await requestPasswordResetAction({ email: email.trim() })
+      if (result.status === "error") {
+        setError(result.message)
+        setPending(false)
+        return
+      }
+      // Mesma mensagem exista ou não a conta (não revela quem tem cadastro).
+      toast.success("Verifique sua caixa de entrada", {
+        description: `Se ${email.trim()} estiver cadastrado, você receberá um link para criar uma nova senha. O link vale por 30 minutos.`,
+      })
+      onDone()
+    } catch {
+      setError("Sem conexão com o servidor. Confira a internet e tente de novo.")
+      setPending(false)
+    }
   }
 
   return (
@@ -222,7 +376,10 @@ function ForgotPasswordBody({ initialEmail, onDone }: { initialEmail: string; on
         <Button type="button" variant="outline" onClick={onDone}>
           Cancelar
         </Button>
-        <Button type="submit">Enviar link</Button>
+        <Button type="submit" disabled={pending}>
+          {pending && <Spinner aria-label="Carregando" />}
+          Enviar link
+        </Button>
       </DialogFooter>
     </form>
   )

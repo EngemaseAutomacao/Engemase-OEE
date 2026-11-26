@@ -1,9 +1,12 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { brandPresets, getClientBranding, getClientBySlug, getConfigAccess, getLine, getMachines } from "@/lib/mock"
 import { ConfigAccessProvider, EngemaseManagedNote } from "@/components/config/engemase-managed"
 import { BrandEditor } from "@/components/settings/brand-editor"
 import type { BrandingInitial, PreviewMachine } from "@/components/settings/types"
+
+export const metadata: Metadata = { title: "Aparência" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/aparencia">) {
   const { cliente } = await params

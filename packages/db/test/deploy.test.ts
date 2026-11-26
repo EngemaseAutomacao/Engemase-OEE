@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { appLoginSql, DeployConfigError, planMigration, readAppLogin } from "../src/deploy"
+import { DeployConfigError, type LoginRole, loginRoleSql, planMigration, readLogin, readLogins } from "../src/deploy"
 import { createTestDatabase, type TestDatabase } from "./helpers"
 
 const PASSWORD = "Abcdefghijklmnopqrstuvwxyz012345-._~"
 const OWNER_URL = "postgresql://owner:x@db.example/neondb"
+const APP: LoginRole = { kind: "app", user: "app_login", password: PASSWORD, memberOf: "app_user", inherit: false }
+const AUTH: LoginRole = { kind: "auth", user: "auth_login", password: PASSWORD, memberOf: "auth_service", inherit: true }
 
 describe("planMigration", () => {
   it("produção migra com a URL sem pooler", () => {
@@ -12,7 +14,7 @@ describe("planMigration", () => {
       DATABASE_URL: "postgresql://pooled",
       DATABASE_URL_UNPOOLED: OWNER_URL,
     })
-    expect(plan).toMatchObject({ run: true, url: OWNER_URL, urlSource: "DATABASE_URL_UNPOOLED", appLogin: null })
+    expect(plan).toMatchObject({ run: true, url: OWNER_URL, urlSource: "DATABASE_URL_UNPOOLED", logins: [] })
   })
 
   it("MIGRATION_DATABASE_URL tem prioridade", () => {
@@ -36,25 +38,36 @@ describe("planMigration", () => {
     expect(() => planMigration({})).toThrow(DeployConfigError)
   })
 
-  it("lê o usuário de login da aplicação", () => {
-    const plan = planMigration({ VERCEL_ENV: "production", DATABASE_URL: OWNER_URL, APP_DB_PASSWORD: PASSWORD })
-    expect(plan).toMatchObject({ run: true, appLogin: { user: "app_login", password: PASSWORD } })
+  it("lê os usuários de login do app e do Better Auth", () => {
+    const plan = planMigration({
+      VERCEL_ENV: "production",
+      DATABASE_URL: OWNER_URL,
+      APP_DB_PASSWORD: PASSWORD,
+      AUTH_DB_PASSWORD: PASSWORD,
+    })
+    expect(plan).toMatchObject({ run: true, logins: [APP, AUTH] })
   })
 })
 
-describe("readAppLogin", () => {
+describe("readLogin", () => {
   it("recusa senha curta, com caracteres inseguros ou papel reservado", () => {
-    expect(() => readAppLogin({ APP_DB_PASSWORD: "curta" })).toThrow(DeployConfigError)
-    expect(() => readAppLogin({ APP_DB_PASSWORD: `${PASSWORD}'; DROP ROLE x; --` })).toThrow(DeployConfigError)
-    expect(() => readAppLogin({ APP_DB_PASSWORD: `${PASSWORD}$$` })).toThrow(DeployConfigError)
-    expect(() => readAppLogin({ APP_DB_PASSWORD: PASSWORD, APP_DB_USER: "app_user" })).toThrow(DeployConfigError)
-    expect(() => readAppLogin({ APP_DB_PASSWORD: PASSWORD, APP_DB_USER: 'x"; DROP' })).toThrow(DeployConfigError)
+    expect(() => readLogin({ APP_DB_PASSWORD: "curta" }, "app")).toThrow(DeployConfigError)
+    expect(() => readLogin({ APP_DB_PASSWORD: `${PASSWORD}'; DROP ROLE x; --` }, "app")).toThrow(DeployConfigError)
+    expect(() => readLogin({ AUTH_DB_PASSWORD: `${PASSWORD}$$` }, "auth")).toThrow(DeployConfigError)
+    expect(() => readLogin({ APP_DB_PASSWORD: PASSWORD, APP_DB_USER: "app_user" }, "app")).toThrow(DeployConfigError)
+    expect(() => readLogin({ APP_DB_PASSWORD: PASSWORD, APP_DB_USER: 'x"; DROP' }, "app")).toThrow(DeployConfigError)
+  })
+
+  it("app e auth não podem usar o mesmo usuário", () => {
+    expect(() => readLogins({ APP_DB_PASSWORD: PASSWORD, AUTH_DB_PASSWORD: PASSWORD, AUTH_DB_USER: "app_login" })).toThrow(
+      DeployConfigError,
+    )
   })
 
   it("a mensagem de erro não mostra a senha", () => {
     const bad = `${PASSWORD}!`
     try {
-      readAppLogin({ APP_DB_PASSWORD: bad })
+      readLogin({ APP_DB_PASSWORD: bad }, "app")
       expect.unreachable()
     } catch (error) {
       expect((error as Error).message).not.toContain(bad)
@@ -62,7 +75,7 @@ describe("readAppLogin", () => {
   })
 })
 
-describe("appLoginSql no banco", () => {
+describe("loginRoleSql no banco", () => {
   let database: TestDatabase
 
   beforeAll(async () => {
@@ -72,40 +85,69 @@ describe("appLoginSql no banco", () => {
     await database.client.close()
   })
 
-  it("cria o usuário membro de app_user, sem poderes, e é idempotente", async () => {
-    const { client } = database
-    const sql = appLoginSql({ user: "app_login", password: PASSWORD })
-    await client.exec(sql)
-    await client.exec(sql) // segunda vez: só atualiza a senha
-
-    const role = await client.query<{ login: boolean; bypass: boolean; createrole: boolean; super: boolean }>(
-      `SELECT rolcanlogin AS login, rolbypassrls AS bypass, rolcreaterole AS createrole, rolsuper AS super
-       FROM pg_roles WHERE rolname = 'app_login'`,
+  async function roleInfo(user: string, memberOf: string) {
+    const result = await database.client.query<{
+      login: boolean
+      inherit: boolean
+      bypass: boolean
+      createrole: boolean
+      super: boolean
+      member: boolean
+      usage: boolean
+    }>(
+      `SELECT rolcanlogin AS login, rolinherit AS inherit, rolbypassrls AS bypass, rolcreaterole AS createrole,
+              rolsuper AS super, pg_has_role($1, $2, 'MEMBER') AS member, pg_has_role($1, $2, 'USAGE') AS usage
+       FROM pg_roles WHERE rolname = $1`,
+      [user, memberOf],
     )
-    expect(role.rows).toEqual([{ login: true, bypass: false, createrole: false, super: false }])
+    return result.rows[0]
+  }
 
-    const member = await client.query<{ ok: boolean }>("SELECT pg_has_role('app_login', 'app_user', 'MEMBER') AS ok")
-    expect(member.rows[0]?.ok).toBe(true)
+  it("app_login: membro de app_user só com SET (não herda), sem poderes; idempotente", async () => {
+    await database.client.exec(loginRoleSql(APP))
+    await database.client.exec(loginRoleSql(APP)) // segunda vez: só atualiza a senha
+    expect(await roleInfo("app_login", "app_user")).toEqual({
+      login: true,
+      inherit: false,
+      bypass: false,
+      createrole: false,
+      super: false,
+      member: true,
+      usage: false,
+    })
+  })
+
+  it("auth_login: herda auth_service (o Better Auth não troca de papel)", async () => {
+    await database.client.exec(loginRoleSql(AUTH))
+    await database.client.exec(loginRoleSql(AUTH))
+    expect(await roleInfo("auth_login", "auth_service")).toMatchObject({ login: true, inherit: true, member: true, usage: true })
   })
 
   it("recusa reaproveitar um papel existente com poderes demais", async () => {
-    const { client } = database
-    await client.exec("CREATE ROLE poderoso LOGIN BYPASSRLS")
-    await expect(client.exec(appLoginSql({ user: "poderoso", password: PASSWORD }))).rejects.toThrow(/poderes demais/)
+    await database.client.exec("CREATE ROLE poderoso LOGIN BYPASSRLS")
+    await expect(database.client.exec(loginRoleSql({ ...APP, user: "poderoso" }))).rejects.toThrow(/poderes demais/)
   })
 
-  it("como app_login, assume app_user e fica sob a RLS (sem cliente, nenhuma linha)", async () => {
+  it("como app_login, sem SET ROLE não lê nada; com app_user fica sob a RLS", async () => {
     const { client } = database
-    await client.exec(appLoginSql({ user: "app_login", password: PASSWORD }))
-    await client.exec(
-      `INSERT INTO organization (name, slug) VALUES ('Engemase Lab', 'engemase-lab') ON CONFLICT DO NOTHING`,
-    )
+    await client.exec(loginRoleSql(APP))
+    const result = await client.transaction(async (tx) => {
+      await tx.exec("SET LOCAL ROLE app_login")
+      const denied = await tx.query("SELECT count(*) FROM organization").then(
+        () => "leu",
+        (error: unknown) => (error as Error).message,
+      )
+      await tx.rollback()
+      return denied
+    })
+    expect(result).toMatch(/permission denied/)
+
     const rows = await client.transaction(async (tx) => {
       await tx.exec("SET LOCAL ROLE app_login")
       await tx.exec("SET LOCAL ROLE app_user")
-      const result = await tx.query<{ n: number }>("SELECT count(*)::int AS n FROM organization")
+      const r = await tx.query<{ n: number }>("SELECT count(*)::int AS n FROM organization")
       await tx.rollback()
-      return result.rows[0]?.n
+      return r.rows[0]?.n
     })
     expect(rows).toBe(0)
   })

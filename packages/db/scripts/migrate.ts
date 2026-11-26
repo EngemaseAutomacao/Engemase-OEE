@@ -1,5 +1,5 @@
 /**
- * Aplica as migrações do Drizzle no Postgres (Neon) e garante o usuário de login da aplicação.
+ * Aplica as migrações do Drizzle no Postgres (Neon) e garante os usuários de login (app e Better Auth).
  *
  *   pnpm --filter @engemase/db db:deploy   # build da Vercel (decide pelo VERCEL_ENV; ver src/deploy.ts)
  *   MIGRATION_DATABASE_URL=… pnpm --filter @engemase/db db:migrate   # manual, fora da Vercel
@@ -15,13 +15,13 @@ import { drizzle } from "drizzle-orm/node-postgres"
 import { migrate } from "drizzle-orm/node-postgres/migrator"
 import pg from "pg"
 import {
-  type AppLogin,
-  appLoginSql,
   DeployConfigError,
+  type LoginRole,
+  loginRoleSql,
   MIGRATION_LOCK_KEY,
   MIN_SERVER_VERSION_NUM,
   planMigration,
-} from "../src/deploy.ts"
+} from "../src/deploy"
 
 const MIGRATIONS_FOLDER = fileURLToPath(new URL("../migrations", import.meta.url))
 const log = (message: string): void => console.log(`[db] ${message}`)
@@ -35,23 +35,31 @@ async function appliedCount(client: pg.Client): Promise<number> {
   return result.rows[0]?.n ?? 0
 }
 
-/** Confere que o usuário da aplicação entra no banco e assume `app_user` (o que o `withTenant` faz). */
-async function checkAppLogin(ownerUrl: string, login: AppLogin): Promise<void> {
+/**
+ * Confere que o login entra no banco com a senha e se comporta como esperado: o da aplicação assume
+ * `app_user` (o que o `withTenant` faz) sem herdá-lo; o do Better Auth herda `auth_service`.
+ */
+async function checkLogin(ownerUrl: string, login: LoginRole): Promise<void> {
   const url = new URL(ownerUrl)
   url.username = login.user
   url.password = login.password
   const client = new pg.Client({ connectionString: url.toString(), connectionTimeoutMillis: 15_000 })
   await client.connect()
   try {
-    await client.query("BEGIN")
-    await client.query("SET LOCAL ROLE app_user")
-    const result = await client.query<{ who: string; bypass: boolean }>(
-      "SELECT session_user AS who, rolbypassrls AS bypass FROM pg_catalog.pg_roles WHERE rolname = session_user",
+    const result = await client.query<{ who: string; bypass: boolean; inherits: boolean }>(
+      `SELECT session_user AS who, r.rolbypassrls AS bypass, pg_catalog.pg_has_role(session_user, $1, 'USAGE') AS inherits
+       FROM pg_catalog.pg_roles r WHERE r.rolname = session_user`,
+      [login.memberOf],
     )
-    await client.query("ROLLBACK")
     const row = result.rows[0]
     if (row?.who !== login.user) throw new Error(`a conexão de teste entrou como ${row?.who ?? "?"}, não como ${login.user}`)
     if (row.bypass) throw new Error(`o usuário ${login.user} não pode ter BYPASSRLS`)
+    if (row.inherits !== login.inherit) {
+      throw new Error(`o usuário ${login.user} ${login.inherit ? "precisa herdar" : "não pode herdar"} ${login.memberOf}`)
+    }
+    await client.query("BEGIN")
+    await client.query(`SET LOCAL ROLE ${login.memberOf}`)
+    await client.query("ROLLBACK")
   } finally {
     await client.end()
   }
@@ -86,11 +94,12 @@ async function main(): Promise<void> {
       const after = await appliedCount(client)
       log(`migrações: ${after - before} nova(s), ${after} no total`)
 
-      if (plan.appLogin === null) {
-        log("APP_DB_PASSWORD ausente: usuário de login da aplicação não foi criado/atualizado.")
-      } else {
-        await client.query(appLoginSql(plan.appLogin))
-        log(`usuário de login ${plan.appLogin.user} pronto (membro de app_user)`)
+      for (const login of plan.logins) {
+        await client.query(loginRoleSql(login))
+        log(`usuário de login ${login.user} pronto (membro de ${login.memberOf})`)
+      }
+      if (plan.logins.length === 0) {
+        log("APP_DB_PASSWORD/AUTH_DB_PASSWORD ausentes: usuários de login não foram criados/atualizados.")
       }
     } finally {
       await client.query("SELECT pg_advisory_unlock($1)", [MIGRATION_LOCK_KEY]).catch(() => undefined)
@@ -104,9 +113,9 @@ async function main(): Promise<void> {
     await client.end()
   }
 
-  if (plan.appLogin !== null) {
-    await checkAppLogin(plan.url, plan.appLogin)
-    log(`conexão como ${plan.appLogin.user} conferida (SET ROLE app_user ok)`)
+  for (const login of plan.logins) {
+    await checkLogin(plan.url, login)
+    log(`conexão como ${login.user} conferida`)
   }
 }
 

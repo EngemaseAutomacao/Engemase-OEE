@@ -1,7 +1,7 @@
-import { OeeInputError } from "./errors.js";
-import { clipInterval, subtractIntervals } from "./intervals.js";
-import { resolveOptions } from "./options.js";
-import type { Interval, MachineState, OeeOptions, ReasonCategory, StateEvent } from "./types.js";
+import { OeeInputError } from "./errors";
+import { clipInterval, subtractIntervals } from "./intervals";
+import { resolveOptions } from "./options";
+import type { Interval, MachineState, OeeOptions, ReasonCategory, StateEvent } from "./types";
 
 /** O que um trecho da linha do tempo representa. */
 export type SegmentCategory =

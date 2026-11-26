@@ -41,6 +41,7 @@ import {
   gateway,
   gatewayCommand,
   gatewayDeviceStatus,
+  gatewayHealthSample,
   gatewayMachine,
   machineLive,
   machineStateEvent,
@@ -54,6 +55,7 @@ import {
   withTenant,
 } from "@engemase/db"
 import { and, asc, eq, gt, gte, inArray, isNull, lte, sql } from "drizzle-orm"
+import { ensureSystemRule, raiseAlert } from "../alerts/system"
 import { assertTokenStillValid, tokenStateInTx } from "./auth"
 import { GatewayApiError, MAX_ERROR_ISSUES, pathFromDotted } from "./errors"
 import { type GatewayPrincipal, type GatewayTx, type GatewayDb, type RequestMeta } from "./types"
@@ -110,7 +112,7 @@ export async function processSync(
   return withTenant(db, principal.organizationId, async (tx) => {
     const gw = await lockGateway(tx, principal)
     const refs = await loadReferences(tx, principal.gatewayId, req)
-    assertQueueReferences(req, refs)
+    assertQueueReferences(req, refs, gw.configVersionLatest)
 
     const writer: Writer = { tx, principal, unitId: gw.unitId, now: ctx.now, touched: new TouchedRanges() }
     const events = req.events ?? []
@@ -287,8 +289,26 @@ async function loadReferences(tx: GatewayTx, gatewayId: string, req: SyncRequest
   }
 }
 
-/** Itens da fila com referência de fora do gateway → 400 `unknown_reference` (o agente isola o item). */
-function assertQueueReferences(req: SyncRequest, refs: References): void {
+/**
+ * O agente ainda roda uma config anterior à publicada, e não porque a recusou ou reverteu: a
+ * referência que ele cita pode ter saído na config nova. Nesse caso a resposta é 409
+ * `config_outdated` (o agente baixa a config e reenvia), em vez de 400 `unknown_reference` (que
+ * mandaria o item para a quarentena). Se a config publicada foi recusada pelo agente, o 409 só o
+ * faria baixar a mesma config de novo, para sempre: aí vale o 400.
+ */
+export function agentConfigOutdated(agent: SyncRequest["agent"], latestVersion: number): boolean {
+  if (agent.config_version >= latestVersion) return false
+  const status = agent.config_status
+  const refusedLatest =
+    status !== undefined && status.version >= latestVersion && (status.state === "rejected" || status.state === "reverted")
+  return !refusedLatest
+}
+
+/**
+ * Itens da fila com referência de fora do gateway → 400 `unknown_reference` (o agente isola o item);
+ * com a config do agente desatualizada, 409 `config_outdated` (ver `agentConfigOutdated`).
+ */
+function assertQueueReferences(req: SyncRequest, refs: References, latestConfigVersion: number): void {
   const issues: ErrorIssue[] = []
   const check = (ok: boolean, path: (string | number)[], what: string) => {
     if (!ok) issues.push({ path, message: `${what} não pertence a este gateway` })
@@ -304,6 +324,13 @@ function assertQueueReferences(req: SyncRequest, refs: References): void {
   ;(req.minutes ?? []).forEach((m, i) => check(refs.machines.has(key(m.machine_id)), ["minutes", i, "machine_id"], "machine_id"))
   ;(req.samples ?? []).forEach((s, i) => check(refs.tags.has(key(s.tag_id)), ["samples", i, "tag_id"], "tag_id"))
   if (issues.length === 0) return
+  if (agentConfigOutdated(req.agent, latestConfigVersion)) {
+    throw new GatewayApiError(
+      "config_outdated",
+      `O lote cita máquina, tag ou sessão fora da config ${latestConfigVersion} (o agente está na ${req.agent.config_version}). Baixe a config nova e reenvie.`,
+      { issues: issues.slice(0, MAX_ERROR_ISSUES) },
+    )
+  }
   throw new GatewayApiError(
     "unknown_reference",
     `${issues.length} item(ns) do lote citam máquina, tag ou sessão que não pertence a este gateway.`,
@@ -538,6 +565,7 @@ async function saveMinutes(w: Writer, minutes: readonly Minute[]): Promise<void>
   const stored = new Map(existing.map((r) => [`${key(r.machineId)}|${r.bucketStart.getTime()}`, r]))
 
   const fresh: (typeof productionMinute.$inferInsert)[] = []
+  const rewritten = new Map<string, { machineId: string; count: number; lastT: string }>()
   for (const m of minutes) {
     const bucketStart = new Date(m.t)
     const values = minuteValues(m)
@@ -564,12 +592,42 @@ async function saveMinutes(w: Writer, minutes: readonly Minute[]): Promise<void>
       after: { t: m.t, ...pickMinute(values) },
       at: w.now,
     })
+    const r = rewritten.get(key(m.machine_id)) ?? { machineId: m.machine_id, count: 0, lastT: m.t }
+    r.count++
+    if (Date.parse(m.t) >= Date.parse(r.lastT)) r.lastT = m.t
+    rewritten.set(key(m.machine_id), r)
   }
+  await raiseMinuteRewrittenAlerts(w, [...rewritten.values()])
   if (fresh.length > 0) {
     await w.tx
       .insert(productionMinute)
       .values(fresh)
       .onConflictDoNothing({ target: [productionMinute.machineId, productionMinute.bucketStart] })
+  }
+}
+
+/**
+ * Alerta "minuto reescrito" (docs/04 e docs/13, regra do sistema `minute_rewritten`): um alerta
+ * aberto por máquina, somando as reescritas em `data.count`. A versão anterior de cada minuto já
+ * está na auditoria (`production_minute.rewritten`).
+ */
+async function raiseMinuteRewrittenAlerts(
+  w: Writer,
+  machines: readonly { machineId: string; count: number; lastT: string }[],
+): Promise<void> {
+  if (machines.length === 0) return
+  const rule = await ensureSystemRule(w.tx, w.principal.organizationId, "minute_rewritten")
+  if (rule === null) return
+  for (const m of machines) {
+    await raiseAlert(w.tx, {
+      organizationId: w.principal.organizationId,
+      rule,
+      dedupKey: key(m.machineId),
+      machineId: m.machineId,
+      gatewayId: w.principal.gatewayId,
+      at: w.now,
+      data: { kind: "minute_rewritten", count: m.count, last_minute: m.lastT, gateway_id: w.principal.gatewayId },
+    })
   }
 }
 
@@ -693,20 +751,21 @@ async function saveCommandResults(w: Writer, results: readonly CommandResult[], 
 }
 
 /**
- * Dados novos num turno já consolidado (`oee_shift.dirty = false`) marcam o turno como sujo para o
- * cron recalcular (docs/07, "Dados atrasados"). O intervalo do turno é calculado no fuso da unidade
- * (turno noturno termina no dia seguinte).
+ * Dados novos num turno já consolidado marcam o turno como sujo para o cron recalcular (docs/07, "Dados
+ * atrasados"). O intervalo do turno é calculado no fuso da unidade (turno noturno termina no dia seguinte).
+ * Marca também o que já está sujo (mantendo o `dirty_since`): o UPDATE trava a linha e serializa com o
+ * recálculo em andamento (`lib/server/production/oee-shifts.ts`), que assim nunca limpa o `dirty` de um
+ * turno cujos dados novos ele não viu.
  */
 async function markShiftsDirty(w: Writer): Promise<void> {
   const ranges = w.touched.toJson()
   if (ranges.length === 0) return
   await w.tx.execute(sql`
-    UPDATE oee_shift AS o SET dirty = true, dirty_since = ${iso(w.now)}::timestamptz
+    UPDATE oee_shift AS o SET dirty = true, dirty_since = CASE WHEN o.dirty THEN o.dirty_since ELSE ${iso(w.now)}::timestamptz END
     FROM jsonb_to_recordset(${JSON.stringify(ranges)}::jsonb) AS r(machine_id uuid, t_min timestamptz, t_max timestamptz),
          shift AS s,
          unit AS u
     WHERE o.machine_id = r.machine_id
-      AND NOT o.dirty
       AND s.id = o.shift_id
       AND u.id = s.unit_id
       AND o.shift_date BETWEEN (r.t_min AT TIME ZONE 'UTC')::date - 2 AND (r.t_max AT TIME ZONE 'UTC')::date + 1
@@ -716,12 +775,24 @@ async function markShiftsDirty(w: Writer): Promise<void> {
            AT TIME ZONE u.timezone) > r.t_min`)
 }
 
+/** Janela do histórico de saúde (`gateway_health_sample`). */
+export const HEALTH_BUCKET_MS = 5 * 60_000
+
+const INT32_MAX = 2_147_483_647
+
+function int32(value: number | undefined): number | null {
+  if (value === undefined || !Number.isFinite(value)) return null
+  return Math.max(-INT32_MAX, Math.min(INT32_MAX, Math.round(value)))
+}
+
 /**
  * Saúde (`agent`, `buses` e o detalhe de `devices`) como última foto em `gateway.health`, mais
- * `last_seen_at`, versão do agente e versão de config aplicada.
+ * `last_seen_at`, versão do agente e versão de config aplicada; e o histórico resumido em
+ * `gateway_health_sample` (uma linha a cada 5 min: máximos, mínimos e o último valor).
  */
 async function saveGatewayHealth(w: Writer, req: SyncRequest, refs: References): Promise<void> {
   const devices = (req.devices ?? []).filter((d) => refs.devices.has(key(d.id)))
+  await saveHealthSample(w, req, devices)
   await w.tx
     .update(gateway)
     .set({
@@ -734,9 +805,65 @@ async function saveGatewayHealth(w: Writer, req: SyncRequest, refs: References):
         ...(devices.length > 0 ? { devices } : {}),
         received_at: iso(w.now),
       },
+      // "Em trânsito" (L23) termina no primeiro /sync depois de marcado: o gateway chegou ao cliente.
+      installedAt: sql`CASE WHEN ${gateway.installedAt} IS NULL AND ${gateway.inTransitSince} IS NOT NULL
+        AND ${gateway.inTransitSince} <= ${iso(w.now)}::timestamptz THEN ${iso(w.now)}::timestamptz ELSE ${gateway.installedAt} END`,
       updatedAt: w.now,
     })
     .where(eq(gateway.id, w.principal.gatewayId))
+}
+
+/** Upsert da janela de 5 min do histórico de saúde. */
+async function saveHealthSample(w: Writer, req: SyncRequest, devices: readonly NonNullable<SyncRequest["devices"]>[number][]): Promise<void> {
+  const a = req.agent
+  const buses = req.buses ?? []
+  const bucketStart = new Date(Math.floor(w.now.getTime() / HEALTH_BUCKET_MS) * HEALTH_BUCKET_MS)
+  const t = gatewayHealthSample
+  await w.tx
+    .insert(t)
+    .values({
+      organizationId: w.principal.organizationId,
+      gatewayId: w.principal.gatewayId,
+      bucketStart,
+      firstAt: w.now,
+      lastAt: w.now,
+      agentVersion: a.version,
+      configVersion: int32(a.config_version),
+      configState: a.config_status?.state ?? null,
+      cpuPctMax: a.cpu_pct,
+      memMbMax: a.mem_mb,
+      diskFreeMbMin: a.disk_free_mb,
+      bufferPendingMax: int32(a.buffer_pending),
+      bufferOldestSMax: int32(a.buffer_oldest_s),
+      quarantinedMax: int32(a.quarantined),
+      clockOffsetMsMaxAbs: int32(Math.abs(a.clock_offset_ms)),
+      tempCMax: a.temp_c ?? null,
+      devicesTotal: devices.length > 0 ? devices.length : null,
+      devicesConnectedMin: devices.length > 0 ? devices.filter((d) => d.status === "connected").length : null,
+      busesDegradedMax: buses.length > 0 ? buses.filter((b) => b.status !== "ok").length : null,
+    })
+    .onConflictDoUpdate({
+      target: [t.gatewayId, t.bucketStart],
+      set: {
+        lastAt: sql`greatest(${t.lastAt}, excluded.last_at)`,
+        syncCount: sql`${t.syncCount} + 1`,
+        agentVersion: sql`excluded.agent_version`,
+        configVersion: sql`excluded.config_version`,
+        configState: sql`coalesce(excluded.config_state, ${t.configState})`,
+        // greatest/least do Postgres ignoram NULL.
+        cpuPctMax: sql`greatest(${t.cpuPctMax}, excluded.cpu_pct_max)`,
+        memMbMax: sql`greatest(${t.memMbMax}, excluded.mem_mb_max)`,
+        diskFreeMbMin: sql`least(${t.diskFreeMbMin}, excluded.disk_free_mb_min)`,
+        bufferPendingMax: sql`greatest(${t.bufferPendingMax}, excluded.buffer_pending_max)`,
+        bufferOldestSMax: sql`greatest(${t.bufferOldestSMax}, excluded.buffer_oldest_s_max)`,
+        quarantinedMax: sql`greatest(${t.quarantinedMax}, excluded.quarantined_max)`,
+        clockOffsetMsMaxAbs: sql`greatest(${t.clockOffsetMsMaxAbs}, excluded.clock_offset_ms_max_abs)`,
+        tempCMax: sql`greatest(${t.tempCMax}, excluded.temp_c_max)`,
+        devicesTotal: sql`coalesce(excluded.devices_total, ${t.devicesTotal})`,
+        devicesConnectedMin: sql`least(${t.devicesConnectedMin}, excluded.devices_connected_min)`,
+        busesDegradedMax: sql`greatest(${t.busesDegradedMax}, excluded.buses_degraded_max)`,
+      },
+    })
 }
 
 // ---------------------------------------------------------------------------

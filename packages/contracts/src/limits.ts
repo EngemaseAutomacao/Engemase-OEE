@@ -96,6 +96,8 @@ export const DEFAULT_COMMAND_TTL_S = {
   "vpn.status": 120,
   "ot.forward.open": 300,
   "ot.forward.close": 3600,
+  "log.level": 600,
+  "logs.upload": 600,
 } as const
 
 /** Prazo de execução de cada tipo de comando no agente, em segundos. */
@@ -110,6 +112,8 @@ export const COMMAND_EXEC_TIMEOUT_S = {
   "vpn.status": 10,
   "ot.forward.open": 30,
   "ot.forward.close": 30,
+  "log.level": 10,
+  "logs.upload": 30,
 } as const
 
 /** Portas sugeridas para a política local de encaminhamento OT (Modbus, S7, EtherNet/IP). */

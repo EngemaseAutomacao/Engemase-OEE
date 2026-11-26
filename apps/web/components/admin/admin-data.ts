@@ -1,29 +1,9 @@
 /**
  * Montagem dos dados do console de clientes a partir de `@/lib/mock`.
  * Usado SÓ por componentes de servidor (páginas); devolve objetos serializáveis.
- * Nada de relógio do sistema: "agora" = MOCK_NOW.
+ * Nada de relógio do sistema: "agora" = r.agoraIso().
  */
 import {
-  MOCK_NOW,
-  getAuditLog,
-  getClientBranding,
-  getClientById,
-  getClientSummary,
-  getClientUsers,
-  getClients,
-  getDevices,
-  getGateways,
-  getLines,
-  getMachinesWithLive,
-  getNotifications,
-  getPlatformUsers,
-  getRemoteAccessPolicy,
-  getRemoteAccessSessions,
-  getShiftHistory,
-  getShifts,
-  getTerminals,
-  getUnits,
-  nowMs,
   type AuditEntry,
   type Client,
   type ClientPlan,
@@ -35,6 +15,8 @@ import {
   type RemoteAccessStatus,
   type UserStatus,
 } from "@/lib/mock"
+import { ROTULOS_DO_BANCO } from "@/lib/data/admin/acoes-auditoria"
+import { repositorioMock, type Repositorio } from "@/lib/data/admin/repositorio"
 import { ago, date, dateTime, dec, num, shortDate, time } from "@/lib/format"
 import { scopeSummary } from "@/lib/roles"
 import { PLATFORM_HOST, plural, timezoneLabel } from "./labels"
@@ -72,9 +54,9 @@ export interface ClientRow {
   openAlerts: number
 }
 
-export function clientRow(c: Client): ClientRow {
-  const s = getClientSummary(c.id)
-  const gws = getGateways(c.id)
+export function clientRow(c: Client, r: Repositorio = repositorioMock): ClientRow {
+  const s = r.getClientSummary(c.id)
+  const gws = r.getGateways(c.id)
   return {
     id: c.id,
     slug: c.slug,
@@ -100,23 +82,23 @@ export function clientRow(c: Client): ClientRow {
     oee: s.oee.oee,
     machinesWithData: s.oee.machinesWithData,
     running: s.running,
-    openAlerts: getNotifications(c.id).filter((n) => n.status !== "resolved").length,
+    openAlerts: r.getNotifications(c.id).filter((n) => n.status !== "resolved").length,
   }
 }
 
-export const buildClientRows = (): ClientRow[] => getClients().map(clientRow)
+export const buildClientRows = (r: Repositorio = repositorioMock): ClientRow[] => r.getClients().map((c) => clientRow(c, r))
 
 // ---------------------------------------------------------------------------
 // Problemas de gateway e pendências de implantação
 // ---------------------------------------------------------------------------
-export function gatewayProblems(g: Gateway): string[] {
+export function gatewayProblems(g: Gateway, r: Repositorio = repositorioMock): string[] {
   const out: string[] = []
   if (g.status === "offline") out.push(`Sem contato ${ago(g.lastSeen)}`)
   if (g.status === "pending" && g.enrollmentCode) out.push(`Aguardando ativação · código ${g.enrollmentCode}`)
   if (g.bufferPending >= 100) out.push(`${num(g.bufferPending)} registros aguardando no buffer`)
   if (g.clockOffsetMs !== null && Math.abs(g.clockOffsetMs) >= 1000) out.push(`Relógio com desvio de ${dec(g.clockOffsetMs / 1000)} s`)
   if (g.configApplied !== null && g.configApplied < g.configVersion) out.push(`Configuração v${g.configApplied} aplicada (publicada v${g.configVersion})`)
-  const errs = getDevices(g.id).filter((d) => d.status === "error")
+  const errs = r.getDevices(g.id).filter((d) => d.status === "error")
   if (errs.length > 0) out.push(`${plural(errs.length, "CLP", "CLPs")} com erro: ${errs[0]!.lastError ?? "sem resposta"}`)
   return out
 }
@@ -129,14 +111,14 @@ export interface ChecklistItem {
 }
 
 /** Etapas do fluxo de implantação (docs/15 §7), conferidas nos dados do cliente. */
-export function implementationChecklist(clientId: string): ChecklistItem[] {
-  const units = getUnits(clientId)
-  const shifts = getShifts(clientId)
-  const users = getClientUsers(clientId)
+export function implementationChecklist(clientId: string, r: Repositorio = repositorioMock): ChecklistItem[] {
+  const units = r.getUnits(clientId)
+  const shifts = r.getShifts(clientId)
+  const users = r.getClientUsers(clientId)
   const admins = users.filter((u) => u.memberships.some((m) => m.clientId === clientId && m.role === "client_admin"))
-  const gws = getGateways(clientId)
-  const machines = getMachinesWithLive(clientId)
-  const terminals = getTerminals(clientId)
+  const gws = r.getGateways(clientId)
+  const machines = r.getMachinesWithLive(clientId)
+  const terminals = r.getTerminals(clientId)
   const pendingGw = gws.filter((g) => g.status === "pending")
   const noPlc = machines.filter((m) => !m.deviceId)
   const paired = terminals.filter((t) => t.status !== "pending")
@@ -208,6 +190,7 @@ export interface ActivityItem {
 }
 
 const ACTION_LABEL: Record<string, string> = {
+  ...ROTULOS_DO_BANCO,
   "config.publish": "Publicou configuração",
   "tag.test_read": "Leitura de teste",
   "user.invite": "Adicionou usuário",
@@ -221,7 +204,7 @@ const ACTION_LABEL: Record<string, string> = {
   "platform.user_create": "Adicionou membro da equipe",
 }
 
-export function activityItem(a: AuditEntry): ActivityItem {
+export function activityItem(a: AuditEntry, r: Repositorio = repositorioMock): ActivityItem {
   return {
     id: a.id,
     action: a.action,
@@ -230,7 +213,7 @@ export function activityItem(a: AuditEntry): ActivityItem {
     impersonatedBy: a.impersonatedBy,
     entityName: a.entityName,
     details: a.details ?? null,
-    clientName: a.clientId ? (getClientById(a.clientId)?.name ?? "—") : "Plataforma",
+    clientName: a.clientId ? (r.getClientById(a.clientId)?.name ?? "—") : "Plataforma",
     when: ago(a.at),
     at: dateTime(a.at),
   }
@@ -238,25 +221,25 @@ export function activityItem(a: AuditEntry): ActivityItem {
 
 const GATEWAY_COLORS: Record<GatewayStatus, string> = { online: "#16a34a", degraded: "#f59e0b", offline: "#dc2626", pending: "#a1a1aa" }
 
-export function buildPlatformOverview() {
-  const clients = getClients()
-  const rows = clients.map(clientRow)
-  const gateways = getGateways()
-  const machines = clients.flatMap((c) => getMachinesWithLive(c.id))
-  const alerts = getNotifications().filter((n) => n.status !== "resolved")
-  const remote = getRemoteAccessSessions()
-  const clientName = (id: string) => getClientById(id)?.name ?? "—"
-  const clientSlug = (id: string) => getClientById(id)?.slug ?? ""
+export function buildPlatformOverview(r: Repositorio = repositorioMock) {
+  const clients = r.getClients()
+  const rows = clients.map((c) => clientRow(c, r))
+  const gateways = r.getGateways()
+  const machines = clients.flatMap((c) => r.getMachinesWithLive(c.id))
+  const alerts = r.getNotifications().filter((n) => n.status !== "resolved")
+  const remote = r.getRemoteAccessSessions()
+  const clientName = (id: string) => r.getClientById(id)?.name ?? "—"
+  const clientSlug = (id: string) => r.getClientById(id)?.slug ?? ""
 
   const attention: AttentionItem[] = []
   for (const g of gateways.filter((x) => x.status === "offline")) {
-    const c = getClientById(g.clientId)
+    const c = r.getClientById(g.clientId)
     attention.push({
       id: `gw-${g.id}`,
       kind: "gateway_offline",
       title: `${g.name} offline`,
       subtitle: `${clientName(g.clientId)}${c?.status === "suspended" ? " · cliente suspenso" : ""}`,
-      details: gatewayProblems(g),
+      details: gatewayProblems(g, r),
       href: `/${clientSlug(g.clientId)}/config/gateways/${g.id}`,
       actionLabel: `Abrir ${g.name}`,
       when: ago(g.lastSeen),
@@ -268,14 +251,14 @@ export function buildPlatformOverview() {
       kind: "gateway_degraded",
       title: `${g.name} com alertas`,
       subtitle: clientName(g.clientId),
-      details: gatewayProblems(g),
+      details: gatewayProblems(g, r),
       href: `/${clientSlug(g.clientId)}/config/gateways/${g.id}`,
       actionLabel: `Abrir ${g.name}`,
       when: ago(g.lastSeen),
     })
   }
   for (const c of clients.filter((x) => x.status === "onboarding")) {
-    const pending = implementationChecklist(c.id).filter((i) => !i.done)
+    const pending = implementationChecklist(c.id, r).filter((i) => !i.done)
     if (pending.length === 0) continue
     attention.push({
       id: `onb-${c.id}`,
@@ -327,7 +310,7 @@ export function buildPlatformOverview() {
       alertsUnacked: alerts.filter((a) => a.status === "open").length,
     },
     attention,
-    activity: getAuditLog().slice(0, 6).map(activityItem),
+    activity: r.getAuditLog().slice(0, 6).map((a) => activityItem(a, r)),
     fleet: (["online", "degraded", "offline", "pending"] as GatewayStatus[]).map((st) => ({ status: st, value: gwBy(st), color: GATEWAY_COLORS[st] })),
     versions: [...versions.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([version, count]) => ({ version, count })),
     remote: {
@@ -439,21 +422,21 @@ const REMOTE_MODE_LABEL = {
   preapproved_window: "Janela pré-aprovada",
 } as const
 
-export function buildClientDetail(clientId: string) {
-  const c = getClientById(clientId)
+export function buildClientDetail(clientId: string, r: Repositorio = repositorioMock) {
+  const c = r.getClientById(clientId)
   if (!c) return null
   const base = `/${c.slug}`
-  const units = getUnits(c.id)
+  const units = r.getUnits(c.id)
   const unitName = (id: string) => units.find((u) => u.id === id)?.name ?? "—"
-  const lines = getLines(c.id)
-  const gateways = getGateways(c.id)
-  const machines = getMachinesWithLive(c.id)
-  const users = getClientUsers(c.id)
-  const summary = getClientSummary(c.id)
-  const audit = getAuditLog(c.id)
-  const sessions = getRemoteAccessSessions({ clientId: c.id })
-  const platform = getPlatformUsers()
-  const now = nowMs()
+  const lines = r.getLines(c.id)
+  const gateways = r.getGateways(c.id)
+  const machines = r.getMachinesWithLive(c.id)
+  const users = r.getClientUsers(c.id)
+  const summary = r.getClientSummary(c.id)
+  const audit = r.getAuditLog(c.id)
+  const sessions = r.getRemoteAccessSessions({ clientId: c.id })
+  const platform = r.getPlatformUsers()
+  const now = Date.parse(r.agoraIso())
 
   const unitRows: UnitRow[] = units.map((u) => ({
     id: u.id,
@@ -464,7 +447,7 @@ export function buildClientDetail(clientId: string) {
     lines: lines.filter((l) => l.unitId === u.id).length,
     machines: machines.filter((m) => m.unitId === u.id).length,
     gateways: gateways.filter((g) => g.unitId === u.id).length,
-    shifts: getShifts(c.id, u.id).map((s) => `${s.name} ${s.start}–${s.end}`),
+    shifts: r.getShifts(c.id, u.id).map((s) => `${s.name} ${s.start}–${s.end}`),
   }))
 
   const machineRows: MachineRow[] = machines.map((m) => ({
@@ -494,7 +477,7 @@ export function buildClientDetail(clientId: string) {
     configOutdated: g.configApplied === null || g.configApplied < g.configVersion,
     buffer: g.bufferPending,
     machines: machines.filter((m) => m.gatewayId === g.id).length,
-    problems: gatewayProblems(g),
+    problems: gatewayProblems(g, r),
     href: `${base}/config/gateways/${g.id}`,
   }))
 
@@ -593,7 +576,7 @@ export function buildClientDetail(clientId: string) {
   }
 
   // OEE médio por dia (últimos 14 dias), a partir do histórico por turno
-  const history = getShiftHistory(machines.map((m) => m.id), 14)
+  const history = r.getShiftHistory(machines.map((m) => m.id), 14)
   const byDate = new Map<string, number[]>()
   for (const r of history) byDate.set(r.date, [...(byDate.get(r.date) ?? []), r.oee])
   const oeeHistory = [...byDate.entries()]
@@ -601,10 +584,10 @@ export function buildClientDetail(clientId: string) {
     .map(([d, vals]) => ({ label: shortDate(d), oee: vals.reduce((s, v) => s + v, 0) / vals.length }))
 
   const admins = userRows.filter((u) => u.role === "client_admin")
-  const notifications = getNotifications(c.id).filter((n) => n.status !== "resolved")
-  const policy = getRemoteAccessPolicy(c.id)
-  const branding = getClientBranding(c.id) ?? null
-  const terminals = getTerminals(c.id)
+  const notifications = r.getNotifications(c.id).filter((n) => n.status !== "resolved")
+  const policy = r.getRemoteAccessPolicy(c.id)
+  const branding = r.getClientBranding(c.id) ?? null
+  const terminals = r.getTerminals(c.id)
 
   return {
     client: {
@@ -652,10 +635,10 @@ export function buildClientDetail(clientId: string) {
     platformField: fieldEngineers.map((u) => u.name),
     unitOptions: units.map((u) => ({ id: u.id, name: u.name })),
     branding,
-    checklist: implementationChecklist(c.id),
+    checklist: implementationChecklist(c.id, r),
     lifecycle,
     oeeHistory,
-    now: MOCK_NOW,
+    now: r.agoraIso(),
   }
 }
 

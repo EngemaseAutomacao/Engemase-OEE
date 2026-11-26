@@ -106,7 +106,7 @@ export function RegistryCard({ slug, cnpj, city, state, createdAt }: { slug: str
           <span className="font-mono text-xs">{cnpj}</span>
         </InfoRow>
         <InfoRow label="Cidade/UF">
-          {city}/{state}
+          {city ? `${city}/${state}` : "—"}
         </InfoRow>
         <InfoRow label="Endereço">
           <span className="font-mono text-xs">

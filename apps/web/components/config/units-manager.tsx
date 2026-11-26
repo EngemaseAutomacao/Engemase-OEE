@@ -39,7 +39,9 @@ import { IconCircle } from "@/components/dashboard/icon-circle"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { PageTitle } from "@/components/refresh/page-title"
 import { SOFT_TONES, SoftIconButton } from "@/components/refresh/soft-action"
+import { salvarAreaAction, salvarLinhaAction, salvarUnidadeAction } from "@/app/(shell)/[cliente]/config/actions"
 import { EngemaseOnlyChip, useCanEdit } from "@/components/config/engemase-managed"
+import { useFonteDados } from "@/components/config/fonte-dados"
 import { GATEWAY_STATUS_DOT, TIMEZONES, UFS, norm, plural, timezoneShort } from "@/components/config/labels"
 
 export interface UnitNode {
@@ -104,35 +106,58 @@ export function UnitsManager({
     setOpen(true)
   }
   const close = () => setOpen(false)
+  const fonte = useFonteDados()
 
-  const saveUnit = (values: Omit<UnitNode, "id" | "gateways">, id?: string) => {
+  /**
+   * Com banco, grava pela Server Action e devolve o id gravado (`null` = falhou, com aviso).
+   * Sem banco (demonstração), devolve um id local.
+   */
+  const gravar = async (prefix: string, acao: ((input: unknown) => Promise<{ ok: true; dados: { id: string } } | { ok: false; mensagem: string }>) | null, input: Record<string, unknown>) => {
+    if (!fonte.banco || !fonte.slug || acao === null) return newId(prefix)
+    try {
+      const res = await acao({ slug: fonte.slug, ...input })
+      if (res.ok) return res.dados.id
+      toast.error("Não foi possível salvar", { description: res.mensagem })
+    } catch {
+      toast.error("Sem conexão", { description: "Não foi possível falar com o servidor. Tente de novo." })
+    }
+    return null
+  }
+
+  const saveUnit = async (values: Omit<UnitNode, "id" | "gateways">, id?: string) => {
+    const saved = await gravar("uni", salvarUnidadeAction, { id, name: values.name, timezone: values.timezone })
+    if (saved === null) return
     if (id) {
       setUnits((prev) => prev.map((u) => (u.id === id ? { ...u, ...values } : u)))
       toast.success(`Unidade "${values.name}" atualizada`)
     } else {
-      setUnits((prev) => [...prev, { id: newId("uni"), gateways: [], ...values }])
+      setUnits((prev) => [...prev, { id: saved, gateways: [], ...values }])
       toast.success(`Unidade "${values.name}" criada`, { description: "Cadastre as áreas e linhas e depois provisione um gateway para ela." })
     }
     close()
   }
 
-  const saveArea = (values: { name: string; unitId: string }, id?: string) => {
+  const saveArea = async (values: { name: string; unitId: string }, id?: string) => {
+    const saved = await gravar("are", salvarAreaAction, { id, unitId: values.unitId, name: values.name })
+    if (saved === null) return
     if (id) {
       setAreas((prev) => prev.map((a) => (a.id === id ? { ...a, ...values } : a)))
       toast.success(`Área "${values.name}" atualizada`)
     } else {
-      setAreas((prev) => [...prev, { id: newId("are"), ...values }])
+      setAreas((prev) => [...prev, { id: saved, ...values }])
       toast.success(`Área "${values.name}" criada`)
     }
     close()
   }
 
-  const saveLine = (values: { name: string; code: string; unitId: string; areaId: string }, id?: string) => {
+  const saveLine = async (values: { name: string; code: string; unitId: string; areaId: string }, id?: string) => {
+    const saved = await gravar("lin", salvarLinhaAction, { id, unitId: values.unitId, areaId: values.areaId || null, name: values.name })
+    if (saved === null) return
     if (id) {
       setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...values } : l)))
       toast.success(`Linha "${values.name}" atualizada`)
     } else {
-      setLines((prev) => [...prev, { id: newId("lin"), machineCount: 0, ...values }])
+      setLines((prev) => [...prev, { id: saved, machineCount: 0, ...values }])
       toast.success(`Linha "${values.name}" criada`, { description: "Agora cadastre as máquinas desta linha." })
     }
     close()

@@ -1,5 +1,6 @@
+import type { Metadata } from "next"
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { Suspense } from "react"
 import {
   AlertTriangleIcon,
   CalendarClockIcon,
@@ -17,8 +18,9 @@ import {
   WrenchIcon,
 } from "lucide-react"
 
-import { getClientBySlug, getCurrentUser, getUnits } from "@/lib/mock"
-import { num, pct } from "@/lib/format"
+import { getClientData } from "@/lib/data/cliente"
+import { DEFAULT_TZ } from "@/lib/mock"
+import { num, pct, shortDate, time } from "@/lib/format"
 import { STATE_META, TONE_HEX, oeeTone } from "@/lib/states"
 import { cn } from "@/lib/utils"
 import { ActivityTimeline, type TimelineEvent } from "@/components/dashboard/activity-timeline"
@@ -32,6 +34,7 @@ import { StatePipeline } from "@/components/dashboard/state-pipeline"
 import { ForecastChart } from "@/components/overview/forecast-chart"
 import { buildOverview } from "@/components/overview/overview-data"
 import { TargetChart } from "@/components/overview/target-chart"
+import { PageSkeleton } from "@/components/shell/page-skeleton"
 import { UnitSelector } from "@/components/shell/unit-selector"
 
 const TIMELINE_ICON = {
@@ -43,16 +46,33 @@ const TIMELINE_ICON = {
   now: { icon: ClockIcon, tone: "blue" },
 } as const
 
-export default async function Page({ params }: PageProps<"/[cliente]">) {
-  const { cliente } = await params
-  const client = getClientBySlug(cliente)
-  if (!client) notFound()
+export const metadata: Metadata = { title: "Visão geral" }
 
-  const me = getCurrentUser()
-  const firstName = me.name.split(" ")[0]
-  const units = getUnits(client.id)
-  const d = buildOverview(client.id, client.slug)
+/** Saudação pela hora local da planta. */
+function greeting(nowIso: string): string {
+  const hour = Number(new Date(nowIso).toLocaleTimeString("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone: DEFAULT_TZ }).slice(0, 2))
+  return hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite"
+}
+
+export default function Page({ params }: PageProps<"/[cliente]">) {
+  return (
+    <Suspense fallback={<PageSkeleton blocks={3} />}>
+      <Overview params={params} />
+    </Suspense>
+  )
+}
+
+async function Overview({ params }: { params: PageProps<"/[cliente]">["params"] }) {
+  const { cliente } = await params
+  // 31 dias: o mês corrente para a meta e os 12 últimos dias para o gráfico.
+  const data = await getClientData(cliente, { diasOee: 31 })
+  const { client } = data
+
+  const firstName = data.viewer.name.split(" ")[0]
+  const units = data.units
+  const d = buildOverview(data)
   const b = `/${client.slug}`
+  const shiftDate = new Date(d.shift.start).toLocaleDateString("en-CA", { timeZone: DEFAULT_TZ })
 
   const goalFraction = d.target.target > 0 ? d.target.monthOee / d.target.target : 0
   const gap = (d.target.target - d.target.monthOee) * 100
@@ -64,13 +84,13 @@ export default async function Page({ params }: PageProps<"/[cliente]">) {
       {/* Saudação + período */}
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Bom dia, {firstName} 👋</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">Veja o que está acontecendo em {client.name} neste turno.</p>
+          <h1 className="text-2xl font-bold tracking-tight">{greeting(data.now)}, {firstName} 👋</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">Veja o que está acontecendo em {client.name} {d.shift.emAndamento ? "neste turno" : "no último turno"}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex h-9 items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium shadow-xs">
             <CalendarClockIcon className="size-4 text-muted-foreground" />
-            1º turno · 11/11 · 06:00–14:00
+            {d.shift.name} · {shortDate(shiftDate)} · {time(d.shift.start)}–{time(d.shift.end)}
           </span>
           <UnitSelector units={units.map((u) => ({ id: u.id, name: u.name }))} />
         </div>
@@ -242,7 +262,7 @@ export default async function Page({ params }: PageProps<"/[cliente]">) {
           <div className="grid grid-cols-[auto_1fr] gap-3">
             <dl className="grid content-start gap-2.5 text-xs">
               <div>
-                <dt className="text-muted-foreground">Previsto até 14:00</dt>
+                <dt className="text-muted-foreground">Previsto até {time(d.shift.end)}</dt>
                 <dd className="text-xl font-bold tabular-nums">{num(d.forecast.predicted)}</dd>
                 {d.forecast.delta !== null && (
                   <dd className={cn("font-semibold", d.forecast.delta >= 0 ? "text-state-running" : "text-state-fault")}>

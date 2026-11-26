@@ -79,7 +79,7 @@ export function ClientDetailHeader({
               <span className="font-mono text-xs">{cnpj}</span>
               <span aria-hidden>·</span>
               <span>
-                {city}/{state}
+                {city ? `${city}/${state}` : "—"}
               </span>
               <span aria-hidden>·</span>
               <span>cliente desde {createdAt}</span>

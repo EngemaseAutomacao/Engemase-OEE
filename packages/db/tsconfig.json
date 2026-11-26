@@ -16,8 +16,7 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "noEmit": true,
-    "allowImportingTsExtensions": true
+    "noEmit": true
   },
-  "include": ["src", "scripts", "test", "vitest.config.ts", "drizzle.config.ts"]
+  "include": ["src", "test", "scripts", "vitest.config.ts", "drizzle.config.ts"]
 }

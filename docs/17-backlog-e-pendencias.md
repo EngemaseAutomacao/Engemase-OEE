@@ -51,7 +51,9 @@ Premissas: 2 desenvolvedores (**Web** e **Gateway**), semana 1 = 16/11/2026, sem
   - alertas e ajuda depois do piloto;
   - configuração de rede pela nuvem só na F2.
 
-**Já adiantado:** a parte de código de W1, X1, W2a, W3, W4 e G0, e boa parte de W2b (RLS completa e FKs compostas) e de G4 (`.deb`, units, firewall, imagem). Ficam pendentes as partes que dependem de contas (deploy, Neon, PoC com 100 gateways) e de hardware (bancada, pacote de suporte ao R1000).
+**Já adiantado (24/11/2026):** W6 pronto no código (publicador de config, códigos de ativação, fila de comandos, limites da L21, `409 config_outdated`, histórico de saúde e alerta de minuto reescrito; o teste de ponta a ponta aplica config e responde a comandos) e as 5 tarefas da L17 (W7; falta o fechamento de turno e o recálculo dos turnos sujos).
+
+**Já adiantado:** a parte de código de W1, X1, W2a, W3, W4 e G0, a parte de código de W2b (RLS completa, FKs compostas, partições com a rotina diária, seed sintético e as tabelas de L2, L3, L19 e L23; falta criar o branch-semente na Neon, que depende de N1), boa parte de G4 (`.deb`, units, firewall, imagem) e de W11 os cabeçalhos HTTP (CSP, HSTS...), a revisão do limite da RLS ([operacao/revisao-seguranca-w11.md](operacao/revisao-seguranca-w11.md)) e os testes de navegador com Playwright (faltam Firewall e os testes de isolamento de nível 3 e 4, que dependem da W5). Ficam pendentes as partes que dependem de contas (deploy, Neon, PoC oficial com 100 gateways) e de hardware (bancada, pacote de suporte ao R1000).
 
 ## 3. Decisões
 
@@ -131,7 +133,7 @@ Em 12/11/2026 o dono do produto decidiu D1, D5, D6, D7, D11, D12, D13, D26, D28 
 
 | # | Tema | O que falta | Quando |
 |---|---|---|---|
-| L1 | Contrato `/sync`, `/enroll`, `/config` | **Fechada:** `packages/contracts` e `docs/04`. Pendente só o que é da F1: `logs.upload`/`log.level` mínimos, `/releases/latest`, `409 config_outdated` e `429` | F0 ✓ |
+| L1 | Contrato `/sync`, `/enroll`, `/config` | **Fechada:** `packages/contracts` e `docs/04`. `409 config_outdated` e `429` implementados na API (24/11/2026). `log.level` e `logs.upload` no contrato (24/11/2026). Pendente só o que é da F1: `/releases/latest` | F0 ✓ |
 | L2 | Turnos e calendário | Dia do turno noturno, feriados, exceções, turnos sobrepostos, produção fora do turno, vigência, "dia produtivo" | F1 |
 | L3 | Refugo manual e troca de produto | Soma ou substituição do refugo do CLP, motivos de refugo, retrabalho, lançamentos atrasados e estornos | F1 |
 | L4 | Metas e faixas de OEE | `oee_target` (onde e quem define) e faixas 85/60 documentadas | F1 |
@@ -145,10 +147,10 @@ Em 12/11/2026 o dono do produto decidiu D1, D5, D6, D7, D11, D12, D13, D26, D28 
 | L12 | Testes de aceite | Critérios por requisito, tolerância do OEE, carga, matriz de navegadores e TVs | F1 |
 | L13 | Observabilidade | SLOs, alertas operacionais, métricas de ingestão, retenção de logs | F1 |
 | L14 | Backup e recuperação | RPO/RTO, teste de restauração. **Depois de restaurar o banco, os dados confirmados não voltam dos gateways.** Backup das chaves (OTA, VAPID, CA SSH) | F1 |
-| L15 | Documentação para o usuário | Guias por papel e notas de versão. Já feitos: 6 runbooks, ficha de TI, roteiro de bancada e guia por fabricante (`docs/operacao/`). Faltam 4 runbooks (contagem divergente, restauração PITR, rotação de token, troca de hardware) | Piloto |
+| L15 | Documentação para o usuário | **Fechada (24/11/2026):** guias por papel em [`guias/`](guias/README.md) (entrar e minha conta, super admin, técnico Engemase, admin do cliente, gestor/supervisor/engenheiro, operador, TV e terminal) e [notas de versão](notas-de-versao.md), conferidos contra as telas de `apps/web/app`. Já existiam: 10 runbooks (RB-01 a RB-10), ficha de TI, roteiro de bancada e guia por fabricante (`docs/operacao/`). A cada entrega: nova entrada nas notas de versão e guia ajustado quando a tela mudar (a troca do mock, W8/W9, e o login com convite vão pedir revisão) | Piloto |
 | L23 | Gateway em trânsito | Gateway ativado na bancada e desligado para envio gera "Gateway offline" no cliente. Falta um estado "em trânsito/não instalado" que suprime o alerta | F1 |
 | L24 | Revisão do agente no campo | Diagnóstico de RS-485 pelo técnico depende de leituras pela API local do agente (o `tecnico` não para o agente nem acessa a serial) | F1 |
-| L25 | Rollback do agente × esquema do buffer | Um agente anterior recusa um `buffer.db` com `user_version` maior e reinicia sem parar. Até aqui as mudanças no buffer são só colunas acrescentadas (o `user_version` fica em 1, e o rollback funciona). Antes da primeira migração que suba o `user_version`, o atualizador (G4b) precisa saber a versão de esquema de cada pacote (no manifesto) e recusar o rollback automático para um pacote de esquema anterior | F1 (com G4b) |
+| L25 | Rollback do agente × esquema do buffer | Um agente anterior recusa um `buffer.db` com `user_version` maior e reinicia sem parar. Até aqui as mudanças no buffer são só colunas acrescentadas (o `user_version` fica em 1, e o rollback funciona). Antes da primeira migração que suba o `user_version`, o atualizador (G4b) precisa saber a versão de esquema de cada pacote (no manifesto) e recusar o rollback automático para um pacote de esquema anterior. **Regra no agente e no atualizador:** `buffer_schema` no manifesto (`oee-gateway version --buffer-schema` no build; ausente = 1), `update.CheckAutoRollback` e `buffer.FileSchemaVersion` (`gateway/internal/update`). O `oee-updater` (G4b) a aplica na instalação (recusa pacote que não abre o buffer do disco) e no rollback automático (`rollback_refused`: o agente novo fica). Falta conferir na bancada (verificação F1.9) | F1 (com G4b) |
 | L16 | Modelo de dados consolidado | Tabelas dos docs 12–15 no `docs/06` (sendo implementadas em `packages/db`) | F0 |
 | L17 | Jobs agendados | Alertas, reconciliação da VPN, expiração de concessões e tokens, partições | F1 |
 | L18 | i18n | Biblioteca e catálogos de texto | F2 |
@@ -169,11 +171,11 @@ Em 12/11/2026 o dono do produto decidiu D1, D5, D6, D7, D11, D12, D13, D26, D28 
 | L12 | OEE da plataforma igual ao da planilha de referência com diferença de até 0,5 ponto percentual por turno. Peças iguais ao contador do CLP no turno, salvo período `NO_COMM` registrado. Navegadores: Chrome e Edge atuais, Safari do iOS atual; TV com Chrome ou Android TV. Carga: 100 gateways simulados (W3) |
 | L13 | Sentry para erros e logs da Vercel. Meta: 99% dos `/sync` respondidos em menos de 1 s. Alerta para a Engemase quando um gateway passa 15 min sem `/sync` ou o atraso do buffer passa de 10 min |
 | L14 | PITR do Neon na janela do plano contratado; RPO e RTO os do SLA ([`docs/negocio/sla-e-suporte.md`](negocio/sla-e-suporte.md)). Teste de restauração a cada 3 meses (runbook 08). Chaves (OTA, VAPID, CA SSH) num cofre de senhas da empresa, com 2 pessoas com acesso |
-| L17 | Vercel Cron: alertas (1 min); expiração de concessões, tokens e códigos (5 min); reconciliação da VPN (15 min); partições e limpeza (diário); resumo diário por e-mail (diário) |
+| L17 | Vercel Cron: alertas (1 min); expiração de concessões, tokens e códigos (5 min); reconciliação da VPN (15 min); partições e limpeza (diário); resumo diário por e-mail (diário). **Implementado** em `/api/cron/*` (24/11/2026; partições quando houver pg_partman) |
 | L18 | Só português do Brasil até a F2. Quando entrar o segundo idioma (provavelmente espanhol), usar `next-intl` |
 | L19 | Várias TVs por linha, sim. Lista de operadores por unidade, cadastrada pela Engemase (nome e matrícula opcional). Fila offline no tablet por até 24 h. Se o tablet e o desktop reclassificarem a mesma parada, vale a última, e as duas ficam na auditoria |
 | L20 | Senha de 12 caracteres ou mais, sem regra de composição, recusada se aparecer em vazamentos conhecidos (consulta por k-anonimato). Depois de 5 erros, espera de 15 min e aviso por e-mail. Sessão de 12 h renovada com o uso; "manter conectado" até 30 dias (a equipe Engemase fica sempre em 12 h). 2FA por aplicativo autenticador (TOTP), com 10 códigos de recuperação. O admin do cliente reinicia o 2FA dos usuários; a Engemase reinicia o do admin, com conferência de identidade. SSO (Microsoft e Google) na F3 |
-| L21 | `/sync`: 60 por minuto por gateway (rajada de 10). `/enroll`: 10 por hora por IP e 5 tentativas por código. `/config`: 30 por minuto por gateway. Acima disso, `429` com `retry_after_s` |
+| L21 | `/sync`: 60 por minuto por gateway (rajada de 10). `/enroll`: 10 por hora por IP e 5 tentativas por código. `/config`: 30 por minuto por gateway (rajada de 5). Acima disso, `429` com `retry_after_s`. **Implementado** no Postgres (24/11/2026) |
 | L23 | Novo estado **"Em trânsito"**: o gateway ativado na bancada não gera alerta de offline até o primeiro `/sync` no cliente ou até a Engemase marcá-lo como instalado. Prazo máximo de 30 dias |
 
 ## 5. Pendências do protótipo
@@ -205,10 +207,89 @@ Continua valendo: `generateStaticParams` e `instant = false` são permitidos só
 1. Pedir cotação formal e comprar o hardware de bancada. O prazo de importação é o maior risco.
 2. Consultar o despachante e um OCD sobre a NCM e a ANATEL.
 3. Criar as contas (Vercel Pro, Neon, domínio, Sentry) e a proteção de branch no GitHub.
-4. Dono do produto decide os bloqueios da Fase 0 (D2, D7, D26, D28, D29, D36, D37, D38).
+4. ~~Dono do produto decide os bloqueios da Fase 0 (D2, D7, D26, D28, D29, D36, D37, D38).~~ Feito em 12/11/2026 (seção 3).
 5. Abrir o PR do branch de trabalho, revisar e ligar o CI (já inclui o teste de ponta a ponta).
 6. Aplicar as migrações 0000–0004 num branch Neon de preview e confirmar que o papel de login é membro de `app_user` e que o dono das tabelas não tem BYPASSRLS.
 7. Deploy de preview na Vercel com `DATABASE_URL` e rodar o PoC com 100 gateways simulados contra ele (W3).
-8. Escrever o publicador de config e o gerador de códigos de ativação na web (hoje só a API do gateway existe).
+8. ~~Escrever o publicador de config e o gerador de códigos de ativação na web~~ (feito em 24/11/2026: `apps/web/lib/server/gateway/publish.ts` e `activation.ts`; falta a tela, W8).
 9. Equipe de automação: implementar o `FB_OEE_ENGEMASE` (`docs/operacao/`) na primeira marca de CLP e escolher o cliente e a linha do piloto.
 10. Com o hardware: roteiro de bancada (`docs/operacao/verificacao-bancada-r1000.md`), receita do pacote de suporte ao R1000 e primeira imagem Trixie.
+
+## 8. Levantamento de 24/11/2026: o que falta e quem faz
+
+> Conferido contra o repositório em 24/11/2026 (branch `main`, commit `5edc747`). Pergunta: **o que ainda dá para fazer agora, sem contas na nuvem e sem hardware, e qual especialista faz cada parte?**
+
+**Resposta curta.** A Fase 0 de código está pronta e o CI está verde (execução 33, 24/11/2026). Desde 13/11 não entrou código novo de produto. Os passos 1 a 3 e 5 a 7 da seção 7 seguem parados porque dependem da Engemase (compra do hardware, contas). Sem esperar por isso, dá para adiantar quase toda a Fase 1 da web e os comandos do gateway contra o Postgres local e o simulador.
+
+**Como foi conferido:**
+
+| Fato | Como conferir | Resultado |
+|---|---|---|
+| Sem pull request aberto; `main` igual ao branch de trabalho | GitHub (lista de PRs) e `git log main..HEAD` | 0 PRs; 0 commits de diferença |
+| CI verde | GitHub Actions, execução 33 (`5edc747`) | sucesso |
+| Login ainda não existe | `grep -rl better-auth apps packages --include=package.json` | nada |
+| Telas ainda usam dados simulados | `grep -rl "@/lib/mock" apps/web/app apps/web/components \| wc -l` | 133 arquivos; 63 exports em `apps/web/lib/mock/index.ts` |
+| Restos do protótipo que precisam sair (seção 5) | `grep -rln "generateStaticParams\|instant = false" apps/web/app \| wc -l` | 13 arquivos |
+| Sem tarefas agendadas | `vercel.json` | só `regions: ["gru1"]`, sem `crons` |
+| Comandos do gateway | `gateway/internal/commands/commands.go:67` | todos respondem `unsupported` |
+| Página local e ajudante | `deploy/gateway/systemd/fase1/` | só as units; o programa não existe |
+| Runbooks RB-07 a RB-10 | `docs/operacao/runbooks/` | escritos (a L15 estava desatualizada; corrigida acima) |
+| Minutas jurídicas e comerciais | `grep -c "\[CONFIRMAR\|\[PROPOSTA\]\|___" docs/negocio` | ~170 campos em aberto (os `___` são dados que só a Engemase tem: CNPJ, nomes, valores) |
+| Links internos da documentação | script de links relativos nos `.md` de `docs/` | 86 quebrados nos `docs/rascunhos/` (faltava `../`); **corrigidos neste levantamento** |
+
+**Distribuição por especialista (o que dá para fazer já, sem contas nem hardware):**
+
+| Especialista | Tarefas | Épico | Pronto quando |
+|---|---|---|---|
+| **Back-end (Rafael)** | 1. Publicador de config versionada e gerador de códigos de ativação (passo 8 da seção 7). 2. `409 config_outdated`, `429` com `retry_after_s` pelos limites da L21, alerta de minuto reescrito, histórico de saúde. 3. Fila de comandos na API. 4. As 5 tarefas agendadas da L17 (rotas de cron + `crons` no `vercel.json`) | W6, W7 | Gateway simulado aplica config e responde a comandos; testes verdes |
+| **Back-end + Segurança (Rafael e João)** | Login com Better Auth, `requireTenant`, escopo por cliente/unidade/máquina (D11, fail-closed), papéis (D12, D13), 2FA obrigatório para Engemase e admin (D14), política de senha e sessão (L20), testes de isolamento entre clientes | W5 | Testes de isolamento verdes no CI |
+| **Segurança (João)** | CSP/HSTS e cabeçalhos, revisão do limite aceito da RLS (D38), isolamento nível 4 | W11 | Revisão registrada; e2e verde |
+| **Banco (Beatriz)** | Restante da W2b: partições, seeds e branch-semente sintético; tabelas de turnos/feriados (L2), refugo manual e estorno (L3), estado "Em trânsito" do gateway (L23), operadores por unidade (L19) | W2b | Teste de catálogo verde; migrações só aditivas |
+| **Frontend (Lucas)** | Troca do mock pelo banco, começando por cadastros, gateways, tags e console mínimo; depois ao vivo, timeline, relatório, operador e terminais. Tirar `generateStaticParams`/`instant = false` (13 arquivos) a cada tela trocada | W8, W9 | Máquina colocada no ar pela web, de ponta a ponta |
+| **Gateway (Go; fora dos especialistas da central, fica com o desenvolvedor do gateway)** | Handlers de `tag.read`, `device.test`, `config.reload` e `agent.restart`; `oee-localui` e `oee-helper`; OTA mínimo com `logs.upload` e `log.level` (D29) e a regra da L25 | G3, G4b | Testes com `-race` e o simulador |
+| **DevOps e QA (Camila)** | Proteção da `main` no GitHub; `.env.example` completo; roteiro do PoC de 100 gateways pronto para rodar quando a Neon existir; Playwright para a W11 | W1, W3, W11 | Roteiro testado localmente; CI verde |
+| **Design (Melissa)** | Só depois da troca do mock: revisar estados vazios, carregando e erro com dados reais | W8, W9 | Prints no celular e no computador |
+| **Pesquisa e docs (Sofia)** | ~~Guias por papel e notas de versão (L15)~~ (feito em 24/11/2026: `docs/guias/` e `docs/notas-de-versao.md`); manter este documento, o `docs/00`, os guias e as notas de versão em dia a cada entrega | L15 | — |
+
+**Depende só da Engemase (nenhum especialista resolve):** compra do hardware de bancada e consulta ao despachante/OCD (passos 1 e 2); contas Vercel Pro, Neon e Sentry (passo 3); preencher os dados das minutas (CNPJ, nomes dos super admins, DPO, escala de plantão) e a revisão por advogado (L7); escolher cliente e linha do piloto (passo 9).
+
+**Incerto:** não deu para conferir daqui se o projeto na Vercel já existe nem se `engemase-oee.vercel.app` responde (a rede desta sessão bloqueia o acesso). As minutas foram revisadas em parte em 13/11 (commit `08570fb`, "correções parciais"); falta uma leitura final para ver se a revisão ficou completa.
+
+**Próximo passo recomendado:** começar pela W5 (login e isolamento), que está no caminho crítico e destrava a W8 e a W11, e tocar a W6/W7 em paralelo. Na Engemase, a compra do hardware continua sendo o maior risco de prazo.
+
+### 8.1 Rodada de 24/11/2026: o que cada especialista entregou
+
+Pedido do Pablo pela Central: acionar os especialistas da tabela acima. Seis trabalharam em paralelo; os trabalhos foram juntados num só branch, conferidos juntos e publicados na `main`.
+
+| Especialista | Entregue | Ficou faltando |
+|---|---|---|
+| **Back-end + Segurança (W5)** | `requireTenant` com RLS, escopo fail-closed (D11), papéis (D12/D13), 2FA obrigatório (D14); login com Better Auth (senha ≥ 12 com checagem de vazamento, bloqueio 5 erros/15 min, sessão L20, TOTP + 10 códigos); `/api/auth/*` fechado por padrão; 50 testes novos de isolamento e login | Fluxo "definir senha"/convite (achar a pessoa pelo e-mail no servidor, achado W11), senha esquecida, aviso por e-mail no bloqueio, reiniciar 2FA de outra pessoa, cron de limpeza de `auth_login_throttle`, seed da Engemase Lab, escopo nos agregados |
+| **Back-end (W6/W7)** | Publicador de config versionada, códigos de ativação, fila de comandos, `429` no Postgres (L21), `409 config_outdated`, histórico de saúde, alerta de minuto reescrito; as 5 rotas de cron da L17 com `CRON_SECRET`; contrato de `log.level` e `logs.upload` | Fechamento de turno e recálculo dos turnos sujos (critério da W7); ligar a limpeza diária a `maintainPartitions()` (precisa da conexão do dono das tabelas); supressão do alerta de offline para gateway "Em trânsito" (L23) |
+| **Banco (W2b)** | Partições nativas de `production_minute` (mês) e `tag_sample` (semana) com `app.maintain_partitions`; seed sintético protegido; tabelas de feriados (L2), motivos de refugo e estorno (L3), operadores (L19) e "Em trânsito" (L23), todas com RLS | Branch-semente na Neon (N1); retenção da auditoria; regras que ficam na aplicação (turnos sem sobreposição, prazo do lançamento atrasado) |
+| **Segurança (W11)** | CSP, HSTS e demais cabeçalhos em todas as respostas (sem violação em 23 telas); revisão do limite da RLS em [operacao/revisao-seguranca-w11.md](operacao/revisao-seguranca-w11.md) | CSP com nonce quando as telas deixarem de ser estáticas; Firewall da Vercel; testes de isolamento de nível 3 e 4 (depois da W8); restrições únicas com `organization_id` (migração de contrato) |
+| **Gateway (G3/G4b)** | Handlers de `tag.read`, `device.test`, `config.reload`, `agent.restart`, `log.level` e `logs.upload`; regra da L25 no manifesto; esqueleto de `oee-localui` e `oee-helper` com ativação por socket. **Depois (25/11):** `oee-updater` (pacote `oee-gateway-updater`: assinatura Ed25519, SHA-256, saúde em 5 min, rollback com a L25, retomada depois de queda de energia) e `oee-gateway update fetch`; operações do `oee-helper` (rede com checkpoint do NetworkManager, relógio, reset de fábrica, pendrive) com lista fechada e `SO_PEERCRED`; página local com login pela senha local (argon2id, bloqueio) e as telas do MVP (conexões, últimas leituras, fila, nuvem) pela API local só de leitura (`ui.sock`) | Conferência na bancada ([verificacao-bancada-r1000.md](operacao/verificacao-bancada-r1000.md) §5.7: RS-485, journald, SO_PEERCRED, NetworkManager, OTA real); par de chaves do OTA; units da página e do ajudante no `.deb` depois da bancada; comando de atualização no contrato; telas de rede, diagnóstico e leitura ao vivo da página; nftables pelo ajudante |
+| **DevOps e QA (W1/W3/W11)** | `.env.example` completo; PoC de N gateways ([operacao/poc-100-gateways.md](operacao/poc-100-gateways.md), 100 gateways locais sem erro, `/sync` p99 454 ms); Playwright (15 telas, celular e computador) e job no CI; passo a passo da proteção da `main` ([operacao/protecao-da-main.md](operacao/protecao-da-main.md)) | PoC oficial na Neon (N1); aplicar a proteção da `main` (admin do repositório) |
+| **Frontend (W8/W9)** | **Não acionado nesta rodada.** A troca do mock pelo banco depende da W5 (entrou agora) e, para aparecer no ar, de um banco na Vercel: sem a Neon, as telas trocadas ficariam vazias na demonstração | Começar pelos cadastros, gateways, tags e console mínimo, contra o Postgres local |
+| **Design** | **Não acionado:** pela tabela acima, só depois da troca do mock | — |
+| **Pesquisa e docs (Sofia)** | Esta seção, `docs/00` e os READMEs atualizados | ~~Guias por papel e notas de versão (L15)~~ (feitos em seguida, ver L15) |
+
+**Ao juntar:** as migrações de três especialistas tinham a mesma numeração; ficaram 0007–0008 (W2b), 0009–0010 (W6), 0011–0012 (W5) e 0013 (partições, sempre a última, porque o teste a aplica sobre um banco que já tem dados). O padrão do `AUTH_ENFORCED` mudou para "exigir login em produção quando o `BETTER_AUTH_SECRET` existe": assim a demonstração no ar continua aberta até a Engemase configurar o login na Vercel.
+
+### 8.2 Rodada de 25/11/2026: pendências de código fechadas
+
+Pedido do Pablo pela Central: finalizar todas as pendências. Seis especialistas trabalharam em paralelo; tudo foi juntado num branch só, conferido (typecheck, lint, testes de todos os pacotes, build, Playwright, testes Go com `-race`, prints 390/1280) e publicado na `main`.
+
+| Frente | Entregue | Ainda falta (e por quê) |
+|---|---|---|
+| **W7 (Back-end)** | Fechamento de turno e recálculo dos turnos sujos (`/api/cron/turnos`, golden 78,4% no teste); partições na limpeza diária por `DATABASE_MAINTENANCE_URL`; retenção da auditoria (0014/0015, `AUDITORIA_RETENCAO_DIAS`); alerta offline suprimido para gateway "Em trânsito" (L23); regras de turno sem sobreposição e prazo de lançamento atrasado (L2, L3, L19) | No plano Hobby da Vercel a tarefa `turnos` não é agendada (roda à mão); paradas planejadas recorrentes; produção em feriado fora do `oee_shift` |
+| **W5 (Segurança)** | Convite e "definir senha" (pessoa achada pelo e-mail no servidor), senha esquecida, aviso de bloqueio por e-mail (Resend opcional, senão log), reinício do 2FA de outra pessoa, limpeza do login no cron, seed da Engemase Lab (`db:seed:plataforma`), escopo nos agregados, testes de isolamento de nível 3 e 4 | Configurar Resend e domínio remetente; rodar o seed de plataforma na Neon (N1) |
+| **W8 (Frontend)** | Console Engemase e cadastros lendo e gravando no banco (0018: `app.platform_create_client`/`platform_update_client`); máquina colocada no ar pela web de ponta a ponta com o agente real e o plc-sim | Turnos, produtos, motivos, usuários, terminais e aparência ainda no mock; editar estado do cliente pela tela |
+| **W9 (Frontend)** | Visão geral, máquinas, linhas, relatórios, notificações, ajuda, andon e operador lendo do banco (oee-core; usa `oee_shift` quando existe) | Ações do operador (classificar parada, refugo, produto) ainda simuladas; terminal pareado sem token de aparelho |
+| **Gateway (G4b)** | `oee-updater` (assinatura Ed25519, saúde, rollback, regra da L25); operações reais do `oee-helper`; `oee-localui` com login e telas de status | Conferência na bancada (§5.7 do roteiro); par de chaves do OTA de produção; comando de atualização pela nuvem (contrato v2) |
+| **L15 (Docs)** | Guias por papel em [`guias/`](guias/README.md) e [notas de versão](notas-de-versao.md) | — |
+
+**Sobra só o que não depende de código:** contas (Vercel Pro, Neon, Sentry, Resend), hardware de bancada, proteção da `main` e Firewall da Vercel (administrador), minutas jurídicas e a escolha do piloto.
+
+**Atenção na implantação (N1):** o usuário do `DATABASE_URL` deve ser `NOINHERIT` com `SET app_user` (revisão W11), e o do `AUTH_DATABASE_URL` precisa herdar `auth_service`. Antes disso, conferir que a API dos gateways funciona com o login `NOINHERIT`: a busca do token do gateway (`resolveGatewayTokenState`) roda fora de `withTenant` e pode precisar de ajuste.
+
+**W5, pendências fechadas (25/11/2026):** convite e "definir senha" (pessoa achada pelo e-mail no servidor, token próprio de uso único de 72 h no fragmento do link, só o hash no banco), "esqueci minha senha" (resposta igual exista ou não a conta, 3 pedidos/h por e-mail e 10/h por IP, link de 30 min), aviso por e-mail de conta bloqueada, reinício do 2FA de outra pessoa (admin do cliente para membros comuns só desse cliente; super admin para qualquer membro; auditado), e-mail por Resend opcional (`RESEND_API_KEY` + `EMAIL_FROM`; sem eles, só log), limpeza de `auth_login_throttle`, verificações e tokens no job `limpeza`, seed de plataforma "Engemase Lab" + primeiro super admin (`db:seed:plataforma`, com confirmação extra em produção), resumos com escopo (totais de produção, CSV, alertas, auditoria) e os testes de isolamento de **nível 3** (convite, reenvio e 2FA com ids de outro cliente) e **nível 4** (agregados e CSV com escopo por unidade e por máquina). Sem migração nova. Falta: ligar as Server Actions de usuários à tela (W8), configurar o Resend/domínio remetente (N1) e rodar o seed de plataforma na Neon (N1). Ver apps/web/README.md, "Login e acesso por cliente".

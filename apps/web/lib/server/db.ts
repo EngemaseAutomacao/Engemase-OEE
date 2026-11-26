@@ -1,15 +1,7 @@
 /**
- * Conexão com o Postgres (Neon) para o código de servidor, criada sob demanda. Nada conecta na
+ * Conexões com o Postgres (Neon) para o código de servidor, criadas sob demanda. Nada conecta na
  * importação nem no build: sem endereço, `getDb()` devolve `null` e as rotas respondem 503.
- *
- * Endereço (`resolveDatabaseUrl`), nesta ordem:
- * 1. `APP_DATABASE_URL`, se existir.
- * 2. `DATABASE_URL` (da integração Neon, com pooler) trocando o usuário e a senha pelos da aplicação:
- *    `APP_DB_USER` (padrão `app_login`) e `APP_DB_PASSWORD`. O usuário é criado pelo
- *    `pnpm --filter @engemase/db db:migrate` no build de produção (packages/db/README.md).
- * 3. Fora da Vercel (dev, testes): `DATABASE_URL` como está.
- * Na Vercel, sem 1 ou 2, não conecta: o `DATABASE_URL` da integração é do dono das tabelas, e o app
- * nunca pode usá-lo.
+ * Endereços de cada papel (app, Better Auth, manutenção): `lib/server/db-url.ts`.
  *
  * Driver: `pg` (node-postgres) com pool, via `drizzle-orm/node-postgres`. É o recomendado para
  * Functions da Vercel com Fluid compute (instâncias reaproveitadas entre requisições) e tem
@@ -22,61 +14,76 @@
  */
 import { drizzle } from "drizzle-orm/node-postgres"
 import { Pool } from "pg"
+import { appDatabaseUrl, authDatabaseUrl, maintenanceDatabaseUrl } from "./db-url"
 import type { GatewayDb } from "./gateway/types"
 
-let cached: { readonly url: string; readonly db: GatewayDb; readonly pool: Pool } | undefined
+interface CachedDb {
+  readonly url: string
+  readonly db: GatewayDb
+  readonly pool: Pool
+}
+
+let cached: CachedDb | undefined
+let cachedAuth: CachedDb | undefined
 
 function poolMax(): number {
   const value = Number(process.env.DATABASE_POOL_MAX ?? "")
   return Number.isInteger(value) && value >= 1 && value <= 50 ? value : 5
 }
 
-type Env = Readonly<Record<string, string | undefined>>
-
-function nonEmpty(value: string | undefined): string | undefined {
-  const trimmed = value?.trim()
-  return trimmed === undefined || trimmed === "" ? undefined : trimmed
+function connect(url: string, previous: CachedDb | undefined, label: string): CachedDb {
+  if (previous?.url === url) return previous
+  void previous?.pool.end().catch(() => undefined)
+  const pool = new Pool({
+    connectionString: url,
+    max: poolMax(),
+    // Instâncias ociosas não seguram conexões no pooler da Neon.
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 5_000,
+  })
+  // Erro numa conexão ociosa (ex.: o pooler fechou) não pode derrubar o processo.
+  pool.on("error", (error) => console.error(`[db] erro numa conexão ociosa do pool (${label})`, error))
+  return { url, pool, db: drizzle({ client: pool }) }
 }
 
-/** Endereço do banco para a aplicação (ver o comentário do topo), ou `null` se não houver um seguro. */
-export function resolveDatabaseUrl(env: Env = process.env): string | null {
-  const explicit = nonEmpty(env.APP_DATABASE_URL)
-  if (explicit !== undefined) return explicit
+/** Banco da aplicação, ou `null` se não houver endereço seguro (ver `lib/server/db-url.ts`). */
+export function getDb(): GatewayDb | null {
+  const url = appDatabaseUrl()
+  if (url === null) return null
+  cached = connect(url, cached, "app")
+  return cached.db
+}
 
-  const base = nonEmpty(env.DATABASE_URL)
-  const password = nonEmpty(env.APP_DB_PASSWORD)
-  if (base !== undefined && password !== undefined) {
+/**
+ * Banco do Better Auth (login que herda `auth_service`; ver `lib/server/db-url.ts`).
+ */
+export function getAuthDb(): GatewayDb | null {
+  const url = authDatabaseUrl()
+  if (url === null) return null
+  if (url === appDatabaseUrl()) return getDb()
+  cachedAuth = connect(url, cachedAuth, "auth")
+  return cachedAuth.db
+}
+
+/** Roda `fn` com uma conexão de manutenção aberta só para isso. */
+export type MaintenanceDbRunner = <T>(fn: (db: GatewayDb) => Promise<T>) => Promise<T>
+
+/**
+ * Conexão de MANUTENÇÃO (`DATABASE_MAINTENANCE_URL`, senão o `DATABASE_URL_UNPOOLED` da integração): o papel DONO das tabelas, usado só pela limpeza
+ * diária para criar e apagar partições (`maintainPartitions()`, que é DDL). Conexão direta (sem pooler),
+ * aberta para a tarefa e fechada no fim: nunca fica num pool da aplicação. Sem a variável devolve `null`,
+ * e a limpeza registra e pula as partições.
+ */
+export function maintenanceDbRunner(): MaintenanceDbRunner | null {
+  const url = maintenanceDatabaseUrl()
+  if (url === null) return null
+  return async (fn) => {
+    const pool = new Pool({ connectionString: url, max: 1, connectionTimeoutMillis: 10_000, idleTimeoutMillis: 1_000 })
+    pool.on("error", (error) => console.error("[db] erro na conexão de manutenção", error))
     try {
-      const url = new URL(base)
-      url.username = nonEmpty(env.APP_DB_USER) ?? "app_login"
-      url.password = password
-      return url.toString()
-    } catch {
-      console.error("[db] DATABASE_URL inválido: não foi possível montar o endereço da aplicação")
-      return null
+      return await fn(drizzle({ client: pool }))
+    } finally {
+      await pool.end().catch(() => undefined)
     }
   }
-
-  if (nonEmpty(env.VERCEL) !== undefined) return null
-  return base ?? null
-}
-
-/** Banco da aplicação, ou `null` se não houver endereço (ver `resolveDatabaseUrl`). */
-export function getDb(): GatewayDb | null {
-  const url = resolveDatabaseUrl()
-  if (url === null) return null
-  if (cached?.url !== url) {
-    void cached?.pool.end().catch(() => undefined)
-    const pool = new Pool({
-      connectionString: url,
-      max: poolMax(),
-      // Instâncias ociosas não seguram conexões no pooler da Neon.
-      idleTimeoutMillis: 10_000,
-      connectionTimeoutMillis: 5_000,
-    })
-    // Erro numa conexão ociosa (ex.: o pooler fechou) não pode derrubar o processo.
-    pool.on("error", (error) => console.error("[db] erro numa conexão ociosa do pool", error))
-    cached = { url, pool, db: drizzle({ client: pool }) }
-  }
-  return cached.db
 }

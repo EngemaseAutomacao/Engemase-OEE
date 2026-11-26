@@ -9,18 +9,8 @@ import {
   type ModbusArea,
   type Protocol,
   type Tag,
-  getAuditLog,
-  getClientUsers,
-  getCurrentUser,
-  getDevices,
-  getMachines,
-  getPlatformUsers,
-  getRemoteAccessPolicy,
-  getRemoteAccessSessions,
-  getTags,
-  getUnit,
-  nowMs,
 } from "@/lib/mock"
+import { repositorioMock, type Repositorio } from "@/lib/data/admin/repositorio"
 import { isNetworkProtocol } from "@/lib/mock/types"
 import { ago, dateTime, duration, time } from "@/lib/format"
 import { PLATFORM_ROLE_LABEL } from "@/lib/roles"
@@ -68,6 +58,8 @@ export interface DeviceVM {
   lastError: string | null
   machines: string[]
   tagCount: number
+  /** Com banco: payload do comando device.test deste CLP. */
+  comando?: Record<string, unknown>
 }
 
 export interface BusVM {
@@ -101,6 +93,8 @@ export interface TagVM {
   readValue: string
   latencyMs: number | null
   deviceError: string | null
+  /** Com banco: payload do comando tag.read deste sinal. */
+  comando?: Record<string, unknown>
 }
 
 export interface ConfigVersionVM {
@@ -219,17 +213,17 @@ function nextValue(t: Tag): string {
   return t.lastValue
 }
 
-export function buildGatewayDetail(client: Client, g: Gateway): GatewayDetail {
-  const unit = getUnit(g.unitId)
-  const devices = getDevices(g.id)
-  const machines = getMachines(client.id)
-  const tags = devices.flatMap((d) => getTags({ deviceId: d.id }))
+export function buildGatewayDetail(client: Client, g: Gateway, r: Repositorio = repositorioMock): GatewayDetail {
+  const unit = r.getUnit(g.unitId)
+  const devices = r.getDevices(g.id)
+  const machines = r.getMachines(client.id)
+  const tags = devices.flatMap((d) => r.getTags({ deviceId: d.id }))
   const machineName = (id: string) => machines.find((m) => m.id === id)?.name ?? "Máquina"
-  const audit = getAuditLog(client.id)
+  const audit = r.getAuditLog(client.id)
 
   // Pessoas (autores de configuração, solicitantes de comandos, aprovadores)
-  const clientUsers = getClientUsers(client.id)
-  const platform = getPlatformUsers()
+  const clientUsers = r.getClientUsers(client.id)
+  const platform = r.getPlatformUsers()
   // Só a equipe Engemase (super admin e engenheiro de campo) publica configuração e manda comandos ao gateway (D13).
   const authors = platform.filter((u) => u.platformRole === "super_admin" || u.platformRole === "field_engineer").map((u) => u.name)
   const approvers = clientUsers
@@ -319,9 +313,9 @@ export function buildGatewayDetail(client: Client, g: Gateway): GatewayDetail {
   )
 
   // Acesso remoto
-  const policy = getRemoteAccessPolicy(client.id)
-  const me = getCurrentUser()
-  const sessions: RemoteSessionVM[] = getRemoteAccessSessions({ gatewayId: g.id }).map((s) => {
+  const policy = r.getRemoteAccessPolicy(client.id)
+  const me = r.getCurrentUser()
+  const sessions: RemoteSessionVM[] = r.getRemoteAccessSessions({ gatewayId: g.id }).map((s) => {
     const plcDev = s.scope.plcForward ? devices.find((d) => d.id === s.scope.plcForward!.deviceId) : undefined
     return {
       id: s.id,
@@ -341,7 +335,7 @@ export function buildGatewayDetail(client: Client, g: Gateway): GatewayDetail {
       endedReason: s.endedReason ?? null,
       connection: s.connection === "direct" ? "Conexão direta" : s.connection === "relay" ? "Via relay (TCP 443)" : null,
       bytes: s.bytes ? bytesLabel(s.bytes) : null,
-      remainingS: s.status === "active" && s.expiresAt ? Math.max(0, Math.round((Date.parse(s.expiresAt) - nowMs()) / 1000)) : null,
+      remainingS: s.status === "active" && s.expiresAt ? Math.max(0, Math.round((Date.parse(s.expiresAt) - Date.parse(r.agoraIso())) / 1000)) : null,
     }
   })
 

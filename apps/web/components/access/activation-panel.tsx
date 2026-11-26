@@ -25,12 +25,15 @@ const CHECKLIST = [
 
 /** Detalhe de um gateway "aguardando ativação": o fluxo de ativação em destaque. */
 export function ActivationPanel({
+  gatewayId,
   name,
   activation,
   machines,
   machineHref,
   machinesHref,
 }: {
+  /** Com banco: gerar código chama o servidor. */
+  gatewayId?: string
   name: string
   activation: NonNullable<GatewayDetail["activation"]>
   machines: GatewayDetail["machines"]
@@ -41,6 +44,7 @@ export function ActivationPanel({
     name,
     { code: activation.code, expired: activation.expired, expiresLabel: activation.expiresLabel },
     activation.freshExpiresLabel,
+    gatewayId,
   )
   const [done, setDone] = useState<Set<number>>(new Set())
 

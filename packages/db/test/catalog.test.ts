@@ -7,6 +7,8 @@ import { NULLABLE_TENANT_TABLES, TENANT_TABLE_NAMES } from "../src/tenancy"
 import {
   applicationRoles,
   nullableOrganizationIdColumns,
+  partitions,
+  partitionsWithApplicationPrivileges,
   permissivePolicies,
   securityDefinerFunctionExecutors,
   securityDefinerFunctions,
@@ -17,7 +19,7 @@ import {
   tenantTablesWithoutIsolationPolicy,
   tenantTablesWithoutOrganizationFk,
 } from "./catalog"
-import { createTestDatabase, type TestDatabase } from "./helpers"
+import { createTestDatabase, ident, type TestDatabase } from "./helpers"
 
 describe("catálogo do banco", () => {
   let t: TestDatabase
@@ -116,7 +118,8 @@ describe("catálogo do banco", () => {
   it("as políticas permissivas são só as previstas (qualquer nova exige revisão)", async () => {
     const policies = await permissivePolicies(t.client)
     const unexpected = policies.filter((p) => {
-      if (p.policy === "tenant_access") return !(p.roles === "app_user" && TENANT_TABLE_NAMES.includes(p.table))
+      // Em partição, vale a tabela-mãe (a política vem de app.enable_tenant_rls na criação da partição).
+      if (p.policy === "tenant_access") return !(p.roles === "app_user" && TENANT_TABLE_NAMES.includes(p.root))
       if (p.policy === "auth_service_all") {
         return !(p.roles === "auth_service" && ["member", "organization", "user"].includes(p.table))
       }
@@ -126,6 +129,16 @@ describe("catálogo do banco", () => {
         return !(p.roles === "app_user" && p.table === "organization" && p.cmd === "SELECT")
       if (p.policy === "lookup_by_slug")
         return !(p.roles === "app_lookup" && p.table === "organization" && p.cmd === "SELECT")
+      // 0018: o console cria e altera clientes só pelas funções platform_* (donas app_lookup).
+      if (p.policy === "platform_client_write")
+        return !(p.roles === "app_lookup" && ((p.table === "organization" && p.cmd === "INSERT") || (p.table === "client_account" && p.cmd === "ALL")))
+      if (p.policy === "platform_client_update")
+        return !(p.roles === "app_lookup" && p.table === "organization" && p.cmd === "UPDATE")
+      // Retenção da auditoria (0014): só o app_lookup, dono de app.audit_log_purge, lê e apaga.
+      if (p.policy === "audit_retention_read")
+        return !(p.roles === "app_lookup" && p.table === "audit_log" && p.cmd === "SELECT")
+      if (p.policy === "audit_retention_delete")
+        return !(p.roles === "app_lookup" && p.table === "audit_log" && p.cmd === "DELETE")
       if (p.policy === "lookup_by_token_hash") {
         return !(
           p.roles === "app_lookup" &&
@@ -137,13 +150,42 @@ describe("catálogo do banco", () => {
     })
     expect(unexpected).toEqual([])
     // Toda tabela de cliente tem a permissiva do app_user (sem ela, o app não leria nada).
-    const withAccess = policies.filter((p) => p.policy === "tenant_access").map((p) => p.table)
+    const withAccess = policies.filter((p) => p.policy === "tenant_access" && p.root === p.table).map((p) => p.table)
     expect(withAccess).toEqual([...TENANT_TABLE_NAMES])
+  })
+
+  it("só as séries temporais previstas são particionadas, e toda partição tem RLS forçada e nenhum GRANT", async () => {
+    const parents = [...new Set((await partitions(t.client)).map((p) => p.parent))]
+    expect(parents).toEqual(["production_minute", "tag_sample"])
+    // Cada partição tem organization_id: as verificações de RLS forçada e de política já a incluem.
+    expect(await tenantTablesWithoutForcedRls(t.client)).toEqual([])
+    expect(await tenantTablesWithoutIsolationPolicy(t.client)).toEqual([])
+    // O app lê e grava pela tabela-mãe; partição não tem GRANT para nenhum papel da aplicação.
+    expect(await partitionsWithApplicationPrivileges(t.client)).toEqual([])
+  })
+
+  it("o teste pega uma partição com GRANT direto para o app_user", async () => {
+    await t.client.transaction(async (tx) => {
+      const [first] = await partitions(tx)
+      if (first === undefined) throw new Error("sem partições")
+      await tx.exec(`GRANT SELECT ON public.${ident(first.partition)} TO app_user`)
+      expect(await partitionsWithApplicationPrivileges(tx)).toEqual([first.partition])
+      await tx.rollback()
+    })
   })
 
   it("as funções SECURITY DEFINER pertencem a app_lookup e fixam o search_path", async () => {
     const functions = await securityDefinerFunctions(t.client)
     expect(functions.map((f) => f.name)).toEqual([
+      "audit_log_purge",
+      "cron_claim",
+      "cron_finish",
+      "cron_organizations",
+      "cron_purge",
+      "platform_create_client",
+      "platform_update_client",
+      "rate_limit_purge",
+      "rate_limit_take",
       "resolve_account_token",
       "resolve_gateway_enrollment",
       "resolve_gateway_enrollment_state",
@@ -160,7 +202,7 @@ describe("catálogo do banco", () => {
 
   it("as funções SECURITY DEFINER só podem ser executadas pelo app_user (nunca PUBLIC)", async () => {
     const executors = await securityDefinerFunctionExecutors(t.client)
-    expect(executors.length).toBe(7)
+    expect(executors.length).toBe(16)
     for (const f of executors) expect(f.executors, f.name).toBe("app_lookup,app_user")
     // auth_service não resolve token nem slug (não precisa: lê organization pela própria política).
     const authCanExecute = await t.client.query<{ n: number }>(`
@@ -173,7 +215,20 @@ describe("catálogo do banco", () => {
     const result = await t.client.query<{ table: string; privilege: string }>(`
       SELECT table_name AS "table", privilege_type AS privilege
       FROM information_schema.role_table_grants
-      WHERE grantee = 'app_user' AND table_name IN ('session', 'account', 'verification')`)
+      WHERE grantee IN ('app_user', 'app_lookup')
+        AND table_name IN ('session', 'account', 'verification', 'two_factor', 'auth_login_throttle')`)
     expect(result.rows).toEqual([])
+  })
+
+  it("auth_service lê e grava as tabelas do login (2FA e bloqueio por tentativas, 0008)", async () => {
+    for (const table of ["two_factor", "auth_login_throttle", "session"]) {
+      for (const privilege of ["SELECT", "INSERT", "UPDATE", "DELETE"]) {
+        const result = await t.client.query<{ ok: boolean }>(
+          `SELECT has_table_privilege('auth_service', $1, $2) AS ok`,
+          [`public.${table}`, privilege],
+        )
+        expect(result.rows[0]?.ok, `${table} ${privilege}`).toBe(true)
+      }
+    }
   })
 })

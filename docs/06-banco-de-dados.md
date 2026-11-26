@@ -112,7 +112,7 @@ erDiagram
 
 | Tabela | Campos principais |
 |---|---|
-| `gateway` | id, organization_id, unit_id, nome, `token_hash`, status, `last_seen_at`, versão, `config_version_applied`, info de hardware (jsonb), métricas de saúde |
+| `gateway` | id, organization_id, unit_id, nome, `token_hash`, status, `last_seen_at`, versão, `config_version_applied`, info de hardware (jsonb), métricas de saúde, **em trânsito** (`in_transit_since`/`in_transit_until`, até 30 dias, sem alerta de offline; L23) e `installed_at` |
 | `gateway_enrollment` | gateway_id, `code_hash`, expira_em, usado_em |
 | `serial_bus` | id, gateway_id, nome, porta lógica (`rs485-1..3`), baud, paridade, `data_bits` (sempre 8), stop bits. Escravos RTU da mesma porta compartilham o barramento |
 | `device` | id, gateway_id, `serial_bus_id` (só em `modbus-rtu`), nome, protocolo (`modbus-tcp`, `modbus-rtu`, `modbus-rtu-over-tcp`), `params` (jsonb validado por protocolo), `blocks` (leituras em bloco) |
@@ -127,7 +127,10 @@ erDiagram
 |---|---|
 | `product` | id, organization_id, código, nome |
 | `product_machine` | product_id, machine_id, `ideal_cycle_s` |
-| `shift` | id, unit_id, nome, hora_inicio, hora_fim, dias_semana, vigência |
+| `shift` | id, unit_id, nome, hora_inicio, hora_fim, dias_semana, vigência. O turno pertence ao dia em que começa (L2) |
+| `unit_holiday` | id, unit_id, data, nome: feriado da unidade (L2), sem turno = tempo não planejado |
+| `unit_operator` | id, unit_id, nome, matrícula (opcional, única na unidade), ativo: lista de operadores do tablet (L19, D18) |
+| `reject_reason` | id, organization_id, código, nome, ativo: motivos de refugo cadastrados pela Engemase (L3) |
 | `planned_downtime` | id, unit_id/line_id/machine_id, início, fim, recorrência, motivo |
 | `downtime_reason` | id, organization_id, parent_id, nome, **categoria** (não planejada / planejada / setup), cor |
 | `fault_code_map` (F2) | machine_id ou template_id, código de falha → reason_id |
@@ -139,7 +142,7 @@ erDiagram
 | `machine_state_event` | id (UUIDv7 da borda) | machine_id, state, `started_at`, `ended_at` (null = em aberto), fault_code, reason_id, classificado_por, classificado_em, origem |
 | `production_minute` | (machine_id, bucket_start) | run_s, stop_s, fault_s, setup_s, no_comm_s (somam 60 s), total, reject, product_code — **particionada por mês** |
 | `production_run` | id | machine_id, product_id, order_code, início, fim (troca de produto vinda do CLP ou do operador) |
-| `quality_entry` | id | machine_id, timestamp, quantidade, motivo de refugo, usuário (lançamento manual) |
+| `quality_entry` | id | machine_id, timestamp, quantidade, motivo de refugo (`reject_reason_id`), operador, usuário (lançamento manual; soma ao refugo do CLP). Estorno = nova linha com quantidade oposta, `reverses_id` e motivo do estorno (um por lançamento; L3) |
 | `machine_live` | machine_id | state, state_since, fault_code, counter_total, product, atualizado_em |
 | `tag_sample` | (tag_id, at) | valor numérico e/ou texto — **particionada por dia/semana**, retenção curta |
 
@@ -200,20 +203,22 @@ Estimativa para **100 máquinas**:
 
 | Tabela | Volume | Partição | Retenção |
 |---|---|---|---|
-| `production_minute` | ~144 mil linhas/dia, ~52 milhões/ano, **~5 GB/ano** | Mensal (pg_partman) | **2 anos** no detalhe por minuto (D6). Depois disso, manter só `oee_hour`/`oee_shift` (ou arquivar em Parquet) |
-| `machine_state_event` | ~10–50 mil/dia | Mensal | Indefinida (pequena) |
-| `tag_sample` | Depende da config (deadband) | Diária ou semanal | 30–90 dias |
+| `production_minute` | ~144 mil linhas/dia, ~52 milhões/ano, **~5 GB/ano** | Mensal (nativa, `app.maintain_partitions`) | **2 anos** no detalhe por minuto (D6). Depois disso, manter só `oee_hour`/`oee_shift` (ou arquivar em Parquet) |
+| `machine_state_event` | ~10–50 mil/dia | Nenhuma por enquanto (chave em `id`, usada pelo `/sync`) | Indefinida (pequena) |
+| `tag_sample` | Depende da config (deadband) | Semanal (nativa) | **90 dias** |
 | `oee_shift` | ~300/dia | — | Indefinida |
-| `audit_log` | Baixo | Anual | **5 anos** (D6) |
+| `audit_log` | Baixo | Nenhuma por enquanto (chave em `id`, usada pelo `/sync`) | **5 anos** (D6) |
 
 **Retenção decidida (D6, 12/11/2026):** dados por minuto por 2 anos e auditoria por 5 anos. As demais linhas da tabela continuam como sugestão. Retenção diferente por cliente ou por plano não foi decidida.
+
+**Implementado (W2b, migração 0013):** particionamento nativo (sem pg_partman, que o banco dos testes não tem) de `production_minute` (mensal) e `tag_sample` (semanal). Uma tarefa agendada diária chama `app.maintain_partitions()` (`maintainPartitions()` em `packages/db`), que cria as partições dos próximos períodos (3 meses / 8 semanas) e apaga as que passaram da retenção, com o papel dono das tabelas. Detalhes no README de `packages/db`.
 
 ## Ambientes e migrações
 
 | Ambiente | Banco |
 |---|---|
 | Local | Postgres em Docker **ou** branch `dev` da Neon |
-| Preview (PR) | Branch Neon `preview/<branch>` criado automaticamente pela integração da Vercel, **a partir de um branch-semente com dados sintéticos** (nunca cópia da produção) |
+| Preview (PR) | Branch Neon `preview/<branch>` criado automaticamente pela integração da Vercel, **a partir de um branch-semente com dados sintéticos** (nunca cópia da produção). O branch-semente recebe o seed de `packages/db` (`ENGEMASE_SEED=sintetico pnpm --filter @engemase/db db:seed`), que se recusa a rodar em produção ou em banco com cliente real |
 | Produção | Branch `main` da Neon |
 
 **Região (D7):** projeto Neon em AWS `sa-east-1` (São Paulo), junto das Functions da Vercel em `gru1`.

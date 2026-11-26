@@ -6,12 +6,11 @@
 #   deploy/gateway/build-deb.sh --arch amd64 --version 0.1.0-rc.1 --out /tmp/debs
 #
 # Opções:
-#   --build          compila antes o agente (gateway/cmd/oee-gateway) em
-#                    <dist>/<arq>/oee-gateway: CGO_ENABLED=0, -trimpath,
-#                    GOTOOLCHAIN=local e a versão/commit/data no buildinfo
+#   --build          compila antes o binário do pacote (gateway/cmd/oee-gateway
+#                    e/ou gateway/cmd/oee-updater) em <dist>/<arq>/:
+#                    CGO_ENABLED=0, -trimpath, GOTOOLCHAIN=local e a
+#                    versão/commit/data no buildinfo
 #   --package NOME   oee-gateway (padrão) | oee-gateway-updater | all
-#                    (o oee-gateway-updater só existe no M4b: o binário
-#                    gateway/cmd/oee-updater ainda não foi escrito)
 #   --arch ARQ       arm64 | amd64 (padrão: a da máquina)
 #   --version VER    versão semver (padrão: 0.0.0-dev)
 #   --dist DIR       diretório dos binários <DIR>/<arq>/oee-gateway e oee-updater
@@ -95,19 +94,20 @@ if [ -z "${SOURCE_DATE_EPOCH:-}" ]; then
 fi
 export SOURCE_DATE_EPOCH
 
-# Compila o agente como o Makefile do gateway/ (mesmo -ldflags), na saída
-# esperada pelo nfpm.yaml.
-build_agent() {
+# Compila um binário (oee-gateway ou oee-updater) como o Makefile do gateway/
+# (mesmo -ldflags), na saída esperada pelos nfpm*.yaml.
+build_bin() {
+	bin=$1
 	command -v go >/dev/null 2>&1 || die "--build precisa do Go (1.24) no PATH"
 	pkg=github.com/engemaseautomacao/engemase-oee/gateway
 	commit=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo desconhecido)
 	date=$(date -u -d "@$SOURCE_DATE_EPOCH" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
 	mkdir -p "$dist_abs/$arch"
-	echo "build-deb: compilando oee-gateway $version ($arch, commit $commit)"
+	echo "build-deb: compilando $bin $version ($arch, commit $commit)"
 	(cd "$repo/gateway" && GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=$arch \
 		go build -trimpath \
 		-ldflags "-s -w -X $pkg/internal/buildinfo.Version=$version -X $pkg/internal/buildinfo.Commit=$commit -X $pkg/internal/buildinfo.Date=$date" \
-		-o "$dist_abs/$arch/oee-gateway" ./cmd/oee-gateway)
+		-o "$dist_abs/$arch/$bin" "./cmd/$bin")
 }
 
 build_one() {
@@ -117,10 +117,7 @@ build_one() {
 		oee-gateway-updater) cfg=deploy/gateway/nfpm-updater.yaml bin=oee-updater ;;
 	esac
 	if [ ! -f "$dist_abs/$arch/$bin" ]; then
-		case "$bin" in
-			oee-updater) die "binário ausente: $dist_abs/$arch/$bin (o oee-updater é do M4b e ainda não existe em gateway/cmd)" ;;
-			*) die "binário ausente: $dist_abs/$arch/$bin (use --build ou gere com o build do gateway; ver README)" ;;
-		esac
+		die "binário ausente: $dist_abs/$arch/$bin (use --build ou gere com o build do gateway; ver README)"
 	fi
 	echo "build-deb: $pkg $version ($arch) a partir de $dist_abs/$arch/$bin"
 	# shellcheck disable=SC2086 # nfpm_cmd pode ser "go run ..."
@@ -129,7 +126,11 @@ build_one() {
 }
 
 if [ "$build" = yes ]; then
-	build_agent
+	case "$package" in
+		oee-gateway) build_bin oee-gateway ;;
+		oee-gateway-updater) build_bin oee-updater ;;
+		all) build_bin oee-gateway && build_bin oee-updater ;;
+	esac
 fi
 
 if [ "$package" = all ]; then

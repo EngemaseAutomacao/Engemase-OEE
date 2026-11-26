@@ -20,11 +20,14 @@ Documentação de operação da plataforma Engemase OEE e do gateway (Seeed reCo
 | [runbooks/08-restauracao-banco-pitr.md](runbooks/08-restauracao-banco-pitr.md) | Restauração do banco na Neon (PITR): quando, como, o que se perde e como recuperar o período que os gateways não reenviam | Engenharia, direção técnica |
 | [runbooks/09-rotacao-token-gateway.md](runbooks/09-rotacao-token-gateway.md) | Bloquear o token de um gateway e registrar de novo com código novo (sem `--force`, pelo marcador `auth-blocked`) | Engenharia, campo |
 | [runbooks/10-troca-hardware-gateway.md](runbooks/10-troca-hardware-gateway.md) | Troca da unidade com defeito: fila da antiga, gravação com a rede do cliente, registro no mesmo gateway e conferência | Engenharia, bancada, campo |
+| [revisao-seguranca-w11.md](revisao-seguranca-w11.md) | Revisão de segurança W11: cabeçalhos HTTP da web (CSP, HSTS...) e isolamento entre clientes no banco (limite da RLS, D38), com achados e recomendações | Engenharia |
 | [ficha-tecnica-ti-cliente.md](ficha-tecnica-ti-cliente.md) | Ficha de uma página para o TI do cliente: portas, saídas, DNS/NTP, proxy, VPN, dados, checklist | TI do cliente, comercial |
 | [verificacao-bancada-r1000.md](verificacao-bancada-r1000.md) | Roteiro de verificação de cada R1000 novo antes de expedir (Partes A e B) e bancada de CLPs das 4 marcas prioritárias, com a matriz de testes por marca (Parte C) | Bancada, engenharia, automação |
 | [bloco-oee-v1.md](bloco-oee-v1.md) | Especificação formal v1 do bloco OEE padrão Engemase (mantida pela D26) e template de tags do gateway | Automação, engenharia, campo |
 | [FB_OEE_ENGEMASE.st](FB_OEE_ENGEMASE.st) | Bloco de função IEC 61131-3 (ST) que monta o bloco OEE no CLP, com notas de portabilidade (TIA Portal, Studio 5000, Machine Expert, Automation Builder) | Automação |
 | [adaptacoes-por-fabricante.md](adaptacoes-por-fabricante.md) | Como expor o bloco por Modbus TCP/RTU em cada marca de CLP: Siemens, Schneider, Rockwell e ABB primeiro, com fontes oficiais; depois as outras marcas | Automação, campo |
+| [poc-100-gateways.md](poc-100-gateways.md) | PoC de carga da API dos gateways (W3): N gateways simulados, latência e erros; roda hoje local e, com a Neon, contra o preview da Vercel | Engenharia |
+| [protecao-da-main.md](protecao-da-main.md) | Proteção da `main` no GitHub (N1/W1): passo a passo com os checks obrigatórios do CI | Administrador do repositório |
 
 ## 2. Marcações usadas
 

@@ -2,7 +2,7 @@
 
 Plataforma de monitoramento de **OEE (Overall Equipment Effectiveness)** para máquinas industriais, **independente da marca do CLP**.
 
-> **Status:** planejamento em revisão final (ADRs aguardando aceite formal, ver [D37 em `docs/17`](docs/17-backlog-e-pendencias.md#3-decisões-pendentes-do-dono-do-produto)), **protótipo da interface** em andamento em [`apps/web`](apps/web/) (dados simulados, roda localmente) e **Fase 0 do sistema real** com código e testes: contrato gateway↔nuvem, cálculo de OEE, banco com RLS, simulador de CLP e esqueleto do agente do gateway (ver [`docs/00-status.md`](docs/00-status.md)). Arquitetura e plano em [`docs/`](docs/).
+> **Status:** planejamento em revisão final (ADRs aguardando aceite formal, ver [D37 em `docs/17`](docs/17-backlog-e-pendencias.md#3-decisões)), **protótipo da interface** em andamento em [`apps/web`](apps/web/) (dados simulados, roda localmente) e **Fase 0 do sistema real** com código e testes: contrato gateway↔nuvem, cálculo de OEE, banco com RLS, simulador de CLP e esqueleto do agente do gateway (ver [`docs/00-status.md`](docs/00-status.md)). Arquitetura e plano em [`docs/`](docs/).
 
 ## Em uma frase
 
@@ -65,6 +65,9 @@ flowchart LR
 | 15 | [Plataforma multi-cliente](docs/15-multi-cliente-e-acesso.md) | Papéis e escopo por unidade, acesso da Engemase, isolamento, console, segurança |
 | 16 | [Projeto do gateway](docs/16-projeto-do-gateway.md) | Funções, software, rede e instalação, comissionamento local, preparação e ciclo de vida (definições canônicas) |
 | 17 | [Backlog e pendências](docs/17-backlog-e-pendencias.md) | O que falta, épicos até o piloto, decisões pendentes, próximos passos |
+| — | [Guias por papel](docs/guias/README.md) | Para o usuário final: o que cada papel (super admin, técnico Engemase, admin do cliente, gestor/supervisor, operador, TV/terminal) vê e faz, passo a passo |
+| — | [Notas de versão](docs/notas-de-versao.md) | O que mudou em cada entrega, em linguagem de usuário (atualizar a cada entrega) |
+| — | [Operação](docs/operacao/README.md) | Runbooks, ficha de TI, roteiro de bancada, bloco OEE e guia por fabricante (equipe Engemase) |
 
 ## Estrutura do repositório
 

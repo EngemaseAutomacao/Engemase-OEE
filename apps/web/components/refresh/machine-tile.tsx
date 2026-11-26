@@ -19,12 +19,15 @@ export function MachineTile({
   lineName,
   unitName,
   className,
+  now,
 }: {
   machine: MachineWithLive
   href: string
   lineName: string
   unitName: string
   className?: string
+  /** "Agora" da leitura (ISO); sem ele, o do protótipo. */
+  now?: string
 }) {
   const live = machine.live
   const state = live?.state ?? "NO_COMM"
@@ -52,7 +55,7 @@ export function MachineTile({
 
         <div className="flex flex-wrap items-center gap-2">
           <StateBadge state={state} pulse={state === "FAULT"} />
-          {live && !stale && live.stateSince && <span className="text-xs text-muted-foreground tabular-nums">há {since(live.stateSince)}</span>}
+          {live && !stale && live.stateSince && <span className="text-xs text-muted-foreground tabular-nums">há {since(live.stateSince, now)}</span>}
         </div>
 
         {live?.faultText && (
@@ -66,7 +69,7 @@ export function MachineTile({
         {stale && (
           <div className="flex items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1.5 text-xs text-muted-foreground">
             <WifiOffIcon className="size-3.5 shrink-0" />
-            <span className="truncate">{live!.countShift > 0 ? `Dados atrasados · último ${ago(live!.lastUpdate)}` : "Aguardando dados do gateway"}</span>
+            <span className="truncate">{live!.countShift > 0 ? `Dados atrasados · último ${ago(live!.lastUpdate, now)}` : "Aguardando dados do gateway"}</span>
           </div>
         )}
 

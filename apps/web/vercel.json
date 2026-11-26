@@ -1,5 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["gru1"],
-  "buildCommand": "pnpm --filter @engemase/db db:migrate && pnpm run build"
+  "buildCommand": "pnpm --filter @engemase/db db:migrate && pnpm run build",
+  "crons": [
+    { "path": "/api/cron/limpeza", "schedule": "30 3 * * *" },
+    { "path": "/api/cron/resumo-diario", "schedule": "0 10 * * *" }
+  ]
 }

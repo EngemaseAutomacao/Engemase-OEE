@@ -1,9 +1,9 @@
 /**
- * Turno corrente de uma unidade a partir do cadastro de turnos (lib/mock).
- * Funções puras, seguras em componentes de servidor: o "agora" é sempre MOCK_NOW
- * (ou um ISO informado), nunca o relógio do sistema.
+ * Turno corrente de uma unidade a partir do cadastro de turnos (dados da tela: banco ou simulados).
+ * Funções puras, seguras em componentes de servidor: o "agora" vem de quem chama (o da leitura dos
+ * dados), nunca do relógio do sistema.
  */
-import { DEFAULT_TZ, MOCK_NOW, getShifts, getUnit } from "@/lib/mock"
+import { DEFAULT_TZ, type Shift } from "@/lib/mock"
 
 export interface ShiftInfo {
   id: string
@@ -51,11 +51,11 @@ const toMin = (hhmm: string) => {
 const overlap = (a0: number, a1: number, b0: number, b1: number) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0))
 
 /** Turno em andamento na unidade (considera turnos que atravessam a meia-noite). */
-export function currentShift(clientId: string, unitId: string, nowIso: string = MOCK_NOW): ShiftInfo | null {
-  const tz = getUnit(unitId)?.timezone ?? DEFAULT_TZ
+export function currentShift(shifts: readonly Shift[], timeZone: string = DEFAULT_TZ, nowIso: string): ShiftInfo | null {
+  const tz = timeZone
   const { minutes, weekday } = localClock(nowIso, tz)
 
-  for (const s of getShifts(clientId, unitId)) {
+  for (const s of shifts) {
     const start = toMin(s.start)
     let end = toMin(s.end)
     if (end <= start) end += 24 * 60

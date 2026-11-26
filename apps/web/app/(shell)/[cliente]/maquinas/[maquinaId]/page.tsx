@@ -1,29 +1,11 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { Suspense } from "react"
 import { LifeBuoyIcon, MonitorIcon, OctagonAlertIcon, Settings2Icon, TabletSmartphoneIcon, UnplugIcon, WifiOffIcon } from "lucide-react"
 
-import {
-  MOCK_NOW,
-  getAreas,
-  getClientBySlug,
-  getConfigAccess,
-  getDailyOee,
-  getDevice,
-  getDevices,
-  getDowntimeReasons,
-  getGateway,
-  getHourlyProduction,
-  getLine,
-  getMachine,
-  getMachineLive,
-  getProducts,
-  getTags,
-  getTimeline,
-  getUnit,
-  machineParams,
-  nowMs,
-  type Tag,
-} from "@/lib/mock"
+import { getClientData } from "@/lib/data/cliente"
+import type { Tag } from "@/lib/mock"
 import { isNetworkProtocol } from "@/lib/mock/types"
 import { ago, dateTime, num, pct, shortDate, since, time } from "@/lib/format"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -50,48 +32,57 @@ import { currentShift, stateDurations, unclassifiedStops } from "@/components/mo
 import { StopsTable } from "@/components/monitoring/stops-table"
 import { PageTitle } from "@/components/refresh/page-title"
 import { SoftLink } from "@/components/refresh/soft-action"
+import { PageSkeleton } from "@/components/shell/page-skeleton"
 
 /** Container de página no padrão novo. */
 function Shell({ children }: { children: React.ReactNode }) {
   return <div className="flex flex-col gap-5 p-4 md:p-6">{children}</div>
 }
 
-export async function generateStaticParams({ params }: { params: { cliente: string } }) {
-  return machineParams(params.cliente)
-}
-
 const HOUR_MS = 60 * 60 * 1000
 
-export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[maquinaId]">) {
+export const metadata: Metadata = { title: "Máquina" }
+
+export default function Page({ params }: PageProps<"/[cliente]/maquinas/[maquinaId]">) {
+  return (
+    <Suspense fallback={<PageSkeleton blocks={3} />}>
+      <MachineDetail params={params} />
+    </Suspense>
+  )
+}
+
+async function MachineDetail({ params }: { params: PageProps<"/[cliente]/maquinas/[maquinaId]">["params"] }) {
   const { cliente, maquinaId } = await params
-  const client = getClientBySlug(cliente)
-  if (!client) notFound()
-  const machine = getMachine(maquinaId)
-  if (!machine || machine.clientId !== client.id) notFound()
+  const data = await getClientData(cliente, { diasOee: 30 })
+  const { client } = data
+  // Máquina de outro cliente ou fora do escopo da pessoa: 404 (não revela que existe).
+  const machine = data.getMachine(maquinaId)
+  if (!machine) notFound()
 
   const slug = client.slug
+  const nowIso = data.now
   // Só a equipe Engemase configura gateway, CLP e tags (D12/D13); para o cliente a tela é só leitura.
-  const { canConfigure } = getConfigAccess(client.id)
-  const live = getMachineLive(machine.id)
-  const line = getLine(machine.lineId)
-  const unit = getUnit(machine.unitId)
-  const areaName = line && unit ? getAreas(unit.id).find((a) => a.id === line.areaId)?.name : undefined
-  const gateway = machine.gatewayId ? getGateway(machine.gatewayId) : undefined
-  const device = machine.deviceId ? getDevice(machine.deviceId) : undefined
+  const { canConfigure, canSeeTechnical } = data.access
+  const live = data.getMachineLive(machine.id)
+  const line = data.getLine(machine.lineId)
+  const unit = data.getUnit(machine.unitId)
+  const areaName = line && unit ? data.getAreas(unit.id).find((a) => a.id === line.areaId)?.name : undefined
+  const gateway = machine.gatewayId ? data.getGateway(machine.gatewayId) : undefined
+  const device = machine.deviceId ? data.getDevice(machine.deviceId) : undefined
   const busPeers =
     device?.protocol === "modbus-rtu"
-      ? getDevices(device.gatewayId).filter((d) => d.id !== device.id && d.protocol === "modbus-rtu" && d.params.serialPort === device.params.serialPort)
+      ? data.getDevices(device.gatewayId).filter((d) => d.id !== device.id && d.protocol === "modbus-rtu" && d.params.serialPort === device.params.serialPort)
       : []
 
-  const shift = currentShift()
-  const events = getTimeline(machine.id)
+  const shift = currentShift(data.shiftWindow(machine.unitId), nowIso)
+  const events = data.getTimeline(machine.id)
   const hasData = Boolean(live) && events.length > 0
-  const reasons = getDowntimeReasons(client.id)
+  const reasons = [...data.reasons]
   const reasonPaths = reasonPathMap(reasons)
   const state = live?.state ?? "NO_COMM"
 
   // Valores das tags de estado coerentes com o estado ao vivo (o mock traz valores fixos).
-  const tags: Tag[] = getTags({ machineId: machine.id }).map((t) => {
+  const tags: Tag[] = data.getTags(machine.id).map((t) => {
     if (!live || t.quality !== "good") return t
     if (t.role === "state.running") return { ...t, lastValue: state === "RUNNING" ? "1" : "0" }
     if (t.role === "state.fault") return { ...t, lastValue: state === "FAULT" ? "1" : "0" }
@@ -100,7 +91,8 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
     return t
   })
 
-  const connection = (
+  // Conexão Modbus, endereços e tags: só com leitura técnica (engenheiro, admin, Engemase).
+  const connection = canSeeTechnical && (
     <ConnectionCard
       clientSlug={slug}
       gateway={gateway}
@@ -109,6 +101,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
       tags={tags}
       stateMode={machine.stateMode}
       canConfigure={canConfigure}
+      now={nowIso}
     />
   )
 
@@ -148,7 +141,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
           <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-xs font-medium text-muted-foreground">{machine.code}</span>
         </span>
       }
-      description={[machine.type, line?.name, areaName, unit ? `${unit.name} (${unit.city}/${unit.state})` : undefined].filter(Boolean).join(" · ")}
+      description={[machine.type, line?.name, areaName, unit ? (unit.city ? `${unit.name} (${unit.city}/${unit.state})` : unit.name) : undefined].filter(Boolean).join(" · ")}
       actions={
         <>
           <SoftLink href={`/${slug}/operador/${machine.id}`}>
@@ -168,7 +161,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
         <StateBadge state={state} pulse={state === "FAULT"} className="px-2.5 py-1 text-sm" />
         {hasData && live ? (
           <span className="text-sm text-muted-foreground tabular-nums">
-            há {since(live.stateSince)} · desde {time(live.stateSince)}
+            há {since(live.stateSince, nowIso)} · desde {time(live.stateSince)}
           </span>
         ) : (
           <span className="text-sm text-muted-foreground">Nenhum dado recebido neste turno</span>
@@ -250,7 +243,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
   const durations = stateDurations(events)
   const totalS = Object.values(durations).reduce((s, v) => s + v, 0)
   const plannedElapsedS = totalS - durations.PLANNED_STOP
-  const product = getProducts(client.id).find((p) => p.code === live.productCode)
+  const product = data.products.find((p) => p.code === live.productCode)
   const idealCycleS = product?.idealCycles.find((c) => c.machineId === machine.id)?.idealCycleS ?? machine.idealCycleS
 
   const lastEvent = events.at(-1)
@@ -258,7 +251,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
     .filter((e) => STOP_STATES.includes(e.state))
     .map((e) => {
       const durationS = (Date.parse(e.end) - Date.parse(e.start)) / 1000
-      const open = e === lastEvent && e.end === MOCK_NOW
+      const open = e === lastEvent && e.end === nowIso
       return {
         key: eventKey(e),
         state: e.state,
@@ -276,8 +269,8 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
   const pending = unclassifiedStops(events, machine.microStopThresholdS).length
   const micro = stopRows.filter((r) => r.micro).length
 
-  const now = nowMs()
-  const hourly: HourlyPoint[] = getHourlyProduction(machine.id).map((h) => {
+  const now = data.nowMs
+  const hourly: HourlyPoint[] = data.getHourlyProduction(machine.id).map((h) => {
     const hs = Date.parse(h.hour)
     const future = hs >= now
     return {
@@ -288,7 +281,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
       partial: !future && hs + HOUR_MS > now,
     }
   })
-  const daily: DailyPoint[] = getDailyOee(machine.id, 30).map((d) => ({
+  const daily: DailyPoint[] = data.getDailyOee(machine.id, 30).map((d) => ({
     label: shortDate(d.date),
     oee: d.oee,
     availability: d.availability,
@@ -305,7 +298,7 @@ export default async function Page({ params }: PageProps<"/[cliente]/maquinas/[m
       {live.stale && (
         <Alert className="rounded-2xl border-state-stopped/40 bg-state-stopped/5">
           <WifiOffIcon className="text-amber-700 dark:text-state-stopped" />
-          <AlertTitle>Dados atrasados · último dado {ago(live.lastUpdate)}</AlertTitle>
+          <AlertTitle>Dados atrasados · último dado {ago(live.lastUpdate, nowIso)}</AlertTitle>
           <AlertDescription>
             {gateway?.status === "offline"
               ? `O ${gateway.name} está offline desde ${time(gateway.lastSeen ?? live.lastUpdate)}. Os indicadores abaixo vão até ${time(live.lastUpdate)}; quando a conexão voltar, ${num(gateway.bufferPending)} leituras guardadas no gateway serão enviadas e o turno será recalculado.`

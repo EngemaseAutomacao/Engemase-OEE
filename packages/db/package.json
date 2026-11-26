@@ -13,6 +13,10 @@
     "./schema": {
       "types": "./src/schema/index.ts",
       "default": "./src/schema/index.ts"
+    },
+    "./seed": {
+      "types": "./src/seed/index.ts",
+      "default": "./src/seed/index.ts"
     }
   },
   "files": [
@@ -24,7 +28,9 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node scripts/migrate.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "db:seed:plataforma": "tsx scripts/seed-plataforma.ts",
+    "db:migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
     "@engemase/contracts": "workspace:*",
@@ -36,6 +42,7 @@
     "@types/node": "^22.20.5",
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.11",
+    "tsx": "^4.23.15",
     "typescript": "~5.9.3",
     "vitest": "^4.1.12"
   }

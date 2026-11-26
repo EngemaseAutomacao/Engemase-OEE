@@ -49,7 +49,11 @@ async function useOwnerWithoutBypassRls(client: PGlite): Promise<void> {
     ALTER SCHEMA drizzle OWNER TO migration_owner;
     GRANT CREATE ON SCHEMA public TO migration_owner;
     GRANT USAGE ON SCHEMA app TO migration_owner;
-    GRANT EXECUTE ON FUNCTION app.enable_tenant_rls(regclass) TO migration_owner;`)
+    GRANT EXECUTE ON FUNCTION app.enable_tenant_rls(regclass) TO migration_owner;
+    -- Na Neon o mesmo dono rodou a 0001: é dono do schema app e membro de app_lookup (a 0001 faz o
+    -- GRANT), o que as migrações que criam funções de busca (0010) precisam.
+    ALTER SCHEMA app OWNER TO migration_owner;
+    GRANT app_lookup TO migration_owner;`)
 }
 
 /** Aplica todas as migrações como `migration_owner`. */
@@ -87,6 +91,16 @@ describe("migrações", () => {
       "0004_organization_slug_check",
       "0005_member_machine_owner_decisions",
       "0006_client_limits_machines_required",
+      "0007_w2b_calendar_reject_operator_transit",
+      "0008_w2b_rls_new_tables_reversal_trigger",
+      "0009_gateway_api_w6",
+      "0010_gateway_api_w6_rls",
+      "0011_auth_two_factor_session_throttle",
+      "0012_auth_grants",
+      "0013_w2b_partitions_maintenance",
+      "0014_w7_audit_retention",
+      "0015_w7_audit_log_at_index",
+      "0018_platform_client_admin",
     ])
   })
 
@@ -97,9 +111,11 @@ describe("migrações", () => {
   })
 
   it("criam exatamente as tabelas declaradas no schema", async () => {
-    const result = await t.client.query<{ name: string }>(
-      "SELECT tablename AS name FROM pg_tables WHERE schemaname = 'public' ORDER BY 1",
-    )
+    // Partições ficam de fora: são da tabela-mãe (test/partitions.test.ts).
+    const result = await t.client.query<{ name: string }>(`
+      SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relispartition
+      ORDER BY 1`)
     const inDb = result.rows.map((r) => r.name)
     const inSchema = ALL_TABLES.map((table) => getTableName(table)).sort()
     expect(inDb).toEqual(inSchema)

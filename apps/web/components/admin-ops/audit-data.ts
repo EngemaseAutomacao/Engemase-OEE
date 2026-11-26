@@ -1,8 +1,9 @@
 /**
- * Auditoria global (console Engemase), montada a partir de `getAuditLog()`.
+ * Auditoria global (console Engemase), montada a partir de `r.getAuditLog()`.
  * Usado SÓ por páginas (servidor). Devolve linhas serializáveis já formatadas.
  */
-import { MOCK_NOW, getAuditLog, getClientById, getClients, getPlatformUsers, getUsers } from "@/lib/mock"
+import { ROTULOS_DO_BANCO } from "@/lib/data/admin/acoes-auditoria"
+import { repositorioMock, type Repositorio } from "@/lib/data/admin/repositorio"
 import { date, time } from "@/lib/format"
 import { CLIENT_ROLE_LABEL, PLATFORM_ROLE_LABEL } from "@/lib/roles"
 import type { AuditCategory } from "./labels"
@@ -10,6 +11,7 @@ import type { AuditCategory } from "./labels"
 export type ActorKind = "engemase" | "client" | "system"
 
 const ACTION_LABEL: Record<string, string> = {
+  ...ROTULOS_DO_BANCO,
   "config.publish": "Publicou configuração",
   "tag.test_read": "Leitura de teste de tag",
   "user.invite": "Convidou usuário",
@@ -71,13 +73,13 @@ export interface AuditData {
   since: string
 }
 
-export function buildAudit(): AuditData {
-  const platform = getPlatformUsers()
-  const users = getUsers()
-  const today = date(MOCK_NOW)
-  const yesterday = date(new Date(Date.parse(MOCK_NOW) - 86_400_000).toISOString())
+export function buildAudit(r: Repositorio = repositorioMock): AuditData {
+  const platform = r.getPlatformUsers()
+  const users = r.getUsers()
+  const today = date(r.agoraIso())
+  const yesterday = date(new Date(Date.parse(r.agoraIso()) - 86_400_000).toISOString())
 
-  const rows: AuditRow[] = getAuditLog().map((a) => {
+  const rows: AuditRow[] = r.getAuditLog().map((a) => {
     const p = platform.find((u) => u.name === a.actorName)
     const u = p ?? users.find((x) => x.name === a.actorName)
     const membership = !p && u ? (u.memberships.find((m) => m.clientId === a.clientId) ?? u.memberships[0]) : undefined
@@ -95,7 +97,7 @@ export function buildAudit(): AuditData {
       actorRole: p ? `Engemase · ${PLATFORM_ROLE_LABEL[p.platformRole!]}` : membership ? CLIENT_ROLE_LABEL[membership.role] : "Sistema",
       impersonatedBy: a.impersonatedBy,
       clientId: a.clientId,
-      clientName: a.clientId ? (getClientById(a.clientId)?.name ?? a.clientId) : "Plataforma",
+      clientName: a.clientId ? (r.getClientById(a.clientId)?.name ?? a.clientId) : "Plataforma",
       action: a.action,
       actionLabel: actionLabel(a.action),
       category: categoryOf(a.action, a.clientId),
@@ -106,10 +108,10 @@ export function buildAudit(): AuditData {
     }
   })
 
-  const oldest = rows.length > 0 ? rows[rows.length - 1]!.at : MOCK_NOW
+  const oldest = rows.length > 0 ? rows[rows.length - 1]!.at : r.agoraIso()
   return {
     rows,
-    clients: getClients().map((c) => ({ id: c.id, name: c.name })),
+    clients: r.getClients().map((c) => ({ id: c.id, name: c.name })),
     since: date(oldest),
   }
 }

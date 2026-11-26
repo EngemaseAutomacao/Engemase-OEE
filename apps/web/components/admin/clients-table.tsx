@@ -214,7 +214,7 @@ export function ClientsTable({ rows }: { rows: ClientRow[] }) {
                     <td className={cn(TD, "text-xs whitespace-nowrap")}>
                       <div className="font-mono text-muted-foreground">{r.cnpj}</div>
                       <div>
-                        {r.city}/{r.state}
+                        {r.city ? `${r.city}/${r.state}` : "—"}
                       </div>
                     </td>
                     <td className={TD}>

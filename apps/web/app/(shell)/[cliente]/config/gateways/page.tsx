@@ -1,30 +1,31 @@
-import { notFound } from "next/navigation"
+import type { Metadata } from "next"
+import { Suspense } from "react"
 
-import { getAuditLog, getClientBySlug, getConfigAccess, getDevices, getGateways, getMachines, getUnits } from "@/lib/mock"
-import { freshCodeExpiresLabel, gatewayRow } from "@/components/access/gateway-view"
+import { dadosGateways } from "@/lib/data/config/telas"
 import { GatewaysView } from "@/components/access/gateways-view"
 import { ConfigAccessProvider } from "@/components/config/engemase-managed"
+import { FonteDadosProvider } from "@/components/config/fonte-dados"
+import { CarregandoPagina } from "@/components/shell/carregando"
 
-export default async function Page({ params }: PageProps<"/[cliente]/config/gateways">) {
+export const metadata: Metadata = { title: "Gateways" }
+
+/** Com banco, lê a sessão e o cadastro (requireTenant): fica dentro do <Suspense>. */
+async function Lista({ params }: { params: PageProps<"/[cliente]/config/gateways">["params"] }) {
   const { cliente } = await params
-  const client = getClientBySlug(cliente)
-  if (!client) notFound()
-
-  const units = getUnits(client.id)
-  const machines = getMachines(client.id)
-  const audit = getAuditLog(client.id)
-  const unitName = (id: string) => units.find((u) => u.id === id)?.name ?? "—"
-  const rows = getGateways(client.id).map((g) => gatewayRow(g, unitName(g.unitId), getDevices(g.id), machines, audit))
-
+  const d = await dadosGateways(cliente)
   return (
-    <ConfigAccessProvider canEdit={getConfigAccess(client.id).canConfigure}>
-      <GatewaysView
-        clientSlug={client.slug}
-        rows={rows}
-        units={units.map((u) => ({ id: u.id, name: u.name }))}
-        limit={client.limits.gateways}
-        freshExpiresLabel={freshCodeExpiresLabel()}
-      />
-    </ConfigAccessProvider>
+    <FonteDadosProvider banco={d.banco} slug={d.client.slug}>
+      <ConfigAccessProvider canEdit={d.access.canConfigure}>
+        <GatewaysView clientSlug={d.client.slug} rows={d.rows} units={d.units} limit={d.client.limits.gateways} freshExpiresLabel={d.freshExpiresLabel} />
+      </ConfigAccessProvider>
+    </FonteDadosProvider>
+  )
+}
+
+export default function Page({ params }: PageProps<"/[cliente]/config/gateways">) {
+  return (
+    <Suspense fallback={<CarregandoPagina />}>
+      <Lista params={params} />
+    </Suspense>
   )
 }

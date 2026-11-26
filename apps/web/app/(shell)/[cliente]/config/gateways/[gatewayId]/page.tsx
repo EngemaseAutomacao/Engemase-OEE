@@ -1,24 +1,33 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
+import { Suspense } from "react"
 
-import { MOCK_NOW, gatewayParams, getClientBySlug, getConfigAccess, getGateway } from "@/lib/mock"
-import { dateTime } from "@/lib/format"
-import { buildGatewayDetail } from "@/components/access/gateway-detail-data"
+import { dadosGateway } from "@/lib/data/config/telas"
 import { GatewayDetailView } from "@/components/access/gateway-detail-view"
 import { ConfigAccessProvider } from "@/components/config/engemase-managed"
+import { FonteDadosProvider } from "@/components/config/fonte-dados"
+import { CarregandoPagina } from "@/components/shell/carregando"
 
-export async function generateStaticParams({ params }: { params: { cliente: string } }) {
-  return gatewayParams(params.cliente)
+export const metadata: Metadata = { title: "Gateway" }
+
+/** Com banco, lê a sessão e o cadastro (requireTenant): fica dentro do <Suspense>. */
+async function Detalhe({ params }: { params: PageProps<"/[cliente]/config/gateways/[gatewayId]">["params"] }) {
+  const { cliente, gatewayId } = await params
+  const d = await dadosGateway(cliente, gatewayId)
+  if (d === null) notFound()
+  return (
+    <FonteDadosProvider banco={d.banco} slug={d.data.clientSlug}>
+      <ConfigAccessProvider canEdit={d.canEdit}>
+        <GatewayDetailView data={d.data} nowLabel={d.nowLabel} />
+      </ConfigAccessProvider>
+    </FonteDadosProvider>
+  )
 }
 
-export default async function Page({ params }: PageProps<"/[cliente]/config/gateways/[gatewayId]">) {
-  const { cliente, gatewayId } = await params
-  const client = getClientBySlug(cliente)
-  const gateway = getGateway(gatewayId)
-  if (!client || !gateway || gateway.clientId !== client.id) notFound()
-
+export default function Page({ params }: PageProps<"/[cliente]/config/gateways/[gatewayId]">) {
   return (
-    <ConfigAccessProvider canEdit={getConfigAccess(client.id).canConfigure}>
-      <GatewayDetailView data={buildGatewayDetail(client, gateway)} nowLabel={dateTime(MOCK_NOW)} />
-    </ConfigAccessProvider>
+    <Suspense fallback={<CarregandoPagina />}>
+      <Detalhe params={params} />
+    </Suspense>
   )
 }

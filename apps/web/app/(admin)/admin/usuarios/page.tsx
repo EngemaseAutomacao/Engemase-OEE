@@ -1,17 +1,27 @@
+import { Suspense } from "react"
 import type { Metadata } from "next"
 
 import { AddMemberButton } from "@/components/admin-ops/add-member-dialog"
 import { OpsTitle } from "@/components/admin-ops/bits"
 import { FieldAssignments, SupportGrants } from "@/components/admin-ops/team-access"
 import { TeamProvider } from "@/components/admin-ops/team-context"
-import { buildTeam } from "@/components/admin-ops/team-data"
+import { dadosEquipe } from "@/lib/data/admin/console"
 import { TeamMembers } from "@/components/admin-ops/team-members"
 import { RoleCards, TeamStats } from "@/components/admin-ops/team-overview"
+import { CarregandoPagina } from "@/components/shell/carregando"
 
 export const metadata: Metadata = { title: "Equipe Engemase" }
 
 export default function Page() {
-  const data = buildTeam()
+  return (
+    <Suspense fallback={<CarregandoPagina cartoes={4} />}>
+      <Equipe />
+    </Suspense>
+  )
+}
+
+async function Equipe() {
+  const data = await dadosEquipe()
 
   return (
     <TeamProvider data={data}>

@@ -1,6 +1,6 @@
-import { getAuditLog, getClients, getCurrentUser, getGateways } from "@/lib/mock"
-import { ago, initials } from "@/lib/format"
-import { PLATFORM_ROLE_LABEL } from "@/lib/roles"
+import { Suspense } from "react"
+
+import { dadosCabecalhoConsole } from "@/lib/data/admin/console"
 import {
   Sidebar,
   SidebarContent,
@@ -17,19 +17,14 @@ import { Brand } from "@/components/shell/brand"
 import { HelpCard } from "@/components/shell/help-card"
 import { AdminNavMenu } from "@/components/shell/nav-menu"
 
-/** Console da plataforma: só para a equipe Engemase. */
-/** Protótipo com dados simulados: navegação pode bloquear (a versão real usará <Suspense>). */
-export const instant = false
+/** Cabeçalho com a pessoa logada (com banco, lê a sessão: fica dentro do <Suspense>). */
+async function Cabecalho() {
+  const d = await dadosCabecalhoConsole()
+  return <AppHeader user={d.user} bell={d.bell} entities={d.entities} />
+}
 
+/** Console da plataforma: só para a equipe Engemase (com banco, conferido em cada página e ação). */
 export default function AdminLayout({ children }: LayoutProps<"/admin">) {
-  const me = getCurrentUser()
-  const entities = [
-    ...getClients().map((c) => ({ kind: "client" as const, label: c.name, hint: `${c.city}/${c.state}`, href: `/admin/clientes/${c.id}` })),
-    ...getGateways().map((g) => ({ kind: "gateway" as const, label: g.name, hint: g.hostname, href: `/${getClients().find((c) => c.id === g.clientId)?.slug}/config/gateways/${g.id}` })),
-  ]
-  const bell = getAuditLog()
-    .slice(0, 5)
-    .map((a) => ({ id: a.id, severity: "info" as const, title: a.entityName, body: a.details ?? a.action, href: "/admin/auditoria", ago: ago(a.at), read: true }))
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon">
@@ -49,17 +44,9 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
         <SidebarRail />
       </Sidebar>
       <SidebarInset className="min-w-0 bg-background">
-        <AppHeader
-          user={{
-            name: me.name,
-            email: me.email ?? "",
-            roleLabel: me.platformRole ? `Engemase · ${PLATFORM_ROLE_LABEL[me.platformRole]}` : "",
-            initials: initials(me.name),
-            isPlatform: true,
-          }}
-          bell={bell}
-          entities={entities}
-        />
+        <Suspense fallback={<div className="h-16 shrink-0 border-b bg-card/90" aria-hidden />}>
+          <Cabecalho />
+        </Suspense>
         <main className="min-w-0 flex-1">{children}</main>
       </SidebarInset>
     </SidebarProvider>

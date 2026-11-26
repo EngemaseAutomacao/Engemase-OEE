@@ -1,28 +1,13 @@
 import { notFound } from "next/navigation"
 
-import {
-  DEFAULT_TZ,
-  getClientBySlug,
-  getClientUsers,
-  getCurrentUser,
-  getDevice,
-  getDowntimeReason,
-  getDowntimeReasons,
-  getGateway,
-  getLine,
-  getMachine,
-  getMachineLive,
-  getProducts,
-  getTimeline,
-  getUnit,
-  nowMs,
-  scopeAllowsMachine,
-} from "@/lib/mock"
+import { getClientData } from "@/lib/data/cliente"
+import { DEFAULT_TZ } from "@/lib/mock"
 import { ago, initials } from "@/lib/format"
 import { Skeleton } from "@/components/ui/skeleton"
 import { OperatorConsole, type TerminalMode } from "@/components/kiosk/operator-console"
 import type { OperatorData, PendingStop } from "@/components/kiosk/operator-types"
 import { currentShift } from "@/components/kiosk/shift-info"
+import { ClockBase } from "@/components/kiosk/use-mock-clock"
 
 /** Esqueleto exibido enquanto a tela do operador carrega (navegação no app). */
 export function OperatorSkeleton() {
@@ -58,16 +43,18 @@ export async function OperatorScreen({
   terminal?: TerminalMode
 }) {
   const { cliente, maquinaId } = await params
-  const client = getClientBySlug(cliente)
-  const machine = getMachine(maquinaId)
-  if (!client || !machine || machine.clientId !== client.id) notFound()
+  const data = await getClientData(cliente)
+  const { client } = data
+  // Máquina de outro cliente ou fora do escopo da pessoa: 404.
+  const machine = data.getMachine(maquinaId)
+  if (!machine) notFound()
 
-  const unit = getUnit(machine.unitId)
-  const line = getLine(machine.lineId)
+  const unit = data.getUnit(machine.unitId)
+  const line = data.getLine(machine.lineId)
   const tz = unit?.timezone ?? DEFAULT_TZ
-  const live = getMachineLive(machine.id) ?? null
-  const timeline = getTimeline(machine.id)
-  const now = nowMs()
+  const live = data.getMachineLive(machine.id) ?? null
+  const timeline = data.getTimeline(machine.id)
+  const now = data.nowMs
   const thresholdMs = machine.microStopThresholdS * 1000
 
   // Paradas não planejadas/falhas ≥ limite de micro-parada, sem motivo (inclui a atual, se for o caso)
@@ -100,32 +87,31 @@ export async function OperatorScreen({
   // Motivo já apontado para o estado atual (setup, parada planejada)
   const current = timeline.at(-1)
   const currentReasonName =
-    current && live && current.state === live.state ? (getDowntimeReason(current.reasonId)?.name ?? null) : null
+    current && live && current.state === live.state ? (data.getDowntimeReason(current.reasonId)?.name ?? null) : null
 
   // Explicação da falta de comunicação
   let commDetail: string | null = null
   if (!live || live.state === "NO_COMM") {
-    const gateway = machine.gatewayId ? getGateway(machine.gatewayId) : undefined
-    const device = machine.deviceId ? getDevice(machine.deviceId) : undefined
+    const gateway = machine.gatewayId ? data.getGateway(machine.gatewayId) : undefined
+    const device = machine.deviceId ? data.getDevice(machine.deviceId) : undefined
     if (!gateway) commDetail = "Máquina sem gateway configurado"
     else if (gateway.status === "pending") commDetail = "Gateway aguardando ativação"
-    else if (gateway.status === "offline") commDetail = `Gateway offline · último sinal ${ago(gateway.lastSeen)}`
+    else if (gateway.status === "offline") commDetail = `Gateway offline · último sinal ${ago(gateway.lastSeen, data.now)}`
     else if (device?.status === "error") commDetail = `CLP sem resposta (${device.lastError ?? "verifique cabo e endereço"})`
     else if (device?.status === "disabled") commDetail = "Leitura do CLP desativada"
     else commDetail = "Sem leitura do CLP"
   }
 
-  // Quem está no tablet: conta de operador da unidade (senão, o usuário atual)
-  const operatorUser =
-    getClientUsers(client.id).find((u) =>
-      u.memberships.some(
-        (m) => m.clientId === client.id && m.role === "operator" && scopeAllowsMachine(m.scope, machine),
-      ),
-    ) ?? getCurrentUser()
+  // Quem está no tablet: conta de operador da unidade (simulado) ou a pessoa logada (banco).
+  const operatorUser = data.operatorFor(machine)
 
-  const shift = currentShift(client.id, machine.unitId)
+  const shift = currentShift(
+    data.shifts.filter((s) => s.unitId === machine.unitId),
+    tz,
+    data.now,
+  )
 
-  const data: OperatorData = {
+  const operatorData: OperatorData = {
     machine: {
       id: machine.id,
       name: machine.name,
@@ -153,8 +139,8 @@ export async function OperatorScreen({
     classifiedStops,
     currentReasonName,
     commDetail,
-    reasons: getDowntimeReasons(client.id).map((r) => ({ id: r.id, parentId: r.parentId, name: r.name, category: r.category })),
-    products: getProducts(client.id).map((p) => {
+    reasons: data.reasons.map((r) => ({ id: r.id, parentId: r.parentId, name: r.name, category: r.category })),
+    products: data.products.map((p) => {
       const ideal = p.idealCycles.find((c) => c.machineId === machine.id)
       return {
         id: p.id,
@@ -164,9 +150,13 @@ export async function OperatorScreen({
         configured: Boolean(ideal),
       }
     }),
-    operator: { name: operatorUser.name, username: operatorUser.username ?? operatorUser.email, initials: initials(operatorUser.name) },
+    operator: { name: operatorUser.name, username: operatorUser.username, initials: initials(operatorUser.name) },
     timeZone: tz,
   }
 
-  return <OperatorConsole data={data} panelHref={`/${client.slug}/maquinas/${machine.id}`} terminal={terminal} />
+  return (
+    <ClockBase value={data.nowMs}>
+      <OperatorConsole data={operatorData} panelHref={`/${client.slug}/maquinas/${machine.id}`} terminal={terminal} />
+    </ClockBase>
+  )
 }

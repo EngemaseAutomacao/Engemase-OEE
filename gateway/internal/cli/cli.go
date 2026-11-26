@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,8 +16,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/app"
+	"github.com/engemaseautomacao/engemase-oee/gateway/internal/buffer"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/buildinfo"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/config"
+	"github.com/engemaseautomacao/engemase-oee/gateway/internal/sdlisten"
 )
 
 // ExitError carrega o código de saída (ex.: diag devolve 1 para avisos e 2 para falhas).
@@ -64,7 +67,8 @@ func NewRoot(stdout, stderr io.Writer) *cobra.Command {
 	root.SetOut(stdout)
 	root.SetErr(stderr)
 	root.PersistentFlags().String("config", config.DefaultLocalPath, "config local (gateway.yaml)")
-	root.AddCommand(newRunCmd(), newVersionCmd(), newEnrollCmd(), newDiagCmd(), newModbusCmd(), newConfigCmd())
+	root.AddCommand(newRunCmd(), newVersionCmd(), newEnrollCmd(), newDiagCmd(), newModbusCmd(), newConfigCmd(),
+		newLocalUICmd(), newHelperCmd(), newUpdateCmd())
 	return root
 }
 
@@ -89,23 +93,39 @@ func newRunCmd() *cobra.Command {
 			// O logger do agente (JSON no stderr, nível da config local) é também o
 			// padrão do processo: o que não recebe um logger explícito (ex.: as falhas
 			// do /sync com Syncer.Log nil) sai no mesmo journal e no mesmo nível.
-			log := app.NewLogger(local.Log.Level)
+			// O nível é ajustável em execução pelo comando log.level (volta sozinho).
+			log, level := app.NewLeveledLogger(local.Log.Level)
 			slog.SetDefault(log)
+			// API local da página (oee-gateway-ui.socket, FileDescriptorName=ui): só
+			// com a ativação por socket; sem ela, o agente roda igual.
+			var ui net.Listener
+			if ls, err := sdlisten.Listeners(); err != nil {
+				log.Warn("sockets do systemd ilegíveis; API local da página desligada", "erro", err)
+			} else if l, err := sdlisten.One(ls, "ui"); err == nil {
+				ui = l
+			}
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return runAgent(ctx, app.Options{Local: local, Logger: log})
+			return runAgent(ctx, app.Options{Local: local, Logger: log, LogLevel: level, UIListener: ui})
 		},
 	}
 }
 
 func newVersionCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Mostra versão, commit e data do build",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if only, _ := cmd.Flags().GetBool("buffer-schema"); only {
+				// Para o build do pacote: vai no manifesto como buffer_schema (L25).
+				fmt.Fprintln(cmd.OutOrStdout(), buffer.SchemaVersion)
+				return nil
+			}
 			fmt.Fprintln(cmd.OutOrStdout(), buildinfo.String())
 			return nil
 		},
 	}
+	cmd.Flags().Bool("buffer-schema", false, "mostra só a versão do esquema do buffer (buffer_schema do manifesto)")
+	return cmd
 }

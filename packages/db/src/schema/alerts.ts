@@ -56,6 +56,12 @@ export const alertRule = pgTable(
     recipients: jsonb("recipients").$type<AlertRecipients>().notNull().default({}),
     escalation: jsonb("escalation").$type<AlertEscalationStep[]>().notNull().default([]),
     active: boolean("active").notNull().default(true),
+    /**
+     * Regra do sistema (preset criado pela plataforma, ex.: "gateway_offline", "minute_rewritten"):
+     * uma por cliente. Nula nas regras criadas por pessoas. Para desligar um alerta do sistema,
+     * desative a regra (`active = false`) em vez de apagá-la.
+     */
+    systemKey: text("system_key"),
     createdBy: uuid("created_by"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -63,6 +69,9 @@ export const alertRule = pgTable(
   },
   (t) => [
     unique("alert_rule_id_org_uq").on(t.id, t.organizationId),
+    uniqueIndex("alert_rule_system_key_uq")
+      .on(t.organizationId, t.systemKey)
+      .where(sql`${t.systemKey} IS NOT NULL`),
     foreignKey({
       name: "alert_rule_unit_fk",
       columns: [t.unitId, t.organizationId],

@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { MOCK_NOW, getClientBySlug, getConfigAccess, getDowntimeReasons, getMachines, getShifts, getUnits } from "@/lib/mock"
@@ -25,6 +26,8 @@ function clockFor(timeZone: string) {
     weekStart: addDays(today, -((weekdayOf(today) + 6) % 7)),
   }
 }
+
+export const metadata: Metadata = { title: "Turnos" }
 
 export default async function Page({ params }: PageProps<"/[cliente]/config/turnos">) {
   const { cliente } = await params

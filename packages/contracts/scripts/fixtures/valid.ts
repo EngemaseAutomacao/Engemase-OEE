@@ -776,6 +776,20 @@ export const allCommands: Command[] = [
     expires_at: ttl(3600),
     payload: { session_id: ID.vpnSession, reason: "requested" },
   },
+  {
+    id: ID.cmdLogLevel,
+    type: "log.level",
+    issued_at: ISSUED,
+    expires_at: ttl(600),
+    payload: { level: "debug", duration_s: 900 },
+  },
+  {
+    id: ID.cmdLogsUpload,
+    type: "logs.upload",
+    issued_at: ISSUED,
+    expires_at: ttl(600),
+    payload: { lines: 500, since_s: 3600 },
+  },
 ]
 
 /** Resposta do exemplo do docs/04 (tag.read em modo interativo, next_sync_s = 1). */
@@ -897,6 +911,25 @@ export const allCommandResults: CommandResult[] = [
     type: "ot.forward.open",
     status: "ok",
     result: { forward_id: ID.otForward, listen_port: 15020, forward_expires_at: "2026-11-11T13:32:00Z" },
+  },
+  {
+    ...done(ID.cmdLogLevel, 3),
+    type: "log.level",
+    status: "ok",
+    result: { level: "debug", previous: "info", until: "2026-11-11T13:17:07.000Z" },
+  },
+  {
+    ...done(ID.cmdLogsUpload, 180),
+    type: "logs.upload",
+    status: "ok",
+    result: {
+      source: "journald",
+      lines: [
+        "2026-11-11T13:01:42Z INFO máquina mudou de estado machine=Injetora 03 de=RUNNING para=FAULT",
+        "2026-11-11T13:02:05Z INFO /sync ok ack_seq=18245 itens=15",
+      ],
+      truncated: false,
+    },
   },
   {
     ...done(ID.cmdOtForwardClose, 20),

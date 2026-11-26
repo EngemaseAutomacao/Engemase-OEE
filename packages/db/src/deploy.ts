@@ -1,10 +1,7 @@
 /**
- * Implantação do banco (Neon): decide se as migrações rodam neste ambiente e monta o SQL do usuário de
- * login da aplicação. Usado por `scripts/migrate.ts` (`pnpm --filter @engemase/db db:deploy`), que o
- * build da Vercel chama antes do `next build`.
- *
- * Sem dependências internas de propósito: o script roda direto no Node (remoção de tipos nativa, Node 22.18+),
- * que não resolve imports sem extensão.
+ * Implantação do banco (Neon): decide se as migrações rodam neste ambiente e monta o SQL dos usuários de
+ * login. Usado por `scripts/migrate.ts` (`pnpm --filter @engemase/db db:migrate`), que o build da Vercel
+ * chama antes do `next build` (apps/web/vercel.json).
  *
  * Regras:
  * - **Produção** (`VERCEL_ENV=production`): migra sempre, antes de o deploy entrar no ar. Se falhar, o build
@@ -13,11 +10,14 @@
  * - **Preview**: só migra com `DB_MIGRATE_PREVIEW=1`, que só deve ser ligado quando cada preview tiver o
  *   próprio branch da Neon. Sem isso o preview aponta para o banco de produção, e migração de branch não
  *   revisado não pode chegar lá.
- * - **Fora da Vercel** (comando manual `pnpm db:migrate`): migra o banco da URL informada.
+ * - **Fora da Vercel** (comando manual): migra o banco da URL informada.
+ *
+ * Usuários de login (criados/atualizados só quando a senha está no ambiente):
+ * - `app_login` (`APP_DB_USER`/`APP_DB_PASSWORD`): NOINHERIT, membro de `app_user` só com SET. A camada de
+ *   acesso sempre roda em `withTenant` (`SET LOCAL ROLE app_user`); fora dela, o login não lê nada.
+ * - `auth_login` (`AUTH_DB_USER`/`AUTH_DB_PASSWORD`): HERDA `auth_service`, porque o Better Auth não troca
+ *   de papel por consulta.
  */
-
-/** Usuário de login padrão da aplicação (membro de `app_user`, sem outros poderes). */
-export const DEFAULT_APP_DB_USER = "app_login"
 
 /** Chave do `pg_advisory_lock` que impede duas migrações ao mesmo tempo (dois builds de produção). */
 export const MIGRATION_LOCK_KEY = 4_281_337_001
@@ -25,16 +25,28 @@ export const MIGRATION_LOCK_KEY = 4_281_337_001
 /** Versão mínima do Postgres: as migrações usam `uuidv7()` nativo (Postgres 18). */
 export const MIN_SERVER_VERSION_NUM = 180_000
 
+/** Os usuários de login que a implantação gerencia. */
+export const LOGIN_KINDS = {
+  app: { userVar: "APP_DB_USER", passwordVar: "APP_DB_PASSWORD", defaultUser: "app_login", memberOf: "app_user", inherit: false },
+  auth: { userVar: "AUTH_DB_USER", passwordVar: "AUTH_DB_PASSWORD", defaultUser: "auth_login", memberOf: "auth_service", inherit: true },
+} as const
+export type LoginKind = keyof typeof LOGIN_KINDS
+
 const ROLE_RE = /^[a-z_][a-z0-9_]{0,62}$/
 /** Só caracteres seguros em URL e em literal SQL; 32+ dá folga sobre a exigência de entropia da Neon. */
 const PASSWORD_RE = /^[A-Za-z0-9._~-]{32,128}$/
-const RESERVED_ROLES = new Set(["app_user", "auth_service", "app_lookup", "postgres", "neondb_owner"])
+const RESERVED_ROLES = new Set(["app_user", "auth_service", "app_lookup", "postgres", "neondb_owner", "neon_superuser"])
 
 export type DeployEnv = Readonly<Record<string, string | undefined>>
 
-export interface AppLogin {
+export interface LoginRole {
+  readonly kind: LoginKind
   readonly user: string
   readonly password: string
+  /** Papel do banco de que o login é membro (`app_user` ou `auth_service`). */
+  readonly memberOf: string
+  /** Herda os privilégios do papel (sem precisar de SET ROLE)? */
+  readonly inherit: boolean
 }
 
 export type MigrationPlan =
@@ -45,8 +57,8 @@ export type MigrationPlan =
       /** De onde veio a URL (nome da variável), para o log; nunca a URL. */
       readonly urlSource: string
       readonly target: string
-      /** `null`: sem `APP_DB_PASSWORD`, o usuário de login não é criado/atualizado nesta execução. */
-      readonly appLogin: AppLogin | null
+      /** Logins com senha no ambiente; os sem senha não são criados/atualizados nesta execução. */
+      readonly logins: readonly LoginRole[]
     }
 
 /** Erro de configuração da implantação (mensagem em português, sem segredos). */
@@ -59,22 +71,38 @@ function nonEmpty(value: string | undefined): string | undefined {
   return trimmed === undefined || trimmed === "" ? undefined : trimmed
 }
 
-/** Usuário de login da aplicação a partir de `APP_DB_USER`/`APP_DB_PASSWORD`, validados. */
-export function readAppLogin(env: DeployEnv): AppLogin | null {
-  const password = nonEmpty(env.APP_DB_PASSWORD)
+function validLogin(user: string, password: string): boolean {
+  return ROLE_RE.test(user) && !RESERVED_ROLES.has(user) && PASSWORD_RE.test(password)
+}
+
+/** Usuário de login de um tipo, a partir do ambiente (validado), ou `null` sem senha. */
+export function readLogin(env: DeployEnv, kind: LoginKind): LoginRole | null {
+  const spec = LOGIN_KINDS[kind]
+  const password = nonEmpty(env[spec.passwordVar])
   if (password === undefined) return null
-  const user = nonEmpty(env.APP_DB_USER) ?? DEFAULT_APP_DB_USER
+  const user = nonEmpty(env[spec.userVar]) ?? spec.defaultUser
   if (!ROLE_RE.test(user) || RESERVED_ROLES.has(user)) {
     throw new DeployConfigError(
-      `APP_DB_USER inválido: use letras minúsculas, números e _ (até 63), e não um papel reservado (${[...RESERVED_ROLES].join(", ")}).`,
+      `${spec.userVar} inválido: use letras minúsculas, números e _ (até 63), e não um papel reservado (${[...RESERVED_ROLES].join(", ")}).`,
     )
   }
   if (!PASSWORD_RE.test(password)) {
     throw new DeployConfigError(
-      "APP_DB_PASSWORD inválida: use de 32 a 128 caracteres entre letras, números e . _ ~ - (ex.: openssl rand -base64 33 | tr '+/' '-_').",
+      `${spec.passwordVar} inválida: use de 32 a 128 caracteres entre letras, números e . _ ~ - (ex.: openssl rand -base64 33 | tr '+/' '-_').`,
     )
   }
-  return { user, password }
+  return { kind, user, password, memberOf: spec.memberOf, inherit: spec.inherit }
+}
+
+/** Todos os logins com senha no ambiente. Falha se dois tipos usarem o mesmo usuário. */
+export function readLogins(env: DeployEnv): LoginRole[] {
+  const logins = (Object.keys(LOGIN_KINDS) as LoginKind[])
+    .map((kind) => readLogin(env, kind))
+    .filter((login): login is LoginRole => login !== null)
+  if (new Set(logins.map((login) => login.user)).size !== logins.length) {
+    throw new DeployConfigError("APP_DB_USER e AUTH_DB_USER precisam ser usuários diferentes.")
+  }
+  return logins
 }
 
 /** Decide se as migrações rodam e com qual URL (de dono, sem pooler). */
@@ -107,7 +135,7 @@ export function planMigration(env: DeployEnv): MigrationPlan {
     url: nonEmpty(env[urlSource]) as string,
     urlSource,
     target: vercelEnv ?? "manual",
-    appLogin: readAppLogin(env),
+    logins: readLogins(env),
   }
 }
 
@@ -120,37 +148,38 @@ function quoteLiteral(value: string): string {
 }
 
 /**
- * SQL idempotente que cria (ou atualiza a senha de) o usuário de login da aplicação e o põe em `app_user`.
- * Roda como o dono das migrações, que criou `app_user` (e por isso pode concedê-lo). O usuário não herda
- * nada além de `app_user`: sem BYPASSRLS, sem CREATEROLE, sem CREATEDB.
+ * SQL idempotente que cria (ou atualiza a senha de) um usuário de login e o põe no papel dele. Roda como o
+ * dono das migrações, que criou os papéis (e por isso pode concedê-los). O login não tem outros poderes:
+ * sem BYPASSRLS, CREATEROLE, CREATEDB nem REPLICATION.
  */
-export function appLoginSql(login: AppLogin): string {
+export function loginRoleSql(login: LoginRole): string {
   // Validados de novo aqui: o SQL leva o nome e a senha como texto (CREATE ROLE não aceita parâmetros).
-  if (!ROLE_RE.test(login.user) || RESERVED_ROLES.has(login.user) || !PASSWORD_RE.test(login.password)) {
-    throw new DeployConfigError("Usuário ou senha do login da aplicação inválidos.")
+  if (!validLogin(login.user, login.password) || !(login.memberOf === "app_user" || login.memberOf === "auth_service")) {
+    throw new DeployConfigError("Usuário, senha ou papel do login inválidos.")
   }
   const role = quoteIdent(login.user)
   const roleLiteral = quoteLiteral(login.user)
   const password = quoteLiteral(login.password)
+  const inherit = login.inherit ? "INHERIT" : "NOINHERIT"
+  const grantInherit = login.inherit ? "TRUE" : "FALSE"
   // O texto não leva `$` (nome e senha validados acima), então o corpo entre $$ não tem como fechar antes.
-  // No ALTER, só login e senha: sem superusuário (Neon), mexer em SUPERUSER/BYPASSRLS/REPLICATION é recusado
-  // mesmo para tirar; por isso um papel já existente com poderes demais faz a implantação falhar.
+  // No ALTER, só login, herança e senha: sem superusuário (Neon), mexer em SUPERUSER/BYPASSRLS/REPLICATION é
+  // recusado mesmo para tirar; por isso um papel já existente com poderes demais faz a implantação falhar.
+  // O GRANT roda sempre: numa segunda vez só reafirma as opções (INHERIT/SET) da concessão.
   return `DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = ${roleLiteral}) THEN
-    CREATE ROLE ${role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${password};
+    CREATE ROLE ${role} LOGIN ${inherit} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${password};
   ELSE
     IF EXISTS (
       SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = ${roleLiteral}
         AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication)
     ) THEN
-      RAISE EXCEPTION 'O usuário de login da aplicação já existe com poderes demais (superusuário, BYPASSRLS, CREATEROLE, CREATEDB ou REPLICATION).';
+      RAISE EXCEPTION 'O usuário de login ${login.user} já existe com poderes demais (superusuário, BYPASSRLS, CREATEROLE, CREATEDB ou REPLICATION).';
     END IF;
-    ALTER ROLE ${role} LOGIN PASSWORD ${password};
+    ALTER ROLE ${role} LOGIN ${inherit} PASSWORD ${password};
   END IF;
-  IF NOT pg_catalog.pg_has_role(${roleLiteral}, 'app_user', 'MEMBER') THEN
-    GRANT app_user TO ${role};
-  END IF;
+  GRANT ${login.memberOf} TO ${role} WITH INHERIT ${grantInherit}, SET TRUE;
 END
 $$;`
 }

@@ -1,25 +1,14 @@
 /**
  * Acesso remoto (VPN de manutenção, docs/12) de todos os clientes, montado a partir de `@/lib/mock`.
- * Usado SÓ por páginas (servidor). Devolve objetos serializáveis; "agora" = MOCK_NOW.
+ * Usado SÓ por páginas (servidor). Devolve objetos serializáveis; "agora" = r.agoraIso().
  */
 import {
-  getClientUsers,
-  getClients,
-  getCurrentUser,
-  getDevice,
-  getDevices,
-  getGateway,
-  getGateways,
-  getPlatformUsers,
-  getRemoteAccessPolicy,
-  getRemoteAccessSessions,
-  getUnit,
-  nowMs,
   type GatewayStatus,
   type Protocol,
   type RemoteAccessPolicy,
   type RemoteAccessSession,
 } from "@/lib/mock"
+import { repositorioMock, type Repositorio } from "@/lib/data/admin/repositorio"
 import { dateTime, duration, time } from "@/lib/format"
 import { PLATFORM_ROLE_LABEL } from "@/lib/roles"
 import { bytesLabel, type SessionStatus } from "./labels"
@@ -96,14 +85,14 @@ export interface RemoteData {
   avgMinutes: number | null
 }
 
-function adminsOf(clientId: string): string[] {
-  return getClientUsers(clientId)
+function adminsOf(clientId: string, r: Repositorio): string[] {
+  return r.getClientUsers(clientId)
     .filter((u) => u.status === "active" && u.memberships.some((m) => m.clientId === clientId && m.role === "client_admin"))
     .map((u) => u.name)
 }
 
-function policyRow(clientId: string, clientName: string, clientStatus: string): PolicyRow | null {
-  const p = getRemoteAccessPolicy(clientId)
+function policyRow(clientId: string, clientName: string, clientStatus: string, r: Repositorio): PolicyRow | null {
+  const p = r.getRemoteAccessPolicy(clientId)
   if (!p) return null
   return {
     clientId,
@@ -115,14 +104,14 @@ function policyRow(clientId: string, clientName: string, clientStatus: string): 
     allowPlcForward: p.allowPlcForward,
     requireOnsiteContact: p.requireOnsiteContact,
     windows: p.windows.map((w) => `${WEEKDAY[w.day]} ${w.start}–${w.end}`),
-    approvers: adminsOf(clientId),
+    approvers: adminsOf(clientId, r),
   }
 }
 
-export function sessionRow(s: RemoteAccessSession, clientName: string): SessionRow {
-  const g = getGateway(s.gatewayId)
-  const dev = s.scope.plcForward ? getDevice(s.scope.plcForward.deviceId) : undefined
-  const requester = getPlatformUsers().find((u) => u.name === s.requestedBy)
+export function sessionRow(s: RemoteAccessSession, clientName: string, r: Repositorio = repositorioMock): SessionRow {
+  const g = r.getGateway(s.gatewayId)
+  const dev = s.scope.plcForward ? r.getDevice(s.scope.plcForward.deviceId) : undefined
+  const requester = r.getPlatformUsers().find((u) => u.name === s.requestedBy)
   const rejected = s.status === "rejected"
   return {
     id: s.id,
@@ -131,7 +120,7 @@ export function sessionRow(s: RemoteAccessSession, clientName: string): SessionR
     gatewayId: s.gatewayId,
     gatewayName: g?.name ?? s.gatewayId,
     hostname: g?.hostname ?? "—",
-    unitName: g ? (getUnit(g.unitId)?.name ?? "—") : "—",
+    unitName: g ? (r.getUnit(g.unitId)?.name ?? "—") : "—",
     gatewayStatus: g?.status ?? "offline",
     requestedBy: s.requestedBy,
     requestedByRole: requester?.platformRole ? PLATFORM_ROLE_LABEL[requester.platformRole] : "Engemase",
@@ -154,16 +143,16 @@ export function sessionRow(s: RemoteAccessSession, clientName: string): SessionR
     realDuration: s.startedAt && s.endedAt ? duration((Date.parse(s.endedAt) - Date.parse(s.startedAt)) / 1000) : null,
     connection: s.connection ?? null,
     bytes: s.bytes !== undefined ? bytesLabel(s.bytes) : null,
-    approvers: adminsOf(s.clientId),
+    approvers: adminsOf(s.clientId, r),
   }
 }
 
-export function buildRemoteAccess(): RemoteData {
-  const clients = getClients()
+export function buildRemoteAccess(r: Repositorio = repositorioMock): RemoteData {
+  const clients = r.getClients()
   const nameOf = (id: string) => clients.find((c) => c.id === id)?.name ?? id
-  const sessions = getRemoteAccessSessions().map((s) => sessionRow(s, nameOf(s.clientId)))
-  const me = getCurrentUser()
-  const now = nowMs()
+  const sessions = r.getRemoteAccessSessions().map((s) => sessionRow(s, nameOf(s.clientId), r))
+  const me = r.getCurrentUser()
+  const now = Date.parse(r.agoraIso())
 
   const recent = sessions.filter((s) => s.startedAt && now - Date.parse(s.startedAt) <= 30 * 86_400_000)
   const finished = recent.filter((s) => s.startedAt && s.endedAt)
@@ -173,14 +162,14 @@ export function buildRemoteAccess(): RemoteData {
     id: c.id,
     name: c.name,
     status: c.status,
-    policy: policyRow(c.id, c.name, c.status),
-    gateways: getGateways(c.id).map((g) => ({
+    policy: policyRow(c.id, c.name, c.status, r),
+    gateways: r.getGateways(c.id).map((g) => ({
       id: g.id,
       name: g.name,
       hostname: g.hostname,
       status: g.status,
-      unitName: getUnit(g.unitId)?.name ?? "—",
-      devices: getDevices(g.id).map((d) => ({ id: d.id, name: d.name, protocol: d.protocol, host: d.params.host ?? null })),
+      unitName: r.getUnit(g.unitId)?.name ?? "—",
+      devices: r.getDevices(g.id).map((d) => ({ id: d.id, name: d.name, protocol: d.protocol, host: d.params.host ?? null })),
     })),
   }))
 

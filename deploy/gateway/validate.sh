@@ -230,12 +230,14 @@ if have go; then
 	built=yes
 	for arch in amd64 arm64; do
 		mkdir -p "$dist/$arch"
-		if (cd "$gwsrc" && GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=$arch \
-			go build -trimpath -ldflags "-s -w" -o "$dist/$arch/oee-gateway" ./cmd/oee-gateway) 2>"$tmp/go.err"; then
-			ok "go build linux/$arch ./cmd/oee-gateway (${gwsrc#"$repo"/})"
-		else
-			ko "go build linux/$arch: $(tail -n5 "$tmp/go.err")"; built=no
-		fi
+		for bin in oee-gateway oee-updater; do
+			if (cd "$gwsrc" && GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=$arch \
+				go build -trimpath -ldflags "-s -w" -o "$dist/$arch/$bin" "./cmd/$bin") 2>"$tmp/go.err"; then
+				ok "go build linux/$arch ./cmd/$bin (${gwsrc#"$repo"/})"
+			else
+				ko "go build linux/$arch ./cmd/$bin: $(tail -n5 "$tmp/go.err")"; built=no
+			fi
+		done
 	done
 	if [[ $(uname -m) == x86_64 && -x $dist/amd64/oee-gateway ]]; then
 		out=$("$dist/amd64/oee-gateway" diag --config "$here/etc/gateway.yaml" 2>&1)
@@ -256,10 +258,10 @@ if [[ $built == yes ]] && { have nfpm || [[ -n ${NFPM:-} ]]; }; then
 	nfpm_opt=()
 	[[ -n ${NFPM:-} ]] && nfpm_opt=(--nfpm "$NFPM")
 	for arch in amd64 arm64; do
-		if "$here/build-deb.sh" "${nfpm_opt[@]}" --arch "$arch" --version "$version" --dist "$dist" --out "$debs" >"$tmp/nfpm.out" 2>&1; then
-			ok "build-deb.sh --arch $arch"
+		if "$here/build-deb.sh" "${nfpm_opt[@]}" --package all --arch "$arch" --version "$version" --dist "$dist" --out "$debs" >"$tmp/nfpm.out" 2>&1; then
+			ok "build-deb.sh --package all --arch $arch"
 		else
-			ko "build-deb.sh --arch $arch"; sed 's/^/      /' "$tmp/nfpm.out"
+			ko "build-deb.sh --package all --arch $arch"; sed 's/^/      /' "$tmp/nfpm.out"
 		fi
 	done
 	deb=$(find "$debs" -name 'oee-gateway_*_amd64.deb' | head -n1)
@@ -281,6 +283,20 @@ if [[ $built == yes ]] && { have nfpm || [[ -n ${NFPM:-} ]]; }; then
 		grep -qE '^-rw-r----- root/root .* ./etc/oee-gateway/gateway.yaml$' <<<"$list" && ok "gateway.yaml 0640" || ko "gateway.yaml sem modo 0640"
 		conff=$(dpkg-deb --ctrl-tarfile "$deb" | tar -xO ./conffiles)
 		[[ $conff == $'/etc/oee-gateway/gateway.yaml\n/etc/sudoers.d/oee-tecnico' ]] && ok "conffiles: gateway.yaml e sudoers" || ko "conffiles: $conff"
+		# Pacote do atualizador (OTA mínimo): binário, units e o diretório das chaves.
+		udeb=$(find "$debs" -name 'oee-gateway-updater_*_amd64.deb' | head -n1)
+		if [[ -n $udeb ]]; then
+			[[ $(dpkg-deb -f "$udeb" Package) == oee-gateway-updater ]] && ok "Package: oee-gateway-updater" || ko "Package do atualizador"
+			ulist=$(dpkg-deb -c "$udeb")
+			for p in ./usr/lib/oee-gateway/oee-updater ./usr/lib/systemd/system/oee-gateway-updater.path \
+				./usr/lib/systemd/system/oee-gateway-updater.service ./usr/lib/systemd/system/oee-gateway-update-check.service \
+				./usr/share/oee-gateway-updater/keys/README.md; do
+				grep -qF -- " $p" <<<"$ulist" && ok "atualizador contém ${p#.}" || ko "atualizador sem ${p#.}"
+			done
+			grep -qE '^-rwxr-xr-x root/root .* ./usr/lib/oee-gateway/oee-updater$' <<<"$ulist" && ok "oee-updater 0755" || ko "oee-updater sem modo 0755"
+		else
+			ko "oee-gateway-updater_*_amd64.deb não gerado"
+		fi
 		darm=$(find "$debs" -name 'oee-gateway_*_arm64.deb' | head -n1)
 		if [[ -n $darm ]]; then
 			mkdir -p "$tmp/arm64x"

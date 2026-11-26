@@ -456,7 +456,7 @@ describe("POST /sync", () => {
     expect(statuses).toEqual([
       { status: "error", n: 1 },
       { status: "expired", n: 1 },
-      { status: "ok", n: 10 },
+      { status: "ok", n: 12 },
       { status: "rejected", n: 1 },
     ])
   })
@@ -544,6 +544,44 @@ describe("POST /sync", () => {
       { shift_date: "2026-11-10", dirty: false },
       { shift_date: "2026-11-11", dirty: true },
     ])
+  })
+
+  it("turno já sujo continua sujo com o mesmo dirty_since (o UPDATE trava a linha durante o recálculo)", async () => {
+    const { client, remap, id } = await freshClient()
+    const [day] = await rows<{ id: string }>(
+      t,
+      `INSERT INTO shift (organization_id, unit_id, name, start_time, end_time, days_of_week) VALUES
+         ($1, $2, 'Dia', '06:00', '14:00', '{1,2,3,4,5,6,7}') RETURNING id`,
+      [client.organizationId, client.unitId],
+    )
+    const since = new Date("2026-11-11T12:00:00Z")
+    await t.client.query(
+      "INSERT INTO oee_shift (organization_id, machine_id, shift_date, shift_id, dirty, dirty_since) VALUES ($1, $2, '2026-11-11', $3, true, $4)",
+      [client.organizationId, id(MCH_INJ), day!.id, since],
+    )
+    await syncOk(client, remap(REALISTIC))
+    expect(await rows(t, "SELECT dirty, dirty_since FROM oee_shift WHERE machine_id = $1", [id(MCH_INJ)])).toEqual([
+      { dirty: true, dirty_since: since },
+    ])
+  })
+
+  it("\"Em trânsito\" termina no primeiro /sync depois de marcado (installed_at, L23)", async () => {
+    const { client, remap } = await freshClient()
+    const since = new Date(FIXTURE_NOW.getTime() - 3 * 24 * 3_600_000)
+    const until = new Date(FIXTURE_NOW.getTime() + 20 * 24 * 3_600_000)
+    await t.client.query("UPDATE gateway SET in_transit_since = $2, in_transit_until = $3 WHERE id = $1", [client.gatewayId, since, until])
+    await syncOk(client, remap(HEALTH_ONLY))
+    expect(await rows(t, "SELECT installed_at, in_transit_until FROM gateway WHERE id = $1", [client.gatewayId])).toEqual([
+      { installed_at: FIXTURE_NOW, in_transit_until: until },
+    ])
+    // O segundo /sync não muda a data da instalação.
+    await syncOk(client, remap(HEALTH_ONLY), new Date(FIXTURE_NOW.getTime() + 60_000))
+    expect(await rows(t, "SELECT installed_at FROM gateway WHERE id = $1", [client.gatewayId])).toEqual([{ installed_at: FIXTURE_NOW }])
+
+    // Gateway que nunca foi marcado em trânsito não ganha installed_at pelo /sync.
+    const other = await freshClient()
+    await syncOk(other.client, other.remap(HEALTH_ONLY))
+    expect(await rows(t, "SELECT installed_at FROM gateway WHERE id = $1", [other.client.gatewayId])).toEqual([{ installed_at: null }])
   })
 
   it("timestamp além de server_time + 2 min → 400 timestamp_out_of_range, nada gravado", async () => {

@@ -64,6 +64,8 @@ export function ConfigTab({
   reloading,
   onReload,
   onRevert,
+  onPublish,
+  publishing = false,
 }: {
   versions: ConfigVersionVM[]
   published: number
@@ -71,7 +73,11 @@ export function ConfigTab({
   offline: boolean
   reloading: boolean
   onReload: () => void
-  onRevert: (v: number) => void
+  /** Sem esta função (com banco, por enquanto), a reversão não aparece. */
+  onRevert?: (v: number) => void
+  /** Com banco: publica a config montada do cadastro atual (nova versão só se houver mudança). */
+  onPublish?: () => void
+  publishing?: boolean
 }) {
   const synced = applied !== null && applied >= published
   const current = versions.find((v) => v.version === published)
@@ -119,6 +125,12 @@ export function ConfigTab({
             </p>
           )}
 
+          {canEdit && onPublish && (
+            <Button onClick={onPublish} disabled={publishing} className="w-full">
+              {publishing ? <Spinner /> : <CloudUploadIcon />}
+              {publishing ? "Publicando…" : "Publicar o cadastro atual"}
+            </Button>
+          )}
           {canEdit && (
             <Button variant={synced ? "outline" : "default"} onClick={onReload} disabled={reloading} className="w-full">
               {reloading ? <Spinner /> : <RefreshCwIcon />}
@@ -133,6 +145,7 @@ export function ConfigTab({
       </SectionCard>
 
       <SectionCard title="Histórico de versões" description="Diff resumido de cada publicação" className="xl:col-span-8">
+        {versions.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma versão publicada ainda.</p>}
         <ol className="flex flex-col gap-3">
           {versions.map((v) => {
             const isPublished = v.version === published
@@ -167,7 +180,7 @@ export function ConfigTab({
                       )
                     })}
                   </ul>
-                  {canEdit && !isPublished && (
+                  {canEdit && onRevert && !isPublished && (
                     <div className="mt-2 flex justify-end border-t pt-2">
                       <RevertButton v={v.version} next={published + 1} onRevert={onRevert} />
                     </div>

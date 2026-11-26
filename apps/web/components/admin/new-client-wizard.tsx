@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils"
 import { IconCircle } from "@/components/dashboard/icon-circle"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
+import { criarClienteAction } from "@/app/(admin)/admin/actions"
 import { PLATFORM_HOST, SHIFT_TEMPLATES, onlyDigits, timezoneForUf } from "./labels"
 import { INITIAL_DATA, STEPS, validateStep, type WizardContext, type WizardData, type WizardErrors } from "./wizard-model"
 import { StepAdmin, StepCompany, StepReview, StepUnit } from "./wizard-steps"
@@ -36,7 +37,7 @@ const FLOW = [
   { title: "Concluir implantação: cliente ativo", wizard: false },
 ]
 
-export function NewClientWizard({ ctx: baseCtx }: { ctx: WizardContext }) {
+export function NewClientWizard({ ctx: baseCtx, banco = false }: { ctx: WizardContext; /** Com banco: grava de verdade (Server Action). */ banco?: boolean }) {
   // Clientes criados nesta sessão também bloqueiam slug e CNPJ (slug nunca é reaproveitado)
   const [createdHere, setCreatedHere] = useState<{ slugs: string[]; cnpjs: string[] }>({ slugs: [], cnpjs: [] })
   const ctx: WizardContext = {
@@ -50,6 +51,7 @@ export function NewClientWizard({ ctx: baseCtx }: { ctx: WizardContext }) {
   const [errors, setErrors] = useState<WizardErrors>({})
   const [creating, setCreating] = useState(false)
   const [created, setCreated] = useState(false)
+  const [real, setReal] = useState<{ id: string; slug: string } | null>(null)
 
   const patch = (p: Partial<WizardData>) => {
     setData((d) => ({ ...d, ...p }))
@@ -89,7 +91,35 @@ export function NewClientWizard({ ctx: baseCtx }: { ctx: WizardContext }) {
     goTo(s)
   }
 
+  const createReal = async () => {
+    setCreating(true)
+    try {
+      const res = await criarClienteAction({ ...data, cnpj: onlyDigits(data.cnpj), adminEmail: data.adminEmail.trim().toLowerCase() })
+      if (!res.ok) {
+        toast.error("Cliente não criado", { description: res.mensagem })
+        return
+      }
+      setReal({ id: res.dados.id, slug: res.dados.slug })
+      setCreated(true)
+      setCreatedHere((c) => ({ slugs: [...c.slugs, data.slug], cnpjs: [...c.cnpjs, onlyDigits(data.cnpj)] }))
+      toast.success(`${data.tradeName} criado`, {
+        description: res.dados.adminExistente
+          ? `${data.adminEmail} já tinha conta e entra com a senha dele.`
+          : `${data.adminEmail} fica “Aguardando definir senha” (o e-mail de acesso ainda não é enviado pela plataforma).`,
+      })
+      window.scrollTo({ top: 0, behavior: "smooth" })
+    } catch {
+      toast.error("Sem conexão", { description: "Não foi possível falar com o servidor. Tente de novo." })
+    } finally {
+      setCreating(false)
+    }
+  }
+
   const create = () => {
+    if (banco) {
+      void createReal()
+      return
+    }
     setCreating(true)
     window.setTimeout(() => {
       setCreating(false)
@@ -108,9 +138,10 @@ export function NewClientWizard({ ctx: baseCtx }: { ctx: WizardContext }) {
     setStep(0)
     setMaxStep(0)
     setCreated(false)
+    setReal(null)
   }
 
-  if (created) return <Success data={data} onAnother={reset} />
+  if (created) return <Success data={data} onAnother={reset} real={real} />
 
   return (
     <div className="grid gap-4 lg:grid-cols-12">
@@ -230,14 +261,14 @@ function Stepper({ step, maxStep, onSelect }: { step: number; maxStep: number; o
   )
 }
 
-function Success({ data, onAnother }: { data: WizardData; onAnother: () => void }) {
+function Success({ data, onAnother, real }: { data: WizardData; onAnother: () => void; real: { id: string; slug: string } | null }) {
   const template = SHIFT_TEMPLATES.find((t) => t.id === data.shiftTemplate)!
   const steps = [
     {
       icon: CpuIcon,
       title: "Provisionar o gateway",
       text: `Gere o código de ativação para a ${data.unitName} e instale o gateway no quadro da planta.`,
-      href: "/admin/gateways",
+      href: real ? `/${real.slug}/config/gateways` : "/admin/gateways",
       cta: "Provisionar",
     },
     {
@@ -280,11 +311,15 @@ function Success({ data, onAnother }: { data: WizardData; onAnother: () => void 
           </div>
         </dl>
         <p className="text-xs text-muted-foreground">
-          {data.sendEmail ? "O e-mail “Definir senha” foi enviado. O link é de uso único." : "O e-mail “Definir senha” ainda não foi enviado."}
+          {real
+            ? "O admin fica “Aguardando definir senha”: o envio do e-mail de acesso ainda não está ligado na plataforma."
+            : data.sendEmail
+              ? "O e-mail “Definir senha” foi enviado. O link é de uso único."
+              : "O e-mail “Definir senha” ainda não foi enviado."}
         </p>
         <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-center">
           <Button variant="outline" asChild>
-            <Link href="/admin/clientes">Ver clientes</Link>
+            <Link href={real ? `/admin/clientes/${real.id}` : "/admin/clientes"}>{real ? "Abrir o cliente" : "Ver clientes"}</Link>
           </Button>
           <Button variant="outline" onClick={onAnother}>
             <PlusIcon />

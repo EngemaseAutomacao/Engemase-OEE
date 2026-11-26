@@ -2,7 +2,7 @@
  * Formatação pt-BR. Sempre no fuso da planta (padrão America/Sao_Paulo).
  * Funções puras: seguras em componentes de servidor (não usam o relógio do sistema).
  */
-import { DEFAULT_TZ, MOCK_NOW } from "@/lib/mock/clock"
+import { DEFAULT_TZ, agoraIso } from "@/lib/mock/clock"
 
 const nf0 = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 })
 const nf1 = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
@@ -38,12 +38,12 @@ export function duration(seconds: number): string {
 }
 
 /** Duração entre um ISO e "agora" do protótipo. */
-export function since(isoStart: string, nowIso: string = MOCK_NOW): string {
+export function since(isoStart: string, nowIso: string = agoraIso()): string {
   return duration((Date.parse(nowIso) - Date.parse(isoStart)) / 1000)
 }
 
 /** "há 5 min", "há 2h 10min" */
-export function ago(iso: string | null | undefined, nowIso: string = MOCK_NOW): string {
+export function ago(iso: string | null | undefined, nowIso: string = agoraIso()): string {
   if (!iso) return "nunca"
   const s = (Date.parse(nowIso) - Date.parse(iso)) / 1000
   if (s < 30) return "agora"

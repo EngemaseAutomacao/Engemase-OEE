@@ -35,6 +35,9 @@ export interface SeededTenant {
   readonly alertRuleId: string
   readonly remoteSessionId: string
   readonly qualityEntryId: string
+  readonly holidayId: string
+  readonly rejectReasonId: string
+  readonly unitOperatorId: string
   /** Tokens em claro (o banco só guarda o hash). */
   readonly gatewayToken: string
   readonly enrollmentCode: string
@@ -235,6 +238,16 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
   await db
     .insert(s.gatewayDeviceStatus)
     .values({ organizationId, gatewayId: gw.id, deviceId: dev.id, status: "connected" })
+  await db.insert(s.gatewayHealthSample).values({
+    organizationId,
+    gatewayId: gw.id,
+    bucketStart: new Date(Math.floor(now / 300_000) * 300_000),
+    firstAt: new Date(now),
+    lastAt: new Date(now),
+    agentVersion: "1.0.0",
+    configVersion: 1,
+    bufferPendingMax: 0,
+  })
 
   const prod = first(
     await db.insert(s.product).values({ organizationId, code: "PRD-001", name: "Tampa 28 mm" }).returning(),
@@ -254,6 +267,21 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
         daysOfWeek: [1, 2, 3, 4, 5],
         breaks: [{ start: "10:00", end: "10:30", name: "Refeição" }],
       })
+      .returning(),
+  )
+  const holiday = first(
+    await db
+      .insert(s.unitHoliday)
+      .values({ organizationId, unitId: unitRow.id, holidayDate: "2026-12-25", name: "Natal" })
+      .returning(),
+  )
+  const rejectReasonRow = first(
+    await db.insert(s.rejectReason).values({ organizationId, code: "RB", name: "Rebarba" }).returning(),
+  )
+  const unitOperatorRow = first(
+    await db
+      .insert(s.unitOperator)
+      .values({ organizationId, unitId: unitRow.id, name: `Operadora ${slug}`, employeeCode: "1042" })
       .returning(),
   )
   const reason = first(
@@ -309,7 +337,15 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
   const quality = first(
     await db
       .insert(s.qualityEntry)
-      .values({ organizationId, machineId: machineRow.id, at: minute, quantity: 3, reason: "Rebarba" })
+      .values({
+        organizationId,
+        machineId: machineRow.id,
+        at: minute,
+        quantity: 3,
+        reason: "Rebarba",
+        rejectReasonId: rejectReasonRow.id,
+        operatorId: unitOperatorRow.id,
+      })
       .returning(),
   )
   await db.insert(s.machineLive).values({
@@ -498,6 +534,9 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
     alertRuleId: rule.id,
     remoteSessionId: session.id,
     qualityEntryId: quality.id,
+    holidayId: holiday.id,
+    rejectReasonId: rejectReasonRow.id,
+    unitOperatorId: unitOperatorRow.id,
     gatewayToken,
     enrollmentCode,
     terminalToken,

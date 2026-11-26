@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { MonitorIcon, TabletIcon, LinkIcon } from "lucide-react"
 
+import { usarBanco } from "@/lib/data/fonte"
 import { getClientById, getTerminal, terminalParams } from "@/lib/mock"
 import { Button } from "@/components/ui/button"
 import { BrandLogo, BrandWatermark } from "@/components/shell/brand"
@@ -14,7 +15,8 @@ export const metadata: Metadata = { title: "Terminal" }
  * Protótipo: não há token; mostramos o estado "não pareado" e atalhos para simular aparelhos já pareados.
  */
 export default function Page() {
-  const demo = terminalParams()
+  // Com banco, a simulação de aparelhos do protótipo some (os dados reais só chegam ao aparelho pareado).
+  const demo = (usarBanco() ? [] : terminalParams())
     .map(({ terminalId }) => getTerminal(terminalId)!)
     .filter((t) => t.status !== "pending")
     .map((t) => ({ ...t, clientName: getClientById(t.clientId)?.name ?? "" }))
@@ -42,6 +44,7 @@ export default function Page() {
         </Button>
       </div>
 
+      {demo.length > 0 && (
       <section className="mt-12 w-full max-w-xl rounded-2xl border border-white/10 bg-white/5 p-5">
         <h2 className="text-sm font-semibold text-white">Protótipo: simular um aparelho já pareado</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">Na versão real, cada aparelho guarda o próprio token e esta lista não existe.</p>
@@ -63,6 +66,7 @@ export default function Page() {
           })}
         </ul>
       </section>
+      )}
     </main>
   )
 }

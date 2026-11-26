@@ -1,17 +1,27 @@
+import { Suspense } from "react"
 import type { Metadata } from "next"
 
 import { OpsTitle } from "@/components/admin-ops/bits"
 import { KillSwitchButton, RequestAccessButton } from "@/components/admin-ops/remote-actions"
 import { RemoteProvider } from "@/components/admin-ops/remote-context"
-import { buildRemoteAccess } from "@/components/admin-ops/remote-data"
+import { dadosAcessoRemoto } from "@/lib/data/admin/console"
 import { RemoteHistory } from "@/components/admin-ops/remote-history"
 import { KillSwitchBanner, RemotePolicies, RemoteStats } from "@/components/admin-ops/remote-overview"
 import { ActiveSessions, PendingRequests } from "@/components/admin-ops/remote-sessions"
+import { CarregandoPagina } from "@/components/shell/carregando"
 
 export const metadata: Metadata = { title: "Acesso remoto" }
 
 export default function Page() {
-  const data = buildRemoteAccess()
+  return (
+    <Suspense fallback={<CarregandoPagina cartoes={4} />}>
+      <AcessoRemoto />
+    </Suspense>
+  )
+}
+
+async function AcessoRemoto() {
+  const data = await dadosAcessoRemoto()
 
   return (
     <RemoteProvider data={data}>

@@ -21,9 +21,9 @@ export type {
   ScheduledWindow,
   SetupPolicy,
   StateEvent,
-} from "./types.js";
+} from "./types";
 
-export { OeeInputError } from "./errors.js";
+export { OeeInputError } from "./errors";
 
 export {
   clipInterval,
@@ -33,7 +33,7 @@ export {
   subtractIntervals,
   totalDurationMs,
   unionIntervals,
-} from "./intervals.js";
+} from "./intervals";
 
 export {
   addDays,
@@ -50,7 +50,7 @@ export {
   type IsoWeekday,
   type LocalDateTime,
   type PlainDateParts,
-} from "./timezone.js";
+} from "./timezone";
 
 export {
   findShiftWindowAt,
@@ -59,7 +59,7 @@ export {
   type ShiftBreakDefinition,
   type ShiftDefinition,
   type ShiftWindow,
-} from "./shifts.js";
+} from "./shifts";
 
 export {
   resolveStateTimeline,
@@ -67,7 +67,7 @@ export {
   type SegmentEffect,
   type StateSegment,
   type TimelineOptions,
-} from "./states.js";
+} from "./states";
 
 export {
   idealCycleFor,
@@ -75,21 +75,21 @@ export {
   type CountSummary,
   type ProductCount,
   type SummarizeCountsInput,
-} from "./counts.js";
+} from "./counts";
 
 export {
   computeIndicators,
   DEFAULT_PERFORMANCE_ALERT_THRESHOLD,
   performanceStatus,
-} from "./indicators.js";
+} from "./indicators";
 
-export { aggregateOee, EMPTY_TOTALS, sumTotals, type OeeSummary } from "./aggregate.js";
+export { aggregateOee, EMPTY_TOTALS, sumTotals, type OeeSummary } from "./aggregate";
 
-export { DEFAULT_OEE_OPTIONS, resolveOptions } from "./options.js";
+export { DEFAULT_OEE_OPTIONS, resolveOptions } from "./options";
 
 export {
   calculateMachineOee,
   type MachineOeeInput,
   type MachineOeeResult,
   type TimeBreakdown,
-} from "./machine-oee.js";
+} from "./machine-oee";
