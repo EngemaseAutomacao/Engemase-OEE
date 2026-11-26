@@ -91,7 +91,7 @@ export function BrandPreview({
                     {short || "OEE"}
                   </span>
                 )}
-                <span className="truncate text-[10px] leading-tight font-semibold">{displayName || "Nome exibido"}</span>
+                <span className="line-clamp-2 min-w-0 text-[10px] leading-tight font-semibold break-words">{displayName || "Nome exibido"}</span>
               </>
             )}
           </div>
