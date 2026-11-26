@@ -17,20 +17,24 @@
   },
   "files": [
     "src",
-    "migrations"
+    "migrations",
+    "scripts"
   ],
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node scripts/migrate.ts"
   },
   "dependencies": {
     "@engemase/contracts": "workspace:*",
-    "drizzle-orm": "^0.45.4"
+    "drizzle-orm": "^0.45.4",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.16",
     "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.11",
     "typescript": "~5.9.3",
     "vitest": "^4.1.12"

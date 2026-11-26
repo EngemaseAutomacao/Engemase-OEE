@@ -21,12 +21,42 @@ Os testes aplicam as migrações num banco vazio e provam, com dois clientes com
 | `test/migrations.test.ts` | Migrações aplicam do zero e são idempotentes; **schema TS e migrações não divergem** (falha se esquecerem o `db:generate`); a 0005 liga `managed_by_engemase` dos clientes que já existiam mesmo com um dono de tabelas **sem `BYPASSRLS`** (como na Neon); a 0006 para se algum cliente não tiver `limits.machines` |
 | `test/enums.test.ts` | "Enums" e faixas do banco iguais aos de `@engemase/contracts` (inclusive `fault_code` uint32 em `bigint` e o formato do slug do cliente, `org` do /enroll); campos de minuto/live do contrato têm coluna; CHECKs recusam valores inválidos (escopo `machines` aceito, admin só com `all`, concessão de suporte sem aprovação, limites inteiros >= 0 com `machines` obrigatório) |
 
+## Implantação (Neon + Vercel)
+
+O build da Vercel (`apps/web/vercel.json`) roda `pnpm --filter @engemase/db db:migrate` antes do `next build`
+([`scripts/migrate.ts`](scripts/migrate.ts), regras em [`src/deploy.ts`](src/deploy.ts)):
+
+| Ambiente | O que acontece |
+|---|---|
+| Produção (`VERCEL_ENV=production`) | Aplica as migrações pendentes **antes** de o deploy entrar no ar, numa transação só (`pg`), com `pg_advisory_lock` (dois builds não migram juntos) e `lock_timeout` de 15 s. Falhou → o build falha e o site continua na versão anterior |
+| Preview | **Não migra**, a não ser com `DB_MIGRATE_PREVIEW=1`. Só ligue isso quando cada preview tiver branch próprio na Neon; sem isso o preview aponta para o banco de produção |
+| Manual | `MIGRATION_DATABASE_URL=<url de dono, sem pooler> pnpm --filter @engemase/db db:migrate` |
+
+URL das migrações: `MIGRATION_DATABASE_URL` → `DATABASE_URL_UNPOOLED` → `DATABASE_URL` (as duas últimas vêm da
+integração da Neon e são do **dono** das tabelas). Postgres 18 ou mais novo (o script confere).
+
+**Usuário de login da aplicação.** Com `APP_DB_PASSWORD` definido, o mesmo script cria (ou atualiza a senha de)
+`app_login` (ou `APP_DB_USER`): `LOGIN`, membro de `app_user`, sem `BYPASSRLS`/`CREATEROLE`/`CREATEDB`. Se já
+existir com poderes demais, falha. Depois confere que ele entra no banco e assume `app_user`. O app
+(`apps/web/lib/server/db.ts`) monta o próprio endereço a partir do `DATABASE_URL` da integração (com pooler),
+trocando usuário e senha; na Vercel ele **nunca** conecta como o dono.
+
+| Variável (Vercel) | Ambientes | Para quê |
+|---|---|---|
+| `APP_DB_PASSWORD` | Production (e Preview, se os previews usarem o banco) | Senha do `app_login`: 32 a 128 caracteres entre letras, números e `. _ ~ -`. Gere com `openssl rand -base64 33 \| tr '+/' '-_'` |
+| `APP_DB_USER` | opcional | Nome do usuário (padrão `app_login`) |
+| `APP_DATABASE_URL` | opcional | Endereço completo do app, se não quiser o montado a partir do `DATABASE_URL` |
+| `DB_MIGRATE_PREVIEW` | Preview, opcional | `1` para migrar nos previews (só com branch da Neon por preview) |
+
+Os branches da Neon herdam os papéis (e senhas) do branch de origem, então o `app_login` também vale neles.
+
 ## Estrutura
 
 ```
 src/schema/      tabelas por domínio (auth, assets, access, connectivity, production-*, alerts, remote-access)
 src/tenancy.ts   withTenant(), papéis, lista das tabelas de cliente
 src/lookups.ts   sha256Hex(), busca por hash de token (e estado da credencial) e por slug (funções SECURITY DEFINER)
+scripts/migrate.ts  migrações + usuário de login da aplicação (build da Vercel ou manual)
 migrations/      0000_init.sql (drizzle-kit) e 0001_rls.sql (MANUAL: papéis, RLS, GRANTs, funções)
                  0002_contract_columns_quality_reversal.sql (drizzle-kit, com o UNIQUE movido para antes da FK)
                  0003_organization_rls_state_lookups.sql (MANUAL: RLS em organization, funções de estado e slug)
@@ -104,7 +134,7 @@ Na implantação, criar os usuários de login **por SQL** (não pelo console da 
 ## Pendências
 
 - **Seed** a partir dos dados simulados do protótipo (`apps/web/lib/mock`): não feito. Caminho sugerido: mover os dados para um pacote compartilhado, mapear os ids de texto (`usr_ana`, `mch_...`) para UUIDs determinísticos e gravar como dono. O seed sintético de `test/fixtures.ts` já cobre todas as tabelas e pode virar a base do branch-semente de preview. Atenção: o mock tem o estado `PLANNED_STOP`, que no banco não é estado bruto (é classificação por motivo).
-- **Script de migração contra a Neon** (`db:migrate` com `pg`, numa transação só; nunca o migrator de `neon-http`) e bootstrap da organização "Engemase Lab" + primeiro super admin: dependem das contas (N1). O projeto Neon fica em AWS `sa-east-1` (São Paulo, D7).
+- **Bootstrap** da organização "Engemase Lab" + primeiro super admin: depende do Better Auth (W5). O script de migração contra a Neon já existe (seção "Implantação"). O projeto Neon fica em AWS `sa-east-1` (São Paulo, D7).
 - **Particionamento** (`pg_partman`) de `production_minute` e `tag_sample`, e retenção (W2b). Retenção decidida (D6, 12/11/2026): `production_minute` por **2 anos** e `audit_log` por **5 anos** (docs/06, "Volume, particionamento e retenção").
 - **Better Auth (W5):** gerar as tabelas definitivas (+ `two_factor`); decidir como "criar conta + membro + escopo na mesma transação" (docs/15, seção 5) convive com o papel `auth_service`.
 - **Console da Engemase:** leituras entre clientes (lista de clientes, frota de gateways) e eventos de plataforma na auditoria precisam de um papel de plataforma próprio (ainda não criado).

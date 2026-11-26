@@ -27,7 +27,7 @@ import type { GatewayDb } from "./types"
 export const MAX_ENROLL_BODY_BYTES = 16 * 1024
 
 export interface GatewayApiDeps {
-  /** Banco; `null` quando não configurado (DATABASE_URL ausente) → 503. */
+  /** Banco; `null` quando não configurado (sem endereço seguro, ver `lib/server/db.ts`) → 503. */
   readonly db: GatewayDb | null
   /** Relógio do servidor (padrão: agora). */
   readonly now?: () => Date

@@ -57,7 +57,7 @@ pnpm --filter web test:e2e
 
 ## O que falta
 
-**Depende de contas (N1):** criar Vercel, Neon e domínio; aplicar as migrações num branch de preview; deploy com `DATABASE_URL`; PoC com 100 gateways simulados (W3). O papel de login do banco precisa ser membro de `app_user`.
+**Depende de contas (N1):** Vercel e Neon criadas e ligadas (26/11/2026). As migrações rodam no build de produção e criam o usuário `app_login` (membro de `app_user`) quando `APP_DB_PASSWORD` está na Vercel ([packages/db](../packages/db/README.md#implantação-neon--vercel)). Falta: confirmar região `sa-east-1`, branch por preview na Neon, domínio e a PoC com 100 gateways simulados (W3).
 
 **Depende de hardware:** bancada com o R1000 (roteiro em `docs/operacao/verificacao-bancada-r1000.md`), pacote de suporte ao R1000 (overlay e RTC, sem o qual as RS-485 não têm alimentação) e a primeira imagem gravada.
 

@@ -84,5 +84,5 @@ pnpm --filter web test:e2e   # plc-sim → agente Go → API → banco (precisa 
 Primeiro código real de servidor: `enroll`, `sync` e `config` ([docs/04](../../docs/04-protocolo-gateway-nuvem.md), contrato em `@engemase/contracts`).
 
 - Lógica em `lib/server/gateway/` (sem Next.js: recebe `Request` e um banco do Drizzle e devolve `Response`); os `app/api/gateway/v1/*/route.ts` só repassam.
-- Banco: `DATABASE_URL` (Neon com pooler; usuário membro de `app_user`) e, opcional, `DATABASE_POOL_MAX` (padrão 5). Sem `DATABASE_URL`, as rotas respondem 503 e o build não conecta em nada.
+- Banco: o `DATABASE_URL` da integração Neon (com pooler) com o usuário e a senha da aplicação (`APP_DB_USER`, padrão `app_login`, e `APP_DB_PASSWORD`), ou `APP_DATABASE_URL` completo; opcional, `DATABASE_POOL_MAX` (padrão 5). Na Vercel o app nunca conecta como o dono do `DATABASE_URL`; fora dela (dev, testes) usa o `DATABASE_URL` como está. Sem endereço, as rotas respondem 503 e o `next build` não conecta em nada. As migrações rodam no build de produção, antes do `next build` (`vercel.json`; ver [packages/db](../../packages/db/README.md#implantação-neon--vercel)).
 - Toda leitura/escrita de um gateway roda em `withTenant()` (`app_user` + `app.org_id` do gateway autenticado, sob RLS); o token é buscado pelo hash antes (`app.resolve_gateway_token`).
