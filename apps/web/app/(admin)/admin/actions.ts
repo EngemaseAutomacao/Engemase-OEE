@@ -14,6 +14,9 @@ import { RESERVED_SLUGS, isValidCnpj, onlyDigits } from "@/components/admin/labe
 import { atorDaEquipe, equipeNaAcao, type Resultado } from "@/lib/data/admin/acesso"
 import type { MetadadosCliente } from "@/lib/data/admin/snapshot"
 import { getAuthDb } from "@/lib/server/db"
+import { authSettings } from "@/lib/server/auth/env"
+import { getEmailSender } from "@/lib/server/email"
+import { addTeamMember } from "@/lib/server/team/add-member"
 import { queryRows } from "@/lib/server/gateway/types"
 
 const SEM_ACESSO: Resultado<never> = { ok: false, mensagem: "Só o super admin da Engemase cria clientes. Entre de novo." }
@@ -124,4 +127,47 @@ export async function criarClienteAction(input: unknown): Promise<Resultado<Clie
 
   revalidatePath("/admin", "layout")
   return { ok: true, dados: { id: organizationId, slug: d.slug, adminExistente: existente !== undefined } }
+}
+
+export interface MembroAdicionado {
+  /** Link "definir senha" para o super admin repassar; `null` se a pessoa já tinha senha. */
+  readonly link: string | null
+  readonly expiraEm: string | null
+  readonly emailEnviado: boolean
+  readonly contaExistente: boolean
+  readonly clienteAtribuido: string | null
+}
+
+/**
+ * "Adicionar membro" da equipe Engemase: só o super admin. A pessoa é achada pelo e-mail no servidor;
+ * regras e gravação em `lib/server/team/add-member.ts`.
+ */
+export async function adicionarMembroEquipeAction(input: unknown): Promise<Resultado<MembroAdicionado>> {
+  const equipe = await equipeNaAcao(["super_admin"])
+  const authDb = getAuthDb()
+  const settings = authSettings()
+  if (equipe === null || authDb === null) return { ok: false, mensagem: "Só o super admin da Engemase adiciona membros. Entre de novo." }
+  if (settings === null) return { ok: false, mensagem: "Login não configurado (BETTER_AUTH_URL): não dá para gerar o link." }
+  try {
+    const r = await addTeamMember(
+      { db: equipe.db, authDb, now: new Date(), baseURL: settings.baseURL, sendEmail: getEmailSender() },
+      { id: equipe.session.user.id, name: equipe.session.user.name, email: equipe.session.user.email },
+      input,
+    )
+    if (r.status === "error") return { ok: false, mensagem: r.message, problemas: r.field ? [{ campo: r.field, mensagem: r.message }] : [] }
+    revalidatePath("/admin", "layout")
+    return {
+      ok: true,
+      dados: {
+        link: r.link,
+        expiraEm: r.expiresAt?.toISOString() ?? null,
+        emailEnviado: r.emailSent,
+        contaExistente: r.existingAccount,
+        clienteAtribuido: r.assignedClient,
+      },
+    }
+  } catch (error) {
+    console.error("[console] falha ao adicionar membro da equipe", error)
+    return { ok: false, mensagem: "Não foi possível adicionar o membro. Tente de novo em instantes." }
+  }
 }

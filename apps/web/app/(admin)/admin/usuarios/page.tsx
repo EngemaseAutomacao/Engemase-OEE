@@ -9,6 +9,7 @@ import { dadosEquipe } from "@/lib/data/admin/console"
 import { TeamMembers } from "@/components/admin-ops/team-members"
 import { RoleCards, TeamStats } from "@/components/admin-ops/team-overview"
 import { CarregandoPagina } from "@/components/shell/carregando"
+import { usarBanco } from "@/lib/data/fonte"
 
 export const metadata: Metadata = { title: "Equipe Engemase" }
 
@@ -29,7 +30,7 @@ async function Equipe() {
         <OpsTitle
           title="Equipe Engemase"
           description="Quem administra a plataforma, com qual papel e em quais clientes pode entrar agora."
-          actions={<AddMemberButton />}
+          actions={<AddMemberButton banco={usarBanco()} />}
         />
         <TeamStats />
         <RoleCards />

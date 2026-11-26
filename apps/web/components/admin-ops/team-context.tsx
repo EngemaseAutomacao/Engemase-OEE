@@ -44,11 +44,22 @@ interface TeamState extends TeamData {
 
 const TeamContext = createContext<TeamState | null>(null)
 
-/** Estado local da equipe (protótipo): convites, atribuições e concessões alteradas na sessão. */
+/**
+ * Estado da equipe na tela: no demo, guarda o que foi alterado na sessão; com banco, recomeça a cada dado novo
+ * do servidor (as gravações reais chamam `router.refresh()`).
+ */
 export function TeamProvider({ data, children }: { data: TeamData; children: React.ReactNode }) {
   const [members, setMembers] = useState(data.members)
   const [assignments, setAssignments] = useState(data.assignments)
   const [grants, setGrants] = useState(data.grants)
+  // Dados novos do servidor (ex.: router.refresh() depois de gravar no banco) substituem o estado local.
+  const [source, setSource] = useState(data)
+  if (source !== data) {
+    setSource(data)
+    setMembers(data.members)
+    setAssignments(data.assignments)
+    setGrants(data.grants)
+  }
 
   const value = useMemo<TeamState>(
     () => ({
