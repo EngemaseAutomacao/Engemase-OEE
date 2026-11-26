@@ -92,7 +92,7 @@ describe("login (Better Auth)", () => {
     })
 
     it("equipe Engemase fica sempre em 12 h, mesmo pedindo para manter conectado", async () => {
-      const p = await createUserWithPassword(h, { role: "support" })
+      const p = await createUserWithPassword(h, { role: "technician" })
       const before = Date.now()
       expect((await signIn(h, p.email, p.password, true)).status).toBe(200)
       const [row] = await sessionRow(h, p.id)

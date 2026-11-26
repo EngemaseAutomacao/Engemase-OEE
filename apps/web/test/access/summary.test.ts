@@ -91,7 +91,7 @@ describe("agregados e auditoria com escopo (nível 4)", () => {
     await audit(a.organizationId, "m3.change", { entityType: "machine", entityId: a.m3, unitId: a.unit2 })
     await audit(b.organizationId, "b.change", { unitId: b.unit1 })
 
-    fieldUnit2 = await createPerson(t.db, "campo-u2", { role: "field_engineer", twoFactor: true })
+    fieldUnit2 = await createPerson(t.db, "campo-u2", { role: "technician", twoFactor: true })
     await assignFieldEngineer(t.db, a.organizationId, fieldUnit2, NOW, { unitIds: [a.unit2] })
   })
 

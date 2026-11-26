@@ -12,7 +12,8 @@ export type MachineState =
   | "PLANNED_STOP" // Parada planejada
   | "NO_COMM" // Sem comunicação
 
-export type PlatformRole = "super_admin" | "support" | "field_engineer"
+/** Papéis da equipe Engemase (iguais a `PLATFORM_ROLES` de @engemase/db): super admin e técnico. */
+export type PlatformRole = "super_admin" | "technician"
 export type ClientRole = "client_admin" | "engineer" | "supervisor" | "operator" | "viewer"
 
 export type ClientStatus = "active" | "onboarding" | "suspended"

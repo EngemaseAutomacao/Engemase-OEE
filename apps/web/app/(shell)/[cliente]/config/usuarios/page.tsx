@@ -63,7 +63,8 @@ function engemaseAccessFor(client: Client): EngemaseAccessRow[] {
       })
     }
 
-    if (role === "support") {
+    // Técnico: concessões de suporte (abertas por ele) e atribuição (do super admin).
+    if (role === "technician") {
       for (const s of getRemoteAccessSessions({ clientId: client.id })) {
         if (s.requestedBy !== p.name || s.status === "rejected" || s.status === "expired_unapproved") continue
         const start = Date.parse(s.requestedAt)
@@ -85,7 +86,7 @@ function engemaseAccessFor(client: Client): EngemaseAccessRow[] {
       }
     }
 
-    if (role === "field_engineer") {
+    if (role === "technician") {
       const start = Date.parse(client.createdAt)
       const end = start + 365 * 24 * HOUR
       rows.push({

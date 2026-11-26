@@ -533,7 +533,7 @@ export async function fotoDaPlataforma(
     somar(f, converter(b, agora.getTime()))
     f.acesso[b.org.id] = {
       isEngemase: true,
-      canConfigure: role === "super_admin" || role === "field_engineer",
+      canConfigure: role === "super_admin" || role === "technician",
       canManageUsers: role === "super_admin",
     }
   }

@@ -45,7 +45,7 @@ export function TeamStats() {
         tone="orange"
         label="Atribuições vigentes"
         value={valid.length}
-        hint={expiring > 0 ? `${expiring} vence${expiring === 1 ? "" : "m"} em até 30 dias` : "engenheiros de campo × clientes"}
+        hint={expiring > 0 ? `${expiring} vence${expiring === 1 ? "" : "m"} em até 30 dias` : "técnicos × clientes"}
       />
       <StatCard
         icon={KeyRoundIcon}
@@ -58,14 +58,14 @@ export function TeamStats() {
   )
 }
 
-/** Cartões explicando os três papéis de plataforma. */
+/** Cartões explicando os papéis de plataforma (super admin e técnico). */
 export function RoleCards() {
   const { members } = useTeam()
   const count = (r: PlatformRole) => members.filter((m) => m.role === r && m.status !== "disabled").length
   const supers = count("super_admin")
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className="grid gap-4 lg:grid-cols-2">
       {(Object.keys(ROLE_META) as PlatformRole[]).map((r) => {
         const meta = ROLE_META[r]
         return (

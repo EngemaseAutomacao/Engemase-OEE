@@ -100,9 +100,9 @@ export function buildTeam(r: Repositorio = repositorioMock): TeamData {
     isMe: u.id === me.id,
   }))
 
-  // Atribuições: clientes em que cada engenheiro de campo atuou (sessões de VPN e auditoria).
+  // Atribuições: clientes em que cada técnico atuou (sessões de VPN e auditoria).
   const assignments: AssignmentRow[] = []
-  for (const u of platform.filter((x) => x.platformRole === "field_engineer")) {
+  for (const u of platform.filter((x) => x.platformRole === "technician")) {
     const byClient = new Map<string, { first: number; units: Set<string> }>()
     const touch = (clientId: string, at: string, unitId?: string) => {
       const cur = byClient.get(clientId) ?? { first: Date.parse(at), units: new Set<string>() }
@@ -143,7 +143,7 @@ export function buildTeam(r: Repositorio = repositorioMock): TeamData {
 
   // Concessões de suporte: sessões de suporte em andamento (VPN ativa) e acessos registrados na auditoria.
   const grants: GrantRow[] = []
-  for (const u of platform.filter((x) => x.platformRole === "support")) {
+  for (const u of platform.filter((x) => x.platformRole === "technician")) {
     for (const s of sessions.filter((s) => s.requestedBy === u.name && s.status === "active")) {
       const start = Date.parse(s.requestedAt)
       const end = start + SUPPORT_MAX_HOURS * HOUR

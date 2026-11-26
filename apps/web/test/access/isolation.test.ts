@@ -35,6 +35,8 @@ describe("isolamento entre clientes e escopo (requireTenant)", () => {
   let b: SeededClient
   let suspended: SeededClient
   let superAdmin: SeededPerson
+  let techBoth: SeededPerson
+  let grantBoth: string
   let superAdminNo2fa: SeededPerson
   let supportWithGrant: SeededPerson
   let supportExpired: SeededPerson
@@ -57,21 +59,21 @@ describe("isolamento entre clientes e escopo (requireTenant)", () => {
 
     superAdmin = await createPerson(t.db, "super", { role: "super_admin", twoFactor: true })
     superAdminNo2fa = await createPerson(t.db, "super-sem-2fa", { role: "super_admin" })
-    supportWithGrant = await createPerson(t.db, "suporte", { role: "support", twoFactor: true })
+    supportWithGrant = await createPerson(t.db, "suporte", { role: "technician", twoFactor: true })
     grantA = await grantSupport(t.db, a.organizationId, supportWithGrant, NOW, { startH: -1, endH: 2 })
     await grantSupport(t.db, suspended.organizationId, supportWithGrant, NOW, { startH: -1, endH: 2 })
-    supportExpired = await createPerson(t.db, "suporte-vencido", { role: "support", twoFactor: true })
+    supportExpired = await createPerson(t.db, "suporte-vencido", { role: "technician", twoFactor: true })
     await grantSupport(t.db, a.organizationId, supportExpired, NOW, { startH: -5, endH: -1 })
-    supportFuture = await createPerson(t.db, "suporte-futuro", { role: "support", twoFactor: true })
+    supportFuture = await createPerson(t.db, "suporte-futuro", { role: "technician", twoFactor: true })
     await grantSupport(t.db, a.organizationId, supportFuture, NOW, { startH: 1, endH: 3 })
 
-    fieldUnit1 = await createPerson(t.db, "campo-u1", { role: "field_engineer", twoFactor: true })
+    fieldUnit1 = await createPerson(t.db, "campo-u1", { role: "technician", twoFactor: true })
     await assignFieldEngineer(t.db, a.organizationId, fieldUnit1, NOW, { unitIds: [a.unit1] })
-    fieldAll = await createPerson(t.db, "campo-todo", { role: "field_engineer", twoFactor: true })
+    fieldAll = await createPerson(t.db, "campo-todo", { role: "technician", twoFactor: true })
     await assignFieldEngineer(t.db, a.organizationId, fieldAll, NOW)
-    fieldRevoked = await createPerson(t.db, "campo-revogado", { role: "field_engineer", twoFactor: true })
+    fieldRevoked = await createPerson(t.db, "campo-revogado", { role: "technician", twoFactor: true })
     await assignFieldEngineer(t.db, a.organizationId, fieldRevoked, NOW, { revoked: true })
-    fieldDeletedUnit = await createPerson(t.db, "campo-unidade-excluida", { role: "field_engineer", twoFactor: true })
+    fieldDeletedUnit = await createPerson(t.db, "campo-unidade-excluida", { role: "technician", twoFactor: true })
     // Unidade nova, sem máquinas, depois excluída: a atribuição restrita a ela não pode virar "cliente inteiro".
     const deletedUnitId = randomUUID()
     await t.client.query(
@@ -79,6 +81,11 @@ describe("isolamento entre clientes e escopo (requireTenant)", () => {
       [deletedUnitId, a.organizationId],
     )
     await assignFieldEngineer(t.db, a.organizationId, fieldDeletedUnit, NOW, { unitIds: [deletedUnitId] })
+
+    // Técnico com atribuição a uma unidade E concessão de suporte ativa no mesmo cliente.
+    techBoth = await createPerson(t.db, "tecnico-ambos", { role: "technician", twoFactor: true })
+    await assignFieldEngineer(t.db, a.organizationId, techBoth, NOW, { unitIds: [a.unit1] })
+    grantBoth = await grantSupport(t.db, a.organizationId, techBoth, NOW, { startH: -1, endH: 1 })
 
     banned = await createPerson(t.db, "bloqueado", { banned: true })
   })
@@ -197,10 +204,13 @@ describe("isolamento entre clientes e escopo (requireTenant)", () => {
       expect(rows[0]).toMatchObject({ organizationId: b.organizationId, actorType: "engemase" })
     })
 
-    it("suporte só entra com concessão ativa, e só no cliente da concessão", async () => {
+    it("técnico por concessão de suporte: só com concessão ativa, só no cliente dela; edita a configuração", async () => {
       const ctx = ok(await load(a.slug, supportWithGrant))
-      expect(ctx.access).toMatchObject({ kind: "engemase", role: "support", supportGrantId: grantA })
-      expect(ctx.permissions.has("config.write")).toBe(false)
+      expect(ctx.access).toMatchObject({ kind: "engemase", role: "technician", supportGrantId: grantA, assignmentId: null })
+      expect(ctx.scope).toEqual({ kind: "all" })
+      // Decisão de 26/11/2026: suporte e implantação são a mesma equipe; durante a concessão o técnico edita.
+      expect(ctx.permissions.has("config.write")).toBe(true)
+      expect(ctx.permissions.has("diagnostics.run")).toBe(true)
       expect(ctx.permissions.has("users.manage")).toBe(false)
       expect(await load(b.slug, supportWithGrant)).toEqual({ ok: false, reason: "not_found" })
       expect(await load(a.slug, supportExpired)).toEqual({ ok: false, reason: "not_found" })
@@ -212,7 +222,15 @@ describe("isolamento entre clientes e escopo (requireTenant)", () => {
       expect(audit?.accessGrantId).toBe(grantA)
     })
 
-    it("engenheiro de campo: só com atribuição válida, no escopo das unidades atribuídas", async () => {
+    it("técnico com atribuição e concessão: vale a concessão (cliente inteiro), as duas no contexto", async () => {
+      const ctx = ok(await load(a.slug, techBoth))
+      expect(ctx.scope).toEqual({ kind: "all" })
+      expect(ctx.access).toMatchObject({ kind: "engemase", role: "technician", supportGrantId: grantBoth })
+      expect(ctx.access.kind === "engemase" && ctx.access.assignmentId).toBeTruthy()
+      expect(await load(b.slug, techBoth)).toEqual({ ok: false, reason: "not_found" })
+    })
+
+    it("técnico por atribuição: só com atribuição válida, no escopo das unidades atribuídas", async () => {
       const u1 = ok(await load(a.slug, fieldUnit1))
       expect(u1.scope).toEqual({ kind: "units", unitIds: [a.unit1] })
       expect((await listMachines(t.db, u1)).map((m) => m.id).sort()).toEqual([a.m1, a.m2].sort())

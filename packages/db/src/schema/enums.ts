@@ -74,8 +74,12 @@ export type ClientStatus = (typeof CLIENT_STATUSES)[number]
 export const CLIENT_ROLES = ["client_admin", "engineer", "supervisor", "operator", "viewer"] as const
 export type ClientRole = (typeof CLIENT_ROLES)[number]
 
-/** Papéis da equipe Engemase, em `user.role` (plugin admin do Better Auth). */
-export const PLATFORM_ROLES = ["super_admin", "support", "field_engineer"] as const
+/**
+ * Papéis da equipe Engemase, em `user.role` (plugin admin do Better Auth). Desde 26/11/2026 o suporte e o
+ * engenheiro de campo são um papel só, o técnico (`technician`): a mesma equipe implanta e dá suporte
+ * (docs/15, seção 3).
+ */
+export const PLATFORM_ROLES = ["super_admin", "technician"] as const
 export type PlatformRole = (typeof PLATFORM_ROLES)[number]
 
 /**

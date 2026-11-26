@@ -8,7 +8,7 @@
  * Tudo "fail-closed":
  * - vínculo sem `member_access`, inativo, com papel/escopo desconhecido → sem acesso;
  * - escopo `units`/`machines` sem nenhuma unidade/máquina listada → sem acesso (D11);
- * - suporte sem concessão ativa, engenheiro de campo sem atribuição válida → sem acesso;
+ * - técnico sem concessão de suporte ativa nem atribuição válida → sem acesso;
  * - papel que exige 2FA (D14) sem 2FA ligado → bloqueado até cadastrar.
  * Sem acesso, quem chama responde 404 (não revela que o cliente existe).
  */
@@ -42,9 +42,9 @@ export type TenantAccess =
       /** Equipe Engemase: sempre com registro na auditoria e faixa na tela (D5). */
       readonly kind: "engemase"
       readonly role: PlatformRole
-      /** Concessão de suporte usada (papel `support`). */
+      /** Concessão de suporte ativa do técnico (até 4 h, motivo e chamado), se houver. */
       readonly supportGrantId: string | null
-      /** Atribuição usada (papel `field_engineer`). */
+      /** Atribuição vigente do técnico ao cliente, se houver. */
       readonly assignmentId: string | null
     }
 
@@ -87,7 +87,7 @@ export interface AccessFacts {
   } | null
   /** Concessão de suporte ativa agora, se houver. */
   readonly supportGrantId: string | null
-  /** Atribuição de engenheiro de campo válida agora, se houver (sem unidades = cliente inteiro). */
+  /** Atribuição do técnico válida agora, se houver (sem unidades = cliente inteiro). */
   readonly assignment: { readonly id: string; readonly unitIds: readonly string[] } | null
 }
 
@@ -131,19 +131,22 @@ function engemaseAccess(
   switch (role) {
     case "super_admin":
       return { access: { kind: "engemase", role, supportGrantId: null, assignmentId: null }, scope: { kind: "all" } }
-    case "support":
-      if (facts.supportGrantId === null) return null
-      return {
-        access: { kind: "engemase", role, supportGrantId: facts.supportGrantId, assignmentId: null },
-        scope: { kind: "all" },
-      }
-    case "field_engineer": {
+    case "technician": {
+      // Entra por concessão de suporte (que ele mesmo abre: cliente inteiro, até 4 h) ou por atribuição
+      // do super admin (cliente inteiro ou unidades). Com as duas, vale a concessão (mais ampla e com
+      // prazo curto); as duas ficam no contexto para a auditoria.
       const assignment = facts.assignment
-      if (assignment === null) return null
-      return {
-        access: { kind: "engemase", role, supportGrantId: null, assignmentId: assignment.id },
-        scope: assignment.unitIds.length > 0 ? { kind: "units", unitIds: [...assignment.unitIds] } : { kind: "all" },
+      if (facts.supportGrantId === null && assignment === null) return null
+      const access = {
+        kind: "engemase",
+        role,
+        supportGrantId: facts.supportGrantId,
+        assignmentId: assignment?.id ?? null,
+      } as const
+      if (facts.supportGrantId !== null || assignment === null || assignment.unitIds.length === 0) {
+        return { access, scope: { kind: "all" } }
       }
+      return { access, scope: { kind: "units", unitIds: [...assignment.unitIds] } }
     }
   }
 }

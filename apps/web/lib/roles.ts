@@ -2,8 +2,7 @@ import type { ClientPlan, ClientRole, ClientStatus, GatewayStatus, MemberScope, 
 
 export const PLATFORM_ROLE_LABEL: Record<PlatformRole, string> = {
   super_admin: "Super admin",
-  support: "Suporte",
-  field_engineer: "Engenheiro de campo",
+  technician: "Técnico",
 }
 
 export const CLIENT_ROLE_LABEL: Record<ClientRole, string> = {

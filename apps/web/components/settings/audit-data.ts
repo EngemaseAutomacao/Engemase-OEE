@@ -153,7 +153,7 @@ export function buildAudit(client: Client): AuditRow[] {
         actorKind = "system"
         actorRole = "Automático"
       } else if (pRole) {
-        actorKind = pRole === "support" || e.action.startsWith("support.") ? "support" : "engemase"
+        actorKind = e.action.startsWith("support.") ? "support" : "engemase"
         actorRole = `Engemase · ${PLATFORM_ROLE_LABEL[pRole]}`
       } else {
         const r = members.get(e.actor)

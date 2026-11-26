@@ -77,7 +77,7 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
   const supportUser = first(
     await db
       .insert(s.user)
-      .values({ name: `Suporte (${slug})`, email: `suporte-${slug}@engemase.example`, role: "support" })
+      .values({ name: `Suporte (${slug})`, email: `suporte-${slug}@engemase.example`, role: "technician" })
       .returning(),
   )
   const mem = first(await db.insert(s.member).values({ organizationId, userId: person.id }).returning())

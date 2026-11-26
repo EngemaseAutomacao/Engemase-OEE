@@ -59,7 +59,7 @@ describe("usuários do cliente: convite, definir senha, reenvio e 2FA", () => {
     a = await seedClient(h.t.db, "alfa")
     b = await seedClient(h.t.db, "beta")
     superAdmin = await createPerson(h.t.db, "super", { role: "super_admin", twoFactor: true })
-    support = await createPerson(h.t.db, "suporte", { role: "support", twoFactor: true })
+    support = await createPerson(h.t.db, "suporte", { role: "technician", twoFactor: true })
     await h.t.db.insert(s.supportAccessGrant).values({
       organizationId: a.organizationId,
       userId: support.user.id,

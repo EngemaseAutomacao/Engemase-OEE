@@ -38,12 +38,12 @@ export function getCurrentUser(): User {
 /**
  * Quem pode o quê na configuração do cliente (decisões D12 e D13).
  * - Unidades, linhas, máquinas, gateways, conexões, tags, terminais, turnos, produtos, motivos de parada,
- *   aparência e políticas: SÓ a equipe Engemase (super admin ou engenheiro de campo).
+ *   aparência e políticas: SÓ a equipe Engemase (super admin ou técnico).
  * - Usuários do cliente (convidar, papéis, escopos, desativar): o admin do cliente. O super admin da Engemase
  *   também pode, para criar o primeiro admin e apoiar o cliente.
  * - Ações do chão (classificar paradas, refugo, troca de produto) seguem com o cliente.
  */
-export const ENGEMASE_CONFIG_ROLES: readonly PlatformRole[] = ["super_admin", "field_engineer"]
+export const ENGEMASE_CONFIG_ROLES: readonly PlatformRole[] = ["super_admin", "technician"]
 
 export interface ConfigAccess {
   /** Usuário atual é da equipe Engemase (qualquer papel de plataforma). */

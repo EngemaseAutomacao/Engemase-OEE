@@ -8,7 +8,7 @@
  * |--------------------------|--------------------------------------------------------------|
  * | admin do cliente         | membro do PRÓPRIO cliente, que não é admin e não tem vínculo com outro cliente |
  * | super admin (no cliente) | qualquer membro do cliente (inclusive admin)                 |
- * | suporte, engenheiro de campo, demais papéis | ninguém (sem `users.manage`)              |
+ * | técnico, demais papéis   | ninguém (sem `users.manage`)                                 |
  *
  * Nunca: a própria pessoa (ela troca o aplicativo em "Segurança da conta"), nem alguém da equipe Engemase
  * (runbook da direção). O admin não reinicia quem também acessa outro cliente porque o efeito valeria lá

@@ -86,7 +86,7 @@ export function RoleMatrix({ className }: { className?: string }) {
       </div>
       <ul className="mt-3 grid gap-1 text-[11px] leading-snug text-muted-foreground">
         <li className="flex items-start gap-1">
-          <LockIcon className="mt-0.5 size-3 shrink-0" /> Configurado pela Engemase: a equipe Engemase (super admin e engenheiro de campo) faz toda a configuração. O cliente
+          <LockIcon className="mt-0.5 size-3 shrink-0" /> Configurado pela Engemase: a equipe Engemase (super admin e técnicos) faz toda a configuração. O cliente
           vê, sem editar; pedidos de mudança vão por chamado.
         </li>
         <li>Escopo por máquina: só as máquinas listadas. Nenhuma máquina listada = nenhum acesso.</li>

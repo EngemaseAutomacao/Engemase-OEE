@@ -53,7 +53,7 @@ export function TeamMembers() {
   const { members, assignments, grants, patchMember } = useTeam()
   const { now } = useOpsClock(30_000)
   const [roleFor, setRoleFor] = useState<MemberRow | null>(null)
-  const [newRole, setNewRole] = useState<PlatformRole>("support")
+  const [newRole, setNewRole] = useState<PlatformRole>("technician")
   const [disableFor, setDisableFor] = useState<MemberRow | null>(null)
 
   const activeSupers = members.filter((m) => m.role === "super_admin" && m.status !== "disabled").length
@@ -61,12 +61,14 @@ export function TeamMembers() {
 
   const accessLabel = (m: MemberRow): { text: string; tone: Tone } => {
     if (m.role === "super_admin") return { text: "Todos os clientes · auditado", tone: "blue" }
-    if (m.role === "support") {
-      const live = grants.filter((g) => g.userId === m.id && g.endedAt === null && Date.parse(g.endsAt) > now)
-      return live.length > 0 ? { text: `Concessão ativa: ${live.map((g) => g.clientName).join(", ")}`, tone: "teal" } : { text: "Sem concessão ativa", tone: "slate" }
-    }
+    // Técnico: concessões de suporte ativas (abertas por ele) e atribuições vigentes (do super admin).
+    const live = grants.filter((g) => g.userId === m.id && g.endedAt === null && Date.parse(g.endsAt) > now)
     const valid = assignments.filter((a) => a.userId === m.id && Date.parse(a.validUntil) > now)
-    return valid.length > 0 ? { text: `${valid.length} cliente${valid.length === 1 ? "" : "s"} atribuído${valid.length === 1 ? "" : "s"}`, tone: "orange" } : { text: "Sem atribuição vigente", tone: "slate" }
+    if (live.length > 0) return { text: `Suporte ativo: ${live.map((g) => g.clientName).join(", ")}`, tone: "teal" }
+    if (valid.length > 0) {
+      return { text: `${valid.length} cliente${valid.length === 1 ? "" : "s"} atribuído${valid.length === 1 ? "" : "s"}`, tone: "orange" }
+    }
+    return { text: "Sem atribuição ou concessão vigente", tone: "slate" }
   }
 
   const openRole = (m: MemberRow) => {

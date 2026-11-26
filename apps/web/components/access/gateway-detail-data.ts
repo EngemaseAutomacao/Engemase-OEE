@@ -225,7 +225,7 @@ export function buildGatewayDetail(client: Client, g: Gateway, r: Repositorio = 
   const clientUsers = r.getClientUsers(client.id)
   const platform = r.getPlatformUsers()
   // Só a equipe Engemase (super admin e engenheiro de campo) publica configuração e manda comandos ao gateway (D13).
-  const authors = platform.filter((u) => u.platformRole === "super_admin" || u.platformRole === "field_engineer").map((u) => u.name)
+  const authors = platform.filter((u) => u.platformRole === "super_admin" || u.platformRole === "technician").map((u) => u.name)
   const approvers = clientUsers
     .filter((u) => u.status !== "disabled" && u.memberships.some((m) => m.clientId === client.id && m.role === "client_admin"))
     .map((u) => ({ name: u.name, invited: u.status === "invited" }))

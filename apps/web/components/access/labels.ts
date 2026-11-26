@@ -199,8 +199,7 @@ export const CLIENT_ROLE_ORDER: ClientRole[] = ["client_admin", "engineer", "sup
 /** Rótulo curto do papel de plataforma para menções ("suporte Engemase"). */
 export const PLATFORM_ROLE_MENTION: Record<PlatformRole, string> = {
   super_admin: "super admin Engemase",
-  support: "suporte Engemase",
-  field_engineer: "engenheiro de campo Engemase",
+  technician: "técnico Engemase",
 }
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/

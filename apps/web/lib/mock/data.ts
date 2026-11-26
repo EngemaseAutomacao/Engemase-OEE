@@ -271,8 +271,8 @@ const ALL = { kind: "all" } as const
 export const users: User[] = [
   // Equipe Engemase (plataforma)
   { id: "usr_ana", name: "Ana Ribeiro", email: "ana.ribeiro@engemase.exemplo.com.br", username: null, platformRole: "super_admin", memberships: [], status: "active", lastLoginAt: "2026-11-11T11:05:00.000Z", twoFactor: true },
-  { id: "usr_carlos", name: "Carlos Mendes", email: "carlos.mendes@engemase.exemplo.com.br", username: null, platformRole: "support", memberships: [], status: "active", lastLoginAt: "2026-11-10T19:12:00.000Z", twoFactor: true },
-  { id: "usr_diego", name: "Diego Souza", email: "diego.souza@engemase.exemplo.com.br", username: null, platformRole: "field_engineer", memberships: [], status: "active", lastLoginAt: "2026-11-11T09:40:00.000Z", twoFactor: false },
+  { id: "usr_carlos", name: "Carlos Mendes", email: "carlos.mendes@engemase.exemplo.com.br", username: null, platformRole: "technician", memberships: [], status: "active", lastLoginAt: "2026-11-10T19:12:00.000Z", twoFactor: true },
+  { id: "usr_diego", name: "Diego Souza", email: "diego.souza@engemase.exemplo.com.br", username: null, platformRole: "technician", memberships: [], status: "active", lastLoginAt: "2026-11-11T09:40:00.000Z", twoFactor: false },
   // Plastiform
   { id: "usr_marcos", name: "Marcos Lima", email: "marcos.lima@plastiform.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "client_admin", scope: ALL }], status: "active", lastLoginAt: "2026-11-11T12:30:00.000Z", twoFactor: true },
   { id: "usr_juliana", name: "Juliana Costa", email: "juliana.costa@plastiform.exemplo.com.br", username: null, platformRole: null, memberships: [{ clientId: "cli_plastiform", role: "supervisor", scope: { kind: "units", unitIds: ["uni_jlle"] } }], status: "active", lastLoginAt: "2026-11-11T09:02:00.000Z", twoFactor: false },
@@ -363,5 +363,5 @@ export const auditLog: AuditEntry[] = [
   { id: "aud_07", clientId: "cli_bomsabor", actorName: "Ana Ribeiro", impersonatedBy: null, action: "client.create", entity: "cliente", entityName: "Bom Sabor Alimentos", at: "2026-11-03T12:00:00.000Z", details: "Plano Pro · 20 máquinas contratadas" },
   { id: "aud_08", clientId: "cli_bomsabor", actorName: "Diego Souza", impersonatedBy: null, action: "gateway.create", entity: "gateway", entityName: "GW Chapecó Envase", at: "2026-11-04T15:30:00.000Z", details: "Código de ativação gerado (expira em 24 h)" },
   { id: "aud_09", clientId: "cli_valeverde", actorName: "Ana Ribeiro", impersonatedBy: null, action: "client.suspend", entity: "cliente", entityName: "Têxtil Vale Verde", at: "2026-10-05T13:00:00.000Z", details: "Suspenso por inadimplência; dados preservados" },
-  { id: "aud_10", clientId: null, actorName: "Ana Ribeiro", impersonatedBy: null, action: "platform.user_create", entity: "usuario", entityName: "Diego Souza", at: "2026-09-01T12:00:00.000Z", details: "Papel: Engenheiro de campo" },
+  { id: "aud_10", clientId: null, actorName: "Ana Ribeiro", impersonatedBy: null, action: "platform.user_create", entity: "usuario", entityName: "Diego Souza", at: "2026-09-01T12:00:00.000Z", details: "Papel: Técnico" },
 ]

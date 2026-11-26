@@ -34,7 +34,7 @@ Uma pessoa pode ter **vínculos com mais de um cliente** (ex.: consultor); o cli
 
 **Quem gerencia o quê (D12 e D13, 12/11/2026):**
 - O **admin do cliente** gerencia os **usuários** do próprio cliente: convidar, papéis, escopos e desativar.
-- **Todo o resto da configuração** é feito **só pela equipe Engemase** (super admin ou engenheiro de campo atribuído, seção 3): unidades, linhas, máquinas, gateways, conexões, tags, terminais, turnos, produtos, motivos de parada, aparência/marca e políticas.
+- **Todo o resto da configuração** é feito **só pela equipe Engemase** (super admin ou técnico com atribuição ou concessão de suporte, seção 3): unidades, linhas, máquinas, gateways, conexões, tags, terminais, turnos, produtos, motivos de parada, aparência/marca e políticas.
 - As **ações do chão** continuam com o cliente: classificar paradas, lançar refugo, trocar produto, ver dashboards e relatórios.
 
 | Papel | Escopo | O que faz |
@@ -58,11 +58,11 @@ Regras:
 | Papel | Quem | Como acessa dados de um cliente |
 |---|---|---|
 | **Super admin** (`super_admin`) | 2–3 pessoas da direção técnica | Acesso a todos os clientes, sempre auditado. Cria clientes e o primeiro admin de cada um e faz toda a configuração (seção 2). Ações destrutivas com reautenticação e motivo; ninguém altera o próprio papel; existe proteção do "último super admin" |
-| **Suporte** (`support`) | Suporte técnico | **Com concessão de suporte ativa**, que ele mesmo abre (cliente, motivo, chamado, prazo de até 4 h) e que vale na hora, **sem aprovação do cliente** (D5). Leitura de cadastros, configs, saúde e dashboards + comandos de diagnóstico. Não mexe em usuários nem papéis |
-| **Engenheiro de campo** (`field_engineer`) | Comissionamento | **Somente nos clientes atribuídos** (atribuição com validade, criada pelo super admin). Faz toda a configuração do cliente (seção 2): unidades, linhas, máquinas, gateways, conexões, tags, terminais, turnos, produtos, motivos de parada, aparência/marca e políticas. Não mexe em usuários |
+| **Técnico** (`technician`) | Implantação e suporte técnico (a mesma equipe) | Por um destes dois caminhos: **atribuição** criada pelo super admin (cliente inteiro ou unidades, com validade), para a implantação; ou **concessão de suporte** que ele mesmo abre (cliente, motivo, chamado, prazo de até 4 h) e que vale na hora, **sem aprovação do cliente** (D5). Nos dois casos faz toda a configuração do cliente (seção 2) e roda diagnóstico. Com os dois ao mesmo tempo, vale a concessão (cliente inteiro). Não mexe em usuários nem papéis |
 
+- **Suporte e engenheiro de campo viraram um papel só, o técnico (decisão de 26/11/2026):** a mesma equipe provisiona gateways, implanta e atende chamados. O suporte passou a poder editar a configuração durante a concessão (motivo, chamado e até 4 h, tudo na auditoria), para corrigir na hora o que o chamado pede.
 - A equipe Engemase **não vira membro** dos clientes (exceto a organização interna "Engemase Lab").
-- **O acesso da Engemase aos dados do cliente é sempre liberado com registro (D5, 12/11/2026).** Não existe a opção "mediante aprovação do cliente". Toda entrada da Engemase num cliente aparece com **faixa na tela** e fica na **auditoria visível ao cliente** ("Carlos Mendes (suporte Engemase), chamado #1042, 25 min").
+- **O acesso da Engemase aos dados do cliente é sempre liberado com registro (D5, 12/11/2026).** Não existe a opção "mediante aprovação do cliente". Toda entrada da Engemase num cliente aparece com **faixa na tela** e fica na **auditoria visível ao cliente** ("Carlos Mendes (técnico Engemase), chamado #1042, 25 min").
 - **Não confundir com o acesso remoto ao gateway** (VPN e SSH, [12](12-acesso-remoto-vpn.md)): as sessões remotas continuam seguindo a política de acesso remoto, com aprovação do admin do cliente (D20, em aberto).
 - **"Ver como usuário" (impersonação)** fica para a F2 e será **somente leitura**, com prazo curto, motivo e aviso ao admin do cliente.
 
@@ -106,7 +106,7 @@ Regras:
 - detalhe do cliente: unidades, máquinas, gateways, usuários, concessões e atribuições da Engemase, ciclo de vida;
 - frota de gateways de todos os clientes; equipe Engemase; auditoria global.
 
-**Configuração do cliente pela Engemase (D12):** unidades, linhas, máquinas, gateways, conexões, tags, terminais, turnos, produtos, motivos de parada, aparência/marca e políticas. Quem faz: super admin ou engenheiro de campo atribuído, sempre com faixa na tela e registro na auditoria do cliente.
+**Configuração do cliente pela Engemase (D12):** unidades, linhas, máquinas, gateways, conexões, tags, terminais, turnos, produtos, motivos de parada, aparência/marca e políticas. Quem faz: super admin ou técnico (com atribuição ou concessão de suporte), sempre com faixa na tela e registro na auditoria do cliente.
 
 **Autogestão pelo admin do cliente** (`/[cliente]/config`): **só usuários** (D12): convidar (e-mail "definir senha"), papéis, escopos (cliente inteiro, unidades ou máquinas) e desativar. O resto da configuração aparece para o cliente só como leitura, no escopo de cada papel; os pedidos de mudança vão pelo canal de suporte.
 
@@ -157,7 +157,7 @@ flowchart LR
 | `member_access` | vínculo, papel, escopo (`all`/`units`/`machines`), ativo — gravado pelo admin do cliente |
 | `member_unit` | vínculo × unidade (quando o escopo é por unidades) |
 | `member_machine` | vínculo × máquina (quando o escopo é por máquinas, D11) |
-| `platform_assignment` | engenheiro de campo × cliente (e unidades opcionais), validade, motivo |
+| `platform_assignment` | técnico × cliente (e unidades opcionais), validade, motivo |
 | `support_access_grant` | usuário de plataforma × cliente, motivo, chamado, início/fim, encerrado por. Nasce ativa, sem aprovação do cliente (D5) |
 | `terminal` | cliente, unidade, nome, tipo (TV/tablet), escopo (linhas/máquinas), token (hash), pareado por, validade |
 | `gateway_machine` | vínculo explícito gateway ↔ máquina (com `organization_id`) |

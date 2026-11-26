@@ -8,9 +8,9 @@
  *   (configuração só leitura, auditoria) e faz as ações do chão.
  * - Engenheiro do cliente: leitura técnica (gateways, conexões, tags), sem editar (D13).
  * - Supervisor: dashboards, relatórios e ações do chão. Operador: ações do chão. Visualizador: leitura.
- * - Equipe Engemase: toda a configuração do cliente é dela (D12/D13) — super admin e engenheiro de
- *   campo atribuído editam; suporte lê e roda diagnóstico. Ninguém da Engemase mexe nos usuários do
- *   cliente, exceto o super admin (cria o primeiro admin). Ações do chão são do cliente.
+ * - Equipe Engemase: toda a configuração do cliente é dela (D12/D13) — o super admin e o técnico
+ *   (com atribuição ou concessão de suporte ativa) editam e rodam diagnóstico. Ninguém da Engemase mexe
+ *   nos usuários do cliente, exceto o super admin (cria o primeiro admin). Ações do chão são do cliente.
  */
 import type { ClientRole, PlatformRole } from "@engemase/db"
 
@@ -62,8 +62,7 @@ const PLATFORM_ROLE_PERMISSIONS: Record<PlatformRole, readonly Permission[]> = {
     "audit.read",
     "diagnostics.run",
   ],
-  support: ["data.read", "technical.read", "config.read", "audit.read", "diagnostics.run"],
-  field_engineer: ["data.read", "technical.read", "config.read", "config.write", "audit.read", "diagnostics.run"],
+  technician: ["data.read", "technical.read", "config.read", "config.write", "audit.read", "diagnostics.run"],
 }
 
 export function clientRolePermissions(role: ClientRole): ReadonlySet<Permission> {

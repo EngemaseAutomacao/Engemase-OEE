@@ -26,7 +26,7 @@ export function AddMemberButton() {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
-  const [role, setRole] = useState<PlatformRole>("field_engineer")
+  const [role, setRole] = useState<PlatformRole>("technician")
   const [clientId, setClientId] = useState("none")
   const [days, setDays] = useState("90")
   const [tried, setTried] = useState(false)
@@ -46,7 +46,7 @@ export function AddMemberButton() {
   const reset = () => {
     setName("")
     setEmail("")
-    setRole("field_engineer")
+    setRole("technician")
     setClientId("none")
     setDays("90")
     setTried(false)
@@ -72,7 +72,7 @@ export function AddMemberButton() {
       isMe: false,
     })
     const client = clients.find((c) => c.id === clientId)
-    if (role === "field_engineer" && client) {
+    if (role === "technician" && client) {
       const until = now + Number(days) * 86_400_000
       addAssignment({
         id: `asg_${id}_${client.id}`,
@@ -93,7 +93,7 @@ export function AddMemberButton() {
       })
     }
     toast.success(`Convite enviado para ${fullName}`, {
-      description: `${mail} recebe um link de uso único para definir a senha e cadastrar o 2FA.${role === "field_engineer" && client ? ` Atribuído a ${client.name} por ${days} dias.` : ""}`,
+      description: `${mail} recebe um link de uso único para definir a senha e cadastrar o 2FA.${role === "technician" && client ? ` Atribuído a ${client.name} por ${days} dias.` : ""}`,
     })
     setOpen(false)
   }
@@ -158,7 +158,7 @@ export function AddMemberButton() {
               </RadioGroup>
             </div>
 
-            {role === "field_engineer" && (
+            {role === "technician" && (
               <div className="grid gap-3 rounded-xl bg-muted/60 p-3 sm:grid-cols-[1fr_auto]">
                 <div className="grid gap-1.5">
                   <Label htmlFor="am-client" className="text-xs">

@@ -499,7 +499,7 @@ export function buildClientDetail(clientId: string, r: Repositorio = repositorio
   // Acesso Engemase: concessões de suporte vêm da auditoria (sessões encerradas) e das sessões
   // de acesso remoto ativas abertas por alguém do suporte; atribuições, das pessoas de campo que já
   // atuaram no cliente (protótipo: o modelo real tem tabelas próprias, docs/15 §9).
-  const supportNames = new Set(platform.filter((u) => u.platformRole === "support").map((u) => u.name))
+  const supportNames = new Set(platform.filter((u) => u.platformRole === "technician").map((u) => u.name))
   const grants: SupportGrant[] = [
     ...sessions
       .filter((s) => s.status === "active" && supportNames.has(s.requestedBy))
@@ -528,8 +528,8 @@ export function buildClientDetail(clientId: string, r: Repositorio = repositorio
       }),
   ]
 
-  const fieldEngineers = platform.filter((u) => u.platformRole === "field_engineer")
-  // Todo cliente é configurado pela Engemase (D12/D13): o engenheiro de campo que atuou no cliente tem atribuição.
+  const fieldEngineers = platform.filter((u) => u.platformRole === "technician")
+  // Todo cliente é configurado pela Engemase (D12/D13): o técnico que atuou no cliente tem atribuição.
   const assignments: Assignment[] = fieldEngineers
     .filter((u) => sessions.some((s) => s.requestedBy === u.name) || audit.some((a) => a.actorName === u.name))
     .map((u) => {
@@ -631,7 +631,7 @@ export function buildClientDetail(clientId: string, r: Repositorio = repositorio
     assignments,
     remoteSessions,
     remotePolicy: policy ? REMOTE_MODE_LABEL[policy.mode] : "Não configurada",
-    platformSupport: platform.filter((u) => u.platformRole === "support").map((u) => u.name),
+    platformSupport: platform.filter((u) => u.platformRole === "technician").map((u) => u.name),
     platformField: fieldEngineers.map((u) => u.name),
     unitOptions: units.map((u) => ({ id: u.id, name: u.name })),
     branding,

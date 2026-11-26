@@ -23,7 +23,7 @@ import { countdown, useOpsClock } from "./use-ops-clock"
 const DAY = 86_400_000
 const VALIDITY = [30, 60, 90, 180] as const
 
-/** Atribuições de engenheiros de campo (cliente, unidades e validade). */
+/** Atribuições de técnicos (cliente, unidades e validade). */
 export function FieldAssignments({ className }: { className?: string }) {
   const { members, clients, assignments, addAssignment, patchAssignment, removeAssignment } = useTeam()
   const { now, read } = useOpsClock(60_000)
@@ -36,7 +36,7 @@ export function FieldAssignments({ className }: { className?: string }) {
   const [reason, setReason] = useState("")
   const [tried, setTried] = useState(false)
 
-  const engineers = members.filter((m) => m.role === "field_engineer" && m.status !== "disabled")
+  const engineers = members.filter((m) => m.role === "technician" && m.status !== "disabled")
   const client = clients.find((c) => c.id === clientId)
   const me = members.find((m) => m.isMe)?.name ?? "Super admin"
   const errors = {
@@ -99,7 +99,7 @@ export function FieldAssignments({ className }: { className?: string }) {
 
   return (
     <SectionCard
-      title="Atribuições de engenheiros de campo"
+      title="Atribuições de técnicos"
       description="Acesso só aos clientes atribuídos, com unidades e validade"
       className={className}
       action={
@@ -118,7 +118,7 @@ export function FieldAssignments({ className }: { className?: string }) {
                 <HardHatIcon />
               </EmptyMedia>
               <EmptyTitle>Nenhuma atribuição</EmptyTitle>
-              <EmptyDescription>Engenheiros de campo só acessam clientes atribuídos por um super admin.</EmptyDescription>
+              <EmptyDescription>Para implantar um cliente, o técnico precisa de uma atribuição do super admin. Para atender um chamado, ele mesmo abre uma concessão de suporte.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         </div>
@@ -127,7 +127,7 @@ export function FieldAssignments({ className }: { className?: string }) {
           <table className="w-full min-w-[720px] text-sm">
             <thead className="border-b">
               <tr>
-                <th className={TH}>Engenheiro</th>
+                <th className={TH}>Técnico</th>
                 <th className={TH}>Cliente e unidades</th>
                 <th className={TH}>Validade</th>
                 <th className={TH}>Motivo</th>
@@ -187,12 +187,12 @@ export function FieldAssignments({ className }: { className?: string }) {
         <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Nova atribuição</DialogTitle>
-            <DialogDescription>O engenheiro de campo passa a configurar unidades, máquinas, gateways e tags do cliente até a data de validade.</DialogDescription>
+            <DialogDescription>O técnico passa a configurar unidades, máquinas, gateways e tags do cliente até a data de validade.</DialogDescription>
           </DialogHeader>
           <form onSubmit={submit} className="grid gap-4" noValidate>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid gap-1.5">
-                <Label htmlFor="na-user">Engenheiro de campo</Label>
+                <Label htmlFor="na-user">Técnico</Label>
                 <Select value={userId} onValueChange={setUserId}>
                   <SelectTrigger id="na-user" className="w-full" aria-invalid={tried && errors.user}>
                     <SelectValue placeholder="Selecione" />

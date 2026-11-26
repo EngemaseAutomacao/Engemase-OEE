@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useMemo, useState } from "react"
-import { HardHatIcon, HeadsetIcon, ShieldCheckIcon, type LucideIcon } from "lucide-react"
+import { HardHatIcon, ShieldCheckIcon, type LucideIcon } from "lucide-react"
 
 import type { PlatformRole } from "@/lib/mock/types"
 import type { Tone } from "./bits"
@@ -18,23 +18,18 @@ export const ROLE_META: Record<PlatformRole, { label: string; tone: Tone; icon: 
     can: ["Criar, suspender e encerrar clientes", "Gerenciar a equipe e as atribuições", "Ações destrutivas com reautenticação e motivo"],
     cannot: ["Alterar o próprio papel", "Remover o último super admin"],
   },
-  support: {
-    label: "Suporte",
+  technician: {
+    label: "Técnico",
     tone: "teal",
-    icon: HeadsetIcon,
-    who: "Suporte técnico",
-    summary: "Só entra num cliente com concessão de suporte ativa (motivo, chamado, até 4 h).",
-    can: ["Ler cadastros, configurações, saúde e dashboards", "Comandos de diagnóstico nos gateways", "Pedir acesso remoto (VPN)"],
-    cannot: ["Mexer em usuários e papéis", "Acessar cliente sem concessão"],
-  },
-  field_engineer: {
-    label: "Engenheiro de campo",
-    tone: "orange",
     icon: HardHatIcon,
-    who: "Comissionamento e implantação",
-    summary: "Só nos clientes atribuídos pelo super admin, com validade.",
-    can: ["Configurar unidades, linhas e máquinas", "Provisionar gateways, conexões Modbus e tags", "Pedir acesso remoto (VPN)"],
-    cannot: ["Mexer em usuários", "Acessar cliente sem atribuição vigente"],
+    who: "Implantação e suporte técnico",
+    summary: "Entra num cliente por atribuição do super admin (implantação) ou por concessão de suporte que ele mesmo abre (motivo, chamado, até 4 h).",
+    can: [
+      "Configurar unidades, linhas, máquinas, turnos e produtos",
+      "Provisionar gateways, conexões Modbus e tags",
+      "Comandos de diagnóstico e acesso remoto (VPN)",
+    ],
+    cannot: ["Mexer em usuários e papéis", "Acessar cliente sem atribuição ou concessão vigente"],
   },
 }
 

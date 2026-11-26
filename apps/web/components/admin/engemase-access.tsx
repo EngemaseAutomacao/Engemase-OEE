@@ -127,8 +127,8 @@ export function EngemaseAccess({
       <div className="grid gap-3 md:grid-cols-3">
         {[
           { icon: ShieldCheckIcon, tone: "navy" as const, title: "Super admin", text: "Acesso a todos os clientes, sempre auditado; ações destrutivas pedem motivo." },
-          { icon: LifeBuoyIcon, tone: "blue" as const, title: "Suporte", text: `Concessão interna da Engemase (chamado e prazo de até 4 h), sem depender de aprovação do cliente (D5). ${activeGrants === 0 ? "Nenhuma ativa agora." : `${activeGrants} ativa${activeGrants === 1 ? "" : "s"} agora.`}` },
-          { icon: HardHatIcon, tone: "teal" as const, title: "Engenheiro de campo", text: `Configura o cliente (D13) nos clientes atribuídos, com validade. ${activeAssignments === 0 ? "Nenhuma atribuição válida." : activeAssignments === 1 ? "1 atribuição válida." : `${activeAssignments} atribuições válidas.`}` },
+          { icon: LifeBuoyIcon, tone: "blue" as const, title: "Técnico · suporte", text: `Concessão que o próprio técnico abre (chamado e prazo de até 4 h), sem depender de aprovação do cliente (D5). ${activeGrants === 0 ? "Nenhuma ativa agora." : `${activeGrants} ativa${activeGrants === 1 ? "" : "s"} agora.`}` },
+          { icon: HardHatIcon, tone: "teal" as const, title: "Técnico · implantação", text: `Atribuição do super admin, com validade, para configurar o cliente (D13). ${activeAssignments === 0 ? "Nenhuma atribuição válida." : activeAssignments === 1 ? "1 atribuição válida." : `${activeAssignments} atribuições válidas.`}` },
         ].map((c) => (
           <div key={c.title} className="flex items-start gap-3 rounded-2xl border bg-card p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
             <IconCircle icon={c.icon} tone={c.tone} soft size="sm" />
@@ -218,7 +218,7 @@ export function EngemaseAccess({
                   <HardHatIcon />
                 </EmptyMedia>
                 <EmptyTitle>Nenhuma atribuição</EmptyTitle>
-                <EmptyDescription>Atribua um engenheiro de campo para comissionar gateways e máquinas deste cliente.</EmptyDescription>
+                <EmptyDescription>Atribua um técnico para comissionar gateways e máquinas deste cliente.</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
@@ -450,7 +450,7 @@ function AssignDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Nova atribuição de campo</DialogTitle>
-          <DialogDescription>O engenheiro de campo passa a configurar {clientName} até a data de validade.</DialogDescription>
+          <DialogDescription>O técnico passa a configurar {clientName} até a data de validade.</DialogDescription>
         </DialogHeader>
         <AssignForm key={formKey} people={people} units={units} clientName={clientName} now={now} onCreate={onCreate} onCancel={() => onOpenChange(false)} />
       </DialogContent>
@@ -483,7 +483,7 @@ function AssignForm({
   const toggle = (id: string, on: boolean) => setSelected((s) => (on ? [...s, id] : s.filter((x) => x !== id)))
 
   const submit = () => {
-    if (!person) return setError("Escolha o engenheiro de campo.")
+    if (!person) return setError("Escolha o técnico.")
     if (!allUnits && selected.length === 0) return setError("Selecione ao menos uma unidade (nenhuma unidade = nenhum acesso).")
     if (reason.trim().length < 5) return setError("Descreva o motivo.")
     const end = date(new Date(Date.parse(now) + Number(days) * 24 * 60 * 60 * 1000).toISOString())
@@ -497,7 +497,7 @@ function AssignForm({
       <div className="grid gap-4">
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-1.5">
-            <Label htmlFor="as-person">Engenheiro de campo</Label>
+            <Label htmlFor="as-person">Técnico</Label>
             <Select value={person} onValueChange={setPerson}>
               <SelectTrigger id="as-person" className="w-full">
                 <SelectValue placeholder="Selecione" />
