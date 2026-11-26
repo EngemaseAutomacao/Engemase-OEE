@@ -15,7 +15,9 @@ import {
 } from "../src/seed/index"
 import { asTenant, count, createTestDatabase, type TestDatabase } from "./helpers"
 
-const NOW = new Date("2026-11-24T15:00:00Z")
+// Relógio do teste perto do relógio real: a busca do token (app.resolve_account_token) compara com o now()
+// do banco, então uma data fixa faria o link "vencer" um dia depois de o teste ser escrito.
+const NOW = new Date(Math.floor(Date.now() / 1000) * 1000)
 const ADMIN = { adminEmail: "Diretor@Engemase.example", adminName: "Diretor Técnico" }
 
 describe("liberação do seed de plataforma", () => {
