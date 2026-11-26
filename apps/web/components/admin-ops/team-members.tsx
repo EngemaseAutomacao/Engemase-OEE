@@ -111,7 +111,7 @@ export function TeamMembers() {
         </div>
       ) : (
         <div className="overflow-x-auto px-5">
-          <table className="w-full min-w-[960px] text-sm">
+          <table className="w-full min-w-[960px] text-sm xl:min-w-0">
             <thead className="border-b">
               <tr>
                 <th className={TH}>Membro</th>
@@ -119,7 +119,7 @@ export function TeamMembers() {
                 <th className={TH}>2FA</th>
                 <th className={TH}>Acesso aos clientes</th>
                 <th className={TH}>Último acesso</th>
-                <th className={TH}>Status</th>
+                <th className={cn(TH, "xl:max-2xl:hidden")}>Status</th>
                 <th className={cn(TH, "text-right")}>
                   <span className="sr-only">Ações</span>
                 </th>
@@ -145,9 +145,15 @@ export function TeamMembers() {
                       </div>
                     </td>
                     <td className={TD}>
-                      <SoftBadge tone={meta.tone} icon={meta.icon}>
-                        {meta.label}
-                      </SoftBadge>
+                      <div className="flex flex-col gap-1">
+                        <SoftBadge tone={meta.tone} icon={meta.icon}>
+                          {meta.label}
+                        </SoftBadge>
+                        {/* De 1280 a 1535 px a coluna "Status" some para a tabela caber: o status vem aqui. */}
+                        <SoftBadge tone={STATUS_TONE[m.status]} dot className="hidden xl:max-2xl:inline-flex">
+                          {USER_STATUS_LABEL[m.status]}
+                        </SoftBadge>
+                      </div>
                     </td>
                     <td className={TD}>
                       {m.twoFactor ? (
@@ -165,13 +171,15 @@ export function TeamMembers() {
                       )}
                     </td>
                     <td className={TD}>
-                      <SoftBadge tone={access.tone}>{access.text}</SoftBadge>
+                      <SoftBadge tone={access.tone} className="xl:max-2xl:max-w-44 xl:max-2xl:rounded-lg xl:max-2xl:whitespace-normal">
+                        {access.text}
+                      </SoftBadge>
                     </td>
                     <td className={cn(TD, "whitespace-nowrap")}>
                       <div className="leading-tight">{m.lastLoginAt ? m.lastLoginAgo : "Nunca entrou"}</div>
                       <div className="text-[11px] text-muted-foreground tabular-nums">{m.lastLoginLabel}</div>
                     </td>
-                    <td className={TD}>
+                    <td className={cn(TD, "xl:max-2xl:hidden")}>
                       <SoftBadge tone={STATUS_TONE[m.status]} dot>
                         {USER_STATUS_LABEL[m.status]}
                       </SoftBadge>

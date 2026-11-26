@@ -18,7 +18,7 @@ export function OperatorSkeleton() {
         <Skeleton className="mt-2 h-8 w-64" />
       </div>
       <Skeleton className="h-16 rounded-none" />
-      <div className="mx-auto grid w-full max-w-7xl gap-4 p-4 md:p-6">
+      <div className="mx-auto grid w-full max-w-7xl 2xl:max-w-[1600px] gap-4 p-4 md:p-6">
         <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
           {Array.from({ length: 4 }, (_, i) => (
             <Skeleton key={i} className="h-32 rounded-xl" />

@@ -169,12 +169,13 @@ export function AuditConsole({ data }: { data: AuditData }) {
         </div>
       ) : (
         <div className="overflow-x-auto px-5 pb-2">
-          <table className="w-full min-w-[1080px] text-sm">
+          {/* De 1280 a 1535 px a coluna Cliente vai para baixo do item, para a tabela caber sem rolar. */}
+          <table className="w-full min-w-[1080px] text-sm xl:min-w-0">
             <thead className="border-b">
               <tr>
-                <th className={cn(TH, "first:pl-3")}>Hora</th>
+                <th className={cn(TH, "first:pl-3 xl:max-2xl:first:pl-3")}>Hora</th>
                 <th className={TH}>Pessoa</th>
-                <th className={TH}>Cliente</th>
+                <th className={cn(TH, "xl:max-2xl:hidden")}>Cliente</th>
                 <th className={TH}>Ação</th>
                 <th className={TH}>Item</th>
                 <th className={TH}>Detalhes</th>
@@ -196,7 +197,7 @@ export function AuditConsole({ data }: { data: AuditData }) {
                       </tr>
                     )}
                     <tr className={cn("border-t transition-colors hover:bg-muted/40", ROW_ACCENT[r.category])}>
-                      <td className={cn(TD, "w-16 font-medium whitespace-nowrap tabular-nums first:pl-3")}>{r.timeLabel}</td>
+                      <td className={cn(TD, "w-16 font-medium whitespace-nowrap tabular-nums first:pl-3 xl:max-2xl:first:pl-3")}>{r.timeLabel}</td>
                       <td className={TD}>
                         <div className="flex items-center gap-2.5">
                           <PersonAvatar name={r.actorName} tone={r.actorKind === "engemase" ? "navy" : "slate"} size="sm" />
@@ -206,7 +207,7 @@ export function AuditConsole({ data }: { data: AuditData }) {
                           </div>
                         </div>
                       </td>
-                      <td className={cn(TD, "whitespace-nowrap", r.clientId === null && "text-muted-foreground italic")}>{r.clientName}</td>
+                      <td className={cn(TD, "whitespace-nowrap xl:max-2xl:hidden", r.clientId === null && "text-muted-foreground italic")}>{r.clientName}</td>
                       <td className={TD}>
                         <SoftBadge
                           tone={CATEGORY_TONE[r.category]}
@@ -217,12 +218,15 @@ export function AuditConsole({ data }: { data: AuditData }) {
                         </SoftBadge>
                       </td>
                       <td className={TD}>
-                        <div className="max-w-56 leading-tight">
+                        <div className="max-w-56 leading-tight xl:max-2xl:max-w-48">
                           <div className="truncate">{r.entityName}</div>
-                          <div className="text-[11px] text-muted-foreground">{r.entityLabel}</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {r.entityLabel}
+                            <span className="hidden xl:max-2xl:inline"> · {r.clientName}</span>
+                          </div>
                         </div>
                       </td>
-                      <td className={cn(TD, "max-w-80 text-xs text-muted-foreground")}>
+                      <td className={cn(TD, "max-w-80 text-xs text-muted-foreground xl:min-w-52")}>
                         <span className="line-clamp-2">{r.details || "—"}</span>
                         {r.impersonatedBy && <span className="mt-0.5 block font-medium text-[#cf5539]">Exibido ao cliente como “{r.impersonatedBy}”</span>}
                       </td>

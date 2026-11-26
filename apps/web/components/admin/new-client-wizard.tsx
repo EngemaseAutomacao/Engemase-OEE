@@ -237,7 +237,7 @@ function Stepper({ step, maxStep, onSelect }: { step: number; maxStep: number; o
                 className="group flex w-full min-w-0 flex-col items-start gap-2 text-left outline-none disabled:cursor-default"
               >
                 <span className={cn("h-1 w-full rounded-full", done ? "bg-state-running" : current ? "bg-primary" : "bg-muted")} aria-hidden />
-                <span className="flex min-w-0 items-center gap-2">
+                <span className="flex w-full min-w-0 items-center gap-2">
                   <span
                     className={cn(
                       "flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition group-focus-visible:ring-[3px] group-focus-visible:ring-ring/50",

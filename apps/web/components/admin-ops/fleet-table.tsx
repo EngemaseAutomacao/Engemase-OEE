@@ -187,18 +187,23 @@ export function FleetTable() {
         </div>
       ) : (
         <div className="overflow-x-auto px-5 pb-2">
-          <table className="w-full min-w-[1220px] text-sm">
+          {/* De 1280 a 1535 px: Unidade vai para baixo do cliente, Config. para baixo do agente e Relógio para baixo da fila, para a tabela caber sem rolar. */}
+          <table className="w-full min-w-[1220px] text-sm xl:min-w-0">
             <thead className="border-b">
               <tr>
                 <th className={TH}>Gateway</th>
                 <th className={TH}>Cliente</th>
-                <th className={TH}>Unidade</th>
+                <th className={cn(TH, "xl:max-2xl:hidden")}>Unidade</th>
                 <th className={TH}>Status</th>
                 <th className={TH}>Último contato</th>
-                <th className={TH}>Agente</th>
-                <th className={TH}>Config. aplicada × publicada</th>
-                <th className={cn(TH, "text-right")}>Fila</th>
-                <th className={cn(TH, "text-right")}>Relógio</th>
+                <th className={TH}>
+                  Agente<span className="hidden xl:max-2xl:inline"> · config.</span>
+                </th>
+                <th className={cn(TH, "xl:max-2xl:hidden")}>Config. aplicada × publicada</th>
+                <th className={cn(TH, "text-right")}>
+                  Fila<span className="hidden xl:max-2xl:inline"> · relógio</span>
+                </th>
+                <th className={cn(TH, "text-right xl:max-2xl:hidden")}>Relógio</th>
                 <th className={cn(TH, "text-right")}>
                   <span className="sr-only">Ações</span>
                 </th>
@@ -213,7 +218,7 @@ export function FleetTable() {
                     <td className={TD}>
                       <div className="min-w-0 leading-tight">
                         <div className="truncate font-medium">{r.name}</div>
-                        <div className="truncate font-mono text-[11px] text-muted-foreground">
+                        <div className="truncate font-mono text-[11px] text-muted-foreground xl:max-2xl:whitespace-normal">
                           {r.hostname} · {r.machines} máq. · {r.devices} CLP{r.devices === 1 ? "" : "s"}
                         </div>
                       </div>
@@ -221,12 +226,13 @@ export function FleetTable() {
                     <td className={TD}>
                       <div className="leading-tight">
                         <div className="truncate">{r.clientName}</div>
+                        <div className="hidden text-[11px] text-muted-foreground xl:max-2xl:block">{r.unitName}</div>
                         {r.clientStatus !== "active" && (
                           <div className="text-[11px] text-muted-foreground">{r.clientStatus === "suspended" ? "Cliente suspenso" : "Em implantação"}</div>
                         )}
                       </div>
                     </td>
-                    <td className={cn(TD, "whitespace-nowrap text-muted-foreground")}>{r.unitName}</td>
+                    <td className={cn(TD, "whitespace-nowrap text-muted-foreground xl:max-2xl:hidden")}>{r.unitName}</td>
                     <td className={TD}>
                       <SoftBadge tone={GATEWAY_TONE[r.status]} dot>
                         {GATEWAY_STATUS_LABEL[r.status]}
@@ -244,6 +250,7 @@ export function FleetTable() {
                           <SoftBadge
                             tone={r.versionState === "unsupported" ? "red" : "amber"}
                             icon={TriangleAlertIcon}
+                            className="xl:max-2xl:rounded-lg xl:max-2xl:whitespace-normal"
                             title={r.versionState === "unsupported" ? "Versão sem suporte: atualize assim que o gateway voltar" : `Versão anterior à estável ${latest}`}
                           >
                             <span className="font-mono">{r.agentVersion}</span> · {r.versionState === "unsupported" ? "sem suporte" : "desatualizado"}
@@ -254,6 +261,9 @@ export function FleetTable() {
                             <span className="text-muted-foreground">{r.channel}</span>
                           </span>
                         )}
+                        <div className="hidden xl:max-2xl:block">
+                          <Config r={r} />
+                        </div>
                         {target && (
                           <SoftBadge tone="teal" icon={ArrowUpCircleIcon}>
                             → {target} agendada
@@ -261,20 +271,8 @@ export function FleetTable() {
                         )}
                       </div>
                     </td>
-                    <td className={TD}>
-                      {r.configState === "none" ? (
-                        <span className="text-xs text-muted-foreground">v{r.configVersion} publicada · aguardando ativação</span>
-                      ) : r.configState === "pending" ? (
-                        <SoftBadge tone="amber" title="O gateway ainda não aplicou a última configuração publicada">
-                          v{r.configApplied} de v{r.configVersion} · pendente
-                        </SoftBadge>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-xs">
-                          <CheckIcon className="size-3.5 text-state-running" aria-hidden />
-                          <span className="font-medium tabular-nums">v{r.configApplied}</span>
-                          <span className="text-muted-foreground">= v{r.configVersion}</span>
-                        </span>
-                      )}
+                    <td className={cn(TD, "xl:max-2xl:hidden")}>
+                      <Config r={r} />
                     </td>
                     <td
                       className={cn(
@@ -284,19 +282,14 @@ export function FleetTable() {
                       )}
                     >
                       {num(r.bufferPending)}
-                    </td>
-                    <td className={cn(TD, "text-right whitespace-nowrap")}>
-                      {r.clockOffsetMs === null ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : r.clockState === "alert" ? (
-                        <SoftBadge tone="red" icon={TriangleAlertIcon} title="Desvio acima de 2 s: verificar NTP/chrony">
-                          {clockLabel(r.clockOffsetMs)}
-                        </SoftBadge>
-                      ) : (
-                        <span className={cn("text-xs font-medium tabular-nums", r.clockState === "warn" ? "text-amber-700 dark:text-state-stopped" : "text-muted-foreground")}>
-                          {clockLabel(r.clockOffsetMs)}
-                        </span>
+                      {r.clockOffsetMs !== null && (
+                        <div className="hidden justify-end pt-1 font-normal xl:max-2xl:flex">
+                          <Clock r={r} />
+                        </div>
                       )}
+                    </td>
+                    <td className={cn(TD, "text-right whitespace-nowrap xl:max-2xl:hidden")}>
+                      <Clock r={r} />
                     </td>
                     <td className={TD}>
                       <div className="flex items-center justify-end gap-1.5">
@@ -329,5 +322,42 @@ export function FleetTable() {
         Relógio: diferença para o horário do servidor; acima de 2 s gera alerta. Fila: registros guardados no gateway aguardando envio (nada se perde enquanto estiver offline).
       </p>
     </section>
+  )
+}
+
+/** Desvio do relógio do gateway (coluna própria; de 1280 a 1535 px aparece embaixo da fila). */
+function Clock({ r }: { r: FleetRow }) {
+  if (r.clockOffsetMs === null) return <span className="text-muted-foreground">—</span>
+  if (r.clockState === "alert")
+    return (
+      <SoftBadge tone="red" icon={TriangleAlertIcon} title="Desvio acima de 2 s: verificar NTP/chrony">
+        {clockLabel(r.clockOffsetMs)}
+      </SoftBadge>
+    )
+  return (
+    <span className={cn("text-xs font-medium tabular-nums", r.clockState === "warn" ? "text-amber-700 dark:text-state-stopped" : "text-muted-foreground")}>
+      {clockLabel(r.clockOffsetMs)}
+    </span>
+  )
+}
+
+/** Configuração aplicada × publicada (coluna própria; de 1280 a 1535 px aparece embaixo do agente). */
+function Config({ r }: { r: FleetRow }) {
+  return (
+    <>
+                      {r.configState === "none" ? (
+                        <span className="text-xs text-muted-foreground xl:max-2xl:block xl:max-2xl:max-w-36">v{r.configVersion} publicada · aguardando ativação</span>
+                      ) : r.configState === "pending" ? (
+                        <SoftBadge tone="amber" title="O gateway ainda não aplicou a última configuração publicada">
+                          v{r.configApplied} de v{r.configVersion} · pendente
+                        </SoftBadge>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs whitespace-nowrap">
+                          <CheckIcon className="size-3.5 text-state-running" aria-hidden />
+                          <span className="font-medium tabular-nums">v{r.configApplied}</span>
+                          <span className="text-muted-foreground">= v{r.configVersion}</span>
+                        </span>
+                      )}
+    </>
   )
 }

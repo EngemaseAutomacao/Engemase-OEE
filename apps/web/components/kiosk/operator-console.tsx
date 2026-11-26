@@ -193,7 +193,7 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
-        <div className="mx-auto flex w-full max-w-7xl items-center gap-2 px-4 py-2.5 sm:gap-3 md:px-6">
+        <div className="mx-auto flex w-full max-w-7xl 2xl:max-w-[1600px] items-center gap-2 px-4 py-2.5 sm:gap-3 md:px-6">
           <Image
             src="/brand/engemase-icone.png"
             alt="Engemase OEE"
@@ -276,7 +276,7 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
 
         {/* Faixa de estado ao vivo */}
         <div className={cn(meta.bg, STATE_ON[state], state === "NO_COMM" && "bg-stripes")} role="status" aria-live="polite">
-          <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 md:px-6">
+          <div className="mx-auto flex w-full max-w-7xl 2xl:max-w-[1600px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 md:px-6">
             <StateIcon className="size-9 shrink-0" strokeWidth={2.4} aria-hidden />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline gap-x-3">
@@ -303,7 +303,7 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 p-4 md:gap-5 md:p-6">
+      <main className="mx-auto flex w-full max-w-7xl 2xl:max-w-[1600px] flex-1 flex-col gap-4 p-4 md:gap-5 md:p-6">
         {/* Indicadores do turno */}
         <section className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4" aria-label="Indicadores do turno">
           <Kpi label="Produção do turno">

@@ -150,8 +150,9 @@ export function AlertsCard({
         </Button>
       }
     >
-      <Tabs value={tab} onValueChange={(v) => setTab(v as StatusTab)} className="gap-3">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as StatusTab)} className="@container gap-3">
+        {/* Abas e filtros na mesma linha só quando o próprio cartão é largo (≥ 768 px), não pela largura da tela. */}
+        <div className="flex flex-col gap-2 @3xl:flex-row @3xl:items-center @3xl:justify-between">
           <div className="-mx-1 overflow-x-auto px-1">
             <TabsList className="h-10 w-max rounded-xl border bg-card p-1 shadow-xs">
               {STATUS_TABS.map((t) => (
@@ -164,7 +165,7 @@ export function AlertsCard({
           </div>
           <div className="flex gap-2">
             <Select value={severity} onValueChange={(v) => setSeverity(v as AlertSeverity | "all")}>
-              <SelectTrigger size="sm" className="w-full min-w-36 rounded-lg bg-card lg:w-auto" aria-label="Severidade">
+              <SelectTrigger size="sm" className="w-full min-w-36 rounded-lg bg-card @3xl:w-auto" aria-label="Severidade">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -179,7 +180,7 @@ export function AlertsCard({
             </Select>
             {units.length > 1 && (
               <Select value={unit} onValueChange={setUnit}>
-                <SelectTrigger size="sm" className="w-full min-w-36 rounded-lg bg-card lg:w-auto" aria-label="Unidade">
+                <SelectTrigger size="sm" className="w-full min-w-36 rounded-lg bg-card @3xl:w-auto" aria-label="Unidade">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

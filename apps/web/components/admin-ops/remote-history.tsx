@@ -126,7 +126,8 @@ export function RemoteHistory() {
         </div>
       ) : (
         <div className="overflow-x-auto px-5 pb-4">
-          <table className="w-full min-w-[1120px] text-sm">
+          {/* De 1280 a 1535 px a coluna Dados vai para baixo da duração, para a tabela caber sem rolar. */}
+          <table className="w-full min-w-[1120px] text-sm xl:min-w-0">
             <thead className="border-b">
               <tr>
                 <th className={TH}>Solicitada</th>
@@ -136,14 +137,16 @@ export function RemoteHistory() {
                 <th className={TH}>Escopo</th>
                 <th className={TH}>Decisão do cliente</th>
                 <th className={TH}>Resultado</th>
-                <th className={cn(TH, "text-right")}>Duração</th>
-                <th className={cn(TH, "text-right")}>Dados</th>
+                <th className={cn(TH, "text-right")}>
+                  Duração
+                </th>
+                <th className={cn(TH, "text-right xl:max-2xl:hidden")}>Dados</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {filtered.map((s) => (
                 <tr key={s.id} className="align-top transition-colors hover:bg-muted/40">
-                  <td className={cn(TD, "whitespace-nowrap tabular-nums")}>{s.requestedLabel}</td>
+                  <td className={cn(TD, "whitespace-nowrap tabular-nums xl:max-2xl:whitespace-normal")}>{s.requestedLabel}</td>
                   <td className={TD}>
                     <div className="leading-tight">
                       <div className="truncate font-medium">{s.gatewayName}</div>
@@ -152,7 +155,9 @@ export function RemoteHistory() {
                   </td>
                   <td className={TD}>
                     <div className="flex items-center gap-2">
-                      <PersonAvatar name={s.requestedBy} tone="navy" size="sm" />
+                      <span className="contents xl:max-2xl:hidden">
+                        <PersonAvatar name={s.requestedBy} tone="navy" size="sm" />
+                      </span>
                       <span className="truncate">{s.requestedBy}</span>
                     </div>
                   </td>
@@ -168,7 +173,7 @@ export function RemoteHistory() {
                         </SoftBadge>
                       )}
                       {s.plc && (
-                        <SoftBadge tone="orange" icon={CableIcon} title={s.plc.deviceName}>
+                        <SoftBadge tone="orange" icon={CableIcon} title={s.plc.deviceName} className="xl:max-2xl:rounded-lg xl:max-2xl:whitespace-normal">
                           CLP {s.plc.target}
                         </SoftBadge>
                       )}
@@ -179,13 +184,19 @@ export function RemoteHistory() {
                     <SoftBadge tone={STATUS_META[s.status].tone} dot>
                       {STATUS_META[s.status].label}
                     </SoftBadge>
-                    {s.endedReason && <div className="mt-1 max-w-56 text-[11px] text-muted-foreground">{s.endedReason}</div>}
+                    {s.endedReason && <div className="mt-1 max-w-56 text-[11px] text-muted-foreground xl:max-2xl:max-w-40">{s.endedReason}</div>}
                   </td>
                   <td className={cn(TD, "text-right whitespace-nowrap tabular-nums")}>
                     {s.realDuration ?? "—"}
                     {s.realDuration && <div className="text-[11px] text-muted-foreground">de {s.durationMin >= 60 ? `${s.durationMin / 60} h` : `${s.durationMin} min`}</div>}
+                    {s.bytes && (
+                      <div className="hidden text-[11px] text-muted-foreground xl:max-2xl:block">
+                        {s.bytes}
+                        {s.connection && ` · ${s.connection === "relay" ? "relay" : "direta"}`}
+                      </div>
+                    )}
                   </td>
-                  <td className={cn(TD, "text-right whitespace-nowrap text-muted-foreground tabular-nums")}>
+                  <td className={cn(TD, "text-right whitespace-nowrap text-muted-foreground tabular-nums xl:max-2xl:hidden")}>
                     {s.bytes ?? "—"}
                     {s.connection && <div className="text-[11px]">{s.connection === "relay" ? "relay" : "direta"}</div>}
                   </td>

@@ -34,9 +34,10 @@ async function Equipe() {
         <TeamStats />
         <RoleCards />
         <TeamMembers />
-        <div className="grid gap-4 xl:grid-cols-12">
-          <FieldAssignments className="xl:col-span-7" />
-          <SupportGrants className="xl:col-span-5" />
+        {/* Lado a lado só a partir de 1536 px: abaixo disso a tabela de atribuições ficava cortada. */}
+        <div className="grid gap-4 2xl:grid-cols-12">
+          <FieldAssignments className="2xl:col-span-8" />
+          <SupportGrants className="2xl:col-span-4" />
         </div>
       </div>
     </TeamProvider>

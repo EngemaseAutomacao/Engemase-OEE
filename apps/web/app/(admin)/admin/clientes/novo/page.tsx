@@ -20,7 +20,8 @@ async function Assistente() {
 
 export default function Page() {
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6">
+    // Em telas bem largas o assistente não estica a tela toda: fica com no máximo 1400 px, centralizado.
+    <div className="flex w-full flex-col gap-5 p-4 md:p-6 2xl:mx-auto 2xl:max-w-[1400px]">
       <PageTitle title="Novo cliente" description="Assistente em 3 passos: empresa, primeira unidade e primeiro admin. O cliente nasce em implantação.">
         <Link href="/admin/clientes" className="mb-1 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
           <ChevronLeftIcon className="size-3.5" />
