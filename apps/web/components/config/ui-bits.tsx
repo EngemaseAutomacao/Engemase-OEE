@@ -97,12 +97,12 @@ export function ConfirmDialog({
 /** Título de página no padrão novo: título forte, subtítulo e ações à direita. */
 export function PageTitle({ title, description, actions }: { title: string; description: React.ReactNode; actions?: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-      <div className="min-w-0">
+    <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end md:justify-between">
+      <div className="min-w-0 md:flex-[1_1_28rem]">
         <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2 md:shrink-0 md:justify-end">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2 md:ml-auto md:justify-end">{actions}</div>}
     </div>
   )
 }

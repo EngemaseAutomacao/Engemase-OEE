@@ -208,7 +208,7 @@ export function ShiftsManager({
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         <StatCard icon={CalendarClockIcon} tone="blue" label="Turnos" value={unitShifts.length} hint={unitShifts.length ? daysSummary(allDays) : "Nenhum turno"} />
         <StatCard icon={ClockIcon} tone="navy" label="Horas por semana" value={hoursLabel(weeklyPlanned)} hint="planejadas, sem as pausas" />
         <StatCard
@@ -360,7 +360,7 @@ export function ShiftsManager({
                       {s.breaks.length === 0 && <li className="text-muted-foreground">Sem pausas fixas</li>}
                     </ul>
 
-                    <dl className="mt-auto grid grid-cols-3 gap-2 rounded-lg bg-muted/60 px-3 py-2">
+                    <dl className="mt-auto grid grid-cols-3 gap-2 rounded-lg bg-muted/60 px-3 py-2 xl:max-2xl:flex xl:max-2xl:justify-between">
                       {[
                         { k: "Duração", v: hoursLabel(m.total) },
                         { k: "Planejado", v: hoursLabel(m.planned) },

@@ -150,7 +150,7 @@ export function TerminalsManager({
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         <StatCard icon={MonitorSmartphoneIcon} tone="blue" label="Terminais" value={terminals.length} hint={`${plural(tvs, "TV", "TVs")} · ${plural(terminals.length - tvs, "tablet", "tablets")}`} />
         <StatCard
           icon={WifiIcon}
@@ -208,13 +208,13 @@ export function TerminalsManager({
           </Empty>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px] text-sm">
+            <table className="w-full min-w-[960px] text-sm xl:max-2xl:min-w-[820px]">
               <thead>
                 <tr className="border-y bg-muted/40 text-left text-xs text-muted-foreground">
                   <th className="py-2.5 pr-3 pl-5 font-medium">Terminal</th>
                   <th className="px-3 py-2.5 font-medium">Unidade</th>
                   <th className="px-3 py-2.5 font-medium">Mostra</th>
-                  <th className="px-3 py-2.5 font-medium">Tema</th>
+                  <th className="px-3 py-2.5 font-medium xl:max-2xl:hidden">Tema</th>
                   <th className="px-3 py-2.5 font-medium">Situação</th>
                   <th className="px-3 py-2.5 font-medium">Pareado por</th>
                   <th className="px-3 py-2.5 font-medium">Último contato</th>
@@ -234,7 +234,10 @@ export function TerminalsManager({
                           <IconCircle icon={t.kind === "andon_tv" ? MonitorIcon : TabletSmartphoneIcon} tone={t.kind === "andon_tv" ? "navy" : "teal"} soft size="sm" />
                           <div className="min-w-0 leading-tight">
                             <div className="truncate font-medium">{t.name}</div>
-                            <div className="text-xs text-muted-foreground">{KIND_LABEL[t.kind]}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {KIND_LABEL[t.kind]}
+                              <span className="hidden xl:max-2xl:inline"> · tema {THEME_LABEL[t.theme].toLowerCase()}</span>
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -248,7 +251,7 @@ export function TerminalsManager({
                           ))}
                         </div>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3 xl:max-2xl:hidden">
                         <span className="inline-flex items-center gap-1.5 text-xs">
                           <ThemeIcon className="size-3.5 text-muted-foreground" />
                           {THEME_LABEL[t.theme]}
