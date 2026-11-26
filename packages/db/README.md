@@ -37,6 +37,8 @@ O build da Vercel (`apps/web/vercel.json`) roda `pnpm --filter @engemase/db db:m
 | Preview | **Não migra**, a não ser com `DB_MIGRATE_PREVIEW=1`. Só ligue isso quando cada preview tiver branch próprio na Neon; sem isso o preview aponta para o banco de produção |
 | Manual | `MIGRATION_DATABASE_URL=<url de dono, sem pooler> pnpm --filter @engemase/db db:migrate` |
 
+Com `ENGEMASE_SEED=plataforma` no ambiente, o build também roda o `db:seed:plataforma` (Engemase Lab + primeiro super admin; em produção exige `ENGEMASE_SEED_PRODUCAO=confirmo`) e o link "definir senha" sai no log do build. Use uma vez e **apague as variáveis `ENGEMASE_SEED*` logo depois**: enquanto o admin não tiver senha, cada build gera um link novo.
+
 URL das migrações: `MIGRATION_DATABASE_URL` → `DATABASE_URL_UNPOOLED` → `DATABASE_URL` (as duas últimas vêm da
 integração da Neon e são do **dono** das tabelas). Postgres 18 ou mais novo (o script confere).
 

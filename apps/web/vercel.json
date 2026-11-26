@@ -1,9 +1,17 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["gru1"],
-  "buildCommand": "pnpm --filter @engemase/db db:migrate && pnpm run build",
+  "regions": [
+    "gru1"
+  ],
+  "buildCommand": "pnpm --filter @engemase/db db:migrate && if [ \"$ENGEMASE_SEED\" = plataforma ]; then pnpm --filter @engemase/db db:seed:plataforma; fi && pnpm run build",
   "crons": [
-    { "path": "/api/cron/limpeza", "schedule": "30 3 * * *" },
-    { "path": "/api/cron/resumo-diario", "schedule": "0 10 * * *" }
+    {
+      "path": "/api/cron/limpeza",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/resumo-diario",
+      "schedule": "0 10 * * *"
+    }
   ]
 }
