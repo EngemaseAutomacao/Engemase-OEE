@@ -26,7 +26,8 @@ export default async function Page({ params }: PageProps<"/[cliente]/acesso-remo
 
   return (
     <RemoteAccessProvider data={data}>
-      <div className="flex flex-col gap-5 p-4 md:p-6">
+      {/* `@container/page`: o histórico (tabela de 760 px) só divide a linha quando a largura útil comporta. */}
+      <div className="@container/page flex flex-col gap-5 p-4 md:p-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight">Acesso remoto</h1>
@@ -54,9 +55,9 @@ export default async function Page({ params }: PageProps<"/[cliente]/acesso-remo
           <ActiveSessions className="xl:col-span-5" />
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-12">
-          <RemoteHistory className="xl:col-span-8" />
-          <div className="grid min-w-0 content-start gap-4 lg:grid-cols-2 xl:col-span-4 xl:grid-cols-1">
+        <div className="grid gap-4 @6xl/page:grid-cols-12">
+          <RemoteHistory className="@6xl/page:col-span-8" />
+          <div className="grid min-w-0 content-start gap-4 @3xl/page:grid-cols-2 @6xl/page:col-span-4 @6xl/page:grid-cols-1">
             <PolicyCard />
             <RemoteGuarantees guideHref={`/${client.slug}/ajuda`} />
           </div>

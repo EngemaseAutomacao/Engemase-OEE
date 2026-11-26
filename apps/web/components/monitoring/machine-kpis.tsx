@@ -87,9 +87,12 @@ export function MachineKpis({
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+      {/* Pela largura útil (sem a barra lateral): em 1280 px três cartões ficam estreitos demais. */}
+      <div className="@container/kpis">
+      <div className="grid gap-4 @2xl/kpis:grid-cols-2 @5xl/kpis:grid-cols-3">
         <SectionCard title="Composição do OEE" description={shiftLabel} action={live.stale ? <PartialBadge lastUpdate={live.lastUpdate} /> : undefined}>
-          <div className="flex flex-col items-center gap-5 sm:flex-row">
+          <div className="@container">
+          <div className="flex flex-col items-center gap-5 @[26rem]:flex-row">
             <OeeRing value={live.shift.oee} size={120} stroke={12} />
             <div className="grid w-full flex-1 gap-3">
               <OeeBreakdown values={live.shift} />
@@ -98,6 +101,7 @@ export function MachineKpis({
                 OEE = D × P × Q = {pct(live.shift.availability, 0)} × {pct(live.shift.performance, 0)} × {pct(live.shift.quality, 0)}
               </p>
             </div>
+          </div>
           </div>
         </SectionCard>
 
@@ -137,7 +141,7 @@ export function MachineKpis({
           </div>
         </SectionCard>
 
-        <SectionCard title="Tempos do turno" description={`${duration(totalS)} decorridos desde o início do turno`} className="lg:col-span-2 xl:col-span-1">
+        <SectionCard title="Tempos do turno" description={`${duration(totalS)} decorridos desde o início do turno`} className="@2xl/kpis:col-span-2 @5xl/kpis:col-span-1">
           <div className="grid gap-4">
             <div className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-muted" aria-hidden>
               {STATE_ORDER.filter((k) => durations[k] > 0).map((k) => (
@@ -148,7 +152,7 @@ export function MachineKpis({
                 />
               ))}
             </div>
-            <ul className="grid gap-1.5 text-sm md:grid-cols-2 xl:grid-cols-1">
+            <ul className="grid gap-x-8 gap-y-1.5 text-sm @2xl/kpis:grid-cols-2 @5xl/kpis:grid-cols-1">
               {STATE_ORDER.filter((k) => durations[k] > 0).map((k) => (
                 <li key={k} className="flex items-center gap-2">
                   <StateDot state={k} />
@@ -171,6 +175,7 @@ export function MachineKpis({
             </p>
           </div>
         </SectionCard>
+      </div>
       </div>
     </>
   )

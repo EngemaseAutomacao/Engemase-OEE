@@ -34,11 +34,18 @@ export function StatCard({
   const good = delta !== undefined && delta !== null && (deltaInverted ? delta < 0 : delta > 0)
   const showDelta = delta !== undefined && delta !== null && delta !== 0
   return (
-    <div className={cn("flex items-center gap-4 rounded-2xl border bg-card px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]", className)}>
-      <IconCircle icon={icon} tone={tone} size="lg" />
+    // `@container`: o cartão se ajusta à própria largura. No computador, com a barra lateral, quatro cartões
+    // lado a lado ficam estreitos em 1280 px: aí perde respiro, o ícone diminui e o anel ao lado some.
+    <div
+      className={cn(
+        "@container flex items-center gap-3 rounded-2xl border bg-card px-4 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] @[17rem]:gap-4 @[17rem]:px-5",
+        className,
+      )}
+    >
+      <IconCircle icon={icon} tone={tone} size="lg" className="@max-[17rem]:size-11 @max-[17rem]:[&>svg]:size-5" />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-xs font-medium text-muted-foreground">{label}</div>
-        <div className="mt-0.5 truncate text-2xl leading-tight font-bold tracking-tight tabular-nums">{value}</div>
+        <div className="line-clamp-2 text-xs font-medium text-muted-foreground">{label}</div>
+        <div className="mt-0.5 line-clamp-2 text-xl leading-tight font-bold tracking-tight break-words tabular-nums @[17rem]:text-2xl">{value}</div>
         {showDelta ? (
           <div className="mt-0.5 flex items-center gap-1 text-xs">
             <span className={cn("inline-flex items-center gap-0.5 font-semibold", good ? "text-state-running" : "text-state-fault")}>
@@ -48,10 +55,10 @@ export function StatCard({
             <span className="truncate text-muted-foreground">{deltaLabel}</span>
           </div>
         ) : (
-          hint && <div className="mt-0.5 truncate text-xs text-muted-foreground">{hint}</div>
+          hint && <div className={cn("mt-0.5 text-xs text-muted-foreground", typeof hint === "string" ? "line-clamp-2" : "truncate")}>{hint}</div>
         )}
       </div>
-      {aside}
+      {aside && <div className="hidden shrink-0 @[19rem]:block">{aside}</div>}
     </div>
   )
 }
