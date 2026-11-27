@@ -3,6 +3,8 @@
 A Engemase precisa de **acesso remoto aos gateways** para manutenção e suporte: SSH, diagnóstico, atualização e, às vezes, acesso pontual a um CLP ou IHM para ajudar o cliente. Este documento define como fazer isso **sem abrir portas na fábrica e sem transformar o gateway numa porta de entrada para a rede industrial**. Ver [ADR-013](10-decisoes-arquiteturais.md#adr-013--vpn-de-manutenção-sob-demanda-tailscale-com-helper-separado).
 
 > **Status:** desenho recomendado após pesquisa. Preços e alguns comportamentos (proxy corporativo, cobrança de nós) estão marcados para confirmar com o fornecedor e na prova de conceito.
+>
+> **Implementado (27/11/2026), falta a conferência na bancada:** plataforma (pedido, aprovação, política, aprovação assinada EdDSA, chave do Tailscale criada só na entrega pelo `/sync`, nó apagado no fim) com `VPN_HABILITADA` desligada; no gateway, `gateway/internal/remoteaccess` (aprovação, política local, prazo, inatividade, só a porta 22 → `127.0.0.1:22`, nada em disco) e o programa `gateway/cmd/oee-remote-access` (tsnet, módulo próprio), com as units em `deploy/gateway/systemd/fase1/`. Ainda não: OpenSSH só local com certificados de curta duração (CA no KMS), usuário `suporte`, encaminhamento para CLP (`ot.forward.*`) e janelas pré-aprovadas.
 
 ## Princípios
 

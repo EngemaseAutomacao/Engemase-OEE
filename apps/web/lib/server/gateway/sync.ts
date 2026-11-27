@@ -535,6 +535,34 @@ async function saveRemoteAccessEvents(w: Writer, events: readonly RemoteAccessEv
       })),
     )
     .onConflictDoNothing({ target: remoteAccessEvent.id })
+
+  // O estado da sessão acompanha o que o gateway relata (docs/12): ligou → ativa; desligou → encerrada.
+  for (const e of [...events].sort((a, b) => a.at.localeCompare(b.at))) {
+    const at = new Date(e.at)
+    if (e.action === "session_started") {
+      await w.tx
+        .update(remoteAccessSession)
+        .set({ status: "active", startsAt: sql`coalesce(${remoteAccessSession.startsAt}, ${iso(at)}::timestamptz)`, updatedAt: w.now })
+        .where(
+          and(
+            eq(remoteAccessSession.id, e.session_id),
+            eq(remoteAccessSession.gatewayId, w.principal.gatewayId),
+            inArray(remoteAccessSession.status, ["approved", "activating"]),
+          ),
+        )
+    } else if (e.action === "session_ended") {
+      await w.tx
+        .update(remoteAccessSession)
+        .set({ status: "ended", endedAt: at, endReason: e.detail ?? "requested", updatedAt: w.now })
+        .where(
+          and(
+            eq(remoteAccessSession.id, e.session_id),
+            eq(remoteAccessSession.gatewayId, w.principal.gatewayId),
+            inArray(remoteAccessSession.status, ["approved", "activating", "active", "stopping"]),
+          ),
+        )
+    }
+  }
 }
 
 /**
@@ -802,6 +830,23 @@ async function saveCommandResults(w: Writer, results: readonly CommandResult[], 
           inArray(gatewayCommand.status, [...RESULT_ACCEPTING_STATUSES]),
         ),
       )
+    // O gateway não conseguiu ligar a VPN (aprovação recusada, política local, rede): a sessão falhou.
+    if (r.type === "vpn.enable" && r.status !== "ok") {
+      const [cmd] = await w.tx.select({ payload: gatewayCommand.payload }).from(gatewayCommand).where(eq(gatewayCommand.id, r.id)).limit(1)
+      const sessionId = (cmd?.payload as { session_id?: unknown } | undefined)?.session_id
+      if (typeof sessionId === "string") {
+        await w.tx
+          .update(remoteAccessSession)
+          .set({ status: "failed", endedAt: w.now, endReason: r.status === "expired" ? "expired" : r.error.code, updatedAt: w.now })
+          .where(
+            and(
+              eq(remoteAccessSession.id, sessionId),
+              eq(remoteAccessSession.gatewayId, w.principal.gatewayId),
+              inArray(remoteAccessSession.status, ["approved", "activating"]),
+            ),
+          )
+      }
+    }
   }
 }
 

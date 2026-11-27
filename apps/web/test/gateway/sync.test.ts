@@ -684,4 +684,35 @@ describe("POST /sync", () => {
     expect(((await syncWith({ vpn })).commands ?? []).find((c) => c.id === cmdId)).toBeUndefined()
     expect(minted).toHaveLength(1)
   })
+
+  it("acesso remoto: o estado da sessão acompanha o gateway (ligou → ativa; desligou → encerrada; falha ao ligar → falhou)", async () => {
+    const { client, remap, id } = await freshClient()
+    const sess = id(REMOTE_SESSION_ID)
+    await t.db.update(s.remoteAccessSession).set({ status: "approved", startsAt: null }).where(eq(s.remoteAccessSession.id, sess))
+    const base = remap(HEALTH_ONLY)
+    const ev = (seq: number, action: string, at: string, detail?: string) => ({
+      id: `01a1cab3-7cf8-7f23-8fdf-c01d84c7a4${String(seq).padStart(2, "0")}`,
+      seq,
+      at,
+      type: "remote_access",
+      action,
+      session_id: sess,
+      ...(detail ? { detail } : {}),
+    })
+    const batch = (seq: number) => ({ ...base.batch, seq_from: seq, seq_to: seq })
+    await syncOk(client, { ...base, batch: batch(1), events: [ev(1, "session_started", "2026-11-11T12:50:00.000Z")] })
+    const status = async () => (await rows<{ status: string; end_reason: string | null }>(t, "SELECT status, end_reason FROM remote_access_session WHERE id = $1", [sess]))[0]
+    expect(await status()).toMatchObject({ status: "active" })
+    await syncOk(client, { ...base, batch: batch(2), events: [ev(2, "session_ended", "2026-11-11T12:55:00.000Z", "idle")] })
+    expect(await status()).toMatchObject({ status: "ended", end_reason: "idle" })
+
+    // Falha ao ligar: o resultado do vpn.enable com erro marca a sessão como falhou.
+    await t.db.update(s.remoteAccessSession).set({ status: "approved", endedAt: null, endReason: null }).where(eq(s.remoteAccessSession.id, sess))
+    const cmdId = await addCommand(client, { type: "vpn.enable", status: "sent", payload: { session_id: sess } })
+    await syncOk(client, {
+      ...base,
+      command_results: [{ id: cmdId, type: "vpn.enable", status: "error", finished_at: "2026-11-11T13:01:00.000Z", duration_ms: 50, error: { code: "approval_invalid", message: "assinatura não confere" } }],
+    })
+    expect(await status()).toMatchObject({ status: "failed", end_reason: "approval_invalid" })
+  })
 })

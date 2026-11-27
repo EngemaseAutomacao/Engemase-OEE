@@ -1,0 +1,16 @@
+{
+  "note": "Aprovação assinada pela plataforma (apps/web/lib/server/remote/approval.ts) com uma chave SÓ DE TESTE (semente 0x01 x 32). O gateway precisa aceitá-la; se mudar, os dois lados mudaram o formato.",
+  "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+  "kid": "34750f98bd59fcfc",
+  "claims": {
+    "typ": "engemase.vpn_approval.v1",
+    "gateway_id": "01a1cab3-2bea-7244-bb03-702b326efb32",
+    "session_id": "01a1cab3-2bea-7244-bb03-702b326efb99",
+    "requested_by": "user:a",
+    "approved_by": "user:b",
+    "approved_at": "2026-11-27T15:00:00.000Z",
+    "not_after": "2026-11-27T16:00:00.000Z",
+    "allow_ot_forward": false
+  },
+  "jws": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCIsImtpZCI6IjM0NzUwZjk4YmQ1OWZjZmMifQ.eyJ0eXAiOiJlbmdlbWFzZS52cG5fYXBwcm92YWwudjEiLCJnYXRld2F5X2lkIjoiMDFhMWNhYjMtMmJlYS03MjQ0LWJiMDMtNzAyYjMyNmVmYjMyIiwic2Vzc2lvbl9pZCI6IjAxYTFjYWIzLTJiZWEtNzI0NC1iYjAzLTcwMmIzMjZlZmI5OSIsInJlcXVlc3RlZF9ieSI6InVzZXI6YSIsImFwcHJvdmVkX2J5IjoidXNlcjpiIiwiYXBwcm92ZWRfYXQiOiIyMDI2LTExLTI3VDE1OjAwOjAwLjAwMFoiLCJub3RfYWZ0ZXIiOiIyMDI2LTExLTI3VDE2OjAwOjAwLjAwMFoiLCJhbGxvd19vdF9mb3J3YXJkIjpmYWxzZX0.6TSlo6o-vvu7TNAhM7e-Urfc6XJBMPpakYjfY3Nr98y08v-18qOW_RAh8kg7SpJVwZ9AYwTJIbldOpwQpQOECA"
+}

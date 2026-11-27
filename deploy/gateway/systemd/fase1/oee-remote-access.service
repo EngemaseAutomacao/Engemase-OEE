@@ -1,0 +1,65 @@
+# FASE 1 — CÓDIGO PRONTO, NÃO EMPACOTADO AINDA: entra no nfpm.yaml (e no
+# postinst/prerm/postrm/install.sh) depois da conferência na bancada com uma sessão
+# de VPN de verdade (docs/12). Ver deploy/gateway/README.md §1.
+#
+# VPN de manutenção sob demanda (docs/12). Ativado pelo socket quando o agente
+# recebe um vpn.enable; sai sozinho depois de 10 min sem sessão nem pedidos.
+# Confere a aprovação assinada (/usr/share/oee-remote-access/keys) e a política
+# local (/etc/oee-gateway/remote-access.json), liga a VPN com tsnet (rede em
+# espaço de usuário: não mexe em rotas nem interfaces do sistema) e escuta SÓ a
+# porta 22 na VPN, repassando ao OpenSSH local (127.0.0.1:22).
+#
+# Usuário próprio e sem privilégio (oee-ra, já criado na imagem). O estado da VPN fica só na memória e numa
+# pasta temporária (RuntimeDirectory, apagada ao parar): depois de reiniciar,
+# a VPN NÃO religa.
+[Unit]
+Description=Engemase OEE - acesso remoto de manutenção (VPN sob demanda)
+Documentation=file:/usr/share/doc/oee-gateway/README.md
+Requires=oee-remote-access.socket
+After=oee-remote-access.socket network-online.target
+
+[Service]
+Type=exec
+ExecStart=/usr/lib/oee-gateway/oee-remote-access --agent-group oee
+User=oee-ra
+Group=oee-ra
+RuntimeDirectory=oee-remote-access
+RuntimeDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+
+MemoryMax=160M
+CPUQuota=50%
+TasksMax=64
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateIPC=yes
+PrivateDevices=yes
+DevicePolicy=closed
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+# Saída para o Tailscale (443 TCP e UDP), socket do agente e acompanhamento da rede (netlink).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+KeyringMode=private
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @mount @module @raw-io @reboot @swap @debug @cpu-emulation @obsolete
+SystemCallErrorNumber=EPERM

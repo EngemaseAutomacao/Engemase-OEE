@@ -3,6 +3,7 @@
  * que vai no gateway) e cliente do Tailscale (OAuth, chave de uso único com a tag, apagar só o nó certo).
  */
 import { createPublicKey, generateKeyPairSync, verify } from "node:crypto"
+import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
 import { approvalSigner } from "@/lib/server/remote/approval"
 import { GATEWAY_TAG, nodeNameFor, tailscaleClient, tailscaleFromEnv } from "@/lib/server/remote/tailscale"
@@ -37,6 +38,14 @@ describe("aprovação assinada (JWS EdDSA)", () => {
     const pub = createPublicKey({ key: spki, format: "der", type: "spki" })
     expect(verify(null, Buffer.from(`${h}.${p}`), pub, Buffer.from(sig, "base64url"))).toBe(true)
     expect(verify(null, Buffer.from(`${h}.${p}x`), pub, Buffer.from(sig, "base64url"))).toBe(false)
+  })
+
+  it("gera exatamente a amostra que o gateway (Go) aceita (gateway/internal/remoteaccess/testdata)", () => {
+    const f = JSON.parse(readFileSync(new URL("../../../../gateway/internal/remoteaccess/testdata/approval-from-platform.json", import.meta.url), "utf8"))
+    const signer = approvalSigner(Buffer.alloc(32, 1).toString("base64"))!
+    expect(signer.kid).toBe(f.kid)
+    expect(signer.publicKeyBase64).toBe(f.public_key)
+    expect(signer.sign(f.claims)).toBe(f.jws)
   })
 
   it("semente em base64 também serve; sem chave = desligado; chave errada ou claims fora do contrato = erro", () => {

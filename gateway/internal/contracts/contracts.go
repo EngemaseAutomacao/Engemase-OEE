@@ -201,6 +201,7 @@ const (
 	EventAgentStop         = "agent_stop"
 	EventConfigApplied     = "config_applied"
 	EventConfigRejected    = "config_rejected"
+	EventRemoteAccess      = "remote_access"
 )
 
 // StateEvent é a mudança de estado de uma máquina. At é o início do candidato
@@ -350,4 +351,14 @@ func WithSeq(payload []byte, seq int64) json.RawMessage {
 	out := make([]byte, 0, len(head)+1+len(rest))
 	out = append(append(head, ','), rest...)
 	return json.RawMessage(out)
+}
+
+// RemoteAccessEvent registra o que acontece numa sessão de acesso remoto (docs/12): início, fim, logins.
+type RemoteAccessEvent struct {
+	ID        string `json:"id"`
+	Type      string `json:"type"`
+	At        string `json:"at"`
+	Action    string `json:"action"` // session_started | session_ended | ssh_login | ssh_logout | policy_blocked
+	SessionID string `json:"session_id"`
+	Detail    string `json:"detail,omitempty"`
 }

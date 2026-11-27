@@ -151,6 +151,35 @@ jobs:
           GOARCH: arm64
         run: go build -trimpath -o /dev/null ./cmd/oee-gateway
 
+  # VPN de manutenção do gateway (gateway/cmd/oee-remote-access): módulo próprio, com a biblioteca do
+  # Tailscale (tsnet) e o Go que ela pede (go.mod do módulo). Fica fora do agente de coleta.
+  go-remote-access:
+    name: go (oee-remote-access)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar o Go do módulo
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: gateway/cmd/oee-remote-access/go.mod
+          cache-dependency-path: gateway/cmd/oee-remote-access/go.sum
+
+      - name: go vet
+        working-directory: gateway/cmd/oee-remote-access
+        run: go vet ./...
+
+      - name: Compilar para arm64 (reComputer R1000)
+        working-directory: gateway/cmd/oee-remote-access
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: arm64
+        run: go build -trimpath -o /dev/null .
+
   # Ponta a ponta (apps/web/test/e2e/gateway-e2e.test.ts): compila o agente e o plc-sim com o Go,
   # sobe o simulador, a API dos gateways (handlers dos route.ts em node:http) e o banco (PGlite com
   # as migrações e a RLS), e espera o agente fazer enroll, aplicar a config e fechar um minuto.

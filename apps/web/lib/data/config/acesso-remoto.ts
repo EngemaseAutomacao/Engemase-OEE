@@ -49,6 +49,11 @@ const FIM: Record<string, string> = {
   token_revoked: "Gateway revogado",
   agent_restart: "Gateway reiniciado",
   error: "Erro na conexão",
+  approval_invalid: "O gateway recusou a aprovação (assinatura ou prazo)",
+  policy_denied: "Bloqueado pela política local do gateway",
+  vpn_failed: "O gateway não conseguiu ligar a VPN",
+  session_conflict: "Já havia outra sessão no gateway",
+  denied: "Recusado",
 }
 
 export async function dadosAcessoRemoto(slug: string) {

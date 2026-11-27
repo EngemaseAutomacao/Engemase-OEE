@@ -3,11 +3,14 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"time"
 
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/buffer"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/commands"
+	"github.com/engemaseautomacao/engemase-oee/gateway/internal/config"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/contracts"
+	"github.com/engemaseautomacao/engemase-oee/gateway/internal/remoteaccess"
 )
 
 // Comandos da nuvem no agente: o executor (internal/commands) com os handlers do MVP
@@ -54,7 +57,57 @@ func (a *agent) newExecutor() *commands.Executor {
 		ops.Level = a.level
 	}
 	commands.RegisterOps(x, ops)
+	commands.RegisterVpn(x, commands.VpnDeps{Service: a.remoteAccess(), GatewayID: a.gatewayID})
 	return x
+}
+
+// remoteAccess é o cliente do oee-remote-access (VPN de manutenção sob demanda, docs/12).
+func (a *agent) remoteAccess() *remoteaccess.Client {
+	return &remoteaccess.Client{Socket: a.opts.RemoteAccessSocket}
+}
+
+// gatewayID é o id do gateway registrado ("" sem registro: o vpn.enable é recusado).
+func (a *agent) gatewayID() string {
+	c, err := config.LoadCredentials(a.local.Paths.Credentials)
+	if err != nil || c == nil {
+		return ""
+	}
+	return c.GatewayID
+}
+
+// remoteAccessEvents leva os eventos das sessões de acesso remoto (início, fim, logins) para a fila de
+// envio. Sem o serviço instalado, não faz nada.
+func (a *agent) remoteAccessEvents(ctx context.Context) error {
+	sock := a.opts.RemoteAccessSocket
+	if sock == "" {
+		sock = remoteaccess.DefaultSocket
+	}
+	t := time.NewTicker(5 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-t.C:
+		}
+		if _, err := os.Stat(sock); err != nil {
+			continue
+		}
+		callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		evs, err := a.remoteAccess().Events(callCtx)
+		cancel()
+		if err != nil {
+			a.log.Debug("eventos do acesso remoto indisponíveis", "erro", err)
+			continue
+		}
+		for _, e := range evs {
+			at := e.At
+			a.enqueueEvent(ctx, contracts.RemoteAccessEvent{
+				ID: a.ids.New(at), Type: contracts.EventRemoteAccess, At: contracts.FormatTime(at),
+				Action: e.Action, SessionID: e.SessionID, Detail: e.Detail,
+			}, at)
+		}
+	}
 }
 
 // cloudNow é o relógio local corrigido pela diferença para o server_time: é com ele

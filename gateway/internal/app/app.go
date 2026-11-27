@@ -33,6 +33,8 @@ import (
 type Options struct {
 	// Local é a config local já carregada.
 	Local *config.Local
+	// RemoteAccessSocket é o socket do oee-remote-access ("" = padrão).
+	RemoteAccessSocket string
 	// Logger (nil = JSON em stderr no nível da config local).
 	Logger *slog.Logger
 	// LogLevel é o nível ajustável do Logger (NewLeveledLogger), para o comando
@@ -221,6 +223,7 @@ func Run(ctx context.Context, o Options) error {
 	start("credencial", a.watchCredentials)
 	start("config", a.configLoop)
 	start("watchdog", a.watchdog)
+	start("acesso remoto", a.remoteAccessEvents)
 	if o.UIListener != nil {
 		wg.Add(1)
 		go func() {
