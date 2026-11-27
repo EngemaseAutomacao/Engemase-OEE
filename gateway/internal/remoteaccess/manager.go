@@ -313,13 +313,15 @@ func (m *Manager) accept(s *session) {
 	}
 }
 
-type countWriter struct {
-	w io.Writer
+// countReader conta o que foi LIDO de um lado antes de repassar ao outro: assim o resumo da sessão
+// nunca fica atrás do que o outro lado já recebeu (contar depois do Write deixava uma janela).
+type countReader struct {
+	r io.Reader
 	n *atomic.Int64
 }
 
-func (c countWriter) Write(p []byte) (int, error) {
-	n, err := c.w.Write(p)
+func (c countReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
 	c.n.Add(int64(n))
 	return n, err
 }
@@ -345,8 +347,8 @@ func (m *Manager) pipe(s *session, c net.Conn) {
 	}
 	defer local.Close()
 	done := make(chan struct{}, 2)
-	go func() { _, _ = io.Copy(countWriter{local, &s.bytesIn}, c); done <- struct{}{} }()
-	go func() { _, _ = io.Copy(countWriter{c, &s.bytesOut}, local); done <- struct{}{} }()
+	go func() { _, _ = io.Copy(local, countReader{c, &s.bytesIn}); done <- struct{}{} }()
+	go func() { _, _ = io.Copy(c, countReader{local, &s.bytesOut}); done <- struct{}{} }()
 	<-done
 }
 

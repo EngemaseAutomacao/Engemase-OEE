@@ -17,7 +17,8 @@
 #   @IF_IT@          interface IT (ETH1), resolvida pelo MAC. Ex.: eth1
 #   @UID_OEE@        UID numérico do usuário oee (agente)
 #   @UIDS_IT_HTTPS@  UIDs com saída TCP 443 na IT, separados por vírgula:
-#                    oee e _apt (atualizações de segurança); oee-ra na F2
+#                    oee, _apt (atualizações de segurança) e oee-ra (VPN de
+#                    manutenção, se existir: só TCP 443, pelo relay do Tailscale)
 #
 # Conjuntos: nascem vazios (exceto 169.254.0.0/16 em ot_nets) e quem renderiza
 # os preenche com "add element" no fim do arquivo ou a quente:

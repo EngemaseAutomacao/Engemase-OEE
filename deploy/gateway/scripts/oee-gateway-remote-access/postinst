@@ -1,0 +1,90 @@
+#!/bin/sh
+# postinst do pacote oee-gateway-remote-access (VPN sob demanda, docs/12).
+# Idempotente; respeita DPKG_ROOT e o chroot de build (sem systemd rodando).
+#
+# Só habilita e inicia o SOCKET: o serviço sobe sozinho no primeiro pedido do
+# agente e sai depois de 10 min sem sessão. NUNCA reinicia o serviço numa
+# atualização: isso derrubaria uma sessão de manutenção em andamento. O binário
+# novo vale na próxima ativação (o serviço sai sozinho quando fica ocioso).
+set -e
+set -f
+
+ROOT="${DPKG_ROOT:-}"
+UNIT=oee-remote-access.socket
+RENDERED=/etc/oee-gateway/nftables.nft
+
+log() { echo "oee-gateway-remote-access: $*"; }
+warn() { echo "oee-gateway-remote-access: AVISO: $*" >&2; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+systemd_running() {
+	[ -z "$ROOT" ] && [ -d /run/systemd/system ]
+}
+
+create_user() {
+	if [ -n "$ROOT" ]; then
+		systemd-sysusers --root="$ROOT" oee-remote-access.conf
+		systemd-tmpfiles --root="$ROOT" --create oee-remote-access.conf
+	else
+		systemd-sysusers oee-remote-access.conf
+		systemd-tmpfiles --create oee-remote-access.conf
+	fi
+}
+
+enable_socket() {
+	if [ -n "$ROOT" ]; then
+		if [ -z "$PREV_VERSION" ]; then
+			systemctl --root="$ROOT" enable "$UNIT" >/dev/null 2>&1 ||
+				warn "não foi possível habilitar $UNIT em $ROOT."
+		fi
+		return 0
+	fi
+	if have deb-systemd-helper; then
+		if deb-systemd-helper --quiet was-enabled "$UNIT"; then
+			deb-systemd-helper enable "$UNIT" >/dev/null || true
+		else
+			deb-systemd-helper update-state "$UNIT" >/dev/null || true
+		fi
+	elif [ -z "$PREV_VERSION" ]; then
+		systemctl enable "$UNIT" >/dev/null || true
+	fi
+}
+
+# O firewall renderizado (install.sh --firewall ou oee-helper) lista os UIDs com
+# saída 443. Se ele já existe sem o oee-ra, a VPN não sai: avisa para renderizar
+# de novo (não mexe no firewall daqui).
+check_firewall() {
+	[ -f "$RENDERED" ] || return 0
+	uid=$(id -u oee-ra 2>/dev/null) || return 0
+	uids=$(sed -n 's/^define UIDS_IT_HTTPS = {\(.*\)}.*/\1/p' "$RENDERED" | tr -d ' ' | tr ',' '\n')
+	if ! printf '%s\n' "$uids" | grep -qx "$uid"; then
+		warn "o firewall em $RENDERED não libera a saída 443 do oee-ra (UID $uid): renderize de novo (deploy/gateway/install.sh --firewall) antes de testar a VPN."
+	fi
+}
+
+PREV_VERSION=""
+case "$1" in
+	configure | abort-upgrade | abort-remove | abort-deconfigure)
+		PREV_VERSION="${2:-}"
+		create_user
+		if systemd_running; then
+			systemctl daemon-reload
+		fi
+		enable_socket
+		if systemd_running; then
+			if systemctl is-enabled --quiet "$UNIT" 2>/dev/null; then
+				systemctl --no-block start "$UNIT" || warn "falha ao iniciar $UNIT."
+			fi
+			if [ -n "$PREV_VERSION" ] && systemctl is-active --quiet oee-remote-access.service; then
+				log "o serviço segue com a versão anterior até ficar ocioso (não derruba sessão em andamento)."
+			fi
+			check_firewall
+		fi
+		;;
+	*)
+		echo "postinst chamado com argumento desconhecido: '$1'" >&2
+		exit 1
+		;;
+esac
+
+exit 0

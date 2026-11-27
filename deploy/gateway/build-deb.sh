@@ -6,14 +6,17 @@
 #   deploy/gateway/build-deb.sh --arch amd64 --version 0.1.0-rc.1 --out /tmp/debs
 #
 # Opções:
-#   --build          compila antes o binário do pacote (gateway/cmd/oee-gateway
-#                    e/ou gateway/cmd/oee-updater) em <dist>/<arq>/:
-#                    CGO_ENABLED=0, -trimpath, GOTOOLCHAIN=local e a
-#                    versão/commit/data no buildinfo
-#   --package NOME   oee-gateway (padrão) | oee-gateway-updater | all
+#   --build          compila antes o binário do pacote (gateway/cmd/oee-gateway,
+#                    gateway/cmd/oee-updater e/ou gateway/cmd/oee-remote-access)
+#                    em <dist>/<arq>/: CGO_ENABLED=0, -trimpath, GOTOOLCHAIN=local
+#                    (o oee-remote-access, módulo próprio, usa o Go do go.mod
+#                    dele) e a versão/commit/data no buildinfo
+#   --package NOME   oee-gateway (padrão) | oee-gateway-updater |
+#                    oee-gateway-remote-access | all
 #   --arch ARQ       arm64 | amd64 (padrão: a da máquina)
 #   --version VER    versão semver (padrão: 0.0.0-dev)
-#   --dist DIR       diretório dos binários <DIR>/<arq>/oee-gateway e oee-updater
+#   --dist DIR       diretório dos binários <DIR>/<arq>/oee-gateway, oee-updater
+#                    e oee-remote-access
 #                    (padrão: gateway/dist, relativo à raiz do repositório)
 #   --out DIR        onde gravar o .deb (padrão: o --dist)
 #   --nfpm CMD       comando do nfpm (padrão: "nfpm" no PATH; senão "go run" da
@@ -26,7 +29,7 @@ set -eu
 
 NFPM_VERSION=v2.43.1 # a última que compila com Go 1.24
 
-usage() { sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; }
 die() {
 	echo "build-deb: ERRO: $*" >&2
 	exit 1
@@ -65,7 +68,7 @@ if [ -z "$arch" ]; then
 	esac
 fi
 case "$arch" in arm64 | amd64) ;; *) die "--arch deve ser arm64 ou amd64" ;; esac
-case "$package" in oee-gateway | oee-gateway-updater | all) ;; *) die "--package inválido: $package" ;; esac
+case "$package" in oee-gateway | oee-gateway-updater | oee-gateway-remote-access | all) ;; *) die "--package inválido: $package" ;; esac
 # semver simples (o nfpm valida de novo com version_schema: semver)
 echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.+-]+)?$' ||
 	die "--version não é semver: $version"
@@ -104,10 +107,16 @@ build_bin() {
 	date=$(date -u -d "@$SOURCE_DATE_EPOCH" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
 	mkdir -p "$dist_abs/$arch"
 	echo "build-deb: compilando $bin $version ($arch, commit $commit)"
-	(cd "$repo/gateway" && GOTOOLCHAIN=local CGO_ENABLED=0 GOOS=linux GOARCH=$arch \
+	# O oee-remote-access é um módulo próprio (biblioteca do Tailscale, Go mais
+	# novo): compila no diretório dele, com o Go fixado no go.mod dele.
+	srcdir=$repo/gateway target=./cmd/$bin toolchain=local
+	if [ "$bin" = oee-remote-access ]; then
+		srcdir=$repo/gateway/cmd/oee-remote-access target=. toolchain=auto
+	fi
+	(cd "$srcdir" && GOTOOLCHAIN=$toolchain CGO_ENABLED=0 GOOS=linux GOARCH=$arch \
 		go build -trimpath \
 		-ldflags "-s -w -X $pkg/internal/buildinfo.Version=$version -X $pkg/internal/buildinfo.Commit=$commit -X $pkg/internal/buildinfo.Date=$date" \
-		-o "$dist_abs/$arch/$bin" "./cmd/$bin")
+		-o "$dist_abs/$arch/$bin" "$target")
 }
 
 build_one() {
@@ -115,6 +124,7 @@ build_one() {
 	case "$pkg" in
 		oee-gateway) cfg=deploy/gateway/nfpm.yaml bin=oee-gateway ;;
 		oee-gateway-updater) cfg=deploy/gateway/nfpm-updater.yaml bin=oee-updater ;;
+		oee-gateway-remote-access) cfg=deploy/gateway/nfpm-remote-access.yaml bin=oee-remote-access ;;
 	esac
 	if [ ! -f "$dist_abs/$arch/$bin" ]; then
 		die "binário ausente: $dist_abs/$arch/$bin (use --build ou gere com o build do gateway; ver README)"
@@ -129,13 +139,15 @@ if [ "$build" = yes ]; then
 	case "$package" in
 		oee-gateway) build_bin oee-gateway ;;
 		oee-gateway-updater) build_bin oee-updater ;;
-		all) build_bin oee-gateway && build_bin oee-updater ;;
+		oee-gateway-remote-access) build_bin oee-remote-access ;;
+		all) build_bin oee-gateway && build_bin oee-updater && build_bin oee-remote-access ;;
 	esac
 fi
 
 if [ "$package" = all ]; then
 	build_one oee-gateway
 	build_one oee-gateway-updater
+	build_one oee-gateway-remote-access
 else
 	build_one "$package"
 fi

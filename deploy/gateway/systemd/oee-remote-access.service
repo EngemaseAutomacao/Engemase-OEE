@@ -1,6 +1,6 @@
-# FASE 1 — CÓDIGO PRONTO, NÃO EMPACOTADO AINDA: entra no nfpm.yaml (e no
-# postinst/prerm/postrm/install.sh) depois da conferência na bancada com uma sessão
-# de VPN de verdade (docs/12). Ver deploy/gateway/README.md §1.
+# Pacote oee-gateway-remote-access (nfpm-remote-access.yaml), SEPARADO do agente:
+# até a conferência na bancada com uma sessão de verdade (docs/12), só é instalado
+# à mão na bancada; não entra na imagem nem no install.sh. Ver README §1.
 #
 # VPN de manutenção sob demanda (docs/12). Ativado pelo socket quando o agente
 # recebe um vpn.enable; sai sozinho depois de 10 min sem sessão nem pedidos.
@@ -9,12 +9,12 @@
 # espaço de usuário: não mexe em rotas nem interfaces do sistema) e escuta SÓ a
 # porta 22 na VPN, repassando ao OpenSSH local (127.0.0.1:22).
 #
-# Usuário próprio e sem privilégio (oee-ra, já criado na imagem). O estado da VPN fica só na memória e numa
-# pasta temporária (RuntimeDirectory, apagada ao parar): depois de reiniciar,
+# Usuário próprio e sem privilégio (oee-ra: sysusers do pacote e da imagem). O estado da
+# VPN fica só na memória e numa pasta temporária (RuntimeDirectory, apagada ao parar): depois de reiniciar,
 # a VPN NÃO religa.
 [Unit]
 Description=Engemase OEE - acesso remoto de manutenção (VPN sob demanda)
-Documentation=file:/usr/share/doc/oee-gateway/README.md
+Documentation=file:/usr/share/doc/oee-gateway-remote-access/README.md
 Requires=oee-remote-access.socket
 After=oee-remote-access.socket network-online.target
 
@@ -24,6 +24,9 @@ ExecStart=/usr/lib/oee-gateway/oee-remote-access --agent-group oee
 User=oee-ra
 Group=oee-ra
 RuntimeDirectory=oee-remote-access
+# Proxy corporativo (HTTPS_PROXY), o mesmo do agente: o Tailscale o usa para a
+# coordenação e o relay. Lido pelo systemd (root); o oee-ra não lê o arquivo.
+EnvironmentFile=-/etc/oee-gateway/proxy.env
 RuntimeDirectoryMode=0700
 UMask=0077
 Restart=on-failure
@@ -50,7 +53,8 @@ ProtectControlGroups=yes
 ProtectClock=yes
 ProtectHostname=yes
 ProtectProc=invisible
-# Saída para o Tailscale (443 TCP e UDP), socket do agente e acompanhamento da rede (netlink).
+# Saída para o Tailscale (o firewall libera só TCP 443 ao oee-ra: coordenação e relay
+# por HTTPS), socket do agente e acompanhamento da rede (netlink).
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 RestrictNamespaces=yes
 RestrictRealtime=yes

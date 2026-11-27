@@ -1,0 +1,86 @@
+# Pacote oee-gateway-remote-access (VPN de manutenção sob demanda) — docs/12.
+#
+# Separado do oee-gateway DE PROPÓSITO:
+#   - a biblioteca do Tailscale (tsnet) fica fora do agente de coleta: falha ou
+#     atualização da VPN não derruba a coleta de OEE;
+#   - até a conferência na bancada com uma sessão de verdade, ele é instalado
+#     só à mão na bancada (não entra na imagem nem no install.sh). Sem ele, o
+#     agente responde vpn.enable com "serviço de acesso remoto indisponível".
+#
+#   deploy/gateway/build-deb.sh --build --package oee-gateway-remote-access --arch arm64 --version 0.1.0
+#
+# ou: OEE_VERSION=0.1.0 OEE_ARCH=arm64 OEE_DIST=gateway/dist \
+#       nfpm pkg --config deploy/gateway/nfpm-remote-access.yaml --packager deb --target gateway/dist/
+#
+# Binário: $OEE_DIST/$OEE_ARCH/oee-remote-access (gateway/cmd/oee-remote-access,
+# módulo Go próprio). As chaves públicas da APROVAÇÃO assinada pela plataforma
+# vêm de deploy/gateway/vpn-keys/vpn-approval-*.pub e vão em
+# /usr/share/oee-remote-access/keys. NUNCA de deploy/gateway/keys (essa é a pasta
+# de confiança do OTA, que aceita todo *.pub dela) e nunca o contrário: o
+# validate.sh confere que um pacote não leva a chave do outro.
+
+name: oee-gateway-remote-access
+arch: ${OEE_ARCH}
+platform: linux
+version: ${OEE_VERSION}
+version_schema: semver
+section: admin
+priority: optional
+# A DEFINIR: e-mail de contato do mantenedor do pacote.
+maintainer: "Engemase Automação <a-definir@engemase.invalid>"
+vendor: Engemase Automação
+homepage: https://engemase-oee.vercel.app
+license: Proprietary
+description: |-
+  Acesso remoto de manutenção (VPN sob demanda) do gateway OEE da Engemase
+  Liga a VPN só com uma aprovação do admin do cliente assinada pela plataforma
+  e respeitando a política local do gateway. Abre apenas a porta 22 na VPN,
+  repassada ao SSH local; a rede da fábrica e os CLPs ficam de fora. Desliga no
+  prazo, por inatividade ou a pedido, e não religa depois de reiniciar.
+
+# O grupo oee (dono do socket) e /etc/oee-gateway vêm do agente.
+depends:
+  - systemd (>= 252)
+  - ca-certificates
+  - oee-gateway
+
+deb:
+  compression: xz
+
+contents:
+  - src: ${OEE_DIST}/${OEE_ARCH}/oee-remote-access
+    dst: /usr/lib/oee-gateway/oee-remote-access
+    expand: true
+    file_info:
+      mode: 0755
+  - src: deploy/gateway/systemd/oee-remote-access.socket
+    dst: /usr/lib/systemd/system/oee-remote-access.socket
+    file_info:
+      mode: 0644
+  - src: deploy/gateway/systemd/oee-remote-access.service
+    dst: /usr/lib/systemd/system/oee-remote-access.service
+    file_info:
+      mode: 0644
+  - src: deploy/gateway/sysusers.d/oee-remote-access.conf
+    dst: /usr/lib/sysusers.d/oee-remote-access.conf
+    file_info:
+      mode: 0644
+  - src: deploy/gateway/tmpfiles.d/oee-remote-access.conf
+    dst: /usr/lib/tmpfiles.d/oee-remote-access.conf
+    file_info:
+      mode: 0644
+  # Só as chaves da aprovação (o programa lê vpn-approval-*.pub). Sem nenhuma,
+  # todo vpn.enable é recusado (falha fechada).
+  - src: deploy/gateway/vpn-keys/vpn-approval-*.pub
+    dst: /usr/share/oee-remote-access/keys/
+    file_info:
+      mode: 0644
+  - src: deploy/gateway/README.md
+    dst: /usr/share/doc/oee-gateway-remote-access/README.md
+    file_info:
+      mode: 0644
+
+scripts:
+  postinstall: deploy/gateway/scripts/oee-gateway-remote-access/postinst
+  preremove: deploy/gateway/scripts/oee-gateway-remote-access/prerm
+  postremove: deploy/gateway/scripts/oee-gateway-remote-access/postrm

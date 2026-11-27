@@ -243,6 +243,8 @@ render_firewall() {
 	uid_oee=$(id -u oee)
 	uids=$uid_oee
 	if uid_apt=$(id -u _apt 2>/dev/null); then uids="$uids, $uid_apt"; fi
+	# VPN de manutenção (pacote oee-gateway-remote-access): só TCP 443 (relay do Tailscale).
+	if uid_ra=$(id -u oee-ra 2>/dev/null); then uids="$uids, $uid_ra"; fi
 	# Sub-redes da OT (rotas de enlace), sem 169.254/16 (já está no modelo).
 	nets=$(ip -4 route show dev "$ot_iface" scope link 2>/dev/null |
 		awk '$1 ~ /\// && $1 !~ /^169\.254\./ { print $1 }' | sort -u | paste -sd, -)

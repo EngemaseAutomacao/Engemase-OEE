@@ -1,12 +1,10 @@
-# FASE 1 — CÓDIGO PRONTO, NÃO EMPACOTADO AINDA: entra no nfpm.yaml (e no
-# postinst/prerm/postrm/install.sh) depois da conferência na bancada com uma sessão
-# de VPN de verdade (docs/12). Ver deploy/gateway/README.md §1.
+# Pacote oee-gateway-remote-access (nfpm-remote-access.yaml), separado do agente.
 #
 # Socket do acesso remoto de manutenção (VPN sob demanda). Só o agente (grupo oee)
 # e o root conectam; o oee-remote-access ainda confere o chamador por SO_PEERCRED.
 [Unit]
 Description=Engemase OEE - socket do acesso remoto (VPN sob demanda)
-Documentation=file:/usr/share/doc/oee-gateway/README.md
+Documentation=file:/usr/share/doc/oee-gateway-remote-access/README.md
 
 [Socket]
 ListenStream=/run/oee-gateway/remote-access.sock

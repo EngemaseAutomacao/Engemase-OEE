@@ -21,10 +21,12 @@
 #      (root + unshare + overlayfs);
 #   4. nftables: modelo renderizado, firewall de fábrica da imagem e os dois
 #      juntos com nft -c; carga real num netns descartável (unshare -n);
-#   5. Go: compila o agente (amd64 e arm64, GOTOOLCHAIN=local) e confere o
+#   5. Go: compila o agente (amd64 e arm64, GOTOOLCHAIN=local) e o
+#      oee-remote-access (módulo próprio, Go do go.mod dele) e confere o
 #      etc/gateway.yaml com o parser real ("oee-gateway diag --config");
 #   6. nfpm: gera os .deb (amd64 e arm64) e confere campos, arquivos, modos,
-#      conffiles e que nenhuma unit da Fase 1 entrou;
+#      conffiles, que nenhuma unit da Fase 1 entrou e que as chaves do OTA e da
+#      aprovação da VPN não se misturam;
 #   7. systemd-analyze verify e security --offline nas units do pacote;
 #   8. scripts do pacote com DPKG_ROOT numa raiz temporária: preinst,
 #      postinst (2x, idempotência), prerm e postrm purge.
@@ -179,8 +181,9 @@ mount --make-rprivate /
 cp /etc/passwd "$T/passwd"
 getent passwd oee >/dev/null || echo 'oee:x:1501:1501::/var/lib/oee-gateway:/usr/sbin/nologin' >>"$T/passwd"
 getent passwd _apt >/dev/null || echo '_apt:x:42:65534::/nonexistent:/usr/sbin/nologin' >>"$T/passwd"
+getent passwd oee-ra >/dev/null || echo 'oee-ra:x:1503:1503::/nonexistent:/usr/sbin/nologin' >>"$T/passwd"
 mount --bind "$T/passwd" /etc/passwd
-sed -e 's|@IF_OT@|eth0|g' -e 's|@IF_IT@|eth1|g' -e 's|@UID_OEE@|1501|g' -e 's|@UIDS_IT_HTTPS@|1501, 42|g' "$TPL" >"$T/nftables.nft"
+sed -e 's|@IF_OT@|eth0|g' -e 's|@IF_IT@|eth1|g' -e 's|@UID_OEE@|1501|g' -e 's|@UIDS_IT_HTTPS@|1501, 42, 1503|g' "$TPL" >"$T/nftables.nft"
 cat >>"$T/nftables.nft" <<'X'
 add element inet oee_gateway ot_nets { 192.168.10.0/24 }
 add element inet oee_gateway ot_targets { 192.168.10.21 . 502, 192.168.10.23 . 502 }
@@ -238,6 +241,13 @@ if have go; then
 				ko "go build linux/$arch ./cmd/$bin: $(tail -n5 "$tmp/go.err")"; built=no
 			fi
 		done
+		# VPN de manutenção: módulo próprio (tsnet), com o Go fixado no go.mod dele.
+		if (cd "$gwsrc/cmd/oee-remote-access" && GOTOOLCHAIN=auto CGO_ENABLED=0 GOOS=linux GOARCH=$arch \
+			go build -trimpath -ldflags "-s -w" -o "$dist/$arch/oee-remote-access" .) 2>"$tmp/go.err"; then
+			ok "go build linux/$arch ./cmd/oee-remote-access (módulo próprio)"
+		else
+			ko "go build linux/$arch ./cmd/oee-remote-access: $(tail -n5 "$tmp/go.err")"; built=no
+		fi
 	done
 	if [[ $(uname -m) == x86_64 && -x $dist/amd64/oee-gateway ]]; then
 		out=$("$dist/amd64/oee-gateway" diag --config "$here/etc/gateway.yaml" 2>&1)
@@ -297,6 +307,29 @@ if [[ $built == yes ]] && { have nfpm || [[ -n ${NFPM:-} ]]; }; then
 		else
 			ko "oee-gateway-updater_*_amd64.deb não gerado"
 		fi
+		# Pacote da VPN de manutenção (docs/12): binário, units, usuário e a chave da aprovação.
+		rdeb=$(find "$debs" -name 'oee-gateway-remote-access_*_amd64.deb' | head -n1)
+		if [[ -n $rdeb ]]; then
+			[[ $(dpkg-deb -f "$rdeb" Package) == oee-gateway-remote-access ]] && ok "Package: oee-gateway-remote-access" || ko "Package da VPN"
+			[[ $(dpkg-deb -f "$rdeb" Depends) == *oee-gateway* ]] && ok "VPN depende do oee-gateway" || ko "VPN Depends: $(dpkg-deb -f "$rdeb" Depends)"
+			rlist=$(dpkg-deb -c "$rdeb")
+			for p in ./usr/lib/oee-gateway/oee-remote-access ./usr/lib/systemd/system/oee-remote-access.socket \
+				./usr/lib/systemd/system/oee-remote-access.service ./usr/lib/sysusers.d/oee-remote-access.conf \
+				./usr/lib/tmpfiles.d/oee-remote-access.conf; do
+				grep -qF -- " $p" <<<"$rlist" && ok "VPN contém ${p#.}" || ko "VPN sem ${p#.}"
+			done
+			grep -qE '^-rwxr-xr-x root/root .* ./usr/lib/oee-gateway/oee-remote-access$' <<<"$rlist" && ok "oee-remote-access 0755" || ko "oee-remote-access sem modo 0755"
+			grep -qE ' ./usr/share/oee-remote-access/keys/vpn-approval-[0-9a-f]{16}\.pub$' <<<"$rlist" && ok "VPN leva a chave da aprovação" || ko "VPN sem chave da aprovação (todo vpn.enable seria recusado)"
+			[[ -z $(grep -E ' ./usr/share/oee-remote-access/keys/' <<<"$rlist" | grep -vE '/keys/(vpn-approval-[0-9a-f]{16}\.pub)?$') ]] && ok "pasta de chaves da VPN só com vpn-approval-*.pub" || ko "arquivo estranho nas chaves da VPN"
+		else
+			ko "oee-gateway-remote-access_*_amd64.deb não gerado"
+		fi
+		# Separação das chaves: a pasta do OTA aceita todo *.pub dela (docs/16).
+		if [[ -n $udeb ]]; then
+			grep -q 'vpn-approval' <<<"$(dpkg-deb -c "$udeb")" && ko "chave da VPN no pacote do OTA (o updater confiaria nela)" || ok "nenhuma chave da VPN no pacote do OTA"
+		fi
+		[[ -z $(find "$here/keys" -name 'vpn-approval-*') ]] && ok "deploy/gateway/keys sem chave da VPN" || ko "chave da VPN em deploy/gateway/keys (pasta do OTA)"
+		[[ -n $rdeb ]] && { grep -q 'oee-gateway-updater' <<<"$rlist" && ko "pacote da VPN mexe no OTA" || ok "pacote da VPN não toca no OTA"; }
 		darm=$(find "$debs" -name 'oee-gateway_*_arm64.deb' | head -n1)
 		if [[ -n $darm ]]; then
 			mkdir -p "$tmp/arm64x"
@@ -315,6 +348,8 @@ deb=$(find "$debs" -name 'oee-gateway_*_amd64.deb' 2>/dev/null | head -n1)
 if [[ -n $deb ]] && is_root && have unshare && have systemd-analyze; then
 	r=$tmp/sa-root; mkdir -p "$r" "$tmp/sa-ovl/up" "$tmp/sa-ovl/work"
 	dpkg-deb -x "$deb" "$r"
+	rdeb=$(find "$debs" -name 'oee-gateway-remote-access_*_amd64.deb' 2>/dev/null | head -n1)
+	[[ -n $rdeb ]] && dpkg-deb -x "$rdeb" "$r"
 	cat >"$tmp/sa.sh" <<'EOF'
 set -u
 R=$1 W=$2
@@ -325,6 +360,16 @@ if systemd-analyze verify --man=no oee-gateway.service oee-gateway-datadir.servi
 	echo "  [ok]     systemd-analyze verify (agente, datadir, bind de /data/oee)"
 else
 	echo "  [FALHA]  systemd-analyze verify"; exit 1
+fi
+if [ -f oee-remote-access.service ]; then
+	if systemd-analyze verify --man=no oee-remote-access.socket oee-remote-access.service; then
+		echo "  [ok]     systemd-analyze verify (VPN: socket e serviço)"
+	else
+		echo "  [FALHA]  systemd-analyze verify da VPN"; exit 1
+	fi
+	vscore=$(systemd-analyze security --offline=yes oee-remote-access.service 2>/dev/null | awk '/Overall exposure level/ { print $(NF-2) }')
+	echo "  [info]   exposição do oee-remote-access.service: ${vscore:-?} (meta <= 2,0)"
+	awk -v s="${vscore:-9}" 'BEGIN { exit !(s <= 2.0) }' && echo "  [ok]     exposição da VPN <= 2,0" || { echo "  [FALHA]  exposição da VPN ${vscore:-?} > 2,0"; exit 1; }
 fi
 score=$(systemd-analyze security --offline=yes oee-gateway.service 2>/dev/null | awk '/Overall exposure level/ { print $(NF-2) }')
 echo "  [info]   exposição do oee-gateway.service: ${score:-?} (meta <= 2,0)"
@@ -359,6 +404,22 @@ if [[ -n $deb ]] && is_root && have systemd-sysusers && have systemd-tmpfiles &&
 	run_ms postrm purge && ok "postrm purge" || { ko "postrm purge"; cat "$tmp/ms.out"; }
 	[[ -z $(find "$root/etc/systemd/system" -type l 2>/dev/null) ]] && ok "purge removeu os links de habilitação" || ko "links sobraram no purge"
 	[[ -d $root/var/lib/oee-gateway ]] && ok "purge preservou /var/lib/oee-gateway (buffer)" || ko "purge apagou o estado"
+	# Pacote da VPN na mesma raiz (o grupo oee já existe).
+	rdeb=$(find "$debs" -name 'oee-gateway-remote-access_*_amd64.deb' 2>/dev/null | head -n1)
+	if [[ -n $rdeb ]]; then
+		rctrl=$tmp/rctrl; mkdir -p "$rctrl"
+		dpkg-deb -x "$rdeb" "$root"; dpkg-deb -e "$rdeb" "$rctrl"
+		run_ra() { DPKG_ROOT=$root "$rctrl/$1" "${@:2}" >"$tmp/ms.out" 2>&1; }
+		run_ra postinst configure && ok "VPN: postinst configure" || { ko "VPN: postinst configure"; cat "$tmp/ms.out"; }
+		run_ra postinst configure 0.0.1 && ok "VPN: postinst de novo (idempotente)" || { ko "VPN: postinst 2x"; cat "$tmp/ms.out"; }
+		grep -q '^oee-ra:.*:/usr/sbin/nologin$' "$root/etc/passwd" && ok "VPN: usuário oee-ra sem login" || ko "VPN: usuário oee-ra ausente"
+		grep -qE '^oee:[^:]*:[0-9]+:.*oee-ra' "$root/etc/group" && ko "VPN: oee-ra no grupo do agente" || ok "VPN: oee-ra fora do grupo do agente"
+		[[ -L $root/etc/systemd/system/sockets.target.wants/oee-remote-access.socket ]] && ok "VPN: socket habilitado" || ko "VPN: socket não habilitado"
+		[[ -z $(find "$root/etc/systemd/system" -name 'oee-remote-access.service' 2>/dev/null) ]] && ok "VPN: serviço não habilitado (só pelo socket)" || ko "VPN: serviço habilitado direto"
+		run_ra prerm remove && ok "VPN: prerm remove" || { ko "VPN: prerm remove"; cat "$tmp/ms.out"; }
+		run_ra postrm purge && ok "VPN: postrm purge" || { ko "VPN: postrm purge"; cat "$tmp/ms.out"; }
+		[[ -z $(find "$root/etc/systemd/system" -name 'oee-remote-access*' 2>/dev/null) ]] && ok "VPN: purge removeu a habilitação" || ko "VPN: links sobraram no purge"
+	fi
 else
 	skip "scripts do pacote (precisa do .deb, root, systemd-sysusers, systemd-tmpfiles e systemctl)"
 fi

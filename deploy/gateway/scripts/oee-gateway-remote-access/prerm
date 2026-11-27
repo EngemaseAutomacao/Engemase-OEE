@@ -1,0 +1,24 @@
+#!/bin/sh
+# prerm do pacote oee-gateway-remote-access. Idempotente; respeita DPKG_ROOT.
+# Na remoção, para o serviço (encerra a sessão, se houver) e o socket. Na
+# atualização não para nada: a sessão em andamento continua.
+set -e
+set -f
+
+ROOT="${DPKG_ROOT:-}"
+
+case "$1" in
+	remove | deconfigure)
+		if [ -z "$ROOT" ] && [ -d /run/systemd/system ]; then
+			systemctl stop oee-remote-access.socket oee-remote-access.service >/dev/null 2>&1 || true
+		fi
+		;;
+	upgrade | failed-upgrade)
+		;;
+	*)
+		echo "prerm chamado com argumento desconhecido: '$1'" >&2
+		exit 1
+		;;
+esac
+
+exit 0

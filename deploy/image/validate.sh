@@ -95,6 +95,9 @@ for u in oee oee-ui; do
 	b=$(awk -v u="$u" '$1 == "u" && $2 == u { $1 = $2 = $3 = ""; print }' "$gw/sysusers.d/oee-gateway.conf" | tr -s ' ')
 	expect "usuário $u igual na imagem e no pacote" "$b" "$a"
 done
+a=$(awk '$1 == "u" && $2 == "oee-ra" { $1 = $2 = $3 = ""; print }' "$img_sysusers" | tr -s ' ')
+b=$(awk '$1 == "u" && $2 == "oee-ra" { $1 = $2 = $3 = ""; print }' "$gw/sysusers.d/oee-remote-access.conf" | tr -s ' ')
+expect "usuário oee-ra igual na imagem e no pacote da VPN" "$b" "$a"
 grep -q '^RuntimeWatchdogSec=10s' "$gw/system.conf.d/50-oee-watchdog.conf" &&
 	grep -q '^RuntimeWatchdogSec=10s' "$here/layer/egw-base.d/customize.overlay/etc/systemd/system.conf.d/40-egw-watchdog.conf" &&
 	ok "watchdog do SoC 10 s nos dois (docs/16 §5)" || ko "watchdog do SoC divergente"
