@@ -1,0 +1,124 @@
+/**
+ * Acesso remoto (lib/server/remote/access.ts): pedido só da equipe Engemase; aprovar/recusar só o admin do
+ * cliente (nunca quem pediu); política (desativado recusa pedidos e os em aberto; duração máxima); encerrar
+ * gera `vpn.disable` quando a VPN está ligada; RLS por cliente; eventos e auditoria.
+ */
+import * as s from "@engemase/db"
+import { and, eq } from "drizzle-orm"
+import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { AccessDeniedError, type TenantContext } from "@/lib/server/access/context"
+import { loadTenantContext } from "@/lib/server/access/load"
+import { aprovarAcesso, encerrarAcesso, lerPolitica, pedirAcesso, recusarAcesso, salvarPolitica } from "@/lib/server/remote/access"
+import { type AuthHarness, createAuthHarness } from "../auth/support"
+import { createPerson, type SeededClient, type SeededPerson, seedClient } from "./support"
+
+describe("acesso remoto: pedido, decisão e política", () => {
+  let h: AuthHarness
+  let a: SeededClient
+  let b: SeededClient
+  let eng: TenantContext
+  let engB: TenantContext
+  let admin: TenantContext
+  let supervisor: TenantContext
+  let gw: string
+  let gw2: string
+  let gwB: string
+
+  async function ctxOf(slug: string, person: SeededPerson): Promise<TenantContext> {
+    const d = await loadTenantContext(h.t.db, { slug, user: person.user, sessionId: person.sessionId, now: new Date() })
+    if (!d.ok) throw new Error(d.reason)
+    return d.context
+  }
+  async function gateway(c: SeededClient, name: string): Promise<string> {
+    const [g] = await h.t.db.insert(s.gateway).values({ organizationId: c.organizationId, unitId: c.unit1, name, status: "pending_enrollment" }).returning()
+    return g?.id ?? ""
+  }
+  const pedido = (gatewayId: string, extra: Record<string, unknown> = {}) => ({ gatewayId, reason: "Ajustar o barramento RS-485", ticket: "#1042", durationMin: 60, ...extra })
+
+  beforeAll(async () => {
+    h = await createAuthHarness()
+    a = await seedClient(h.t.db, "alfa-remoto")
+    b = await seedClient(h.t.db, "beta-remoto")
+    const sup = await createPerson(h.t.db, "super-remoto", { role: "super_admin", twoFactor: true })
+    eng = await ctxOf(a.slug, sup)
+    engB = await ctxOf(b.slug, sup)
+    admin = await ctxOf(a.slug, a.admin)
+    supervisor = await ctxOf(a.slug, a.supervisorUnit1)
+    gw = await gateway(a, "GW Injeção")
+    gw2 = await gateway(a, "GW Sopro")
+    gwB = await gateway(b, "GW Beta")
+  }, 60_000)
+
+  afterAll(async () => {
+    await h.t.client.close()
+  })
+
+  it("pedido da Engemase → aprovação do admin (reduz a duração), com eventos e auditoria", async () => {
+    const r = await pedirAcesso(h.t.db, eng, pedido(gw, { durationMin: 120 }))
+    expect(r.ok).toBe(true)
+    const id = r.ok ? r.dados.id : ""
+    // Um pedido vivo por gateway e técnico.
+    expect(await pedirAcesso(h.t.db, eng, pedido(gw))).toEqual({ ok: false, mensagem: "Você já tem um pedido ou uma sessão aberta neste gateway." })
+
+    const ap = await aprovarAcesso(h.t.db, admin, { id, durationMin: 60, note: "Só até o almoço" })
+    expect(ap).toEqual({ ok: true, dados: { id, durationMin: 60 } })
+    const [row] = await h.t.db.select().from(s.remoteAccessSession).where(eq(s.remoteAccessSession.id, id))
+    expect(row).toMatchObject({ status: "approved", approvedDurationMin: 60, decidedBy: a.admin.user.id })
+    expect(row?.expiresAt).not.toBeNull()
+    expect(await aprovarAcesso(h.t.db, admin, { id })).toMatchObject({ ok: false })
+
+    const events = await h.t.db.select({ type: s.remoteAccessEvent.type }).from(s.remoteAccessEvent).where(eq(s.remoteAccessEvent.sessionId, id))
+    expect(events.map((e) => e.type)).toEqual(["requested", "approved"])
+    const audit = await h.t.db.select({ action: s.auditLog.action }).from(s.auditLog).where(eq(s.auditLog.entityId, id))
+    expect(audit.map((x) => x.action).sort()).toEqual(["remote.approve", "remote.request"])
+
+    // Aprovada que não ligou: encerrar fecha na hora (sem comando ao gateway).
+    expect(await encerrarAcesso(h.t.db, admin, id)).toMatchObject({ ok: true, dados: { status: "ended" } })
+  })
+
+  it("quem pode: admin do cliente não pede; supervisor e a Engemase não aprovam; quem pediu só cancela", async () => {
+    await expect(pedirAcesso(h.t.db, admin, pedido(gw))).rejects.toBeInstanceOf(AccessDeniedError)
+    const r = await pedirAcesso(h.t.db, eng, pedido(gw2))
+    const id = r.ok ? r.dados.id : ""
+    await expect(aprovarAcesso(h.t.db, supervisor, { id })).rejects.toBeInstanceOf(AccessDeniedError)
+    await expect(aprovarAcesso(h.t.db, eng, { id })).rejects.toBeInstanceOf(AccessDeniedError)
+    expect(await encerrarAcesso(h.t.db, supervisor, id)).toMatchObject({ ok: false })
+    expect(await encerrarAcesso(h.t.db, eng, id)).toMatchObject({ ok: true, dados: { status: "cancelled" } })
+  })
+
+  it("recusa com motivo; sessão ativa encerrada vira 'encerrando' com vpn.disable na fila", async () => {
+    const r = await pedirAcesso(h.t.db, eng, pedido(gw))
+    const id = r.ok ? r.dados.id : ""
+    expect(await recusarAcesso(h.t.db, admin, { id, reason: "x" })).toMatchObject({ ok: false })
+    expect(await recusarAcesso(h.t.db, admin, { id, reason: "Fora do horário combinado" })).toEqual({ ok: true, dados: { id } })
+    expect((await h.t.db.select().from(s.remoteAccessSession).where(eq(s.remoteAccessSession.id, id)))[0]).toMatchObject({ status: "denied", decisionNote: "Fora do horário combinado" })
+
+    const r2 = await pedirAcesso(h.t.db, eng, pedido(gw))
+    const id2 = r2.ok ? r2.dados.id : ""
+    await aprovarAcesso(h.t.db, admin, { id: id2 })
+    await h.t.db.update(s.remoteAccessSession).set({ status: "active", startsAt: new Date() }).where(eq(s.remoteAccessSession.id, id2))
+    expect(await encerrarAcesso(h.t.db, admin, id2)).toMatchObject({ ok: true, dados: { status: "stopping" } })
+    const cmds = await h.t.db.select().from(s.gatewayCommand).where(and(eq(s.gatewayCommand.gatewayId, gw), eq(s.gatewayCommand.type, "vpn.disable")))
+    expect(cmds.map((c) => c.payload)).toContainEqual({ session_id: id2, reason: "requested" })
+  })
+
+  it("política: duração máxima vale no pedido; desativar recusa os em aberto e bloqueia novos; só o admin muda", async () => {
+    await expect(salvarPolitica(h.t.db, eng, { mode: "approval", maxDurationMin: 60, idleTimeoutMin: 15 })).rejects.toBeInstanceOf(AccessDeniedError)
+    expect(await salvarPolitica(h.t.db, admin, { mode: "approval", maxDurationMin: 60, idleTimeoutMin: 90 })).toMatchObject({ ok: false })
+    expect(await salvarPolitica(h.t.db, admin, { mode: "approval", maxDurationMin: 60, idleTimeoutMin: 15 })).toEqual({ ok: true, dados: { recusados: 0 } })
+    expect(await lerPolitica(h.t.db, supervisor)).toMatchObject({ mode: "approval", maxDurationMin: 60 })
+    expect(await pedirAcesso(h.t.db, eng, pedido(gw2, { durationMin: 120 }))).toEqual({ ok: false, mensagem: "A política do cliente permite até 60 minutos por sessão." })
+
+    const aberto = await pedirAcesso(h.t.db, eng, pedido(gw2))
+    expect(await salvarPolitica(h.t.db, admin, { mode: "disabled", maxDurationMin: 60, idleTimeoutMin: 15 })).toEqual({ ok: true, dados: { recusados: 1 } })
+    expect((await h.t.db.select().from(s.remoteAccessSession).where(eq(s.remoteAccessSession.id, aberto.ok ? aberto.dados.id : "")))[0]?.status).toBe("denied")
+    expect(await pedirAcesso(h.t.db, eng, pedido(gw2))).toMatchObject({ ok: false, mensagem: "O cliente desativou o acesso remoto. Combine com o admin do cliente." })
+  })
+
+  it("nível 3: gateway de outro cliente não existe aqui; a política de A não vale em B", async () => {
+    // A política de A está desativada (teste anterior): reativa para ver a recusa pelo gateway.
+    await salvarPolitica(h.t.db, admin, { mode: "approval", maxDurationMin: 240, idleTimeoutMin: 15 })
+    expect(await pedirAcesso(h.t.db, eng, pedido(gwB))).toEqual({ ok: false, mensagem: "Gateway não encontrado. Atualize a página." })
+    expect((await pedirAcesso(h.t.db, engB, pedido(gwB))).ok).toBe(true)
+  })
+})

@@ -32,6 +32,14 @@ interface RemoteCtx {
   exportHistory: (format: "csv" | "pdf") => void
 }
 
+/** Sistema real: o servidor decide e grava; a tela recarrega com os dados novos. Devolve `false` se recusou. */
+export interface RemoteServer {
+  approve: (id: string, durationMin: number, note: string) => Promise<boolean>
+  reject: (id: string, reason: string) => Promise<boolean>
+  end: (id: string) => Promise<boolean>
+  savePolicy: (p: PolicyVM) => Promise<boolean>
+}
+
 const Ctx = createContext<RemoteCtx | null>(null)
 
 export function useRemote() {
@@ -54,11 +62,14 @@ function csvCell(v: string) {
   return /[";\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
 }
 
-export function RemoteAccessProvider({ data, children }: { data: RemoteData; children: React.ReactNode }) {
+export function RemoteAccessProvider({ data, children, server }: { data: RemoteData; children: React.ReactNode; server?: RemoteServer }) {
   const base = data.nowMs
   const [now, setNow] = useState(base)
-  const [sessions, setSessions] = useState(data.sessions)
-  const [policy, setPolicy] = useState(data.policy)
+  const [localSessions, setSessions] = useState(data.sessions)
+  const [localPolicy, setPolicy] = useState(data.policy)
+  // Sistema real: sessões e política são sempre as do servidor (recarregadas depois de cada ação).
+  const sessions = server ? data.sessions : localSessions
+  const policy = server ? data.policy : localPolicy
   const startedRef = useRef<number | null>(null)
   const sessionsRef = useRef(sessions)
   const notified = useRef(new Set<string>())
@@ -93,6 +104,15 @@ export function RemoteAccessProvider({ data, children }: { data: RemoteData; chi
     (id: string, o: ApproveOptions) => {
       const s = sessionsRef.current.find((x) => x.id === id)
       if (!s) return
+      if (server) {
+        void server.approve(id, o.durationMin, o.note).then((ok) => {
+          if (ok)
+            toast.success("Pedido aprovado", {
+              description: `${s.requestedBy} pode acessar o ${s.gatewayName} por até ${minutesLabel(o.durationMin)}. A ligação da VPN no gateway entra com a integração do provedor de VPN. Registrado na Auditoria.`,
+            })
+        })
+        return
+      }
       const t = read()
       const contact = data.contacts.find((c) => c.id === o.onsiteContactId)?.name ?? null
       patch(id, (x) => ({
@@ -125,31 +145,49 @@ export function RemoteAccessProvider({ data, children }: { data: RemoteData; chi
         })
       }, 2500)
     },
-    [data.contacts, data.me.name, patch, read],
+    [data.contacts, data.me.name, patch, read, server],
   )
 
   const reject = useCallback(
     (id: string, reason: string) => {
+      if (server) {
+        void server.reject(id, reason).then((ok) => ok && toast.success("Pedido recusado", { description: "Nada foi aberto no gateway. Registrado na Auditoria." }))
+        return
+      }
       const t = read()
       patch(id, (x) => ({ ...x, status: "rejected", decidedBy: data.me.name, decidedMs: t, endedMs: t, endedReason: `Recusado: ${reason}` }))
       toast.success("Pedido recusado", { description: "O técnico foi avisado com o motivo. Nada foi aberto no gateway." })
     },
-    [data.me.name, patch, read],
+    [data.me.name, patch, read, server],
   )
 
   const endNow = useCallback(
     (id: string) => {
+      if (server) {
+        void server.end(id).then((ok) => ok && toast.success("Sessão encerrada", { description: "Se a VPN estava ligada, o gateway recebe o pedido de desligar na próxima sincronização. Registrado na Auditoria." }))
+        return
+      }
       const t = read()
       patch(id, (x) => ({ ...x, status: "ended", endedMs: t, endedReason: `Encerrada pelo cliente (${data.me.name})` }))
       toast.success("Sessão encerrada", {
         description: "O gateway desligou a VPN e apagou as credenciais da sessão. O resumo vai para a Auditoria e por e-mail.",
       })
     },
-    [data.me.name, patch, read],
+    [data.me.name, patch, read, server],
   )
 
   const savePolicy = useCallback(
     (p: PolicyVM) => {
+      if (server) {
+        void server.savePolicy(p).then(
+          (ok) =>
+            ok &&
+            toast.success("Política de acesso remoto salva", {
+              description: `${MODE_META[p.mode].label} · até ${minutesLabel(p.maxDurationMin)} por sessão. Vale para os próximos pedidos e fica registrada na Auditoria.`,
+            }),
+        )
+        return
+      }
       setPolicy(p)
       if (p.mode === "disabled") {
         const t = read()
@@ -163,7 +201,7 @@ export function RemoteAccessProvider({ data, children }: { data: RemoteData; chi
         description: `${MODE_META[p.mode].label} · até ${minutesLabel(p.maxDurationMin)} por sessão. Vale para os próximos pedidos e fica registrada na Auditoria.`,
       })
     },
-    [data.me.name, read],
+    [data.me.name, read, server],
   )
 
   const effectiveSessions = useMemo(() => sessions.map((s) => effective(s, now)), [sessions, now])

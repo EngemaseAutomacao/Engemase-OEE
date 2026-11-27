@@ -93,10 +93,13 @@ A demonstração na Vercel não tem banco. Por isso as telas leem por `lib/data/
   operadores do chão, e a auditoria do cliente (`lib/data/config/auditoria.ts`: `listAuditEntries` com `audit.read`,
   RLS e escopo; últimos 90 dias, até 500 eventos; rótulos das ações em `ACOES`, ação nova sem rótulo aparece com o
   código; CSV gerado no navegador a partir das linhas já filtradas). Ainda simulados com banco ("Em breve"):
-  acesso remoto; logotipos do cliente; concessões/atribuições da equipe; reverter versão de config.
+  ligar a VPN do acesso remoto (precisa do provedor); logotipos do cliente; concessões/atribuições da equipe; reverter versão de config.
 - Aparência (`lib/server/config/branding.ts`, `config.write`): `client_branding` (0020, uma linha por cliente, RLS);
   os tokens são recalculados no servidor com `analyzeBrand` (`components/settings/brand-color.ts`) e cor bloqueada
   (perto das cores de estado) é recusada. `banco.ts` lê a linha e o layout do cliente injeta as cores.
+- Acesso remoto (`lib/server/remote/access.ts`, docs/12): pedido (Engemase, `diagnostics.run`), aprovar/recusar e
+  política (`remote_access.approve`; quem pede nunca decide), encerrar (ativa → `stopping` + `vpn.disable`).
+  `remote_access_event` e auditoria. Falta `vpn.enable` (chave do provedor + aprovação assinada JWS).
 - Mapa de falhas do CLP (`lib/server/config/fault-map.ts`, `config.write`): `fault_code_map` com `fault_text` e
   `reason_id` opcional (0019); alvo = uma máquina ou, com `machine_id` e `template_id` nulos, o cliente todo (o da
   máquina ganha). "Salvar mapa" troca o mapa inteiro numa transação (as linhas por modelo ficam). No `/sync`

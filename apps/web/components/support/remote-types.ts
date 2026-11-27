@@ -62,7 +62,8 @@ export interface PersonVM {
 export interface RemoteData {
   clientName: string
   clientSlug: string
-  me: { name: string; isPlatform: boolean }
+  /** `canDecide`: aprova, recusa e muda a política (sistema real: admin do cliente). Sem ele: pode. */
+  me: { name: string; isPlatform: boolean; canDecide?: boolean }
   approvers: string[]
   contacts: PersonVM[]
   sessions: RemoteSessionVM[]

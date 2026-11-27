@@ -85,6 +85,8 @@ A Engemase **sempre** pode ver os dados da sua empresa, para dar suporte, mas **
 3. Em "Sessões ativas" você acompanha o tempo restante e pode clicar em **"Encerrar agora"** a qualquer momento.
 4. No fim, o resumo da sessão vai para a "Auditoria" e por e-mail.
 
+**Hoje no sistema real:** o pedido, a aprovação (com a duração que você escolher, até o máximo da política), a recusa com motivo, o "Encerrar agora" e a política ("Com aprovação" ou "Desativado", duração máxima e inatividade) já funcionam e ficam na Auditoria. Desativar a política recusa os pedidos em aberto. A ligação da VPN no gateway, o acesso ao CLP, o contato na planta e as janelas pré-aprovadas entram com a integração do provedor de VPN.
+
 Quem pede nunca aprova. Fora de uma sessão aprovada, nenhum gateway fica acessível pela rede. A "Política de acesso remoto" mostra as regras da sua empresa (duração máxima, acesso ao CLP, contato na planta, janelas pré-aprovadas); o modo de acesso segue o contrato com a Engemase.
 
 ## Ver a configuração e a saúde dos gateways

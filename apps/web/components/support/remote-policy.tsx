@@ -241,7 +241,7 @@ function PolicyForm({ initial, onCancel, onSave }: { initial: PolicyVM; onCancel
 
 /** Política de acesso remoto do cliente, com edição em diálogo. */
 export function PolicyCard({ className }: { className?: string }) {
-  const { policy, approvers, contacts, clientName, savePolicy } = useRemote()
+  const { policy, approvers, contacts, clientName, savePolicy, me } = useRemote()
   const [open, setOpen] = useState(false)
   const meta = MODE_META[policy.mode]
   const ic = MODE_ICON[policy.mode]
@@ -252,10 +252,12 @@ export function PolicyCard({ className }: { className?: string }) {
       title="Política de acesso remoto"
       description={`Vale para todos os gateways de ${clientName}`}
       action={
-        <Button variant="ghost" size="xs" className="shrink-0 font-semibold text-primary" onClick={() => setOpen(true)}>
-          <PencilIcon />
-          Editar
-        </Button>
+        me.canDecide === false ? undefined : (
+          <Button variant="ghost" size="xs" className="shrink-0 font-semibold text-primary" onClick={() => setOpen(true)}>
+            <PencilIcon />
+            Editar
+          </Button>
+        )
       }
       className={className}
     >

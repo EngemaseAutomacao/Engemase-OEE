@@ -91,6 +91,8 @@ function RequestCard({ s, onAction }: { s: RemoteSessionVM; onAction: (kind: App
   const overMax = s.requestedDurationMin > policy.maxDurationMin
   const plcBlocked = Boolean(s.plc) && !policy.allowPlcForward
   const selfRequest = s.requestedBy === me.name
+  // Sistema real: só quem pode decidir (admin do cliente) vê aprovar e recusar.
+  const canDecide = me.canDecide !== false
   const offline = s.gatewayStatus === "offline"
 
   return (
@@ -145,18 +147,22 @@ function RequestCard({ s, onAction }: { s: RemoteSessionVM; onAction: (kind: App
       )}
 
       <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <Button onClick={() => onAction("approve")} disabled={selfRequest}>
-          <ShieldCheckIcon />
-          Aprovar
-        </Button>
-        <Button variant="outline" onClick={() => onAction("modify")} disabled={selfRequest}>
-          <SlidersHorizontalIcon />
-          Aprovar com alterações
-        </Button>
-        <Button variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => onAction("reject")}>
-          <BanIcon />
-          Recusar
-        </Button>
+        {canDecide && (
+          <>
+            <Button onClick={() => onAction("approve")} disabled={selfRequest}>
+              <ShieldCheckIcon />
+              Aprovar
+            </Button>
+            <Button variant="outline" onClick={() => onAction("modify")} disabled={selfRequest}>
+              <SlidersHorizontalIcon />
+              Aprovar com alterações
+            </Button>
+            <Button variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => onAction("reject")}>
+              <BanIcon />
+              Recusar
+            </Button>
+          </>
+        )}
         <span className="text-[11px] text-muted-foreground sm:ml-auto">
           {selfRequest ? "Quem pede nunca aprova." : `Aprovadores: ${approvers.length ? approvers.join(", ") : "admins do cliente"}`}
         </span>

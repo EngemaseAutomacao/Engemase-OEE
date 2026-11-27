@@ -33,6 +33,7 @@ import { requireTenant } from "@/lib/server/access/require-tenant"
 import { getDb } from "@/lib/server/db"
 import { excluirProduto, salvarMatrizCiclos, salvarProduto } from "@/lib/server/config/products"
 import { restaurarAparencia, salvarAparencia } from "@/lib/server/config/branding"
+import { aprovarAcesso, encerrarAcesso, pedirAcesso, recusarAcesso, salvarPolitica } from "@/lib/server/remote/access"
 import { salvarMapaFalhas } from "@/lib/server/config/fault-map"
 import { definirAtivo, definirCor, excluirMotivo, salvarGrupo, salvarMotivo } from "@/lib/server/config/reasons"
 import { cancelarParada, excluirTurno, salvarParada, salvarTurno } from "@/lib/server/config/shifts"
@@ -622,4 +623,43 @@ export async function salvarAparenciaAction(input: unknown): Promise<Resultado<{
 
 export async function restaurarAparenciaAction(input: unknown): Promise<Resultado<{ brandColor: string }>> {
   return cadastro(input, "restaurarAparencia", (a) => restaurarAparencia(a.db, a.ctx))
+}
+
+// ---------------------------------------------------------------------------
+// Acesso remoto (docs/12; regras em lib/server/remote/access.ts). Cada regra confere a própria permissão:
+// pedir = equipe Engemase (diagnostics.run); aprovar, recusar e política = admin do cliente.
+// ---------------------------------------------------------------------------
+
+async function remoto<T>(input: unknown, permissao: Permission, contexto: string, fn: (a: Acesso) => Promise<Resultado<T>>): Promise<Resultado<T>> {
+  const parsed = SlugInput.safeParse(input)
+  if (!parsed.success) return SEM_ACESSO
+  const a = await acesso(parsed.data.slug, permissao)
+  if (a === null) return SEM_ACESSO
+  try {
+    const result = await fn(a)
+    if (result.ok) revalidar(parsed.data.slug)
+    return result
+  } catch (error) {
+    return erroEsperado(error, contexto)
+  }
+}
+
+export async function pedirAcessoAction(input: unknown): Promise<Resultado<{ id: string }>> {
+  return remoto(input, "diagnostics.run", "pedirAcesso", (a) => pedirAcesso(a.db, a.ctx, input))
+}
+
+export async function aprovarAcessoAction(input: unknown): Promise<Resultado<{ id: string; durationMin: number }>> {
+  return remoto(input, "remote_access.approve", "aprovarAcesso", (a) => aprovarAcesso(a.db, a.ctx, input))
+}
+
+export async function recusarAcessoAction(input: unknown): Promise<Resultado<{ id: string }>> {
+  return remoto(input, "remote_access.approve", "recusarAcesso", (a) => recusarAcesso(a.db, a.ctx, input))
+}
+
+export async function encerrarAcessoAction(input: unknown): Promise<Resultado<{ id: string; status: string }>> {
+  return remoto(input, "data.read", "encerrarAcesso", (a) => encerrarAcesso(a.db, a.ctx, (input as { id?: unknown } | null)?.id))
+}
+
+export async function salvarPoliticaAcessoAction(input: unknown): Promise<Resultado<{ recusados: number }>> {
+  return remoto(input, "remote_access.approve", "salvarPoliticaAcesso", (a) => salvarPolitica(a.db, a.ctx, input))
 }

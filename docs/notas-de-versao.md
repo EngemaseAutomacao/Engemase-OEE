@@ -11,6 +11,15 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 - **Fechamento de turno automático:** os números de cada turno são fechados no fim do turno e recalculados se chegarem dados atrasados ou se uma parada for reclassificada.
 - **Atualização do programa do gateway à distância**, enviada pela Engemase.
 
+## 27/11/2026 · Acesso remoto: pedido e aprovação de verdade
+
+**Para quem usa (admin do cliente)**
+- **"Acesso remoto" funciona no sistema real:** os pedidos da Engemase aparecem para aprovar (pode reduzir a duração) ou recusar com motivo; "Encerrar agora" e a política do cliente ("Com aprovação" ou "Desativado", duração máxima, inatividade) gravam de verdade. Só o admin do cliente aprova, e quem pede nunca aprova. Tudo na Auditoria.
+
+**Para a equipe Engemase**
+- **"Pedir acesso"** na tela "Acesso remoto" do cliente: gateway, motivo, chamado e duração (dentro da política). Um pedido aberto por gateway.
+- Ainda não tem: ligar a VPN no gateway (precisa da conta no provedor de VPN), acesso ao CLP e janelas pré-aprovadas.
+
 ## 27/11/2026 · Tema de cada terminal
 
 **Para quem usa**
