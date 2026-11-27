@@ -317,7 +317,7 @@ Decisão: os pacotes ficam no **GitHub Releases** do repositório (público). Fe
 
 | # | Falta | Quem |
 |---|---|---|
-| U1 | **Par de chaves do OTA de produção:** a pública em `deploy/gateway/keys/ota-2026.pub` e a privada no segredo `OTA_SIGNING_KEY` do GitHub e no cofre (2 pessoas). Sem ela, o workflow para com erro e o gateway recusa tudo | Pablo + equipe |
+| U1 | **Par de chaves do OTA de produção:** gerado em 27/11/2026; a pública está em `deploy/gateway/keys/ota-2026.pub`. Falta pôr a privada no segredo `OTA_SIGNING_KEY` do GitHub e no cofre (2 pessoas) | Pablo |
 | U2 | Proteger as tags `gateway-v*` no GitHub (só administradores criam) | Administrador do repositório |
 | U3 | Primeira release de teste e atualização de um gateway na bancada (com `oee-updater seed` antes) | Bancada |
 | U4 | Atualizar vários gateways de uma vez (ondas/canais) | Depois do piloto |
