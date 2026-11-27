@@ -48,6 +48,7 @@ export function ProductDialog({
   product,
   machines,
   existingCodes,
+  saving = false,
   onSave,
 }: {
   open: boolean
@@ -55,12 +56,24 @@ export function ProductDialog({
   product: ProductRow | null
   machines: ProductMachine[]
   existingCodes: string[]
+  /** Gravando no servidor: o botão fica desativado e mostra "Salvando…". */
+  saving?: boolean
   onSave: (draft: ProductDraft) => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto p-0 sm:max-w-2xl">
-        {open && <ProductForm key={product?.id ?? "new"} product={product} machines={machines} existingCodes={existingCodes} onSave={onSave} onCancel={() => onOpenChange(false)} />}
+        {open && (
+          <ProductForm
+            key={product?.id ?? "new"}
+            product={product}
+            machines={machines}
+            existingCodes={existingCodes}
+            saving={saving}
+            onSave={onSave}
+            onCancel={() => onOpenChange(false)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -70,12 +83,14 @@ function ProductForm({
   product,
   machines,
   existingCodes,
+  saving,
   onSave,
   onCancel,
 }: {
   product: ProductRow | null
   machines: ProductMachine[]
   existingCodes: string[]
+  saving: boolean
   onSave: (draft: ProductDraft) => void
   onCancel: () => void
 }) {
@@ -113,7 +128,7 @@ function ProductForm({
       onSubmit={(e) => {
         e.preventDefault()
         setShow(true)
-        if (!invalid) onSave(draft)
+        if (!invalid && !saving) onSave(draft)
       }}
       className="flex flex-col"
     >
@@ -193,7 +208,9 @@ function ProductForm({
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button type="submit">{product ? "Salvar alterações" : "Cadastrar produto"}</Button>
+        <Button type="submit" disabled={saving}>
+          {saving ? "Salvando…" : product ? "Salvar alterações" : "Cadastrar produto"}
+        </Button>
       </DialogFooter>
     </form>
   )
@@ -209,6 +226,7 @@ export function CycleMatrixDialog({
   products,
   machines,
   units,
+  saving = false,
   onSave,
 }: {
   open: boolean
@@ -216,12 +234,14 @@ export function CycleMatrixDialog({
   products: ProductRow[]
   machines: ProductMachine[]
   units: { id: string; name: string }[]
+  /** Gravando no servidor: o botão fica desativado e mostra "Salvando…". */
+  saving?: boolean
   onSave: (next: Record<string, Record<string, number>>, changed: number) => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto p-0 sm:max-w-5xl">
-        {open && <MatrixForm products={products} machines={machines} units={units} onSave={onSave} onCancel={() => onOpenChange(false)} />}
+        {open && <MatrixForm products={products} machines={machines} units={units} saving={saving} onSave={onSave} onCancel={() => onOpenChange(false)} />}
       </DialogContent>
     </Dialog>
   )
@@ -231,12 +251,14 @@ function MatrixForm({
   products,
   machines,
   units,
+  saving,
   onSave,
   onCancel,
 }: {
   products: ProductRow[]
   machines: ProductMachine[]
   units: { id: string; name: string }[]
+  saving: boolean
   onSave: (next: Record<string, Record<string, number>>, changed: number) => void
   onCancel: () => void
 }) {
@@ -372,8 +394,8 @@ function MatrixForm({
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancelar
           </Button>
-          <Button type="button" onClick={submit} disabled={invalid > 0}>
-            Salvar matriz
+          <Button type="button" onClick={submit} disabled={saving || invalid > 0}>
+            {saving ? "Salvando…" : "Salvar matriz"}
           </Button>
         </div>
       </DialogFooter>

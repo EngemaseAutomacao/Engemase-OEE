@@ -2,7 +2,7 @@
 
 /**
  * Server Actions do cadastro do cliente (W8): unidades, áreas, linhas, gateways, códigos de ativação,
- * máquinas com CLP e sinais, publicação da config e comandos ao gateway.
+ * máquinas com CLP e sinais, publicação da config, comandos ao gateway e produtos com ciclos ideais.
  *
  * Toda ação: valida a entrada (zod), confere de novo a sessão e o cliente (`requireTenant`, RLS) e a
  * permissão do papel (config.write = equipe Engemase, D12/D13; diagnostics.run para comandos), grava
@@ -31,6 +31,7 @@ import { hasPermission, type TenantContext } from "@/lib/server/access/context"
 import type { Permission } from "@/lib/server/access/permissions"
 import { requireTenant } from "@/lib/server/access/require-tenant"
 import { getDb } from "@/lib/server/db"
+import { excluirProduto, salvarMatrizCiclos, salvarProduto } from "@/lib/server/config/products"
 import { createActivationCode } from "@/lib/server/gateway/activation"
 import { GatewayAdminError } from "@/lib/server/gateway/admin-errors"
 import { enqueueGatewayCommand, getGatewayCommand } from "@/lib/server/gateway/commands"
@@ -486,4 +487,37 @@ export async function criarMaquinaAction(input: unknown): Promise<Resultado<Maqu
   } catch (error) {
     return erroEsperado(error, "criarMaquina")
   }
+}
+
+// ---------------------------------------------------------------------------
+// Produtos e ciclos ideais (config.write = equipe Engemase, D12; regras em lib/server/config/products.ts)
+// ---------------------------------------------------------------------------
+
+const SlugInput = z.object({ slug: Slug })
+
+/** Confere o acesso e roda a regra do cadastro; com sucesso, recarrega as telas do cliente. */
+async function cadastro<T>(input: unknown, contexto: string, fn: (a: Acesso) => Promise<Resultado<T>>): Promise<Resultado<T>> {
+  const parsed = SlugInput.safeParse(input)
+  if (!parsed.success) return SEM_ACESSO
+  const a = await acesso(parsed.data.slug, "config.write")
+  if (a === null) return SEM_ACESSO
+  try {
+    const result = await fn(a)
+    if (result.ok) revalidar(parsed.data.slug)
+    return result
+  } catch (error) {
+    return erroEsperado(error, contexto)
+  }
+}
+
+export async function salvarProdutoAction(input: unknown): Promise<Resultado<{ id: string }>> {
+  return cadastro(input, "salvarProduto", (a) => salvarProduto(a.db, a.ctx, input))
+}
+
+export async function salvarMatrizCiclosAction(input: unknown): Promise<Resultado<{ produtos: number }>> {
+  return cadastro(input, "salvarMatrizCiclos", (a) => salvarMatrizCiclos(a.db, a.ctx, input))
+}
+
+export async function excluirProdutoAction(input: unknown): Promise<Resultado<{ id: string }>> {
+  return cadastro(input, "excluirProduto", (a) => excluirProduto(a.db, a.ctx, (input as { id?: unknown } | null)?.id))
 }

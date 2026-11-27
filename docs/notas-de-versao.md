@@ -11,6 +11,13 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 - **Fechamento de turno automático:** os números de cada turno são fechados no fim do turno e recalculados se chegarem dados atrasados ou se uma parada for reclassificada.
 - **Atualização do programa do gateway à distância**, enviada pela Engemase.
 
+## 27/11/2026 · Cadastro de produtos de verdade
+
+**Para a equipe Engemase**
+- **"Configurações" › "Produtos" funciona no sistema real** (antes aparecia "Em breve"): cadastrar, alterar e excluir produtos, com o ciclo ideal de cada um em cada máquina, e salvar a matriz de ciclos de uma vez. Tudo na auditoria.
+- O cliente vê a tela só para consulta.
+- A importação por planilha (CSV) ainda não existe no sistema real e fica escondida lá.
+
 ## 27/11/2026 · Tela do operador grava de verdade
 
 **Para quem usa**

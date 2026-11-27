@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import {
   FactoryIcon,
   FileSpreadsheetIcon,
@@ -30,6 +31,7 @@ import { norm, piecesPerHour, plural, seconds } from "@/components/config/labels
 import { CycleMatrixDialog, ImportCsvDialog, ProductDialog, type ProductDraft } from "@/components/config/product-dialogs"
 import { ConfirmDialog, IconAction, PageTitle } from "@/components/config/ui-bits"
 import { EngemaseOnlyChip, useCanEdit } from "@/components/config/engemase-managed"
+import { excluirProdutoAction, salvarMatrizCiclosAction, salvarProdutoAction } from "@/app/(shell)/[cliente]/config/actions"
 
 export interface ProductMachine {
   id: string
@@ -60,12 +62,37 @@ export function ProductsManager({
   initialProducts,
   machines,
   units,
+  banco = false,
+  clientSlug = "",
 }: {
   initialProducts: ProductRow[]
   machines: ProductMachine[]
   units: { id: string; name: string }[]
+  /** Sistema real: grava no banco (Server Actions) e a lista vem do servidor. Sem banco: demonstração local. */
+  banco?: boolean
+  clientSlug?: string
 }) {
-  const [products, setProducts] = useState(initialProducts)
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  const [localProducts, setProducts] = useState(initialProducts)
+  // Com banco, a lista é sempre a do servidor (recarregada depois de cada gravação).
+  const products = banco ? initialProducts : localProducts
+
+  /** Grava no servidor; com sucesso, avisa e recarrega a lista. Erro → aviso, nada muda. */
+  const gravar = (fn: () => Promise<{ ok: true } | { ok: false; mensagem: string }>, onOk: () => void) =>
+    startTransition(async () => {
+      try {
+        const r = await fn()
+        if (!r.ok) {
+          toast.error(r.mensagem)
+          return
+        }
+        onOk()
+        router.refresh()
+      } catch {
+        toast.error("Não foi possível gravar agora. Tente de novo.")
+      }
+    })
   const canEdit = useCanEdit()
   const [query, setQuery] = useState("")
   const [unitId, setUnitId] = useState("all")
@@ -102,6 +129,18 @@ export function ProductsManager({
       const n = Number(v.replace(",", "."))
       if (v.trim() && n > 0) cycles[mid] = n
     }
+    if (banco) {
+      gravar(
+        () => salvarProdutoAction({ slug: clientSlug, ...(draft.id ? { id: draft.id } : {}), code: draft.code, name: draft.name, cycles }),
+        () => {
+          toast.success(draft.id ? "Produto atualizado" : "Produto cadastrado", {
+            description: `${draft.code.trim()} · ${draft.name.trim()} · ${plural(Object.keys(cycles).length, "máquina", "máquinas")}`,
+          })
+          setEditing(null)
+        },
+      )
+      return
+    }
     if (draft.id) {
       setProducts((list) => list.map((p) => (p.id === draft.id ? { ...p, code: draft.code.trim(), name: draft.name.trim(), cycles } : p)))
       toast.success("Produto atualizado", { description: `${draft.code.trim()} · ${draft.name.trim()} · ${plural(Object.keys(cycles).length, "máquina", "máquinas")}` })
@@ -116,6 +155,21 @@ export function ProductsManager({
   }
 
   const saveMatrix = (next: Record<string, Record<string, number>>, changed: number) => {
+    if (banco) {
+      if (changed === 0) {
+        setMatrixOpen(false)
+        toast.success("Matriz de ciclos salva", { description: "Nenhuma alteração." })
+        return
+      }
+      gravar(
+        () => salvarMatrizCiclosAction({ slug: clientSlug, products: next }),
+        () => {
+          setMatrixOpen(false)
+          toast.success("Matriz de ciclos salva", { description: `${plural(changed, "ciclo alterado", "ciclos alterados")}. Vale para o turno aberto e os próximos.` })
+        },
+      )
+      return
+    }
     setProducts((list) => list.map((p) => (next[p.id] ? { ...p, cycles: next[p.id] } : p)))
     setMatrixOpen(false)
     toast.success("Matriz de ciclos salva", {
@@ -132,10 +186,12 @@ export function ProductsManager({
           canEdit && (
             <>
               <EngemaseOnlyChip />
-              <Button variant="outline" onClick={() => setImportOpen(true)}>
-                <UploadIcon />
-                Importar CSV
-              </Button>
+              {!banco && (
+                <Button variant="outline" onClick={() => setImportOpen(true)}>
+                  <UploadIcon />
+                  Importar CSV
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setMatrixOpen(true)} disabled={products.length === 0 || machines.length === 0}>
                 <Grid3x3Icon />
                 Matriz de ciclos
@@ -355,7 +411,7 @@ export function ProductsManager({
                   {plural(uncovered.length, "máquina usa", "máquinas usam")} só o ciclo padrão: {uncovered.map((m) => m.code).join(", ")}.
                 </p>
               )}
-              {canEdit && (
+              {canEdit && !banco && (
                 <Button variant="outline" size="sm" className="self-start" onClick={() => setImportOpen(true)}>
                   <FileSpreadsheetIcon />
                   Importar planilha de ciclos
@@ -372,9 +428,10 @@ export function ProductsManager({
         product={editing === "new" ? null : editing}
         machines={machines}
         existingCodes={products.filter((p) => editing === "new" || p.id !== (editing as ProductRow | null)?.id).map((p) => p.code)}
+        saving={pending}
         onSave={save}
       />
-      <CycleMatrixDialog open={matrixOpen} onOpenChange={setMatrixOpen} products={products} machines={machines} units={units} onSave={saveMatrix} />
+      <CycleMatrixDialog open={matrixOpen} onOpenChange={setMatrixOpen} products={products} machines={machines} units={units} saving={pending} onSave={saveMatrix} />
       <ImportCsvDialog open={importOpen} onOpenChange={setImportOpen} />
       <ConfirmDialog
         open={deleting !== null}
@@ -383,9 +440,17 @@ export function ProductsManager({
         description="O histórico de produção continua com o código do produto, mas ele deixa de aparecer na tela do operador e nos novos turnos."
         onConfirm={() => {
           if (!deleting) return
-          setProducts((list) => list.filter((p) => p.id !== deleting.id))
-          toast.success("Produto excluído", { description: `${deleting.code} · ${deleting.name}` })
+          const target = deleting
           setDeleting(null)
+          if (banco) {
+            gravar(
+              () => excluirProdutoAction({ slug: clientSlug, id: target.id }),
+              () => toast.success("Produto excluído", { description: `${target.code} · ${target.name}` }),
+            )
+            return
+          }
+          setProducts((list) => list.filter((p) => p.id !== target.id))
+          toast.success("Produto excluído", { description: `${target.code} · ${target.name}` })
         }}
       />
     </div>

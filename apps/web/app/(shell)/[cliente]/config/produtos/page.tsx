@@ -1,51 +1,28 @@
 import type { Metadata } from "next"
-import { usarBanco } from "@/lib/data/fonte"
-import { TelaEmBreve } from "@/components/shell/tela-em-breve"
-import { notFound } from "next/navigation"
-
-import { getClientBySlug, getConfigAccess, getLines, getMachineLive, getMachines, getProducts, getUnits } from "@/lib/mock"
+import { Suspense } from "react"
 import { ConfigAccessProvider, EngemaseManagedNote } from "@/components/config/engemase-managed"
-import { ProductsManager, type ProductMachine, type ProductRow } from "@/components/config/products-manager"
+import { ProductsManager } from "@/components/config/products-manager"
+import { CarregandoPagina } from "@/components/shell/carregando"
+import { dadosProdutos } from "@/lib/data/config/produtos"
 
 export const metadata: Metadata = { title: "Produtos" }
 
-export default async function Page({ params }: PageProps<"/[cliente]/config/produtos">) {
+/** Lê a sessão e o cadastro (com banco, `requireTenant`): fica dentro do <Suspense>. */
+async function Tela({ params }: { params: PageProps<"/[cliente]/config/produtos">["params"] }) {
   const { cliente } = await params
-  // Sem versão real ainda: no sistema real, nunca mostra os dados simulados.
-  if (usarBanco()) return <TelaEmBreve titulo="Produtos" voltarPara={`/${cliente}`} voltarTexto="Voltar ao painel" />
-  const client = getClientBySlug(cliente)
-  if (!client) notFound()
-
-  const units = getUnits(client.id).map((u) => ({ id: u.id, name: u.name }))
-  const lines = getLines(client.id)
-  const rawMachines = getMachines(client.id)
-
-  const machines: ProductMachine[] = rawMachines.map((m) => ({
-    id: m.id,
-    name: m.name,
-    code: m.code,
-    type: m.type,
-    lineName: lines.find((l) => l.id === m.lineId)?.name ?? "—",
-    unitId: m.unitId,
-    unitName: units.find((u) => u.id === m.unitId)?.name ?? "—",
-    defaultCycleS: m.idealCycleS,
-  }))
-
-  // Produto em produção agora em cada máquina (dado ao vivo do protótipo).
-  const runningCode = new Map(rawMachines.map((m) => [m.id, getMachineLive(m.id)?.productCode]))
-
-  const products: ProductRow[] = getProducts(client.id).map((p) => ({
-    id: p.id,
-    code: p.code,
-    name: p.name,
-    cycles: Object.fromEntries(p.idealCycles.map((c) => [c.machineId, c.idealCycleS])),
-    runningOn: rawMachines.filter((m) => runningCode.get(m.id) === p.code).map((m) => m.code),
-  }))
-
+  const d = await dadosProdutos(cliente)
   return (
-    <ConfigAccessProvider canEdit={getConfigAccess(client.id).canConfigure}>
-      <EngemaseManagedNote padded clientSlug={client.slug} subject="Produtos e ciclos ideais" />
-      <ProductsManager initialProducts={products} machines={machines} units={units} />
+    <ConfigAccessProvider canEdit={d.canEdit}>
+      <EngemaseManagedNote padded clientSlug={d.client.slug} subject="Produtos e ciclos ideais" />
+      <ProductsManager initialProducts={d.products} machines={d.machines} units={d.units} banco={d.banco} clientSlug={d.client.slug} />
     </ConfigAccessProvider>
+  )
+}
+
+export default function Page({ params }: PageProps<"/[cliente]/config/produtos">) {
+  return (
+    <Suspense fallback={<CarregandoPagina />}>
+      <Tela params={params} />
+    </Suspense>
   )
 }
