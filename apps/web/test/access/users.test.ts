@@ -18,7 +18,8 @@ import { resetMemberTwoFactor } from "@/lib/server/users/two-factor-reset"
 import { type AuthHarness, BASE_URL, browserHeaders, createAuthHarness, createUserWithPassword, GOOD_PASSWORD } from "../auth/support"
 import { createPerson, type SeededClient, type SeededPerson, seedClient } from "./support"
 
-const NOW = new Date("2026-11-24T15:00:00Z")
+// Relógio no minuto atual: o banco confere a validade dos códigos com a hora real (`now()` em `app.resolve_account_token`).
+const NOW = new Date(Math.floor(Date.now() / 60_000) * 60_000)
 const NEW_PASSWORD = "lanterna violeta café trovão"
 
 /** Token do link "definir senha" de um e-mail capturado. */

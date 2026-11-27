@@ -23,7 +23,8 @@ import {
 import { type AuthHarness, createAuthHarness } from "../auth/support"
 import { createPerson, type SeededClient, type SeededPerson, seedClient } from "./support"
 
-const NOW = new Date("2026-11-27T15:00:00Z")
+// Relógio no minuto atual: o banco confere a validade dos códigos com a hora real (`now()` nas buscas de token).
+const NOW = new Date(Math.floor(Date.now() / 60_000) * 60_000)
 
 describe("terminais pareados", () => {
   let h: AuthHarness

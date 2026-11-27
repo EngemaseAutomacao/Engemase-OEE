@@ -11,6 +11,15 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 - **Fechamento de turno automático:** os números de cada turno são fechados no fim do turno e recalculados se chegarem dados atrasados ou se uma parada for reclassificada.
 - **Atualização do programa do gateway à distância**, enviada pela Engemase.
 
+## 27/11/2026 · Aparência do cliente de verdade
+
+**Para quem usa**
+- **As cores do cliente valem no sistema real:** botões, links e menu lateral aparecem na cor da marca do cliente para todos os usuários, no tema claro e no escuro. As cores de estado das máquinas e as faixas de OEE nunca mudam.
+
+**Para a equipe Engemase**
+- **"Configurações" › "Aparência" grava de verdade:** cor da marca (paleta pronta ou livre), menu lateral, nome exibido e nome curto. A plataforma recalcula as cores para passar no contraste e recusa cor parecida demais com as de estado. "Restaurar padrão Engemase" volta ao visual original. Tudo na auditoria.
+- Ainda não tem: envio dos logotipos (fica o da Engemase).
+
 ## 27/11/2026 · Mapa de falhas do CLP de verdade
 
 **Para quem usa**

@@ -35,6 +35,8 @@ const ACOES: Record<string, { label: string; category: AuditCategory }> = {
   "gateway.command_created": { label: "Enviou um comando ao gateway", category: "config" },
   "gateway.command_cancelled": { label: "Cancelou um comando do gateway", category: "config" },
   "fault_code_map.updated": { label: "Alterou o mapa de falhas do CLP", category: "config" },
+  "branding.updated": { label: "Alterou a aparência (cores e nome)", category: "branding" },
+  "branding.reset": { label: "Restaurou a aparência padrão Engemase", category: "branding" },
   "product.created": { label: "Cadastrou um produto", category: "config" },
   "product.updated": { label: "Alterou um produto", category: "config" },
   "product.deleted": { label: "Excluiu um produto", category: "config" },

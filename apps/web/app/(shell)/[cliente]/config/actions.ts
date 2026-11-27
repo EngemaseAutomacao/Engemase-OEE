@@ -32,6 +32,7 @@ import type { Permission } from "@/lib/server/access/permissions"
 import { requireTenant } from "@/lib/server/access/require-tenant"
 import { getDb } from "@/lib/server/db"
 import { excluirProduto, salvarMatrizCiclos, salvarProduto } from "@/lib/server/config/products"
+import { restaurarAparencia, salvarAparencia } from "@/lib/server/config/branding"
 import { salvarMapaFalhas } from "@/lib/server/config/fault-map"
 import { definirAtivo, definirCor, excluirMotivo, salvarGrupo, salvarMotivo } from "@/lib/server/config/reasons"
 import { cancelarParada, excluirTurno, salvarParada, salvarTurno } from "@/lib/server/config/shifts"
@@ -605,4 +606,19 @@ export async function salvarOperadorAction(input: unknown): Promise<Resultado<{ 
 
 export async function definirOperadorAtivoAction(input: unknown): Promise<Resultado<{ id: string }>> {
   return cadastro(input, "definirOperadorAtivo", (a) => definirOperadorAtivo(a.db, a.ctx, input))
+}
+
+// ---------------------------------------------------------------------------
+// Aparência (config.write = equipe Engemase, D12; regras em lib/server/config/branding.ts)
+// ---------------------------------------------------------------------------
+
+export async function salvarAparenciaAction(input: unknown): Promise<Resultado<{ adjusted: boolean }>> {
+  return cadastro(input, "salvarAparencia", async (a) => {
+    const r = await salvarAparencia(a.db, a.ctx, input)
+    return r.ok ? { ok: true, dados: { adjusted: r.dados.adjusted } } : r
+  })
+}
+
+export async function restaurarAparenciaAction(input: unknown): Promise<Resultado<{ brandColor: string }>> {
+  return cadastro(input, "restaurarAparencia", (a) => restaurarAparencia(a.db, a.ctx))
 }

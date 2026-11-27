@@ -300,6 +300,14 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
     startsAt: new Date(now + 48 * HOUR),
     endsAt: new Date(now + 50 * HOUR),
   })
+  // Identidade visual (0020): o teste das partições carrega num banco só até a 0012, sem a tabela.
+  await db.execute(sql`
+    DO $$ BEGIN
+      IF to_regclass('public.client_branding') IS NOT NULL THEN
+        INSERT INTO client_branding (organization_id, display_name, short_name, brand_color, tokens)
+        VALUES (${sql.raw(`'${organizationId}'`)}, 'Cliente OEE', 'Cliente', '#257bb4', '{}'::jsonb);
+      END IF;
+    END $$`)
   // SQL direto: o teste das partições usa esta carga num banco com as migrações só até a 0012 (sem `fault_text`).
   await db.execute(
     sql`INSERT INTO fault_code_map (organization_id, machine_id, fault_code, reason_id) VALUES (${organizationId}, ${machineRow.id}, 47, ${reason.id})`,

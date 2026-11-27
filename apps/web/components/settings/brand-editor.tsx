@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useRef, useState, useTransition } from "react"
 import {
   CheckIcon,
   CircleCheckIcon,
@@ -48,16 +48,25 @@ const LOGO_SLOTS: { key: LogoKey; title: string; hint: string; square?: boolean 
 
 const MAX_LOGO_BYTES = 1_048_576
 
+/** Sistema real: o servidor recalcula e grava (devolve `false` se recusou; a tela já mostrou o motivo). */
+export interface BrandRemote {
+  save: (v: { displayName: string; shortName: string; preset: string | null; brandColor: string; sidebarMode: SidebarMode }) => Promise<boolean>
+  restore: () => Promise<boolean>
+}
+
 export function BrandEditor({
   clientName,
   initial,
   presets,
   machine,
+  remote,
 }: {
   clientName: string
   initial: BrandingInitial
   presets: { name: string; hex: string }[]
   machine: PreviewMachine
+  /** Sistema real (sem isso, demonstração local). Logotipos ainda não são enviados no sistema real. */
+  remote?: BrandRemote
 }) {
   const initialBrand = normalizeHex(initial.brandColor) ?? ENGEMASE_BRAND
   const [saved, setSaved] = useState({ brand: initialBrand, sidebarMode: initial.sidebarMode, displayName: initial.displayName, shortName: initial.shortName })
@@ -69,6 +78,7 @@ export function BrandEditor({
   const [logos, setLogos] = useState<Partial<Record<LogoKey, LogoFile>>>({})
   const [logosChanged, setLogosChanged] = useState(false)
   const [restoreOpen, setRestoreOpen] = useState(false)
+  const [busy, startBusy] = useTransition()
   const canEdit = useCanEdit()
 
   const stored = brand === initialBrand ? initial.tokens : null
@@ -89,6 +99,17 @@ export function BrandEditor({
 
   const save = () => {
     if (blocked || nameError) return
+    if (remote) {
+      const v = { displayName: displayName.trim(), shortName: shortName.trim(), preset: preset?.name ?? null, brandColor: brand, sidebarMode }
+      startBusy(async () => {
+        if (!(await remote.save(v))) return
+        setSaved({ brand, sidebarMode, displayName: v.displayName, shortName: v.shortName })
+        toast.success("Identidade visual salva", {
+          description: `Cores calculadas no servidor (${a.light.primary.toUpperCase()} no claro, ${a.dark.primary.toUpperCase()} no escuro). Quem usa ${clientName} vê as novas cores na próxima página. Registrado na auditoria.`,
+        })
+      })
+      return
+    }
     setSaved({ brand, sidebarMode, displayName: displayName.trim(), shortName: shortName.trim() })
     setLogosChanged(false)
     toast.success("Identidade visual salva", {
@@ -97,6 +118,17 @@ export function BrandEditor({
   }
 
   const restore = () => {
+    if (remote) {
+      startBusy(async () => {
+        if (!(await remote.restore())) return
+        applyRestore()
+      })
+      return
+    }
+    applyRestore()
+  }
+
+  const applyRestore = () => {
     const name = clientName
     const short = clientName.split(/\s+/)[0]!.slice(0, 12)
     setBrand(ENGEMASE_BRAND)
@@ -157,7 +189,7 @@ export function BrandEditor({
                 <RotateCcwIcon />
                 Restaurar padrão Engemase
               </Button>
-              <Button onClick={save} disabled={!dirty || blocked || !!nameError}>
+              <Button onClick={save} disabled={busy || !dirty || blocked || !!nameError}>
                 <SaveIcon />
                 Salvar identidade
               </Button>
@@ -379,10 +411,16 @@ export function BrandEditor({
         <div className="grid gap-4 xl:grid-cols-12">
           <SectionCard
             title="Logotipos"
-            description={canEdit ? "Arraste o arquivo para a área ou clique para escolher" : "Enviados pela equipe Engemase. Para trocar, abra um chamado."}
+            description={
+              remote
+                ? "Em breve no sistema real: o envio dos logotipos. Até lá, aparece o logotipo da Engemase."
+                : canEdit
+                  ? "Arraste o arquivo para a área ou clique para escolher"
+                  : "Enviados pela equipe Engemase. Para trocar, abra um chamado."
+            }
             className="xl:col-span-8"
           >
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className={cn("grid gap-3 md:grid-cols-3", remote && "pointer-events-none opacity-50")} aria-disabled={remote ? true : undefined}>
               {LOGO_SLOTS.map((slot) => (
                 <LogoDrop
                   key={slot.key}

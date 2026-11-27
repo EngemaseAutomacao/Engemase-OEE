@@ -12,6 +12,7 @@ import {
   clientAccount,
   device,
   downtimeReason,
+  clientBranding,
   faultCodeMap,
   gateway,
   gatewayDeviceStatus,
@@ -43,6 +44,7 @@ import { CLIENT_ROLE_LABEL, PLATFORM_ROLE_LABEL } from "@/lib/roles"
 import { assertPermission, hasPermission, type TenantContext } from "@/lib/server/access/context"
 import { withContext } from "@/lib/server/access/load"
 import { machineScopeCondition, unitScopeCondition } from "@/lib/server/access/scope"
+import { brandingTokens } from "@/lib/server/config/branding"
 import type { GatewayDb } from "@/lib/server/gateway/types"
 import { type BrutoCliente, EVENT_MARGIN_MS, inicioDosTurnosCorrentes, montarClienteDados, STOP_WEEKS } from "./calculo"
 import type { ClienteDados, NecessidadesCliente } from "./tipos"
@@ -163,6 +165,7 @@ export async function lerClienteDoBanco(
       .from(downtimeReason)
       .where(isNull(downtimeReason.deletedAt))
       .orderBy(asc(downtimeReason.sortOrder), asc(downtimeReason.name))
+    const [brandRow] = await tx.select().from(clientBranding).limit(1)
     const faultMap = await tx
       .select({ machineId: faultCodeMap.machineId, faultCode: faultCodeMap.faultCode, text: faultCodeMap.faultText, reasonId: faultCodeMap.reasonId })
       .from(faultCodeMap)
@@ -425,6 +428,19 @@ export async function lerClienteDoBanco(
         plannedDowntimes: plannedDowntimes.map((p) => ({ unitId: p.unitId, lineId: p.lineId, machineId: p.machineId, start: msNN(p.startsAt), end: msNN(p.endsAt) })),
         reasons,
         faultMap: faultMap.map((f) => ({ machineId: f.machineId, faultCode: Number(f.faultCode), text: f.text, reasonId: f.reasonId })),
+        ...(brandRow !== undefined && brandingTokens(brandRow.tokens)
+          ? {
+              branding: {
+                clientId: brandRow.organizationId,
+                displayName: brandRow.displayName,
+                preset: brandRow.preset,
+                brandColor: brandRow.brandColor,
+                sidebarMode: brandRow.sidebarMode,
+                tokens: brandRow.tokens,
+                adjusted: brandRow.adjusted,
+              },
+            }
+          : {}),
         live: live.map((l) => ({
           machineId: l.machineId,
           state: l.state,

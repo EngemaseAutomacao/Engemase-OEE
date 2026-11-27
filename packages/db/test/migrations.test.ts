@@ -102,6 +102,7 @@ describe("migrações", () => {
       "0015_w7_audit_log_at_index",
       "0018_platform_client_admin",
       "0019_fault_map_text_client",
+      "0020_client_branding",
     ])
   })
 

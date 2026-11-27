@@ -50,6 +50,7 @@ import type {
   StateEvent,
   Tag,
   Unit,
+  ClientBranding,
 } from "@/lib/mock"
 import { UNCLASSIFIED_ID, UNCLASSIFIED_NAME } from "@/components/reports/report-utils"
 import type { StopRecord } from "@/components/reports/stops-data"
@@ -101,6 +102,9 @@ export interface BrutoCliente {
   readonly plannedDowntimes: readonly { unitId: string; lineId: string | null; machineId: string | null; start: number; end: number }[]
   readonly reasons: readonly { id: string; parentId: string | null; name: string; category: ReasonCategory }[]
   readonly faultMap: readonly { machineId: string | null; faultCode: number; text: string; reasonId: string | null }[]
+  /** Identidade visual do cliente (`client_branding`); sem ela, o padrão Engemase. */
+  readonly branding?: ClientBranding
+
   readonly live: readonly {
     machineId: string
     state: string
@@ -839,7 +843,7 @@ export function montarClienteDados(raw: BrutoCliente, m: MontagemCliente): Clien
     viewer: m.viewer,
     access: m.access,
     accessibleClients: [{ slug: client.slug, name: client.name, status: client.status }],
-    branding: undefined,
+    branding: raw.branding,
     oeeTarget: (() => {
       const targets = raw.lines.map((l) => l.oeeTarget).filter((v): v is number => v !== null && v > 0)
       return targets.length > 0 ? targets.reduce((a, b) => a + b, 0) / targets.length : 0.75

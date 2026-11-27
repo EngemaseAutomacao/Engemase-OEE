@@ -345,3 +345,37 @@ export const unitOperator = pgTable(
     check("unit_operator_code_chk", sql`${t.employeeCode} IS NULL OR btrim(${t.employeeCode}) <> ''`),
   ],
 )
+
+/** Modo do menu lateral da identidade visual do cliente (docs/14). */
+export const SIDEBAR_MODES = ["neutral", "brand-dark", "light"] as const
+
+/**
+ * Identidade visual do cliente (docs/14, F2): uma linha por cliente; sem linha = padrão Engemase.
+ * Os tokens (claro e escuro) são calculados no servidor ao salvar (contraste WCAG, OKLCH) e o layout do
+ * cliente os aplica sem rebuild. Só a equipe Engemase altera (D12). Logotipos ficam para depois (Blob).
+ */
+export const clientBranding = pgTable(
+  "client_branding",
+  {
+    organizationId: organizationId().primaryKey(),
+    displayName: text("display_name").notNull(),
+    shortName: text("short_name").notNull(),
+    /** Paleta pronta escolhida (nome), ou nulo para cor livre. */
+    preset: text("preset"),
+    brandColor: text("brand_color").notNull(),
+    sidebarMode: text("sidebar_mode", { enum: SIDEBAR_MODES }).notNull().default("neutral"),
+    /** `{ light: { primary, ring, sidebar }, dark: { ... } }` calculados no servidor. */
+    tokens: jsonb("tokens").notNull(),
+    /** A primária foi ajustada para passar no contraste. */
+    adjusted: boolean("adjusted").notNull().default(false),
+    algorithmVersion: smallint("algorithm_version").notNull().default(1),
+    updatedBy: uuid("updated_by"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check("client_branding_color_chk", sql`${t.brandColor} ~ '^#[0-9a-f]{6}$'`),
+    check("client_branding_sidebar_chk", oneOf(t.sidebarMode, SIDEBAR_MODES)),
+    check("client_branding_names_chk", sql`char_length(${t.displayName}) BETWEEN 1 AND 40 AND char_length(${t.shortName}) BETWEEN 1 AND 12`),
+  ],
+)
