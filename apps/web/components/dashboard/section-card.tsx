@@ -23,7 +23,7 @@ export function SectionCard({
   children: React.ReactNode
 }) {
   return (
-    <section className={cn("flex min-w-0 flex-col rounded-2xl border bg-card text-card-foreground shadow-[0_1px_2px_rgba(16,24,40,0.04)]", className)}>
+    <section className={cn("flex min-w-0 flex-col rounded-2xl border bg-card text-card-foreground shadow-(--ui-shadow-card)", className)}>
       <header className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
         <div className="min-w-0">
           <h2 className="truncate text-[15px] font-semibold">{title}</h2>
@@ -31,7 +31,7 @@ export function SectionCard({
         </div>
         {action}
         {href && (
-          <Link href={href} className="shrink-0 text-xs font-semibold text-primary hover:underline">
+          <Link href={href} className="shrink-0 rounded-sm text-xs font-semibold text-primary underline-offset-4 transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
             {linkLabel}
           </Link>
         )}

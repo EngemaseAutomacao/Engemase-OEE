@@ -7,7 +7,18 @@ export function Ring({ value, size = 64, stroke = 7, color = "#257bb4", label }:
     <div className="relative inline-flex shrink-0 items-center justify-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} className="stroke-muted" />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} strokeLinecap="round" stroke={color} strokeDasharray={`${c * v} ${c}`} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          stroke={color}
+          strokeDasharray={`${c * v} ${c}`}
+          className="ui-arco"
+          style={{ "--ui-arco-de": `${c * v}` } as React.CSSProperties}
+        />
       </svg>
       {label && <span className="absolute text-[11px] font-semibold tabular-nums">{label}</span>}
     </div>

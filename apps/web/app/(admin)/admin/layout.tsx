@@ -44,10 +44,12 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
         <SidebarRail />
       </Sidebar>
       <SidebarInset className="min-w-0 bg-background">
-        <Suspense fallback={<div className="h-16 shrink-0 border-b bg-card/90" aria-hidden />}>
+        <Suspense fallback={<div className="h-16 shrink-0 border-b border-transparent bg-background/80" aria-hidden />}>
           <Cabecalho />
         </Suspense>
-        <main className="min-w-0 flex-1">{children}</main>
+        <main data-entrada className="min-w-0 flex-1">
+          {children}
+        </main>
       </SidebarInset>
     </SidebarProvider>
   )

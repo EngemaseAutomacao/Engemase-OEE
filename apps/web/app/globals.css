@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./interface.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -51,6 +52,18 @@
   --sidebar-border: #3d648e;
   --sidebar-ring: #7fb4dc;
 
+  /* Interface interna (casca e console): movimento e profundidade. Usados em interface.css e nos cartões. */
+  --ui-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ui-shadow-card: 0 1px 2px rgb(16 24 40 / 4%), 0 1px 3px rgb(16 24 40 / 3%);
+  --ui-shadow-card-hover: 0 2px 4px rgb(16 24 40 / 4%), 0 14px 28px -10px rgb(19 37 58 / 18%);
+  --ui-shadow-header: 0 10px 30px -18px rgb(19 37 58 / 35%);
+  /* Barrinha do item ativo no menu: clareia a cor da marca (3,2:1 sobre o item ativo, também com a marca do cliente). */
+  --ui-nav-indicator: color-mix(in oklab, var(--sidebar-primary) 45%, white);
+  --ui-shimmer: rgb(255 255 255 / 55%);
+  /* Azul quase preto da apresentação (fundos escuros da marca, ex.: cartão de ajuda). */
+  --ui-ink: #12283f;
+  --ui-ink-mid: #1f4775;
+
   --state-running: oklch(0.627 0.194 149.214);
   --state-stopped: oklch(0.769 0.188 70.08);
   --state-fault: oklch(0.577 0.245 27.325);
@@ -91,6 +104,11 @@
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: rgb(255 255 255 / 8%);
   --sidebar-ring: #4a9fd6;
+
+  --ui-shadow-card: 0 1px 2px rgb(0 0 0 / 30%), inset 0 1px 0 rgb(255 255 255 / 4%);
+  --ui-shadow-card-hover: 0 2px 4px rgb(0 0 0 / 30%), 0 16px 32px -12px rgb(0 0 0 / 55%), inset 0 1px 0 rgb(255 255 255 / 6%);
+  --ui-shadow-header: 0 12px 30px -18px rgb(0 0 0 / 70%);
+  --ui-shimmer: rgb(255 255 255 / 6%);
 
   --state-running: oklch(0.723 0.219 149.579);
   --state-stopped: oklch(0.828 0.189 84.429);

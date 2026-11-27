@@ -27,6 +27,8 @@ export function Donut({ segments, size = 168, stroke = 26, center, caption }: { 
               strokeWidth={stroke}
               strokeDasharray={`${Math.max(0, len - 2)} ${c}`}
               strokeDashoffset={-offsets[i]}
+              className="ui-traco"
+              style={{ "--ui-traco-de": `0 ${c}` } as React.CSSProperties}
             />
           )
         })}

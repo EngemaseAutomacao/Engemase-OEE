@@ -46,7 +46,7 @@ function ShellSkeleton() {
         ))}
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
-        <Skeleton className="h-14 rounded-none" />
+        <Skeleton className="h-16 rounded-none" />
         <div className="grid gap-4 p-4 md:p-6">
           <Skeleton className="h-10 w-64" />
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -133,7 +133,9 @@ async function ClientShell({ children, params }: { children: React.ReactNode; pa
               : undefined
           }
         />
-        <main className="min-w-0 flex-1">{children}</main>
+        <main data-entrada className="min-w-0 flex-1">
+          {children}
+        </main>
       </SidebarInset>
     </SidebarProvider>
   )

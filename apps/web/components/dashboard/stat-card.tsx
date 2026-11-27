@@ -38,7 +38,7 @@ export function StatCard({
     // lado a lado ficam estreitos em 1280 px: aí perde respiro, o ícone diminui e o anel ao lado some.
     <div
       className={cn(
-        "@container flex items-center gap-3 rounded-2xl border bg-card px-4 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] @[17rem]:gap-4 @[17rem]:px-5",
+        "@container flex items-center gap-3 rounded-2xl border bg-card px-4 py-4 shadow-(--ui-shadow-card) @[17rem]:gap-4 @[17rem]:px-5",
         className,
       )}
     >

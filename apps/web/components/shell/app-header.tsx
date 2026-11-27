@@ -84,9 +84,14 @@ export function AppHeader({
   const model = slug ? clientNav(slug, kiosk, perms) : adminNav
   const helpHref = slug ? `/${slug}/ajuda` : "/admin"
   const bellHref = slug ? `/${slug}/notificacoes` : "/admin"
+  const scrolled = useScrolled()
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b bg-card/90 px-4 backdrop-blur supports-[backdrop-filter]:bg-card/75 md:px-6">
+    // No topo, o cabeçalho se funde ao fundo da página; ao rolar, vira "vidro" (desfoque) com sombra suave.
+    <header
+      data-scrolled={scrolled}
+      className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b border-transparent bg-background/80 px-4 backdrop-blur-md transition-[background-color,border-color,box-shadow] duration-300 ease-(--ui-ease) data-[scrolled=true]:border-border data-[scrolled=true]:bg-card/80 data-[scrolled=true]:shadow-(--ui-shadow-header) md:px-6"
+    >
       <SidebarTrigger className="-ml-1 text-muted-foreground" />
       <GlobalSearch model={model} entities={entities} />
 
@@ -142,6 +147,28 @@ export function AppHeader({
   )
 }
 
+/** Verdadeiro quando a página já rolou alguns pixels (para o efeito de vidro do cabeçalho). */
+function useScrolled(threshold = 4) {
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    let frame = 0
+    const update = () => {
+      frame = 0
+      setScrolled(window.scrollY > threshold)
+    }
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update)
+    }
+    frame = requestAnimationFrame(update)
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => {
+      window.removeEventListener("scroll", onScroll)
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [threshold])
+  return scrolled
+}
+
 function GlobalSearch({ model, entities }: { model: ReturnType<typeof clientNav>; entities: SearchEntity[] }) {
   const [open, setOpen] = useState(false)
   const router = useRouter()
@@ -172,7 +199,7 @@ function GlobalSearch({ model, entities }: { model: ReturnType<typeof clientNav>
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Buscar (Ctrl+K)"
-        className="flex h-10 w-10 min-w-0 shrink-0 items-center justify-center gap-2 rounded-xl border bg-background text-left text-sm text-muted-foreground shadow-xs transition hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:w-full sm:max-w-[360px] sm:shrink sm:justify-start sm:px-3"
+        className="flex h-10 w-10 min-w-0 shrink-0 items-center justify-center gap-2 rounded-xl border bg-card text-left text-sm text-muted-foreground shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-primary/40 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:w-full sm:max-w-[360px] sm:shrink sm:justify-start sm:px-3"
       >
         <SearchIcon className="size-4 shrink-0" />
         <span className="hidden truncate sm:inline">Buscar máquinas, linhas, gateways…</span>

@@ -30,7 +30,16 @@ export function Gauge({
     <div className="relative mx-auto" style={{ width, height: h + 4 }}>
       <svg width={width} height={h + 4} viewBox={`0 0 ${width} ${h + 4}`} aria-hidden>
         <path d={d} fill="none" stroke={track} strokeWidth={stroke} strokeLinecap="round" />
-        <path d={d} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${arc * v} ${arc}`} />
+        <path
+          d={d}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={`${arc * v} ${arc}`}
+          className="ui-arco"
+          style={{ "--ui-arco-de": `${arc * v}` } as React.CSSProperties}
+        />
         <circle cx={cx} cy={cy} r={0} />
       </svg>
       <div className="absolute inset-x-0 bottom-0 flex flex-col items-center leading-tight">
