@@ -1,9 +1,11 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useTransition } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   KeyRoundIcon,
+  RotateCcwKeyIcon,
   MailIcon,
   MonitorSmartphoneIcon,
   MoreHorizontalIcon,
@@ -43,6 +45,26 @@ import { StatCard } from "@/components/dashboard/stat-card"
 import { ConfirmAction, InitialsAvatar, SettingsTitle, SoftBadge, plural, type SoftTone } from "@/components/settings/bits"
 import type { ClientUserRow, SettingsMachine, SettingsUnit } from "@/components/settings/types"
 import { ROLE_ORDER, UserDialog, type UserFormValue } from "@/components/settings/user-dialog"
+import {
+  changeAccessAction,
+  inviteUserAction,
+  resendInviteAction,
+  resetTwoFactorAction,
+  sendPasswordResetAction,
+  setActiveAction,
+} from "@/app/(shell)/[cliente]/config/usuarios/actions"
+
+/** Resultado comum das Server Actions de usuários (ok ou erro com mensagem em português). */
+type ActionResult = { readonly status: "ok" } | { readonly status: "error"; readonly message: string }
+
+/** Ids do escopo no formato das Server Actions. */
+function scopeInput(scope: MemberScope) {
+  return {
+    scope: scope.kind,
+    unitIds: scope.kind === "units" ? scope.unitIds : [],
+    machineIds: scope.kind === "machines" ? scope.machineIds : [],
+  }
+}
 
 const ROLE_TONE: Record<ClientRole, SoftTone> = {
   client_admin: "navy",
@@ -62,17 +84,42 @@ export function UsersManager({
   machines,
   initialUsers,
   canManage,
+  banco = false,
 }: {
   clientName: string
   clientSlug: string
-  seatLimit: number
+  /** Limite de usuários do contrato; `null` = sem limite. */
+  seatLimit: number | null
   units: SettingsUnit[]
   machines: SettingsMachine[]
   initialUsers: ClientUserRow[]
   /** Admin do cliente (ou super admin da Engemase) gerencia os usuários; os demais só veem (D12). */
   canManage: boolean
+  /** Sistema real: as ações gravam no banco (Server Actions) e a lista vem do servidor. Sem banco: demonstração local. */
+  banco?: boolean
 }) {
-  const [users, setUsers] = useState(initialUsers)
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  const [localUsers, setUsers] = useState(initialUsers)
+  // Com banco, a lista é sempre a do servidor (recarregada com router.refresh() depois de cada ação).
+  const users = banco ? initialUsers : localUsers
+  const [resettingTwoFactor, setResettingTwoFactor] = useState<ClientUserRow | null>(null)
+
+  /** Roda uma Server Action; com sucesso, mostra a mensagem e recarrega a lista. Erro → aviso, nada muda. */
+  const act = (fn: () => Promise<ActionResult>, onOk: () => void) =>
+    startTransition(async () => {
+      try {
+        const r = await fn()
+        if (r.status === "error") {
+          toast.error(r.message)
+          return
+        }
+        onOk()
+        router.refresh()
+      } catch {
+        toast.error("Não foi possível concluir agora. Confira a conexão e tente de novo.")
+      }
+    })
   const [query, setQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState<ClientRole | "all">("all")
   const [statusFilter, setStatusFilter] = useState<UserStatus | "all">("all")
@@ -87,6 +134,7 @@ export function UsersManager({
   const isLastAdmin = (u: ClientUserRow) => u.role === "client_admin" && u.status !== "disabled" && admins.length <= 1
 
   const seatsUsed = users.filter((u) => u.status !== "disabled").length
+  const seatsLeft = seatLimit === null ? Number.POSITIVE_INFINITY : seatLimit - seatsUsed
   const active = users.filter((u) => u.status === "active")
   const invited = users.filter((u) => u.status === "invited")
   const withTwoFactor = active.filter((u) => u.twoFactor).length
@@ -101,6 +149,38 @@ export function UsersManager({
 
   const submit = (v: UserFormValue) => {
     const editing = dialog?.editing
+    if (banco) {
+      if (editing) {
+        act(
+          () => changeAccessAction(clientSlug, { memberId: editing.id, role: v.role, ...scopeInput(v.scope) }),
+          () => {
+            toast.success(`Acesso de ${editing.name} atualizado`, { description: `${CLIENT_ROLE_LABEL[v.role]} · ${scopeText(v.scope)}. Registrado na auditoria.` })
+            setDialog(null)
+          },
+        )
+      } else {
+        act(
+          async () => {
+            const r = await inviteUserAction(clientSlug, { name: v.name, email: v.email, role: v.role, ...scopeInput(v.scope) })
+            if (r.status === "ok" && !r.emailSent) {
+              toast.warning(`${v.name} foi adicionado, mas o e-mail não saiu`, {
+                description: "Use \"Reenviar e-mail de acesso\" no menu da pessoa daqui a pouco. Se continuar, fale com o suporte Engemase.",
+              })
+            } else if (r.status === "ok") {
+              toast.success(r.kind === "set_password" ? `E-mail de acesso enviado para ${v.email}` : `${v.name} já tinha conta: acesso liberado`, {
+                description:
+                  r.kind === "set_password"
+                    ? `${v.name} entra como ${CLIENT_ROLE_LABEL[v.role]} assim que definir a senha. O link vale por 72 h.`
+                    : "Avisamos por e-mail. Ela entra com a senha que já usa.",
+              })
+            }
+            return r
+          },
+          () => setDialog(null),
+        )
+      }
+      return
+    }
     if (editing) {
       setUsers((list) => list.map((u) => (u.id === editing.id ? { ...u, role: v.role, scope: v.scope } : u)))
       toast.success(`Acesso de ${editing.name} atualizado`, { description: `${CLIENT_ROLE_LABEL[v.role]} · ${scopeText(v.scope)}. Registrado na auditoria.` })
@@ -127,6 +207,16 @@ export function UsersManager({
   }
 
   const setStatus = (u: ClientUserRow, status: UserStatus) => {
+    if (banco) {
+      act(
+        () => setActiveAction(clientSlug, { memberId: u.id, active: status !== "disabled" }),
+        () =>
+          status === "disabled"
+            ? toast.success(`${u.name} desativado`, { description: "Perdeu o acesso a este cliente agora. O histórico e os apontamentos continuam na auditoria." })
+            : toast.success(`${u.name} reativado`, { description: "A pessoa volta a entrar com a senha que já tinha." }),
+      )
+      return
+    }
     setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, status } : x)))
     if (status === "disabled") {
       toast.success(`${u.name} desativado`, { description: "Sessões encerradas agora. O histórico e os apontamentos continuam na auditoria." })
@@ -135,10 +225,31 @@ export function UsersManager({
     }
   }
 
-  const resend = (u: ClientUserRow) =>
-    toast.success(`Novo e-mail de acesso enviado para ${u.email}`, { description: "O link anterior deixou de valer. O novo vale por 72 h." })
-  const resetPassword = (u: ClientUserRow) =>
-    toast.success(`Link de redefinição enviado para ${u.email}`, { description: "A senha atual continua valendo até a pessoa definir uma nova." })
+  const resend = (u: ClientUserRow) => {
+    const done = () => toast.success(`Novo e-mail de acesso enviado para ${u.email}`, { description: "O link anterior deixou de valer. O novo vale por 72 h." })
+    if (!banco) return done()
+    act(async () => {
+      const r = await resendInviteAction(clientSlug, u.id)
+      if (r.status === "ok" && !r.emailSent) {
+        return { status: "error", message: "O e-mail não saiu agora. Tente de novo daqui a pouco; se continuar, fale com o suporte Engemase." } as const
+      }
+      return r
+    }, done)
+  }
+  const resetPassword = (u: ClientUserRow) => {
+    const done = () => toast.success(`Link de redefinição enviado para ${u.email}`, { description: "Vale por 30 min. A senha atual continua valendo até a pessoa definir uma nova." })
+    if (!banco) return done()
+    act(() => sendPasswordResetAction(clientSlug, u.id), done)
+  }
+  const resetTwoFactor = (u: ClientUserRow) => {
+    const done = () =>
+      toast.success(`Verificação em duas etapas de ${u.name} reiniciada`, { description: "Na próxima entrada ela usa só a senha e pode ativar o aplicativo de novo." })
+    if (!banco) {
+      setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, twoFactor: false } : x)))
+      return done()
+    }
+    act(() => resetTwoFactorAction(clientSlug, u.id), done)
+  }
 
   return (
     <>
@@ -171,11 +282,11 @@ export function UsersManager({
           value={
             <>
               {seatsUsed}
-              <span className="text-base font-semibold text-muted-foreground"> / {seatLimit}</span>
+              {seatLimit !== null && <span className="text-base font-semibold text-muted-foreground"> / {seatLimit}</span>}
             </>
           }
-          hint="Limite do plano (ativos + convites)"
-          aside={<Ring value={seatsUsed / seatLimit} size={52} stroke={6} color="#257bb4" />}
+          hint={seatLimit !== null ? "Limite do plano (ativos + convites)" : "Ativos + convites (sem limite no contrato)"}
+          aside={seatLimit !== null ? <Ring value={seatLimit > 0 ? seatsUsed / seatLimit : 1} size={52} stroke={6} color="#257bb4" /> : undefined}
         />
         <StatCard icon={MailQuestionIcon} tone="orange" label="Convites pendentes" value={invited.length} hint={invited.length ? "Aguardando definir a senha" : "Nenhum pendente"} />
         <StatCard
@@ -188,7 +299,7 @@ export function UsersManager({
               <span className="text-base font-semibold text-muted-foreground"> / {active.length}</span>
             </>
           }
-          hint="Opcional para o cliente; obrigatório na Engemase"
+          hint="Opcional e recomendado: cada pessoa ativa em Minha conta"
           aside={<Ring value={active.length ? withTwoFactor / active.length : 0} size={52} stroke={6} color="#0e9384" />}
         />
         <StatCard icon={CrownIcon} tone="navy" label="Admins do cliente" value={admins.length} hint={admins.length <= 1 ? "Recomendado: ao menos 2" : "Gerenciam os usuários do cliente"} />
@@ -328,13 +439,17 @@ export function UsersManager({
                         {u.status === "invited" ? <span className="xl:max-2xl:whitespace-normal">Aguardando senha</span> : u.lastLogin}
                       </td>
                       <td className="py-3 pr-5 pl-3 text-right">
-                        {canManage && (
+                        {canManage && u.isSelf ? (
+                          <span className="text-xs text-muted-foreground">Você</span>
+                        ) : canManage && (
                         <UserMenu
                           user={u}
                           lastAdmin={lastAdmin}
                           onEdit={() => setDialog({ editing: u })}
                           onResend={() => resend(u)}
                           onReset={() => resetPassword(u)}
+                          onResetTwoFactor={() => setResettingTwoFactor(u)}
+                          busy={pending}
                           onDeactivate={() => setDeactivating(u)}
                           onReactivate={() => setStatus(u, "active")}
                           terminalsHref={`/${clientSlug}/config/terminais`}
@@ -358,8 +473,9 @@ export function UsersManager({
         machines={machines}
         existingEmails={users.map((u) => (u.email ?? "").toLowerCase()).filter(Boolean)}
         isLastAdmin={dialog?.editing ? isLastAdmin(dialog.editing) : false}
-        seatsLeft={seatLimit - seatsUsed}
+        seatsLeft={seatsLeft}
         clientName={clientName}
+        submitting={pending}
         onSubmit={submit}
       />
 
@@ -369,7 +485,7 @@ export function UsersManager({
         title={`Desativar ${deactivating?.name ?? ""}?`}
         description={
           <div className="grid gap-2">
-            <p>A pessoa perde o acesso agora e as sessões abertas são encerradas. Nada é apagado: apontamentos, classificações e o histórico na auditoria continuam.</p>
+            <p>A pessoa perde o acesso a {clientName} agora (o acesso a outros clientes, se tiver, continua). Nada é apagado: apontamentos, classificações e o histórico na auditoria continuam.</p>
             <p>Você pode reativar depois, sem novo convite.</p>
           </div>
         }
@@ -377,6 +493,23 @@ export function UsersManager({
         onConfirm={() => {
           if (deactivating) setStatus(deactivating, "disabled")
           setDeactivating(null)
+        }}
+      />
+
+      <ConfirmAction
+        open={resettingTwoFactor !== null}
+        onOpenChange={(o) => !o && setResettingTwoFactor(null)}
+        title={`Reiniciar a verificação em duas etapas de ${resettingTwoFactor?.name ?? ""}?`}
+        description={
+          <div className="grid gap-2">
+            <p>Use quando a pessoa trocou ou perdeu o celular do aplicativo autenticador. O 2FA dela é desligado e as sessões abertas são encerradas.</p>
+            <p>Na próxima entrada ela usa só a senha e pode ativar o aplicativo de novo em Minha conta. Fica registrado na auditoria.</p>
+          </div>
+        }
+        confirmLabel="Reiniciar 2FA"
+        onConfirm={() => {
+          if (resettingTwoFactor) resetTwoFactor(resettingTwoFactor)
+          setResettingTwoFactor(null)
         }}
       />
     </>
@@ -444,6 +577,8 @@ function UserMenu({
   onReset,
   onDeactivate,
   onReactivate,
+  onResetTwoFactor,
+  busy = false,
   terminalsHref,
 }: {
   user: ClientUserRow
@@ -453,11 +588,14 @@ function UserMenu({
   onReset: () => void
   onDeactivate: () => void
   onReactivate: () => void
+  onResetTwoFactor: () => void
+  /** Uma ação está gravando: o menu fica desativado até terminar. */
+  busy?: boolean
   terminalsHref: string
 }) {
   return (
     <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
+      <DropdownMenuTrigger asChild disabled={busy}>
         <button
           type="button"
           aria-label={`Ações para ${user.name}`}
@@ -482,6 +620,12 @@ function UserMenu({
           <DropdownMenuItem onSelect={onReset}>
             <KeyRoundIcon />
             Enviar redefinição de senha
+          </DropdownMenuItem>
+        )}
+        {user.status !== "disabled" && user.twoFactor && (
+          <DropdownMenuItem onSelect={onResetTwoFactor}>
+            <RotateCcwKeyIcon />
+            Reiniciar verificação em duas etapas
           </DropdownMenuItem>
         )}
         {!user.email && (

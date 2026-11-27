@@ -36,6 +36,8 @@ export interface ClientUserRow {
   lastLoginAt: string | null
   /** Quantos outros clientes a pessoa acessa (ex.: consultor). */
   otherClients: number
+  /** É quem está vendo a tela: ninguém altera o próprio acesso por aqui. */
+  isSelf?: boolean
 }
 
 export type EngemaseAccessKind = "super_admin" | "support_grant" | "assignment"

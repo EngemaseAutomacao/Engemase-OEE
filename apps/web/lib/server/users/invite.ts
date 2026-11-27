@@ -98,7 +98,7 @@ function unique(ids: readonly string[]): string[] {
 }
 
 /** Confere, sob a RLS do cliente, que todas as unidades/máquinas existem (e não foram excluídas). */
-async function scopeTargetsExist(tx: GatewayTx, unitIds: readonly string[], machineIds: readonly string[]): Promise<boolean> {
+export async function scopeTargetsExist(tx: GatewayTx, unitIds: readonly string[], machineIds: readonly string[]): Promise<boolean> {
   if (unitIds.length > 0) {
     const [row] = await tx.select({ n: count() }).from(unit).where(and(inArray(unit.id, [...unitIds]), isNull(unit.deletedAt)))
     if (Number(row?.n ?? 0) !== unitIds.length) return false

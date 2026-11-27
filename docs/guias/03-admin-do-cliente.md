@@ -39,7 +39,9 @@ Menu "Configurações" › "Usuários" (ou "Adicionar usuário" nas ações ráp
 
    Nenhuma unidade ou máquina marcada = nenhum acesso. Os números de linha e de unidade que a pessoa vê somam **só** o que está no escopo dela.
 
-5. Clique em "Adicionar e enviar e-mail". A pessoa recebe o convite por e-mail para definir a senha e aparece como "Aguardando definir senha" até lá.
+5. Clique em "Adicionar e enviar e-mail". A pessoa recebe o convite por e-mail para definir a senha (o link vale 72 horas) e aparece como "Aguardando definir senha" até lá. Se ela já tem conta na plataforma (por outra empresa), recebe só um aviso e entra com a senha que já usa.
+
+Se aparecer "o e-mail não saiu", a pessoa já foi adicionada: use "Reenviar e-mail de acesso" no menu dela daqui a pouco.
 
 Se aparecer "Limite de usuários do plano atingido", desative quem não usa mais ou fale com a Engemase para ampliar o plano.
 
@@ -51,11 +53,15 @@ Na lista "Pessoas com acesso", abra o menu da pessoa:
 |---|---|
 | "Alterar papel e escopo" | Muda o papel e o que a pessoa vê. Vale na hora |
 | "Reenviar e-mail de acesso" | Para quem ainda não definiu a senha (o link anterior venceu ou se perdeu) |
-| "Enviar redefinição de senha" | Manda um link para a pessoa criar uma senha nova |
-| "Desativar acesso" | A pessoa perde o acesso **na hora** e as sessões abertas são encerradas. **Nada é apagado**: apontamentos, classificações e histórico continuam |
+| "Enviar redefinição de senha" | Manda um link (vale 30 minutos) para a pessoa criar uma senha nova. A senha atual continua valendo até ela trocar |
+| "Reiniciar verificação em duas etapas" | Para quem trocou ou perdeu o celular do aplicativo autenticador: desliga o 2FA dela e encerra as sessões abertas. Ela entra só com a senha e pode ativar de novo em "Minha conta" |
+| "Desativar acesso" | A pessoa perde o acesso **à sua empresa na hora** (se ela também tiver acesso a outra empresa, esse continua). **Nada é apagado**: apontamentos, classificações e histórico continuam |
 | "Reativar acesso" | Devolve o acesso, sem novo convite |
 
-Regras: o **último admin do cliente** não pode ser desativado nem rebaixado (promova outra pessoa antes). Ninguém concede papel acima do próprio.
+Regras:
+- O **último admin do cliente** não pode ser desativado nem rebaixado (promova outra pessoa antes).
+- **Ninguém altera o próprio acesso**: na sua linha aparece "Você". Peça a outro admin.
+- Tudo fica registrado em "Configurações" › "Auditoria", com quem fez, quando, e como era antes e depois.
 
 Use a busca e os filtros de papel e situação para achar alguém. No alto, os números mostram quantas pessoas têm acesso, convites pendentes, admins e quem tem a verificação em duas etapas ativa.
 

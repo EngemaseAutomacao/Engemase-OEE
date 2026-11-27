@@ -11,6 +11,18 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 - **Fechamento de turno automático:** os números de cada turno são fechados no fim do turno e recalculados se chegarem dados atrasados ou se uma parada for reclassificada.
 - **Atualização do programa do gateway à distância**, enviada pela Engemase.
 
+## 27/11/2026 · Usuários da empresa de verdade
+
+**Para quem usa**
+- **"Configurações" › "Usuários" funciona no sistema real** (antes aparecia "Em breve"). O admin da empresa vê a equipe com papel, escopo, situação, verificação em duas etapas e último acesso.
+- **Convidar, mudar papel e escopo, desativar e reativar** gravam de verdade e ficam na auditoria, com como era antes e depois.
+- **Reenviar o convite, mandar a redefinição de senha e reiniciar a verificação em duas etapas** de quem trocou de celular, pelo menu de cada pessoa.
+- Proteções: a empresa nunca fica sem admin ativo, ninguém altera o próprio acesso e desativar tira o acesso só à sua empresa.
+- O quadro "Acesso da equipe Engemase" mostra os acessos reais: super admins, atendimentos de suporte e técnicos atribuídos.
+
+**Para a equipe Engemase**
+- As rotinas automáticas (alerta de gateway offline, vencimentos, VPN e fechamento de turno) passaram a rodar pelo cron-job.org e foram corrigidas: falhavam por falta de permissão no banco. A mesma correção vale para a ativação e o envio de dados dos gateways.
+
 ## 24/11/2026 · Entrar com segurança e preparação para o piloto
 
 **Para quem usa**

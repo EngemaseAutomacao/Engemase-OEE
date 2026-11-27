@@ -1,6 +1,8 @@
 import type { Metadata } from "next"
+import { Suspense } from "react"
 import { usarBanco } from "@/lib/data/fonte"
-import { TelaEmBreve } from "@/components/shell/tela-em-breve"
+import { dadosUsuarios } from "@/lib/data/config/usuarios"
+import { CarregandoPagina } from "@/components/shell/carregando"
 import { notFound } from "next/navigation"
 
 import {
@@ -109,10 +111,39 @@ function engemaseAccessFor(client: Client): EngemaseAccessRow[] {
 
 export const metadata: Metadata = { title: "Usuários" }
 
-export default async function Page({ params }: PageProps<"/[cliente]/config/usuarios">) {
+/** Sistema real: sessão, permissão e dados do banco (fica dentro do <Suspense>). */
+async function Real({ params }: { params: PageProps<"/[cliente]/config/usuarios">["params"] }) {
   const { cliente } = await params
-  // Sem versão real ainda: no sistema real, nunca mostra os dados simulados.
-  if (usarBanco()) return <TelaEmBreve titulo="Usuários" voltarPara={`/${cliente}`} voltarTexto="Voltar ao painel" />
+  const d = await dadosUsuarios(cliente)
+  return (
+    <div className="flex flex-col gap-5 p-4 md:p-6">
+      <UsersManager
+        clientName={d.clientName}
+        clientSlug={cliente}
+        seatLimit={d.seatLimit}
+        units={d.units}
+        machines={d.machines}
+        initialUsers={d.users}
+        canManage={d.canManage}
+        banco
+      />
+      <div className="grid items-start gap-4 2xl:grid-cols-2">
+        <EngemaseAccess clientSlug={cliente} rows={d.engemase} />
+        <RoleMatrix />
+      </div>
+    </div>
+  )
+}
+
+export default async function Page({ params }: PageProps<"/[cliente]/config/usuarios">) {
+  if (usarBanco()) {
+    return (
+      <Suspense fallback={<CarregandoPagina />}>
+        <Real params={params} />
+      </Suspense>
+    )
+  }
+  const { cliente } = await params
   const client = getClientBySlug(cliente)
   if (!client) notFound()
 

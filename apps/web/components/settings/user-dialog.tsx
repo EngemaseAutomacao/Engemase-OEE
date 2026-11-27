@@ -51,6 +51,7 @@ export function UserDialog({
   isLastAdmin,
   seatsLeft,
   clientName,
+  submitting = false,
   onSubmit,
 }: {
   open: boolean
@@ -63,6 +64,8 @@ export function UserDialog({
   isLastAdmin: boolean
   seatsLeft: number
   clientName: string
+  /** Gravando no servidor: o botão fica desativado e mostra "Salvando…". */
+  submitting?: boolean
   onSubmit: (value: UserFormValue) => void
 }) {
   return (
@@ -78,6 +81,7 @@ export function UserDialog({
             isLastAdmin={isLastAdmin}
             seatsLeft={seatsLeft}
             clientName={clientName}
+            submitting={submitting}
             onCancel={() => onOpenChange(false)}
             onSubmit={onSubmit}
           />
@@ -95,6 +99,7 @@ function UserForm({
   isLastAdmin,
   seatsLeft,
   clientName,
+  submitting,
   onCancel,
   onSubmit,
 }: {
@@ -105,6 +110,7 @@ function UserForm({
   isLastAdmin: boolean
   seatsLeft: number
   clientName: string
+  submitting: boolean
   onCancel: () => void
   onSubmit: (value: UserFormValue) => void
 }) {
@@ -149,7 +155,7 @@ function UserForm({
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     setTouched(true)
-    if (!valid) return
+    if (!valid || submitting) return
     onSubmit({ name: name.trim(), email: emailNorm, role, scope: effectiveScope })
   }
 
@@ -332,11 +338,11 @@ function UserForm({
       )}
 
       <DialogFooter>
-        <Button type="button" variant="outline" onClick={onCancel}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={touched && !valid}>
-          {isEdit ? "Salvar alterações" : "Adicionar e enviar e-mail"}
+        <Button type="submit" disabled={submitting || (touched && !valid)}>
+          {submitting ? "Salvando…" : isEdit ? "Salvar alterações" : "Adicionar e enviar e-mail"}
         </Button>
       </DialogFooter>
     </form>
