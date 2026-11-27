@@ -21,7 +21,7 @@
  */
 import { randomBytes } from "node:crypto"
 import { GatewayTokenSchema } from "@engemase/contracts"
-import { gateway, type GatewayTokenState, resolveGatewayTokenState, sha256Hex } from "@engemase/db"
+import { gateway, type GatewayTokenState, resolveGatewayTokenState, sha256Hex, withAppRole } from "@engemase/db"
 import { type SQL, sql } from "drizzle-orm"
 import { GatewayApiError } from "./errors"
 import { type GatewayDb, type GatewayPrincipal, rowsExecutor } from "./types"
@@ -75,7 +75,8 @@ export async function authenticateGateway(db: GatewayDb, authorization: string |
   const token = parseBearerToken(authorization)
   if (token === null) throw new GatewayApiError("unauthorized")
   const tokenHash = hashGatewayToken(token)
-  const ref = await resolveGatewayTokenState(rowsExecutor(db), tokenHash)
+  // Antes de saber o cliente: só a função de busca, como app_user (o login de produção é NOINHERIT).
+  const ref = await withAppRole(db, (tx) => resolveGatewayTokenState(rowsExecutor(tx), tokenHash))
   if (ref === null) throw new GatewayApiError("unauthorized")
   assertAuthenticates(ref.state)
   return { gatewayId: ref.id, organizationId: ref.organizationId, tokenHash }

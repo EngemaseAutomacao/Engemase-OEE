@@ -17,7 +17,7 @@
  * autentica recebe 401 sem tocar no limitador). O /enroll conta o IP antes de ler o corpo e o código
  * depois de validá-lo.
  */
-import { sha256Hex } from "@engemase/db"
+import { sha256Hex, withAppRole } from "@engemase/db"
 import { sql } from "drizzle-orm"
 import { GatewayApiError } from "./errors"
 import { type GatewayDb, queryRows } from "./types"
@@ -57,9 +57,12 @@ export const rateLimitKey = {
  * (arredondado para cima, no mínimo 1 s).
  */
 export async function enforceRateLimit(db: GatewayDb, key: string, limit: RateLimit, now: Date): Promise<void> {
-  const [row] = await queryRows<{ allowed: boolean; retry_after_ms: string | number }>(
-    db,
-    sql`SELECT allowed, retry_after_ms FROM app.rate_limit_take(${key}, ${limit.intervalMs}::integer, ${limit.burst}::integer, ${now.toISOString()}::timestamptz)`,
+  // Como app_user (o login de produção é NOINHERIT): a função é de plataforma, sem cliente definido.
+  const [row] = await withAppRole(db, (tx) =>
+    queryRows<{ allowed: boolean; retry_after_ms: string | number }>(
+      tx,
+      sql`SELECT allowed, retry_after_ms FROM app.rate_limit_take(${key}, ${limit.intervalMs}::integer, ${limit.burst}::integer, ${now.toISOString()}::timestamptz)`,
+    ),
   )
   if (row === undefined) throw new Error("app.rate_limit_take não devolveu linha")
   if (row.allowed) return

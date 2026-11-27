@@ -145,10 +145,13 @@ Lógica em `lib/server/cron/` (`runner.ts` + um arquivo por job); os `route.ts` 
 > **Fase de testes, plano gratuito (Hobby) da Vercel (desde 24/11/2026).** O Hobby recusa o deploy inteiro quando o
 > `vercel.json` tem tarefa que roda mais de uma vez por dia. Por isso `PLANO_VERCEL = "hobby"` em
 > `lib/server/cron/jobs.ts` e o `vercel.json` agenda só `limpeza` (03:30) e `resumo-diario` (só às 10h, sem a
-> 2ª tentativa das 11h). `alertas`, `expiracao` e `vpn` continuam no código, sem agendamento: rodam só à mão (curl
-> abaixo). **Antes de clientes usarem os alertas**, passe o projeto para o Pro, troque `PLANO_VERCEL` para `"pro"`
-> e ponha no `vercel.json` as 6 entradas da tabela (o teste `test/cron/cron.test.ts` confere que os dois batem).
-> Enquanto for Hobby, o fechamento de turno (`turnos`) também só roda à mão.
+> 2ª tentativa das 11h). **Desde 27/11/2026 as outras quatro são chamadas pelo cron-job.org** (conta da Engemase),
+> com `GET` e o cabeçalho `Authorization: Bearer <CRON_SECRET>`: `alertas` (1 min), `expiracao` (5 min), `vpn`
+> (15 min) e `turnos` (de hora em hora, no minuto 10), sempre em `https://engemase-oee.vercel.app/api/cron/<job>`.
+> Trocou o `CRON_SECRET` na Vercel? Troque também nas quatro tarefas do cron-job.org e publique de novo. Chamada a
+> mais não faz mal: cada janela roda uma vez só (`app.cron_claim`). Ao passar para o Pro, troque `PLANO_VERCEL`
+> para `"pro"`, ponha no `vercel.json` as 6 entradas da tabela (o teste `test/cron/cron.test.ts` confere que os
+> dois batem) e desligue as tarefas do cron-job.org.
 
 | Rota | Quando | O que faz |
 |---|---|---|

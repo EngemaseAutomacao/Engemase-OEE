@@ -115,3 +115,23 @@ export async function withTenant<TTx extends SqlExecutor, T>(
     return fn(tx)
   })
 }
+
+/**
+ * Executa `fn` numa transação como `app_user`, SEM cliente definido: para as funções de plataforma
+ * (`app.resolve_gateway_*`, `app.rate_limit_*`, `app.cron_*`, `app.audit_log_purge`), que rodam antes de
+ * se saber o cliente ou valem para todos. Com o cliente ainda não definido, a RLS não mostra nenhuma linha
+ * de cliente; só as funções `SECURITY DEFINER` liberadas para `app_user` funcionam.
+ *
+ * Necessária porque o login de produção é NOINHERIT (`packages/db/src/deploy.ts`): fora de uma
+ * transação com `SET LOCAL ROLE`, ele não tem nem USAGE no schema `app`.
+ *
+ * ```ts
+ * const ref = await withAppRole(db, (tx) => resolveGatewayTokenState(tx, hash))
+ * ```
+ */
+export async function withAppRole<TTx extends SqlExecutor, T>(db: TransactionalDb<TTx>, fn: (tx: TTx) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql.raw(`SET LOCAL ROLE ${DB_ROLES.app}`))
+    return fn(tx)
+  })
+}
