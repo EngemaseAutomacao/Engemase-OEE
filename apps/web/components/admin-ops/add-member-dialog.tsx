@@ -28,14 +28,14 @@ const VALIDITY = [30, 60, 90, 180] as const
  * super admin) e mostra o link "definir senha" para repassar; sem banco (demonstração), simula na tela.
  */
 export function AddMemberButton({ banco = false }: { banco?: boolean }) {
-  const { members, clients, addMember, addAssignment } = useTeam()
+  const { members, clients, addMember, addAssignment, agora } = useTeam()
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [serverError, setServerError] = useState<{ message: string; field?: string } | null>(null)
   const [result, setResult] = useState<MembroAdicionado | null>(null)
   const [copied, setCopied] = useState(false)
   const DOMAIN = banco ? (members.find((m) => m.isMe)?.email.split("@")[1] ?? "engemase.com.br") : DEMO_DOMAIN
-  const { read } = useOpsClock(60_000)
+  const { read } = useOpsClock(60_000, agora)
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")

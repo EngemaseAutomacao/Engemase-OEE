@@ -15,6 +15,8 @@ import { ago, initials } from "@/lib/format"
 import { PLATFORM_ROLE_LABEL } from "@/lib/roles"
 import { usarBanco } from "../fonte"
 import { exigirEquipe } from "./acesso"
+import { getAuthDb } from "@/lib/server/db"
+import { clientAccessRows, readTeamAccess, teamRows } from "@/lib/server/team/read"
 import { type Repositorio, repositorioEmMemoria, repositorioMock } from "./repositorio"
 import { fotoDaPlataforma } from "./snapshot"
 
@@ -70,7 +72,22 @@ export async function dadosClientes() {
 export async function dadosCliente(clienteId: string) {
   if (usarBanco() && !UUID_RE.test(clienteId)) return null
   const r = await repositorioDoConsole(usarBanco() ? clienteId : undefined)
-  return buildClientDetail(clienteId, r)
+  const d = buildClientDetail(clienteId, r)
+  if (d === null) return null
+  const technicians = r
+    .getPlatformUsers()
+    .filter((u) => u.platformRole === "technician" && u.status !== "disabled")
+    .map((u) => ({ id: u.id, name: u.name }))
+  const me = r.getCurrentUser()
+  const base = { ...d, banco: false, clientId: clienteId, technicians, me: { id: me.id, role: me.platformRole } }
+  if (!usarBanco()) return base
+  // Com banco, concessões e atribuições vêm das tabelas reais (não da atividade derivada).
+  const e = await exigirEquipe()
+  const authDb = getAuthDb()
+  if (authDb === null) return base
+  const now = new Date()
+  const real = clientAccessRows(await readTeamAccess(e.db, authDb, now, [clienteId]), clienteId, now)
+  return { ...base, ...real, banco: true }
 }
 
 export async function nomeDoCliente(clienteId: string): Promise<string> {
@@ -83,7 +100,17 @@ export async function dadosFrota() {
 }
 
 export async function dadosEquipe() {
-  return buildTeam(await repositorioDoConsole())
+  const r = await repositorioDoConsole()
+  const data = buildTeam(r)
+  const me = r.getCurrentUser()
+  if (!usarBanco()) return { ...data, banco: false, meRole: me.platformRole }
+  const agora = new Date().toISOString()
+  // Com banco, atribuições e concessões vêm das tabelas reais (não da atividade derivada).
+  const e = await exigirEquipe()
+  const authDb = getAuthDb()
+  if (authDb === null) return { ...data, banco: true, meRole: e.role, agora }
+  const now = new Date(agora)
+  return { ...data, ...teamRows(await readTeamAccess(e.db, authDb, now), now), banco: true, meRole: e.role, agora }
 }
 
 export async function dadosAuditoria() {

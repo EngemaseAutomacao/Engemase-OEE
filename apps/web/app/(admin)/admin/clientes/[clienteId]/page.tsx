@@ -138,6 +138,7 @@ async function DetalheDoCliente({ params }: { params: PageProps<"/admin/clientes
               units={d.unitOptions}
               remoteSessions={d.remoteSessions}
               remotePolicy={d.remotePolicy}
+              banco={d.banco ? { clientId: d.clientId, technicians: d.technicians, meId: d.me.id, meRole: d.me.role } : null}
             />
           </TabsContent>
 

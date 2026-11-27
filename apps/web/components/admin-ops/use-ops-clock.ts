@@ -4,14 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { MOCK_NOW } from "@/lib/mock/clock"
 
-const BASE_MS = Date.parse(MOCK_NOW)
-
 /**
- * Relógio simulado do console: começa em MOCK_NOW (igual no servidor e no navegador,
- * sem erro de hidratação) e, depois de montado, avança junto com o relógio real.
- * `read()` devolve o instante simulado dentro de handlers (ex.: hora de um pedido).
+ * Relógio do console: começa em `baseIso` (o "agora" que o servidor usou; com banco, a hora real) ou, sem
+ * ele, em MOCK_NOW (demonstração). Igual no servidor e no navegador (sem erro de hidratação) e, depois de
+ * montado, avança junto com o relógio real. `read()` devolve o instante dentro de handlers.
  */
-export function useOpsClock(tickMs = 1000) {
+export function useOpsClock(tickMs = 1000, baseIso?: string) {
+  const BASE_MS = Date.parse(baseIso ?? MOCK_NOW)
   const [now, setNow] = useState(BASE_MS)
   const mountedAt = useRef<number | null>(null)
 
@@ -20,9 +19,9 @@ export function useOpsClock(tickMs = 1000) {
     mountedAt.current = startedAt
     const id = window.setInterval(() => setNow(BASE_MS + (Date.now() - startedAt)), tickMs)
     return () => window.clearInterval(id)
-  }, [tickMs])
+  }, [tickMs, BASE_MS])
 
-  const read = useCallback(() => (mountedAt.current === null ? BASE_MS : BASE_MS + (Date.now() - mountedAt.current)), [])
+  const read = useCallback(() => (mountedAt.current === null ? BASE_MS : BASE_MS + (Date.now() - mountedAt.current)), [BASE_MS])
 
   return { now, read }
 }

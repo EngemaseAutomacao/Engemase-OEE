@@ -19,14 +19,20 @@ import { useTeam } from "./team-context"
 import { SUPPORT_MAX_HOURS } from "./labels"
 import type { AssignmentRow } from "./team-data"
 import { countdown, useOpsClock } from "./use-ops-clock"
+import { useTeamAction } from "./use-team-action"
+import { OpenGrantButton } from "./open-grant-dialog"
+import { criarAtribuicaoAction, encerrarConcessaoAction, renovarAtribuicaoAction, revogarAtribuicaoAction } from "@/app/(admin)/admin/equipe-actions"
 
 const DAY = 86_400_000
 const VALIDITY = [30, 60, 90, 180] as const
 
 /** Atribuições de técnicos (cliente, unidades e validade). */
 export function FieldAssignments({ className }: { className?: string }) {
-  const { members, clients, assignments, addAssignment, patchAssignment, removeAssignment } = useTeam()
-  const { now, read } = useOpsClock(60_000)
+  const { members, clients, assignments, addAssignment, patchAssignment, removeAssignment, meRole, agora } = useTeam()
+  const { run, pending, banco } = useTeamAction()
+  // Com banco, só o super admin cria, renova e revoga (o servidor confere de novo).
+  const canManage = !banco || meRole === "super_admin"
+  const { now, read } = useOpsClock(60_000, agora)
   const [open, setOpen] = useState(false)
   const [userId, setUserId] = useState("")
   const [clientId, setClientId] = useState("")
@@ -66,6 +72,19 @@ export function FieldAssignments({ className }: { className?: string }) {
     const t = read()
     const until = t + Number(days) * DAY
     const scope = allUnits || units.length === client.units.length ? "all" : units
+    const done = () =>
+      toast.success(`${user.name} atribuído a ${client.name}`, { description: `Válido até ${date(new Date(until).toISOString())}. Registrado na auditoria visível ao cliente.` })
+    if (banco) {
+      run(
+        () => criarAtribuicaoAction({ userId: user.id, clientId: client.id, unitIds: scope === "all" ? null : scope, days: Number(days), reason: reason.trim() }),
+        () => {
+          done()
+          setOpen(false)
+        },
+        () => undefined,
+      )
+      return
+    }
     addAssignment({
       id: `asg_${user.id}_${client.id}_${t}`,
       userId: user.id,
@@ -88,13 +107,27 @@ export function FieldAssignments({ className }: { className?: string }) {
   }
 
   const renew = (a: AssignmentRow) => {
-    const until = Math.max(Date.parse(a.validUntil), now) + 90 * DAY
-    patchAssignment(a.id, { validUntil: new Date(until).toISOString(), validUntilLabel: date(new Date(until).toISOString()) })
-    toast.success("Atribuição renovada por 90 dias", { description: `${a.userName} · ${a.clientName} · até ${date(new Date(until).toISOString())}` })
+    const until = (banco ? now : Math.max(Date.parse(a.validUntil), now)) + 90 * DAY
+    const done = () => toast.success("Atribuição renovada por 90 dias", { description: `${a.userName} · ${a.clientName} · até ${date(new Date(until).toISOString())}` })
+    run(
+      () => renovarAtribuicaoAction({ id: a.id, clientId: a.clientId }),
+      done,
+      () => {
+        patchAssignment(a.id, { validUntil: new Date(until).toISOString(), validUntilLabel: date(new Date(until).toISOString()) })
+        done()
+      },
+    )
   }
   const revoke = (a: AssignmentRow) => {
-    removeAssignment(a.id)
-    toast.success("Atribuição revogada", { description: `${a.userName} perdeu o acesso a ${a.clientName} imediatamente.` })
+    const done = () => toast.success("Atribuição revogada", { description: `${a.userName} perdeu o acesso a ${a.clientName} imediatamente.` })
+    run(
+      () => revogarAtribuicaoAction({ id: a.id, clientId: a.clientId }),
+      done,
+      () => {
+        removeAssignment(a.id)
+        done()
+      },
+    )
   }
 
   return (
@@ -103,7 +136,7 @@ export function FieldAssignments({ className }: { className?: string }) {
       description="Acesso só aos clientes atribuídos, com unidades e validade"
       className={className}
       action={
-        <Button size="sm" variant="outline" onClick={openDialog} disabled={engineers.length === 0}>
+        <Button size="sm" variant="outline" onClick={openDialog} disabled={engineers.length === 0 || !canManage}>
           <PlusIcon />
           Nova atribuição
         </Button>
@@ -166,14 +199,16 @@ export function FieldAssignments({ className }: { className?: string }) {
                       <span className="block text-[11px]">por {a.createdBy}</span>
                     </td>
                     <td className={TD}>
+                      {canManage && (
                       <div className="flex items-center justify-end gap-1.5">
-                        <button type="button" onClick={() => renew(a)} className={squareClass("teal")} aria-label={`Renovar atribuição de ${a.userName} em ${a.clientName}`} title="Renovar por 90 dias">
+                        <button type="button" disabled={pending} onClick={() => renew(a)} className={squareClass("teal")} aria-label={`Renovar atribuição de ${a.userName} em ${a.clientName}`} title="Renovar por 90 dias">
                           <CalendarPlusIcon aria-hidden />
                         </button>
-                        <button type="button" onClick={() => revoke(a)} className={squareClass("red")} aria-label={`Revogar atribuição de ${a.userName} em ${a.clientName}`} title="Revogar">
+                        <button type="button" disabled={pending} onClick={() => revoke(a)} className={squareClass("red")} aria-label={`Revogar atribuição de ${a.userName} em ${a.clientName}`} title="Revogar">
                           <XIcon aria-hidden />
                         </button>
                       </div>
+                      )}
                     </td>
                   </tr>
                 )
@@ -282,7 +317,7 @@ export function FieldAssignments({ className }: { className?: string }) {
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancelar
               </Button>
-              <Button type="submit">
+              <Button type="submit" disabled={pending}>
                 <CalendarRangeIcon />
                 Atribuir
               </Button>
@@ -296,19 +331,27 @@ export function FieldAssignments({ className }: { className?: string }) {
 
 /** Concessões de suporte: ativas (com contagem regressiva) e encerradas recentemente. */
 export function SupportGrants({ className }: { className?: string }) {
-  const { grants, patchGrant } = useTeam()
-  const { now, read } = useOpsClock(1000)
+  const { grants, patchGrant, meRole, meId, agora } = useTeam()
+  const { run, pending: ending } = useTeamAction()
+  const { now, read } = useOpsClock(1000, agora)
   const active = grants.filter((g) => g.endedAt === null && Date.parse(g.endsAt) > now)
   const recent = grants.filter((g) => !(g.endedAt === null && Date.parse(g.endsAt) > now)).slice(0, 4)
 
-  const end = (id: string, who: string, client: string) => {
-    const t = new Date(read()).toISOString()
-    patchGrant(id, { endedAt: t, endsAt: t, endsLabel: dateTime(t), active: false })
-    toast.success("Concessão de suporte encerrada", { description: `${who} perdeu o acesso a ${client}. O cliente vê o encerramento na auditoria.` })
+  const end = (id: string, clientId: string, who: string, client: string) => {
+    const done = () => toast.success("Concessão de suporte encerrada", { description: `${who} perdeu o acesso a ${client}. O cliente vê o encerramento na auditoria.` })
+    run(
+      () => encerrarConcessaoAction({ id, clientId }),
+      done,
+      () => {
+        const t = new Date(read()).toISOString()
+        patchGrant(id, { endedAt: t, endsAt: t, endsLabel: dateTime(t), active: false })
+        done()
+      },
+    )
   }
 
   return (
-    <SectionCard title="Concessões de suporte" description={`Cliente, motivo e chamado · até ${SUPPORT_MAX_HOURS} h · sempre visível ao cliente`} className={className}>
+    <SectionCard title="Concessões de suporte" description={`Cliente, motivo e chamado · até ${SUPPORT_MAX_HOURS} h · sempre visível ao cliente`} className={className} action={<OpenGrantButton />}>
       {active.length === 0 ? (
         <Empty className="border border-dashed p-6 md:p-6">
           <EmptyHeader>
@@ -348,7 +391,7 @@ export function SupportGrants({ className }: { className?: string }) {
                   <span>
                     Desde {g.startedLabel} · termina {g.endsLabel}
                   </span>
-                  <Button size="xs" variant="outline" onClick={() => end(g.id, g.userName, g.clientName)} className="text-state-fault hover:text-state-fault">
+                  <Button size="xs" variant="outline" onClick={() => end(g.id, g.clientId, g.userName, g.clientName)} disabled={ending || (meRole === "technician" && g.userId !== meId)} className="text-state-fault hover:text-state-fault">
                     Encerrar concessão
                   </Button>
                 </div>

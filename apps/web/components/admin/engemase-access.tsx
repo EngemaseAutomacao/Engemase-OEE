@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
 import { BadgeCheckIcon, CircleStopIcon, HardHatIcon, KeyRoundIcon, LifeBuoyIcon, PlusIcon, ShieldCheckIcon, UserXIcon } from "lucide-react"
@@ -20,6 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { Assignment, RemoteSessionRow, SupportGrant } from "./admin-data"
+import { abrirConcessaoAction, criarAtribuicaoAction, encerrarConcessaoAction, revogarAtribuicaoAction } from "@/app/(admin)/admin/equipe-actions"
+import type { Resultado } from "@/lib/data/admin/acesso"
 import { SoftBadge, TD, TH, squareClass } from "./bits"
 import type { SoftTone } from "./labels"
 
@@ -73,6 +76,34 @@ function RowAction({ label, icon: Icon, onClick }: { label: string; icon: typeof
 }
 
 /** Aba "Acesso Engemase": concessões de suporte, atribuições de campo e acesso remoto (docs/15 §3). */
+/** Pessoa nas listas dos formulários (com banco, `id` é o do usuário; no demo, o próprio nome). */
+interface Person {
+  readonly id: string
+  readonly name: string
+}
+
+/** Com banco: cliente, técnicos ativos e quem está na tela (as ações gravam de verdade). */
+export interface AcessoNoBanco {
+  readonly clientId: string
+  readonly technicians: readonly Person[]
+  readonly meId: string
+  readonly meRole: "super_admin" | "technician" | null
+}
+
+interface GrantPayload {
+  readonly personId: string
+  readonly ticket: string
+  readonly reason: string
+  readonly minutes: number
+}
+
+interface AssignPayload {
+  readonly personId: string
+  readonly unitIds: string[] | null
+  readonly days: number
+  readonly reason: string
+}
+
 export function EngemaseAccess({
   clientName,
   now,
@@ -83,6 +114,7 @@ export function EngemaseAccess({
   units,
   remoteSessions,
   remotePolicy,
+  banco,
 }: {
   clientName: string
   now: string
@@ -93,9 +125,40 @@ export function EngemaseAccess({
   units: { id: string; name: string }[]
   remoteSessions: RemoteSessionRow[]
   remotePolicy: string
+  banco?: AcessoNoBanco | null
 }) {
   const [grants, setGrants] = useState(initialGrants)
   const [assignments, setAssignments] = useState(initialAssignments)
+  // Dados novos do servidor (router.refresh() depois de gravar) substituem o estado local.
+  const [source, setSource] = useState({ initialGrants, initialAssignments })
+  if (source.initialGrants !== initialGrants || source.initialAssignments !== initialAssignments) {
+    setSource({ initialGrants, initialAssignments })
+    setGrants(initialGrants)
+    setAssignments(initialAssignments)
+  }
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  /** Com banco: Server Action + recarregar; sem banco: só a tela. */
+  function run<T>(action: () => Promise<Resultado<T>>, onOk: () => void, demo: () => void) {
+    if (!banco) return demo()
+    startTransition(async () => {
+      const r = await action()
+      if (!r.ok) {
+        toast.error(r.mensagem)
+        return
+      }
+      onOk()
+      router.refresh()
+    })
+  }
+  const isSuper = !banco || banco.meRole === "super_admin"
+  // Técnico abre concessão só para si; super admin escolhe o técnico.
+  const grantPeople: Person[] = banco
+    ? banco.meRole === "super_admin"
+      ? [...banco.technicians]
+      : banco.technicians.filter((t) => t.id === banco.meId)
+    : supportPeople.map((n) => ({ id: n, name: n }))
+  const assignPeople: Person[] = banco ? [...banco.technicians] : fieldPeople.map((n) => ({ id: n, name: n }))
   const [grantOpen, setGrantOpen] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
   // muda a cada abertura para zerar os formulários (sem esvaziar o diálogo durante a animação de saída)
@@ -110,12 +173,26 @@ export function EngemaseAccess({
   }
 
   const endGrant = (g: SupportGrant) => {
-    setGrants((list) => list.map((x) => (x.id === g.id ? { ...x, status: "revoked", end: "agora" } : x)))
-    toast.success("Concessão encerrada", { description: `${g.userName} perdeu o acesso a ${clientName}. Registro mantido na auditoria.` })
+    const done = () => toast.success("Concessão encerrada", { description: `${g.userName} perdeu o acesso a ${clientName}. Registro mantido na auditoria.` })
+    run(
+      () => encerrarConcessaoAction({ id: g.id, clientId: banco?.clientId }),
+      done,
+      () => {
+        setGrants((list) => list.map((x) => (x.id === g.id ? { ...x, status: "revoked", end: "agora" } : x)))
+        done()
+      },
+    )
   }
   const revokeAssignment = (a: Assignment) => {
-    setAssignments((list) => list.map((x) => (x.id === a.id ? { ...x, status: "revoked" } : x)))
-    toast.success("Atribuição revogada", { description: `${a.userName} não acessa mais ${clientName}.` })
+    const done = () => toast.success("Atribuição revogada", { description: `${a.userName} não acessa mais ${clientName}.` })
+    run(
+      () => revogarAtribuicaoAction({ id: a.id, clientId: banco?.clientId }),
+      done,
+      () => {
+        setAssignments((list) => list.map((x) => (x.id === a.id ? { ...x, status: "revoked" } : x)))
+        done()
+      },
+    )
   }
 
   const activeGrants = grants.filter((g) => g.status === "active").length
@@ -145,7 +222,7 @@ export function EngemaseAccess({
           title="Concessões de suporte"
           description="Leitura de cadastros, configurações, saúde e painéis + comandos de diagnóstico"
           action={
-            <Button size="sm" onClick={openGrant} aria-label="Nova concessão" className="shrink-0">
+            <Button size="sm" onClick={openGrant} aria-label="Nova concessão" className="shrink-0" disabled={grantPeople.length === 0}>
               <PlusIcon />
               <span className="hidden sm:inline">Nova concessão</span>
             </Button>
@@ -205,7 +282,7 @@ export function EngemaseAccess({
           title="Atribuições de engenheiros de campo"
           description="Configuram unidades, linhas, máquinas, gateways e tags; não mexem em usuários"
           action={
-            <Button size="sm" onClick={openAssign} aria-label="Nova atribuição" className="shrink-0">
+            <Button size="sm" onClick={openAssign} aria-label="Nova atribuição" className="shrink-0" disabled={!isSuper}>
               <PlusIcon />
               <span className="hidden sm:inline">Nova atribuição</span>
             </Button>
@@ -252,7 +329,7 @@ export function EngemaseAccess({
                           {ASSIGNMENT_STATUS[a.status].label}
                         </SoftBadge>
                       </td>
-                      <td className={cn(TD, "text-right")}>{a.status === "active" && <RowAction label={`Revogar atribuição de ${a.userName}`} icon={UserXIcon} onClick={() => revokeAssignment(a)} />}</td>
+                      <td className={cn(TD, "text-right")}>{a.status === "active" && isSuper && <RowAction label={`Revogar atribuição de ${a.userName}`} icon={UserXIcon} onClick={() => revokeAssignment(a)} />}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -299,24 +376,53 @@ export function EngemaseAccess({
         formKey={formKey}
         open={grantOpen}
         onOpenChange={setGrantOpen}
-        people={supportPeople}
+        people={grantPeople}
         clientName={clientName}
-        onCreate={(g) => {
-          setGrants((list) => [{ ...g, id: `grt-new-${list.length + 1}` }, ...list])
-          setGrantOpen(false)
+        pending={pending}
+        onCreate={(g, payload) => {
+          const done = () => {
+            toast.success("Concessão criada", { description: `${g.userName} pode atuar em ${clientName} agora (${g.end}). Fica na auditoria visível ao cliente.` })
+            setGrantOpen(false)
+          }
+          run(
+            () =>
+              abrirConcessaoAction({
+                clientId: banco?.clientId,
+                userId: banco?.meRole === "super_admin" ? payload.personId : null,
+                ticket: payload.ticket,
+                reason: payload.reason,
+                minutes: payload.minutes,
+              }),
+            done,
+            () => {
+              setGrants((list) => [{ ...g, id: `grt-new-${list.length + 1}` }, ...list])
+              done()
+            },
+          )
         }}
       />
       <AssignDialog
         formKey={formKey}
         open={assignOpen}
         onOpenChange={setAssignOpen}
-        people={fieldPeople}
+        people={assignPeople}
         units={units}
         clientName={clientName}
         now={now}
-        onCreate={(a) => {
-          setAssignments((list) => [{ ...a, id: `asg-new-${list.length + 1}` }, ...list])
-          setAssignOpen(false)
+        pending={pending}
+        onCreate={(a, payload) => {
+          const done = () => {
+            toast.success("Atribuição criada", { description: `${a.userName} pode configurar ${clientName} até ${a.end}.` })
+            setAssignOpen(false)
+          }
+          run(
+            () => criarAtribuicaoAction({ userId: payload.personId, clientId: banco?.clientId, unitIds: payload.unitIds, days: payload.days, reason: payload.reason }),
+            done,
+            () => {
+              setAssignments((list) => [{ ...a, id: `asg-new-${list.length + 1}` }, ...list])
+              done()
+            },
+          )
         }}
       />
     </div>
@@ -332,14 +438,16 @@ function GrantDialog({
   onOpenChange,
   people,
   clientName,
+  pending,
   onCreate,
 }: {
   formKey: number
   open: boolean
   onOpenChange: (o: boolean) => void
-  people: string[]
+  people: Person[]
   clientName: string
-  onCreate: (g: Omit<SupportGrant, "id">) => void
+  pending: boolean
+  onCreate: (g: Omit<SupportGrant, "id">, payload: GrantPayload) => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -348,14 +456,24 @@ function GrantDialog({
           <DialogTitle>Nova concessão de suporte</DialogTitle>
           <DialogDescription>Libera o suporte para atuar em {clientName} por tempo limitado, ligado a um chamado.</DialogDescription>
         </DialogHeader>
-        <GrantForm key={formKey} people={people} clientName={clientName} onCreate={onCreate} onCancel={() => onOpenChange(false)} />
+        <GrantForm key={formKey} people={people} pending={pending} onCreate={onCreate} onCancel={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
   )
 }
 
-function GrantForm({ people, clientName, onCreate, onCancel }: { people: string[]; clientName: string; onCreate: (g: Omit<SupportGrant, "id">) => void; onCancel: () => void }) {
-  const [person, setPerson] = useState(people[0] ?? "")
+function GrantForm({
+  people,
+  pending,
+  onCreate,
+  onCancel,
+}: {
+  people: Person[]
+  pending: boolean
+  onCreate: (g: Omit<SupportGrant, "id">, payload: GrantPayload) => void
+  onCancel: () => void
+}) {
+  const [person, setPerson] = useState(people[0]?.id ?? "")
   const [ticket, setTicket] = useState("")
   const [reason, setReason] = useState("")
   const [minutes, setMinutes] = useState("60")
@@ -367,8 +485,8 @@ function GrantForm({ people, clientName, onCreate, onCancel }: { people: string[
     if (reason.trim().length < 10) return setError("Descreva o motivo (pelo menos 10 caracteres).")
     const label = GRANT_DURATIONS.find((d) => d.value === minutes)!.label.replace(" (máximo)", "")
     const t = ticket.trim().startsWith("#") ? ticket.trim() : `#${ticket.trim()}`
-    onCreate({ userName: person, ticket: t, reason: reason.trim(), start: "agora", end: `em ${label}`, status: "active" })
-    toast.success("Concessão criada", { description: `${person} pode atuar em ${clientName} por ${label}. O admin do cliente recebe um aviso.` })
+    const name = people.find((p) => p.id === person)?.name ?? person
+    onCreate({ userName: name, ticket: t, reason: reason.trim(), start: "agora", end: `por ${label}`, status: "active" }, { personId: person, ticket: t, reason: reason.trim(), minutes: Number(minutes) })
   }
 
   return (
@@ -382,8 +500,8 @@ function GrantForm({ people, clientName, onCreate, onCancel }: { people: string[
             </SelectTrigger>
             <SelectContent>
               {people.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {p}
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -420,7 +538,9 @@ function GrantForm({ people, clientName, onCreate, onCancel }: { people: string[
         <Button variant="outline" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button onClick={submit}>Criar concessão</Button>
+        <Button onClick={submit} disabled={pending}>
+          {pending ? "Criando…" : "Criar concessão"}
+        </Button>
       </DialogFooter>
     </>
   )
@@ -434,16 +554,18 @@ function AssignDialog({
   units,
   clientName,
   now,
+  pending,
   onCreate,
 }: {
   formKey: number
   open: boolean
   onOpenChange: (o: boolean) => void
-  people: string[]
+  people: Person[]
   units: { id: string; name: string }[]
   clientName: string
   now: string
-  onCreate: (a: Omit<Assignment, "id">) => void
+  pending: boolean
+  onCreate: (a: Omit<Assignment, "id">, payload: AssignPayload) => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -452,7 +574,7 @@ function AssignDialog({
           <DialogTitle>Nova atribuição de campo</DialogTitle>
           <DialogDescription>O técnico passa a configurar {clientName} até a data de validade.</DialogDescription>
         </DialogHeader>
-        <AssignForm key={formKey} people={people} units={units} clientName={clientName} now={now} onCreate={onCreate} onCancel={() => onOpenChange(false)} />
+        <AssignForm key={formKey} people={people} units={units} now={now} pending={pending} onCreate={onCreate} onCancel={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
   )
@@ -461,19 +583,19 @@ function AssignDialog({
 function AssignForm({
   people,
   units,
-  clientName,
   now,
+  pending,
   onCreate,
   onCancel,
 }: {
-  people: string[]
+  people: Person[]
   units: { id: string; name: string }[]
-  clientName: string
   now: string
-  onCreate: (a: Omit<Assignment, "id">) => void
+  pending: boolean
+  onCreate: (a: Omit<Assignment, "id">, payload: AssignPayload) => void
   onCancel: () => void
 }) {
-  const [person, setPerson] = useState(people[0] ?? "")
+  const [person, setPerson] = useState(people[0]?.id ?? "")
   const [allUnits, setAllUnits] = useState(true)
   const [selected, setSelected] = useState<string[]>([])
   const [days, setDays] = useState("90")
@@ -488,8 +610,11 @@ function AssignForm({
     if (reason.trim().length < 5) return setError("Descreva o motivo.")
     const end = date(new Date(Date.parse(now) + Number(days) * 24 * 60 * 60 * 1000).toISOString())
     const unitsLabel = allUnits ? "Todas as unidades" : units.filter((u) => selected.includes(u.id)).map((u) => u.name).join(", ")
-    onCreate({ userName: person, units: unitsLabel, start: date(now), end, reason: reason.trim(), status: "active" })
-    toast.success("Atribuição criada", { description: `${person} pode configurar ${clientName} até ${end}.` })
+    const name = people.find((p) => p.id === person)?.name ?? person
+    onCreate(
+      { userName: name, units: unitsLabel, start: date(now), end, reason: reason.trim(), status: "active" },
+      { personId: person, unitIds: allUnits ? null : selected, days: Number(days), reason: reason.trim() },
+    )
   }
 
   return (
@@ -504,8 +629,8 @@ function AssignForm({
               </SelectTrigger>
               <SelectContent>
                 {people.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {p}
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -554,7 +679,9 @@ function AssignForm({
         <Button variant="outline" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button onClick={submit}>Criar atribuição</Button>
+        <Button onClick={submit} disabled={pending}>
+          {pending ? "Criando…" : "Criar atribuição"}
+        </Button>
       </DialogFooter>
     </>
   )

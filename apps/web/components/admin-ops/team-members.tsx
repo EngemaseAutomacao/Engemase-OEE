@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
   FingerprintIcon,
@@ -16,6 +17,15 @@ import {
 } from "lucide-react"
 
 import type { PlatformRole } from "@/lib/mock/types"
+import type { Resultado } from "@/lib/data/admin/acesso"
+import {
+  desativarMembroAction,
+  reativarMembroAction,
+  reenviarConviteAction,
+  reiniciar2faMembroAction,
+  trocarPapelAction,
+} from "@/app/(admin)/admin/equipe-actions"
+import { Input } from "@/components/ui/input"
 import { USER_STATUS_LABEL } from "@/lib/roles"
 import { cn } from "@/lib/utils"
 import { SectionCard } from "@/components/dashboard/section-card"
@@ -50,8 +60,27 @@ const STATUS_TONE: Record<MemberRow["status"], Tone> = { active: "green", invite
 
 /** Tabela de membros da equipe Engemase com ações por linha. */
 export function TeamMembers() {
-  const { members, assignments, grants, patchMember } = useTeam()
-  const { now } = useOpsClock(30_000)
+  const { members, assignments, grants, patchMember, banco, meRole, agora } = useTeam()
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  const [inviteLink, setInviteLink] = useState<{ name: string; link: string; expiraEm: string; emailEnviado: boolean } | null>(null)
+  // Com banco, só o super admin gerencia a equipe (o servidor confere de novo).
+  const canManage = !banco || meRole === "super_admin"
+
+  /** Com banco: grava pela Server Action e recarrega; sem banco: só a tela. */
+  function run<T>(action: () => Promise<Resultado<T>>, onOk: (dados: T) => void, demo: () => void) {
+    if (!banco) return demo()
+    startTransition(async () => {
+      const r = await action()
+      if (!r.ok) {
+        toast.error(r.mensagem)
+        return
+      }
+      onOk(r.dados)
+      router.refresh()
+    })
+  }
+  const { now } = useOpsClock(30_000, agora)
   const [roleFor, setRoleFor] = useState<MemberRow | null>(null)
   const [newRole, setNewRole] = useState<PlatformRole>("technician")
   const [disableFor, setDisableFor] = useState<MemberRow | null>(null)
@@ -81,19 +110,37 @@ export function TeamMembers() {
       setRoleFor(null)
       return
     }
-    patchMember(roleFor.id, { role: newRole })
-    toast.success(`${roleFor.name} agora é ${ROLE_META[newRole].label}`, {
-      description: "Alteração registrada na auditoria da plataforma. As sessões abertas dessa pessoa foram encerradas.",
-    })
+    const who = roleFor
+    const done = () =>
+      toast.success(`${who.name} agora é ${ROLE_META[newRole].label}`, {
+        description: "Alteração registrada na auditoria da plataforma. As sessões abertas dessa pessoa foram encerradas.",
+      })
+    run(
+      () => trocarPapelAction({ userId: who.id, role: newRole }),
+      done,
+      () => {
+        patchMember(who.id, { role: newRole })
+        done()
+      },
+    )
     setRoleFor(null)
   }
 
   const confirmDisable = () => {
     if (!disableFor) return
-    patchMember(disableFor.id, { status: "disabled" })
-    toast.success(`Acesso de ${disableFor.name} desativado`, {
-      description: "Sessões encerradas, concessões e atribuições suspensas. O histórico na auditoria é mantido.",
-    })
+    const who = disableFor
+    const done = () =>
+      toast.success(`Acesso de ${who.name} desativado`, {
+        description: "Sessões encerradas; sem acesso a nenhum cliente enquanto estiver desativado. O histórico na auditoria é mantido.",
+      })
+    run(
+      () => desativarMembroAction({ userId: who.id }),
+      done,
+      () => {
+        patchMember(who.id, { status: "disabled" })
+        done()
+      },
+    )
     setDisableFor(null)
   }
 
@@ -187,8 +234,9 @@ export function TeamMembers() {
                       </SoftBadge>
                     </td>
                     <td className={cn(TD, "text-right")}>
+                      {canManage && (
                       <DropdownMenu>
-                        <DropdownMenuTrigger className={squareClass("slate")} aria-label={`Ações para ${m.name}`}>
+                        <DropdownMenuTrigger className={squareClass("slate")} aria-label={`Ações para ${m.name}`} disabled={pending}>
                           <MoreHorizontalIcon aria-hidden />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-60">
@@ -198,12 +246,20 @@ export function TeamMembers() {
                             {m.isMe ? "Alterar papel (não no próprio)" : isLastSuper(m) ? "Alterar papel (último super admin)" : "Alterar papel"}
                           </DropdownMenuItem>
                           {m.status === "invited" && (
-                            <DropdownMenuItem onSelect={() => toast.success("Convite reenviado", { description: `${m.email} recebeu um novo link para definir senha e cadastrar o 2FA.` })}>
+                            <DropdownMenuItem
+                              onSelect={() =>
+                                run(
+                                  () => reenviarConviteAction({ userId: m.id }),
+                                  (d) => setInviteLink({ name: m.name, ...d }),
+                                  () => toast.success("Convite reenviado", { description: `${m.email} recebeu um novo link para definir a senha.` }),
+                                )
+                              }
+                            >
                               <MailIcon />
                               Reenviar convite
                             </DropdownMenuItem>
                           )}
-                          {m.status === "active" && !m.twoFactor && (
+                          {!banco && m.status === "active" && !m.twoFactor && (
                             <DropdownMenuItem
                               onSelect={() =>
                                 toast.success("Link de cadastro do 2FA enviado", {
@@ -218,8 +274,18 @@ export function TeamMembers() {
                           {m.status === "active" && m.twoFactor && !m.isMe && (
                             <DropdownMenuItem
                               onSelect={() => {
-                                patchMember(m.id, { twoFactor: false })
-                                toast.success(`2FA de ${m.name} redefinido`, { description: "Um link para cadastrar o novo dispositivo foi enviado por e-mail." })
+                                const done = () =>
+                                  toast.success(`2FA de ${m.name} redefinido`, {
+                                    description: "Sessões encerradas. A pessoa entra só com a senha e pode cadastrar o novo celular em \"Segurança da conta\".",
+                                  })
+                                run(
+                                  () => reiniciar2faMembroAction({ userId: m.id }),
+                                  done,
+                                  () => {
+                                    patchMember(m.id, { twoFactor: false })
+                                    done()
+                                  },
+                                )
                               }}
                             >
                               <RotateCcwIcon />
@@ -229,10 +295,16 @@ export function TeamMembers() {
                           <DropdownMenuSeparator />
                           {m.status === "disabled" ? (
                             <DropdownMenuItem
-                              onSelect={() => {
-                                patchMember(m.id, { status: "active" })
-                                toast.success(`Acesso de ${m.name} reativado`)
-                              }}
+                              onSelect={() =>
+                                run(
+                                  () => reativarMembroAction({ userId: m.id }),
+                                  () => toast.success(`Acesso de ${m.name} reativado`),
+                                  () => {
+                                    patchMember(m.id, { status: "active" })
+                                    toast.success(`Acesso de ${m.name} reativado`)
+                                  },
+                                )
+                              }
                             >
                               <UserCheckIcon />
                               Reativar acesso
@@ -245,6 +317,7 @@ export function TeamMembers() {
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
+                      )}
                     </td>
                   </tr>
                 )
@@ -291,8 +364,8 @@ export function TeamMembers() {
           <AlertDialogHeader>
             <AlertDialogTitle>Desativar o acesso de {disableFor?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              A pessoa sai de todas as sessões na hora e perde concessões de suporte e atribuições vigentes. O histórico na auditoria continua disponível. Dá para reativar
-              depois.
+              A pessoa sai de todas as sessões na hora e não entra em nenhum cliente enquanto estiver desativada. O histórico na auditoria continua disponível. Dá para
+              reativar depois.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -303,6 +376,39 @@ export function TeamMembers() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={inviteLink !== null} onOpenChange={(o) => !o && setInviteLink(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Novo link para {inviteLink?.name}</DialogTitle>
+            <DialogDescription>
+              {inviteLink?.emailEnviado ? "Também foi enviado por e-mail. " : "Nenhum e-mail foi enviado (provedor não configurado). "}
+              Entregue por um canal seguro: serve uma vez só
+              {inviteLink ? ` e vale até ${new Date(inviteLink.expiraEm).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}. O link
+              anterior deixou de valer.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Input readOnly value={inviteLink?.link ?? ""} onFocus={(e) => e.currentTarget.select()} className="font-mono text-xs" aria-label="Link para definir a senha" />
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(inviteLink?.link ?? "")
+                  toast.success("Link copiado")
+                } catch {
+                  toast.error("Não deu para copiar. Selecione o link e copie manualmente.")
+                }
+              }}
+            >
+              Copiar
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setInviteLink(null)}>Concluir</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SectionCard>
   )
 }

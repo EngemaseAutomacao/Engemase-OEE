@@ -13,8 +13,8 @@ import { useOpsClock } from "./use-ops-clock"
 
 /** Indicadores da equipe Engemase. */
 export function TeamStats() {
-  const { members, assignments, grants } = useTeam()
-  const { now } = useOpsClock(30_000)
+  const { members, assignments, grants, agora } = useTeam()
+  const { now } = useOpsClock(30_000, agora)
   const active = members.filter((m) => m.status !== "disabled")
   const invited = members.filter((m) => m.status === "invited").length
   const with2fa = active.filter((m) => m.twoFactor).length

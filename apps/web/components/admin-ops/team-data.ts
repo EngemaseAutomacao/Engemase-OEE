@@ -69,6 +69,12 @@ export interface TeamData {
   grants: GrantRow[]
   clients: { id: string; name: string; status: string; units: { id: string; name: string }[]; admins: string[] }[]
   meId: string
+  /** Com banco, as ações gravam de verdade (Server Actions); sem banco, simulam na tela. */
+  banco?: boolean
+  /** Papel de quem está na tela (o técnico não gerencia a equipe). */
+  meRole?: PlatformRole | null
+  /** "Agora" do servidor (com banco, a hora real): base do relógio da tela. */
+  agora?: string
 }
 
 function unitLabel(clientId: string, unitIds: Set<string>, r: Repositorio): { units: string[] | "all"; label: string } {
