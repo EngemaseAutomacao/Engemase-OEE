@@ -11,6 +11,14 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 - **Fechamento de turno automático:** os números de cada turno são fechados no fim do turno e recalculados se chegarem dados atrasados ou se uma parada for reclassificada.
 - **Atualização do programa do gateway à distância**, enviada pela Engemase.
 
+## 27/11/2026 · Auditoria do cliente de verdade
+
+**Para quem usa (admin do cliente)**
+- **"Configurações" › "Auditoria" funciona no sistema real:** mostra os últimos 90 dias do que mudou no cliente, quem fez e quando: cadastros, usuários, terminais, operadores do chão, paradas classificadas, refugo e troca de produto.
+- **Ações da equipe Engemase ficam destacadas**; as feitas por chamado de suporte mostram o número do chamado. Apontamentos feitos pelo tablet aparecem com o nome do terminal.
+- **"Exportar CSV" baixa de verdade** o que está na tela, com os filtros aplicados (abre no Excel).
+- O item "Auditoria" só aparece no menu para quem pode ver (admin do cliente e equipe Engemase).
+
 ## 27/11/2026 · Quem está operando no tablet
 
 **Para quem usa**

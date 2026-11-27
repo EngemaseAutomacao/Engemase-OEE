@@ -61,7 +61,7 @@ Na lista "Pessoas com acesso", abra o menu da pessoa:
 Regras:
 - O **último admin do cliente** não pode ser desativado nem rebaixado (promova outra pessoa antes).
 - **Ninguém altera o próprio acesso**: na sua linha aparece "Você". Peça a outro admin.
-- Tudo fica registrado em "Configurações" › "Auditoria", com quem fez, quando, e como era antes e depois.
+- Tudo fica registrado em "Configurações" › "Auditoria", com quem fez, quando e o que mudou.
 
 Use a busca e os filtros de papel e situação para achar alguém. No alto, os números mostram quantas pessoas têm acesso, convites pendentes, admins e quem tem a verificação em duas etapas ativa.
 
@@ -71,7 +71,7 @@ A Engemase **sempre** pode ver os dados da sua empresa, para dar suporte, mas **
 
 - Uma faixa na tela mostra quando alguém da Engemase está dentro da área da sua empresa.
 - Em "Configurações" › "Usuários", o quadro "Acesso da equipe Engemase" lista quem tem acesso agora (super admin, atendimento de suporte com chamado e prazo, engenheiro de campo atribuído) e os encerrados recentemente.
-- Em "Configurações" › "Auditoria" ficam todas as entradas da Engemase, com motivo e chamado, além das mudanças de configuração, usuários e terminais. Use os filtros e a exportação.
+- Em "Configurações" › "Auditoria" ficam todas as entradas da Engemase, com motivo e chamado, além das mudanças de configuração, usuários e terminais e dos apontamentos do chão (paradas, refugo, troca de produto). A tela mostra os últimos 90 dias; use os filtros e "Exportar CSV" (baixa o que está na tela, com os filtros aplicados). Ações da Engemase aparecem destacadas, e as feitas por chamado de suporte mostram o número do chamado.
 
 ## Aprovar o acesso remoto aos gateways
 

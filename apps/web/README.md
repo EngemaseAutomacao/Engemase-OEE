@@ -89,8 +89,11 @@ A demonstração na Vercel não tem banco. Por isso as telas leem por `lib/data/
   (unidade, área, linha, gateway + código de ativação, nova máquina com CLP e sinais + publicação da config, comandos
   `tag.read`/`device.test`/`config.reload`/`agent.restart`). Os componentes sabem a fonte por `FonteDadosProvider`
   (`components/config/fonte-dados.tsx`): sem banco, continuam simulando com `toast`.
-- Ainda simulados com banco: dados ao vivo, OEE, notificações, acesso remoto, terminais, aparência; turnos, produtos,
-  motivos, usuários do cliente (telas de config fora da W8); concessões/atribuições da equipe; reverter versão de config.
+- Já com banco: unidades, linhas, máquinas, gateways, produtos, turnos, motivos, usuários do cliente, terminais e
+  operadores do chão, e a auditoria do cliente (`lib/data/config/auditoria.ts`: `listAuditEntries` com `audit.read`,
+  RLS e escopo; últimos 90 dias, até 500 eventos; rótulos das ações em `ACOES`, ação nova sem rótulo aparece com o
+  código; CSV gerado no navegador a partir das linhas já filtradas). Ainda simulados com banco ("Em breve"):
+  aparência, acesso remoto, mapa de falhas do CLP; concessões/atribuições da equipe; reverter versão de config.
 
 ## Checagens
 

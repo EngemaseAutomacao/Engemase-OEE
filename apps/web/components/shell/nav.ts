@@ -49,6 +49,8 @@ export interface NavModel {
 export interface NavPerms {
   canConfigure?: boolean
   canManageUsers?: boolean
+  /** `false`: sem `audit.read`, o item "Auditoria" some (a página responderia 404). */
+  canReadAudit?: boolean
 }
 
 /** Menu da área do cliente. */
@@ -75,7 +77,7 @@ export function clientNav(slug: string, kiosk: { machineId?: string; lineId?: st
       { title: "Usuários", href: `${b}/config/usuarios`, icon: UsersIcon },
       { title: "Terminais (TV/tablet)", href: `${b}/config/terminais`, icon: MonitorSmartphoneIcon },
       { title: "Aparência", href: `${b}/config/aparencia`, icon: PaletteIcon },
-      { title: "Auditoria", href: `${b}/config/auditoria`, icon: HistoryIcon },
+      ...(perms.canReadAudit === false ? [] : [{ title: "Auditoria", href: `${b}/config/auditoria`, icon: HistoryIcon }]),
     ],
     quick: [
       ...(kiosk.machineId ? [{ title: "Classificar parada", href: `${b}/operador/${kiosk.machineId}`, icon: ClipboardListIcon }] : []),

@@ -1,24 +1,32 @@
 import type { Metadata } from "next"
-import { usarBanco } from "@/lib/data/fonte"
-import { TelaEmBreve } from "@/components/shell/tela-em-breve"
-import { notFound } from "next/navigation"
+import { Suspense } from "react"
 
-import { getClientBySlug } from "@/lib/mock"
-import { buildAudit } from "@/components/settings/audit-data"
 import { AuditLog } from "@/components/settings/audit-log"
+import { CarregandoPagina } from "@/components/shell/carregando"
+import { AUDIT_DAYS, AUDIT_LIMIT, dadosAuditoria } from "@/lib/data/config/auditoria"
 
 export const metadata: Metadata = { title: "Auditoria" }
 
-export default async function Page({ params }: PageProps<"/[cliente]/config/auditoria">) {
+/** Lê a sessão e a auditoria (com banco: `audit.read`, RLS e escopo): fica dentro do <Suspense>. */
+async function Tela({ params }: { params: PageProps<"/[cliente]/config/auditoria">["params"] }) {
   const { cliente } = await params
-  // Sem versão real ainda: no sistema real, nunca mostra os dados simulados.
-  if (usarBanco()) return <TelaEmBreve titulo="Auditoria" voltarPara={`/${cliente}`} voltarTexto="Voltar ao painel" />
-  const client = getClientBySlug(cliente)
-  if (!client) notFound()
-
+  const d = await dadosAuditoria(cliente)
+  const note = !d.banco
+    ? undefined
+    : d.truncated
+      ? `Mostrando os ${AUDIT_LIMIT} eventos mais recentes.`
+      : `Mostrando os últimos ${AUDIT_DAYS} dias.`
   return (
     <div className="flex flex-col gap-5 p-4 md:p-6">
-      <AuditLog clientName={client.name} clientSlug={client.slug} rows={buildAudit(client)} />
+      <AuditLog clientName={d.client.name} clientSlug={d.client.slug} rows={d.rows} note={note} />
     </div>
+  )
+}
+
+export default function Page({ params }: PageProps<"/[cliente]/config/auditoria">) {
+  return (
+    <Suspense fallback={<CarregandoPagina />}>
+      <Tela params={params} />
+    </Suspense>
   )
 }

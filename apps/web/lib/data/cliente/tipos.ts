@@ -67,6 +67,8 @@ export interface AcessoTela {
   readonly isEngemase: boolean
   readonly canConfigure: boolean
   readonly canManageUsers: boolean
+  /** Vê a auditoria do cliente (`audit.read`). Sem a informação (demonstração), o menu mostra. */
+  readonly canReadAudit?: boolean
   /** Vê gateways por dentro: conexões Modbus, endereços e tags (leitura técnica). */
   readonly canSeeTechnical: boolean
 }

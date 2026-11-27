@@ -49,7 +49,38 @@ const CATEGORY: Record<AuditCategory, { label: string; icon: LucideIcon; tone: I
 type Origin = "all" | "engemase" | "client"
 const isEngemase = (k: AuditActorKind) => k === "engemase" || k === "support"
 
-export function AuditLog({ clientName, clientSlug, rows }: { clientName: string; clientSlug: string; rows: AuditRow[] }) {
+/** Gera o CSV dos eventos visíveis (já filtrados pelo escopo no servidor) e baixa no navegador. */
+function exportCsv(rows: AuditRow[], clientSlug: string) {
+  const cell = (v: string | null) => {
+    const t = v ?? ""
+    // Evita que planilhas executem fórmulas vindas do texto (=, +, -, @).
+    const safe = /^[=+\-@\t\r]/.test(t) ? `'${t}` : t
+    return `"${safe.replace(/"/g, '""')}"`
+  }
+  const header = ["Data e hora", "Quem", "Papel", "Ação", "Item", "Detalhes", "Chamado"]
+  const full = (iso: string) => new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })
+  const lines = rows.map((r) => [full(r.at), r.actor, r.actorRole, r.actionLabel, r.entityName, r.details, r.ticket].map(cell).join(";"))
+  const blob = new Blob(["\uFEFF" + [header.map(cell).join(";"), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = `auditoria-${clientSlug}-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+export function AuditLog({
+  clientName,
+  clientSlug,
+  rows,
+  note,
+}: {
+  clientName: string
+  clientSlug: string
+  rows: AuditRow[]
+  /** Aviso sobre o período mostrado (ex.: só os últimos 90 dias). */
+  note?: string
+}) {
   const [view, setView] = useState<"timeline" | "table">("timeline")
   const [query, setQuery] = useState("")
   const [category, setCategory] = useState<AuditCategory | "all">("all")
@@ -92,15 +123,15 @@ export function AuditLog({ clientName, clientSlug, rows }: { clientName: string;
     <>
       <SettingsTitle
         title="Auditoria"
-        description={`Tudo o que mudou em ${clientName}: quem fez, quando e o quê. Ações da equipe Engemase ficam destacadas.`}
+        description={`Tudo o que mudou em ${clientName}: quem fez, quando e o quê. Ações da equipe Engemase ficam destacadas.${note ? ` ${note}` : ""}`}
         actions={
           <Button
             variant="outline"
-            onClick={() =>
-              toast.success("Exportação gerada", {
-                description: `${plural(visible.length, "evento", "eventos")} em CSV, respeitando o seu escopo de unidades. O download aparece em instantes.`,
-              })
-            }
+            disabled={visible.length === 0}
+            onClick={() => {
+              exportCsv(visible, clientSlug)
+              toast.success("CSV baixado", { description: `${plural(visible.length, "evento", "eventos")}, com os filtros aplicados.` })
+            }}
           >
             <DownloadIcon />
             Exportar CSV
@@ -316,7 +347,13 @@ function ActorBadge({ row }: { row: AuditRow }) {
         {row.actorRole ?? "Equipe Engemase"}
       </SoftBadge>
     )
-  if (row.actorKind === "system") return <span className="text-[11px] text-muted-foreground">Automático</span>
+  if (row.actorKind === "system") return <span className="text-[11px] text-muted-foreground">{row.actorRole ?? "Automático"}</span>
+  if (row.actorKind === "terminal")
+    return (
+      <SoftBadge tone="teal" icon={MonitorSmartphoneIcon} className="mt-0.5">
+        {row.actorRole ?? "Terminal"}
+      </SoftBadge>
+    )
   return row.actorRole ? <span className="text-[11px] text-muted-foreground">{row.actorRole}</span> : null
 }
 

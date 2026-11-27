@@ -512,6 +512,7 @@ export async function lerClienteDoBanco(
       isEngemase,
       canConfigure: hasPermission(ctx, "config.write"),
       canManageUsers: hasPermission(ctx, "users.manage"),
+      canReadAudit: hasPermission(ctx, "audit.read"),
       canSeeTechnical: technical,
     },
   })

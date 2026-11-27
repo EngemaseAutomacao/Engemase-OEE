@@ -180,6 +180,10 @@ export interface AuditEntry {
   readonly entityType: string | null
   readonly entityId: string | null
   readonly unitId: string | null
+  /** Concessão de suporte usada pela Engemase (chamado), quando houver. */
+  readonly accessGrantId: string | null
+  readonly before: unknown
+  readonly after: unknown
 }
 
 /** Auditoria do cliente (mais recente primeiro), no escopo de quem lê. */
@@ -216,6 +220,9 @@ export async function listAuditEntries(
         entityType: auditLog.entityType,
         entityId: auditLog.entityId,
         unitId: auditLog.unitId,
+        accessGrantId: auditLog.accessGrantId,
+        before: auditLog.before,
+        after: auditLog.after,
       })
       .from(auditLog)
       .where(and(scoped, options.before === undefined ? undefined : lt(auditLog.at, options.before)))
