@@ -11,6 +11,11 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 - **Fechamento de turno automático:** os números de cada turno são fechados no fim do turno e recalculados se chegarem dados atrasados ou se uma parada for reclassificada.
 - **Atualização do programa do gateway à distância**, enviada pela Engemase.
 
+## 27/11/2026 · Paradas planejadas que se repetem
+
+**Para a equipe Engemase**
+- **Em "Configurações" › "Turnos", a parada planejada pode repetir "Toda semana" ou "Todo mês"** até uma data (no máximo 1 ano). Cada data vira uma parada própria: dá para alterar ou cancelar só uma, ou cancelar "esta e as próximas" da série.
+
 ## 27/11/2026 · Aparência do cliente de verdade
 
 **Para quem usa**

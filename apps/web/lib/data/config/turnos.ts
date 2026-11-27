@@ -73,6 +73,7 @@ export async function dadosTurnos(slug: string) {
         name: plannedDowntime.name,
         startsAt: plannedDowntime.startsAt,
         endsAt: plannedDowntime.endsAt,
+        recurrence: plannedDowntime.recurrence,
       })
       .from(plannedDowntime)
       .where(and(isNull(plannedDowntime.deletedAt), gt(plannedDowntime.endsAt, new Date(now - DAY))))
@@ -111,7 +112,8 @@ export async function dadosTurnos(slug: string) {
         startTime: start.time,
         endDate: end.date,
         endTime: end.time,
-        recurrence: "none" as const,
+        // Série gravada como "weekly:<id>" / "monthly:<id>" (cada ocorrência é uma parada).
+        recurrence: p.recurrence?.startsWith("weekly:") ? ("weekly" as const) : p.recurrence?.startsWith("monthly:") ? ("monthly" as const) : ("none" as const),
       }
     })
   const reasons: StopReason[] = reasonRows

@@ -319,6 +319,10 @@ function StopForm({
   const [endTime, setEndTime] = useState(stop?.endTime ?? "10:00")
   const [allDay, setAllDay] = useState(wasAllDay)
   const [recurrence, setRecurrence] = useState<Recurrence>(stop?.recurrence ?? "none")
+  const [until, setUntil] = useState(stop?.until ?? "")
+  // Ocorrência de uma série: a mudança vale só para ela (a repetição não muda aqui).
+  const inSeries = stop !== null && stop.recurrence !== "none"
+  const repeats = !stop && recurrence !== "none"
   const [show, setShow] = useState(false)
 
   const datesOk = DATE_RE.test(startDate) && DATE_RE.test(endDate)
@@ -335,6 +339,7 @@ function StopForm({
     reasonId: !reasonId ? "Escolha o motivo." : null,
     scope: scopeKind === "machines" && picked.length === 0 ? "Escolha ao menos uma máquina." : null,
     period: !(minutes > 0) ? "O fim precisa ser depois do início." : null,
+    until: repeats && (!DATE_RE.test(until) || until < startDate) ? "Informe até quando repete (depois do início)." : null,
   }
   const invalid = Object.values(errors).some(Boolean)
 
@@ -350,7 +355,8 @@ function StopForm({
           reasonId,
           scope: scopeKind === "unit" ? "unit" : picked,
           ...draft,
-          recurrence,
+          recurrence: inSeries ? stop.recurrence : recurrence,
+          until: repeats ? until : null,
         })
       }}
     >
@@ -383,10 +389,15 @@ function StopForm({
             </Select>
             {show && errors.reasonId && <FieldError>{errors.reasonId}</FieldError>}
           </Field>
-          {allowRecurrence && (
+          {allowRecurrence && inSeries && (
+            <p className="self-end text-xs text-muted-foreground">
+              Faz parte de uma série ({RECURRENCE_LABEL[stop.recurrence].toLowerCase()}): a mudança vale só para esta data.
+            </p>
+          )}
+          {allowRecurrence && !inSeries && (
           <Field>
             <FieldLabel htmlFor="ps-rec">Repetição</FieldLabel>
-            <Select value={recurrence} onValueChange={(v) => setRecurrence(v as Recurrence)}>
+            <Select value={recurrence} onValueChange={(v) => setRecurrence(v as Recurrence)} disabled={stop !== null}>
               <SelectTrigger id="ps-rec" className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -399,6 +410,13 @@ function StopForm({
               </SelectContent>
             </Select>
           </Field>
+          )}
+          {allowRecurrence && repeats && (
+            <Field data-invalid={show && !!errors.until}>
+              <FieldLabel htmlFor="ps-until">Repetir até</FieldLabel>
+              <Input id="ps-until" type="date" value={until} min={startDate} onChange={(e) => setUntil(e.target.value)} />
+              {show && errors.until ? <FieldError>{errors.until}</FieldError> : <p className="text-xs text-muted-foreground">Até 1 ano; cada data vira uma parada que dá para cancelar sozinha.</p>}
+            </Field>
           )}
         </div>
 

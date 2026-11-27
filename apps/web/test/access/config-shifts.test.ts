@@ -4,11 +4,11 @@
  * planejado, turnos consolidados marcados para recálculo, RLS por cliente (nível 3) e `config.write`.
  */
 import * as s from "@engemase/db"
-import { and, eq, isNull } from "drizzle-orm"
+import { and, eq, inArray, isNull } from "drizzle-orm"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { AccessDeniedError, type TenantContext } from "@/lib/server/access/context"
 import { loadTenantContext } from "@/lib/server/access/load"
-import { cancelarParada, excluirTurno, salvarParada, salvarTurno } from "@/lib/server/config/shifts"
+import { cancelarParada, datasDaSerie, excluirTurno, MAX_OCORRENCIAS, salvarParada, salvarTurno } from "@/lib/server/config/shifts"
 import { type AuthHarness, createAuthHarness } from "../auth/support"
 import { createPerson, type SeededClient, type SeededPerson, seedClient } from "./support"
 
@@ -133,10 +133,51 @@ describe("cadastro de turnos e paradas planejadas", () => {
       expect(await dirty()).toBe(true)
       await h.t.db.update(s.oeeShift).set({ dirty: false }).where(eq(s.oeeShift.shiftId, shiftId))
 
-      expect(await cancelarParada(h.t.db, eng, newId)).toEqual({ ok: true, dados: { id: newId } })
+      expect(await cancelarParada(h.t.db, eng, newId)).toEqual({ ok: true, dados: { id: newId, canceladas: 1 } })
       expect(await dirty()).toBe(true)
       const actions = await h.t.db.select({ action: s.auditLog.action }).from(s.auditLog).where(eq(s.auditLog.organizationId, a.organizationId))
       expect(actions.map((x) => x.action)).toEqual(expect.arrayContaining(["planned_downtime.created", "planned_downtime.updated", "planned_downtime.cancelled"]))
+    })
+
+    it("repetição: datas da série (semanal, mensal pulando o dia que não existe, limite)", () => {
+      expect(datasDaSerie("2026-12-05", "weekly", "2026-12-26")).toEqual(["2026-12-05", "2026-12-12", "2026-12-19", "2026-12-26"])
+      expect(datasDaSerie("2027-01-31", "monthly", "2027-05-31")).toEqual(["2027-01-31", "2027-03-31", "2027-05-31"])
+      expect(datasDaSerie("2026-12-05", "none", "2027-12-05")).toEqual(["2026-12-05"])
+      expect(datasDaSerie("2026-01-01", "weekly", "2027-12-31")).toHaveLength(MAX_OCORRENCIAS)
+    })
+
+    it("repetição: agenda uma parada por data (mesma série); alterar mexe só numa; cancelar só esta ou esta e as próximas", async () => {
+      const base = { unitId: a.unit2, title: "Preventiva de sábado", reasonId: planned, scope: "unit" as const, startDate: "2027-01-02", startTime: "06:00", endDate: "2027-01-02", endTime: "10:00" }
+      expect(await salvarParada(h.t.db, eng, { ...base, recurrence: "weekly" })).toMatchObject({ ok: false, mensagem: "Informe até quando a parada se repete." })
+      expect(await salvarParada(h.t.db, eng, { ...base, recurrence: "weekly", until: "2028-06-01" })).toMatchObject({ ok: false })
+      expect(await salvarParada(h.t.db, eng, { ...base, endDate: "2027-01-10", recurrence: "weekly", until: "2027-02-01" })).toMatchObject({ ok: false })
+
+      const r = await salvarParada(h.t.db, eng, { ...base, recurrence: "weekly", until: "2027-01-23" })
+      expect(r.ok).toBe(true)
+      const ids = r.ok ? r.dados.ids : []
+      expect(ids).toHaveLength(4)
+      const rows = await h.t.db.select().from(s.plannedDowntime).where(inArray(s.plannedDowntime.id, ids))
+      const series = new Set(rows.map((x) => x.recurrence))
+      expect(series.size).toBe(1)
+      expect([...series][0]).toMatch(/^weekly:/)
+      // 06:00 em São Paulo = 09:00 UTC, em cada sábado.
+      expect(rows.map((x) => x.startsAt.toISOString()).sort()).toEqual(["2027-01-02T09:00:00.000Z", "2027-01-09T09:00:00.000Z", "2027-01-16T09:00:00.000Z", "2027-01-23T09:00:00.000Z"])
+
+      const byStart = (iso: string) => rows.find((x) => x.startsAt.toISOString() === iso)?.id ?? ""
+      // Alterar a 2ª: vira outra linha, ainda na série.
+      const e = await salvarParada(h.t.db, eng, { ...base, id: byStart("2027-01-09T09:00:00.000Z"), title: "Preventiva longa", startDate: "2027-01-09", endDate: "2027-01-09", endTime: "12:00" })
+      expect(e.ok && e.dados.ids).toHaveLength(1)
+      const [nova] = await h.t.db.select().from(s.plannedDowntime).where(eq(s.plannedDowntime.id, e.ok ? (e.dados.ids[0] ?? "") : ""))
+      expect(nova?.recurrence).toBe([...series][0])
+
+      // Cancelar só a 1ª; depois "esta e as próximas" a partir da 3ª.
+      expect(await cancelarParada(h.t.db, eng, byStart("2027-01-02T09:00:00.000Z"))).toMatchObject({ ok: true, dados: { canceladas: 1 } })
+      expect(await cancelarParada(h.t.db, eng, byStart("2027-01-16T09:00:00.000Z"), { proximas: true })).toMatchObject({ ok: true, dados: { canceladas: 2 } })
+      const vivas = await h.t.db
+        .select({ name: s.plannedDowntime.name })
+        .from(s.plannedDowntime)
+        .where(and(eq(s.plannedDowntime.recurrence, [...series][0] ?? ""), isNull(s.plannedDowntime.deletedAt)))
+      expect(vivas.map((x) => x.name)).toEqual(["Preventiva longa"])
     })
 
     it("sem config.write (admin do cliente): recusado", async () => {

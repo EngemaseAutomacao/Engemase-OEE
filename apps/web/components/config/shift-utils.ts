@@ -35,6 +35,8 @@ export interface PlannedStop {
   endDate: string
   endTime: string
   recurrence: Recurrence
+  /** Ao agendar com repetição: última data em que a série pode começar. */
+  until?: string | null
 }
 
 export const WEEK_MIN = 7 * 1440

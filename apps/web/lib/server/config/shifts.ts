@@ -15,7 +15,7 @@
  */
 import { auditLog, downtimeReason, machine, plannedDowntime, shift, unit, withTenant } from "@engemase/db"
 import { zonedDateTimeToInstant } from "@engemase/oee-core"
-import { and, eq, inArray, isNull, sql } from "drizzle-orm"
+import { and, eq, gte, inArray, isNull, sql } from "drizzle-orm"
 import { z } from "zod"
 import { assertPermission, type TenantContext } from "@/lib/server/access/context"
 import type { GatewayDb, GatewayTx } from "@/lib/server/gateway/types"
@@ -48,7 +48,43 @@ export const ParadaInput = z.object({
   startTime: HHMM,
   endDate: DATA,
   endTime: HHMM,
+  /** Repetição (só ao agendar): cada ocorrência vira uma parada própria, ligadas pela série. */
+  recurrence: z.enum(["none", "weekly", "monthly"]).default("none"),
+  /** Última data em que a série pode começar (obrigatória com repetição; até 1 ano depois do início). */
+  until: DATA.nullable().optional(),
 })
+
+/** Máximo de ocorrências de uma série e de linhas gravadas de uma vez (ocorrências × máquinas). */
+export const MAX_OCORRENCIAS = 60
+const MAX_LINHAS = 2000
+
+function somarDias(date: string, n: number): string {
+  const d = new Date(`${date}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+/** Mesmo dia do mês `n` meses depois; `null` se o mês não tem esse dia (ex.: 31 de abril). */
+function somarMeses(date: string, n: number): string | null {
+  const [y, m, d] = date.split("-").map(Number) as [number, number, number]
+  const alvo = new Date(Date.UTC(y, m - 1 + n, d))
+  return alvo.getUTCDate() === d ? alvo.toISOString().slice(0, 10) : null
+}
+
+/** Datas de início das ocorrências (a primeira é a própria data), até `until`. */
+export function datasDaSerie(start: string, recurrence: "none" | "weekly" | "monthly", until: string | null | undefined): string[] {
+  if (recurrence === "none" || !until) return [start]
+  const out: string[] = []
+  for (let i = 0; i < 400 && out.length < MAX_OCORRENCIAS; i++) {
+    const d = recurrence === "weekly" ? somarDias(start, 7 * i) : somarMeses(start, i)
+    if (d === null) continue
+    if (d > until) break
+    out.push(d)
+  }
+  return out
+}
+
+const diasEntre = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000)
 
 function entrada<T extends z.ZodType>(schema: T, input: unknown): z.infer<T> | { ok: false; mensagem: string } {
   const parsed = schema.safeParse(input)
@@ -150,6 +186,22 @@ export async function salvarParada(db: GatewayDb, ctx: TenantContext, input: unk
     if (!(endsAt > startsAt)) return { ok: false, mensagem: "O fim da parada precisa ser depois do início." }
     if (endsAt.getTime() - startsAt.getTime() > 120 * 86_400_000) return { ok: false, mensagem: "Parada planejada de no máximo 120 dias." }
 
+    // Repetição: só ao agendar (alterar mexe só na ocorrência escolhida).
+    const repete = !v.id && v.recurrence !== "none"
+    if (repete) {
+      if (!v.until) return { ok: false, mensagem: "Informe até quando a parada se repete." }
+      if (v.until < v.startDate) return { ok: false, mensagem: "A repetição precisa terminar depois do início." }
+      if (diasEntre(v.startDate, v.until) > 366) return { ok: false, mensagem: "Repetição de no máximo 1 ano. Para mais tempo, agende outra série depois." }
+      if (v.recurrence === "weekly" && diasEntre(v.startDate, v.endDate) >= 7) return { ok: false, mensagem: "Uma parada semanal precisa durar menos de 7 dias." }
+    }
+    const datas = repete ? datasDaSerie(v.startDate, v.recurrence, v.until) : [v.startDate]
+    const duracaoDias = diasEntre(v.startDate, v.endDate)
+    const ocorrencias = datas.map((d) => ({
+      startsAt: d === v.startDate ? startsAt : new Date(zonedDateTimeToInstant(d, v.startTime, u.timezone)),
+      endsAt: d === v.startDate ? endsAt : new Date(zonedDateTimeToInstant(somarDias(d, duracaoDias), v.endTime, u.timezone)),
+    }))
+    const serie = repete ? `${v.recurrence}:${crypto.randomUUID()}` : null
+
     const [reason] = await tx
       .select({ id: downtimeReason.id })
       .from(downtimeReason)
@@ -163,33 +215,43 @@ export async function salvarParada(db: GatewayDb, ctx: TenantContext, input: unk
       if (ok.length !== machineIds.length) return { ok: false, mensagem: "Máquina não encontrada nesta unidade. Atualize a página." }
     }
 
+    const alvos = machineIds.length === 0 ? [null] : machineIds
+    if (ocorrencias.length * alvos.length > MAX_LINHAS) return { ok: false, mensagem: "Repetição grande demais para tantas máquinas. Encurte o período ou use a unidade inteira." }
+
     const now = new Date()
+    let serieAtual: string | null = serie
     if (v.id) {
       const [old] = await tx
         .update(plannedDowntime)
         .set({ deletedAt: now, updatedAt: now })
         .where(and(eq(plannedDowntime.id, v.id), eq(plannedDowntime.unitId, u.id), isNull(plannedDowntime.deletedAt)))
-        .returning({ machineId: plannedDowntime.machineId, startsAt: plannedDowntime.startsAt, endsAt: plannedDowntime.endsAt })
+        .returning({ machineId: plannedDowntime.machineId, startsAt: plannedDowntime.startsAt, endsAt: plannedDowntime.endsAt, recurrence: plannedDowntime.recurrence })
       if (old === undefined) return { ok: false, mensagem: "Parada planejada não encontrada. Atualize a página." }
+      // A ocorrência alterada continua na série (para "cancelar as próximas").
+      serieAtual = old.recurrence
       await sujarTurnos(tx, await maquinasAfetadas(tx, u.id, old.machineId), old.startsAt, old.endsAt)
     }
     const rows = await tx
       .insert(plannedDowntime)
       .values(
-        (machineIds.length === 0 ? [null] : machineIds).map((machineId) => ({
-          organizationId: ctx.organizationId,
-          unitId: u.id,
-          machineId,
-          reasonId: reason.id,
-          name: v.title,
-          startsAt,
-          endsAt,
-          createdBy: ctx.user.id,
-        })),
+        ocorrencias.flatMap((o) =>
+          alvos.map((machineId) => ({
+            organizationId: ctx.organizationId,
+            unitId: u.id,
+            machineId,
+            reasonId: reason.id,
+            name: v.title,
+            startsAt: o.startsAt,
+            endsAt: o.endsAt,
+            recurrence: serieAtual,
+            createdBy: ctx.user.id,
+          })),
+        ),
       )
       .returning({ id: plannedDowntime.id })
     const ids = rows.map((r) => r.id)
-    await sujarTurnos(tx, machineIds.length === 0 ? await maquinasAfetadas(tx, u.id, null) : machineIds, startsAt, endsAt)
+    const afetadas = machineIds.length === 0 ? await maquinasAfetadas(tx, u.id, null) : machineIds
+    for (const o of ocorrencias) await sujarTurnos(tx, afetadas, o.startsAt, o.endsAt)
     await auditar(tx, ctx, v.id ? "planned_downtime.updated" : "planned_downtime.created", "planned_downtime", ids[0] ?? u.id, u.id, {
       ids,
       replaced: v.id ?? null,
@@ -198,25 +260,51 @@ export async function salvarParada(db: GatewayDb, ctx: TenantContext, input: unk
       machine_ids: machineIds,
       starts_at: startsAt.toISOString(),
       ends_at: endsAt.toISOString(),
+      recurrence: serie === null ? null : v.recurrence,
+      until: serie === null ? null : (v.until ?? null),
+      occurrences: ocorrencias.length,
     })
     return { ok: true, dados: { ids } }
   })
 }
 
 /** Cancela uma parada planejada (lógico): o intervalo volta a contar como tempo planejado. */
-export async function cancelarParada(db: GatewayDb, ctx: TenantContext, id: unknown): Promise<ConfigResult<{ id: string }>> {
+export async function cancelarParada(
+  db: GatewayDb,
+  ctx: TenantContext,
+  id: unknown,
+  opcoes: { readonly proximas?: boolean } = {},
+): Promise<ConfigResult<{ id: string; canceladas: number }>> {
   assertPermission(ctx, "config.write")
   if (typeof id !== "string" || !z.uuid().safeParse(id).success) return { ok: false, mensagem: "Parada planejada não encontrada. Atualize a página." }
-  return withTenant(db, ctx.organizationId, async (tx): Promise<ConfigResult<{ id: string }>> => {
+  return withTenant(db, ctx.organizationId, async (tx): Promise<ConfigResult<{ id: string; canceladas: number }>> => {
     const now = new Date()
     const [row] = await tx
       .update(plannedDowntime)
       .set({ deletedAt: now, updatedAt: now })
       .where(and(eq(plannedDowntime.id, id), isNull(plannedDowntime.deletedAt)))
-      .returning({ id: plannedDowntime.id, unitId: plannedDowntime.unitId, machineId: plannedDowntime.machineId, startsAt: plannedDowntime.startsAt, endsAt: plannedDowntime.endsAt, name: plannedDowntime.name })
+      .returning({
+        id: plannedDowntime.id,
+        unitId: plannedDowntime.unitId,
+        machineId: plannedDowntime.machineId,
+        startsAt: plannedDowntime.startsAt,
+        endsAt: plannedDowntime.endsAt,
+        name: plannedDowntime.name,
+        recurrence: plannedDowntime.recurrence,
+      })
     if (row === undefined) return { ok: false, mensagem: "Parada planejada não encontrada. Atualize a página." }
-    await sujarTurnos(tx, await maquinasAfetadas(tx, row.unitId, row.machineId), row.startsAt, row.endsAt)
-    await auditar(tx, ctx, "planned_downtime.cancelled", "planned_downtime", row.id, row.unitId, { name: row.name })
-    return { ok: true, dados: { id: row.id } }
+    const todas = [row]
+    // "Esta e as próximas": as ocorrências seguintes da mesma série (e das mesmas máquinas da série).
+    if (opcoes.proximas && row.recurrence !== null) {
+      const seguintes = await tx
+        .update(plannedDowntime)
+        .set({ deletedAt: now, updatedAt: now })
+        .where(and(eq(plannedDowntime.recurrence, row.recurrence), eq(plannedDowntime.unitId, row.unitId), gte(plannedDowntime.startsAt, row.startsAt), isNull(plannedDowntime.deletedAt)))
+        .returning({ id: plannedDowntime.id, unitId: plannedDowntime.unitId, machineId: plannedDowntime.machineId, startsAt: plannedDowntime.startsAt, endsAt: plannedDowntime.endsAt, name: plannedDowntime.name, recurrence: plannedDowntime.recurrence })
+      todas.push(...seguintes)
+    }
+    for (const r of todas) await sujarTurnos(tx, await maquinasAfetadas(tx, r.unitId, r.machineId), r.startsAt, r.endsAt)
+    await auditar(tx, ctx, "planned_downtime.cancelled", "planned_downtime", row.id, row.unitId, { name: row.name, series: opcoes.proximas === true && row.recurrence !== null, cancelled: todas.length })
+    return { ok: true, dados: { id: row.id, canceladas: todas.length } }
   })
 }

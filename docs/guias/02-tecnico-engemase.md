@@ -21,7 +21,7 @@ Suporte sem concessão ativa: abra a concessão na aba "Acesso Engemase" do deta
 Ordem recomendada, depois que o super admin criou o cliente:
 
 1. **Unidades e linhas** ("Configurações" › "Unidades e linhas"): "Nova unidade" (nome, cidade e fuso), "Nova área" (opcional, só agrupa) e "Nova linha" (nome e um código curto, que aparece na TV e nas exportações).
-2. **Turnos** ("Configurações" › "Turnos"): horário, dias e pausas de cada turno da unidade. Sem turno não há tempo planejado. Agende aqui também as **paradas planejadas** (preventiva, feriado), para que não pesem no OEE. Mudança de turno vale a partir do próximo turno; os turnos encerrados não são recalculados.
+2. **Turnos** ("Configurações" › "Turnos"): horário, dias e pausas de cada turno da unidade. Sem turno não há tempo planejado. Agende aqui também as **paradas planejadas** (preventiva, feriado), para que não pesem no OEE. Para uma parada que se repete, escolha "Toda semana" ou "Todo mês" e "Repetir até" (no máximo 1 ano): cada data vira uma parada própria, que dá para alterar ou cancelar sozinha; ao cancelar, marque "Cancelar também as próximas desta série" para encerrar a repetição. No "Todo mês", o mês que não tem o dia (ex.: 31) é pulado. Mudança de turno vale a partir do próximo turno; os turnos encerrados não são recalculados.
 3. **Gateway** ("Configurações" › "Gateways"): cadastre o gateway da unidade e gere o **código de ativação** (vale 24 horas e uma vez só). No local, instale o gateway no quadro e ative-o com o código, seguindo os passos mostrados na tela. Ele aparece "Online" depois do primeiro contato.
 4. **Máquinas** ("Configurações" › "Máquinas" › "Nova máquina"). O assistente tem cinco etapas:
    1. "Identificação": nome, código curto, tipo, unidade e linha.

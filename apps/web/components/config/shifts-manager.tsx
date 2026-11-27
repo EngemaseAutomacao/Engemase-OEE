@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils"
 import { pct } from "@/lib/format"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SectionCard } from "@/components/dashboard/section-card"
@@ -96,7 +97,7 @@ export function ShiftsManager({
   const [copying, setCopying] = useState<ShiftRow | null>(null)
 
   /** Grava no servidor; com sucesso, avisa e recarrega. Erro → aviso, nada muda. */
-  const gravar = (fn: () => Promise<{ ok: true } | { ok: false; mensagem: string }>, onOk: () => void) =>
+  const gravar = <T,>(fn: () => Promise<{ ok: true; dados: T } | { ok: false; mensagem: string }>, onOk: (dados: T) => void) =>
     startTransition(async () => {
       try {
         const r = await fn()
@@ -104,7 +105,7 @@ export function ShiftsManager({
           toast.error(r.mensagem)
           return
         }
-        onOk()
+        onOk(r.dados)
         router.refresh()
       } catch {
         toast.error("Não foi possível gravar agora. Tente de novo.")
@@ -118,7 +119,12 @@ export function ShiftsManager({
   const stops = banco ? initialStops : localStops
   const [editingShift, setEditingShift] = useState<ShiftRow | "new" | null>(null)
   const [editingStop, setEditingStop] = useState<PlannedStop | "new" | null>(null)
-  const [deleting, setDeleting] = useState<{ kind: "shift"; item: ShiftRow } | { kind: "stop"; item: PlannedStop } | null>(null)
+  const [deleting, setDeletingState] = useState<{ kind: "shift"; item: ShiftRow } | { kind: "stop"; item: PlannedStop } | null>(null)
+  const [cancelNext, setCancelNext] = useState(false)
+  const setDeleting = (v: typeof deleting) => {
+    setCancelNext(false)
+    setDeletingState(v)
+  }
   const canEdit = useCanEdit()
 
   const unit = units.find((u) => u.id === unitId) ?? units[0]
@@ -209,10 +215,14 @@ export function ShiftsManager({
             startTime: d.startTime,
             endDate: d.endDate,
             endTime: d.endTime,
+            recurrence: d.id ? "none" : d.recurrence,
+            until: d.until ?? null,
           }),
         () => {
           toast.success(d.id ? "Parada planejada atualizada" : "Parada planejada agendada", {
-            description: d.id ? d.title : `${d.title} · ${dm(d.startDate)}. O intervalo sai do tempo planejado do OEE.`,
+            description: d.id
+              ? d.title
+              : `${d.title} · ${dm(d.startDate)}${d.recurrence !== "none" && d.until ? ` · ${RECURRENCE_LABEL[d.recurrence].toLowerCase()} até ${dm(d.until)}` : ""}. O intervalo sai do tempo planejado do OEE.`,
           })
           setEditingStop(null)
         },
@@ -571,7 +581,7 @@ export function ShiftsManager({
         today={unit.today}
         reasons={reasons}
         machines={unitMachines}
-        allowRecurrence={!banco}
+        allowRecurrence
         saving={pending}
         onSave={saveStop}
       />
@@ -583,7 +593,17 @@ export function ShiftsManager({
         description={
           deleting?.kind === "shift"
             ? "Os turnos já encerrados continuam no histórico. A partir de agora esse horário deixa de contar como tempo planejado."
-            : `“${deleting?.item.title ?? ""}” volta a contar como tempo planejado. Se a máquina parar nesse período, a parada pedirá motivo.`
+            : (
+                <>
+                  “{deleting?.item.title ?? ""}” volta a contar como tempo planejado. Se a máquina parar nesse período, a parada pedirá motivo.
+                  {deleting?.kind === "stop" && deleting.item.recurrence !== "none" && (
+                    <label className="mt-3 flex items-center gap-2 text-sm text-foreground">
+                      <Checkbox checked={cancelNext} onCheckedChange={(v) => setCancelNext(v === true)} />
+                      Cancelar também as próximas desta série
+                    </label>
+                  )}
+                </>
+              )
         }
         onConfirm={() => {
           if (!deleting) return
@@ -594,8 +614,9 @@ export function ShiftsManager({
               gravar(() => excluirTurnoAction({ slug: clientSlug, id: target.item.id }), () => toast.success(`${target.item.name} excluído`))
             } else {
               gravar(
-                () => cancelarParadaAction({ slug: clientSlug, id: target.item.id }),
-                () => toast.success("Parada planejada cancelada", { description: target.item.title }),
+                () => cancelarParadaAction({ slug: clientSlug, id: target.item.id, proximas: cancelNext }),
+                (r) =>
+                  toast.success(r.canceladas > 1 ? `${r.canceladas} paradas planejadas canceladas` : "Parada planejada cancelada", { description: target.item.title }),
               )
             }
             return

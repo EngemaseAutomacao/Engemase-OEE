@@ -572,8 +572,9 @@ export async function salvarParadaAction(input: unknown): Promise<Resultado<{ id
   return cadastro(input, "salvarParada", (a) => salvarParada(a.db, a.ctx, input))
 }
 
-export async function cancelarParadaAction(input: unknown): Promise<Resultado<{ id: string }>> {
-  return cadastro(input, "cancelarParada", (a) => cancelarParada(a.db, a.ctx, (input as { id?: unknown } | null)?.id))
+export async function cancelarParadaAction(input: unknown): Promise<Resultado<{ id: string; canceladas: number }>> {
+  const i = input as { id?: unknown; proximas?: unknown } | null
+  return cadastro(input, "cancelarParada", (a) => cancelarParada(a.db, a.ctx, i?.id, { proximas: i?.proximas === true }))
 }
 
 // ---------------------------------------------------------------------------
