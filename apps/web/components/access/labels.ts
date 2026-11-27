@@ -158,7 +158,7 @@ export function formatTagValue(value: string, dataType: DataType): string {
 // Comandos do gateway (docs/04)
 // ---------------------------------------------------------------------------
 
-export type CommandType = "tag.read" | "device.test" | "config.reload" | "agent.restart"
+export type CommandType = "tag.read" | "device.test" | "config.reload" | "agent.restart" | "agent.update"
 export type CommandStatus = "queued" | "sent" | "done" | "failed" | "expired"
 
 export const COMMAND_TYPE_LABEL: Record<CommandType, string> = {
@@ -166,6 +166,7 @@ export const COMMAND_TYPE_LABEL: Record<CommandType, string> = {
   "device.test": "Teste de conexão",
   "config.reload": "Recarregar configuração",
   "agent.restart": "Reiniciar agente",
+  "agent.update": "Atualizar agente",
 }
 
 export const COMMAND_STATUS_LABEL: Record<CommandStatus, string> = {

@@ -37,9 +37,10 @@ import {
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { publicarConfigAction } from "@/app/(shell)/[cliente]/config/actions"
+import { atualizarAgenteAction, publicarConfigAction } from "@/app/(shell)/[cliente]/config/actions"
 import { useFonteDados } from "@/components/config/fonte-dados"
 import { ActivationPanel } from "./activation-panel"
+import { AgentUpdateDialog } from "./agent-update-dialog"
 import { useCommandRunner } from "./command-runner"
 import { CommandsTab } from "./commands-tab"
 import { ConfigTab } from "./config-tab"
@@ -69,7 +70,8 @@ export function GatewayDetailView({ data, nowLabel }: { data: GatewayDetail; now
 
   const fonte = useFonteDados()
   const real = fonte.banco && fonte.slug ? { slug: fonte.slug, gatewayId: data.id } : undefined
-  const { commands, run } = useCommandRunner({ initial: data.commands, offline, me, nowLabel, real })
+  const { commands, run, runWith } = useCommandRunner({ initial: data.commands, offline, me, nowLabel, real })
+  const [updating, setUpdating] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [published, setPublished] = useState(data.configVersion)
   const [applied, setApplied] = useState(data.configApplied)
@@ -127,6 +129,17 @@ export function GatewayDetailView({ data, nowLabel }: { data: GatewayDetail; now
     )
     setRestarting(false)
     if (out) toast.success("Agente reiniciado", { description: "A coleta voltou em 8 s. As leituras do intervalo ficaram no buffer local." })
+  }
+
+  /** Com banco: agent.update da versão escolhida (endereços dos manifestos montados no servidor). */
+  const updateAgent = async (version: string) => {
+    if (!real) return
+    setUpdating(true)
+    const out = await runWith("agent.update", `Versão ${version} · ${data.hostname}`, () => atualizarAgenteAction({ slug: real.slug, gatewayId: real.gatewayId, version }))
+    setUpdating(false)
+    if (!out) return
+    if (out.ok) toast.success(`Versão ${version} baixada pelo gateway`, { description: "Ele instala e reinicia o agente. A versão nova aparece aqui no próximo sincronismo." })
+    else toast.error("Atualização não aplicada", { description: out.result })
   }
 
   /** Com banco: publica a config do cadastro atual (nova versão só se houver mudança). */
@@ -198,6 +211,9 @@ export function GatewayDetailView({ data, nowLabel }: { data: GatewayDetail; now
               {reloading ? <Spinner /> : <RefreshCwIcon />}
               Recarregar configuração
             </Button>
+            {real && (
+              <AgentUpdateDialog slug={real.slug} gatewayName={data.name} current={data.agentVersion} offline={offline} busy={updating} onSend={(v) => void updateAgent(v)} />
+            )}
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="outline" size="sm" disabled={restarting}>

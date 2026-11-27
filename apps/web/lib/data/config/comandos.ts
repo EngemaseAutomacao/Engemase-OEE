@@ -31,7 +31,9 @@ export function resumoDoComando(c: ComandoDoBanco): ResumoDoComando {
   if (c.status === "ok") {
     const r = (res.result ?? {}) as Record<string, unknown>
     let text = "Concluído"
-    if ("value" in r) text = `Valor ${fmtValor(r.value)}${r.quality && r.quality !== "good" ? ` (qualidade ${String(r.quality)})` : ""}`
+    if (r.state === "downloaded" && typeof r.version === "string") text = `Versão ${r.version} baixada e conferida; o agente instala e reinicia (volta à anterior se não sincronizar em 5 min)`
+    else if (r.state === "current" && typeof r.version === "string") text = `Já estava na versão ${r.version}`
+    else if ("value" in r) text = `Valor ${fmtValor(r.value)}${r.quality && r.quality !== "good" ? ` (qualidade ${String(r.quality)})` : ""}`
     else if (typeof r.latency_ms === "number") text = `Conexão OK em ${r.latency_ms} ms`
     else if (typeof r.version === "number") text = r.outcome === "unchanged" ? `Configuração v${r.version} já estava aplicada` : `Configuração v${r.version} aplicada`
     else if (typeof r.restart_at === "string") text = "Agente reiniciando"

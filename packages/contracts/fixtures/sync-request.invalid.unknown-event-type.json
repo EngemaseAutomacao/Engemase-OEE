@@ -272,7 +272,7 @@
     },
     {
       "id": "01a1cab3-5200-7abc-893a-62f99640b0df",
-      "type": "agent.update",
+      "type": "fleet.rollout",
       "status": "rejected",
       "error": {
         "code": "unsupported",

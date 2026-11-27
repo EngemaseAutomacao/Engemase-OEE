@@ -187,7 +187,7 @@ func TestAgentCommandsEndToEnd(t *testing.T) {
 
 	cl.version.Store(2)
 	cl.add(idReload, "config.reload", map[string]any{}, 10*time.Minute)
-	cl.add(idUnknown, "agent.update", map[string]any{"version": "9.9.9"}, 10*time.Minute)
+	cl.add(idUnknown, "fleet.rollout", map[string]any{"version": "9.9.9"}, 10*time.Minute)
 	if r = cl.waitResult(idReload, 20*time.Second); r["status"] != "ok" || r["result"].(map[string]any)["version"] != float64(2) {
 		t.Fatalf("config.reload: %v", r)
 	}

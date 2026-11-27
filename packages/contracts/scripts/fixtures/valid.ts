@@ -491,7 +491,7 @@ export const syncRequestRealistic = {
     },
     {
       id: ID.cmdUnknownDone,
-      type: "agent.update",
+      type: "fleet.rollout",
       status: "rejected",
       error: { code: "unsupported", message: "Tipo de comando desconhecido para o agente 1.2.0." },
     },
@@ -790,6 +790,19 @@ export const allCommands: Command[] = [
     expires_at: ttl(600),
     payload: { lines: 500, since_s: 3600 },
   },
+  {
+    id: ID.cmdAgentUpdate,
+    type: "agent.update",
+    issued_at: ISSUED,
+    expires_at: ttl(1800),
+    payload: {
+      version: "1.3.0",
+      manifests: {
+        arm64: "https://github.com/EngemaseAutomacao/Engemase-OEE/releases/download/gateway-v1.3.0/oee-gateway_1.3.0_arm64.manifest.json",
+        amd64: "https://github.com/EngemaseAutomacao/Engemase-OEE/releases/download/gateway-v1.3.0/oee-gateway_1.3.0_amd64.manifest.json",
+      },
+    },
+  },
 ]
 
 /** Resposta do exemplo do docs/04 (tag.read em modo interativo, next_sync_s = 1). */
@@ -944,6 +957,12 @@ export const allCommandResults: CommandResult[] = [
     },
   },
   {
+    ...done(ID.cmdAgentUpdate, 41_500),
+    type: "agent.update",
+    status: "ok",
+    result: { version: "1.3.0", previous: "1.2.0", state: "downloaded" },
+  },
+  {
     ...done(ID.cmdVpnDisable, 900),
     type: "vpn.disable",
     status: "ok",
@@ -1069,10 +1088,10 @@ export const VALID_FIXTURES: Readonly<Record<string, ValidFixture>> = {
   },
   "command-envelope.valid.future-type": {
     schema: "command-envelope",
-    description: "Tipo de comando de versão futura (agent.update): o envelope aceita; o agente responde rejected/unsupported.",
+    description: "Tipo de comando de versão futura (fleet.rollout): o envelope aceita; o agente responde rejected/unsupported.",
     data: {
       id: ID.cmdUnknownDone,
-      type: "agent.update",
+      type: "fleet.rollout",
       issued_at: ISSUED,
       expires_at: ttl(900),
       payload: { version: "1.3.0", channel: "stable" },

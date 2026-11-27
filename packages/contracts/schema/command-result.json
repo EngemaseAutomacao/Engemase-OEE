@@ -1029,6 +1029,72 @@
             "status",
             "result"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "id do comando"
+            },
+            "finished_at": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+              "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+            },
+            "duration_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "type": {
+              "type": "string",
+              "const": "agent.update"
+            },
+            "status": {
+              "type": "string",
+              "const": "ok"
+            },
+            "result": {
+              "type": "object",
+              "properties": {
+                "version": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+                  "description": "Versão baixada e conferida"
+                },
+                "previous": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+                  "description": "Versão em execução quando o comando chegou"
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "downloaded",
+                    "current"
+                  ],
+                  "description": "downloaded: conferido; a instalação é pedida depois da confirmação. current: já é a versão em execução"
+                }
+              },
+              "required": [
+                "version",
+                "previous",
+                "state"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "status",
+            "result"
+          ]
         }
       ]
     },
@@ -1091,6 +1157,8 @@
                 "session_conflict",
                 "session_not_found",
                 "vpn_failed",
+                "update_busy",
+                "update_failed",
                 "internal_error"
               ]
             },

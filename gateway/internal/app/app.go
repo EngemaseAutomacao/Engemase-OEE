@@ -35,6 +35,8 @@ type Options struct {
 	Local *config.Local
 	// RemoteAccessSocket é o socket do oee-remote-access ("" = padrão).
 	RemoteAccessSocket string
+	// UpdateKeysDir são as chaves públicas do OTA para o agent.update ("" = update.DefaultKeysDir).
+	UpdateKeysDir string
 	// Logger (nil = JSON em stderr no nível da config local).
 	Logger *slog.Logger
 	// LogLevel é o nível ajustável do Logger (NewLeveledLogger), para o comando
@@ -122,6 +124,10 @@ type agent struct {
 	restart   *pendingRestart
 	// level é o nível temporário do log (log.level); nil sem LevelVar.
 	level *commands.LevelControl
+	// updateMu protege updates: agent.update baixado, à espera da confirmação da nuvem
+	// para pedir a instalação (id do comando → versão).
+	updateMu sync.Mutex
+	updates  map[string]string
 
 	// Só a rotina de coleta (tick e collectWith) mexe nestes.
 	unsent      buffer.Write                      // saída do motor que o buffer ainda não gravou (ver flush)

@@ -1,0 +1,139 @@
+# Publicação do gateway no GitHub Releases (OTA pela nuvem, docs/16 §3).
+#
+# Dispara com uma tag gateway-v<semver> (ex.: gateway-v0.2.0, gateway-v0.2.0-rc.1) num commit da main:
+#   1. testes do gateway;
+#   2. .deb de arm64 e amd64: oee-gateway, oee-gateway-updater e oee-gateway-remote-access;
+#   3. manifesto de cada oee-gateway assinado com a chave privada do OTA (segredo OTA_SIGNING_KEY) e
+#      conferido contra as chaves públicas do repositório (deploy/gateway/keys) ANTES de publicar;
+#   4. release com os arquivos e o SHA256SUMS (pré-release quando a versão tem "-").
+#
+# A plataforma lista estas releases e manda o agent.update com o endereço do manifesto; o gateway
+# confere a assinatura de novo, e o oee-updater mais uma vez antes de instalar.
+name: Gateway release
+
+on:
+  push:
+    tags: ["gateway-v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gateway-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.24.x"
+
+jobs:
+  release:
+    name: Gerar, assinar e publicar
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write # criar a release e enviar os arquivos
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Versão da tag
+        id: v
+        run: |
+          v="${GITHUB_REF_NAME#gateway-v}"
+          if ! printf '%s\n' "$v" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::a tag $GITHUB_REF_NAME não é gateway-v<semver> (ex.: gateway-v0.2.0)"
+            exit 1
+          fi
+          echo "version=$v" >>"$GITHUB_OUTPUT"
+          case "$v" in *-*) echo "prerelease=true" >>"$GITHUB_OUTPUT" ;; *) echo "prerelease=false" >>"$GITHUB_OUTPUT" ;; esac
+
+      # A chave do OTA só assina o que já passou pela main (CI verde e revisão).
+      - name: O commit da tag está na main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::a tag $GITHUB_REF_NAME aponta para um commit fora da main"
+            exit 1
+          fi
+
+      - name: Chave pública e segredo do OTA
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+        run: |
+          if ! ls deploy/gateway/keys/*.pub >/dev/null 2>&1; then
+            echo "::error::nenhuma chave pública em deploy/gateway/keys: o gateway recusaria todo pacote (ver deploy/gateway/keys/README.md)"
+            exit 1
+          fi
+          if [ -z "$OTA_SIGNING_KEY" ]; then
+            echo "::error::segredo OTA_SIGNING_KEY ausente (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            gateway/go.sum
+            gateway/cmd/oee-remote-access/go.sum
+
+      - name: Testes do gateway
+        working-directory: gateway
+        env:
+          GOTOOLCHAIN: local
+        run: go test -race -count=1 ./...
+
+      - name: nfpm
+        run: GOTOOLCHAIN=local go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.43.1
+
+      - name: Pacotes .deb (arm64 e amd64)
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/dist" release
+          for arch in arm64 amd64; do
+            deploy/gateway/build-deb.sh --build --package all --arch "$arch" --version "$VERSION" \
+              --dist "$RUNNER_TEMP/dist" --out release
+          done
+          # O "~" da versão Debian de pré-release (0.2.0~rc.1) não vai bem em nome de arquivo de release.
+          for f in release/*~*; do
+            [ -e "$f" ] || continue
+            mv "$f" "$(printf '%s' "$f" | tr '~' '-')"
+          done
+          ls -l release
+
+      - name: Assinar e conferir os manifestos
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+        run: |
+          (cd gateway && GOTOOLCHAIN=local go build -o "$RUNNER_TEMP/oee-updater" ./cmd/oee-updater)
+          key="$RUNNER_TEMP/ota.key"
+          trap 'rm -f "$key"' EXIT
+          (umask 077 && printf '%s\n' "$OTA_SIGNING_KEY" >"$key")
+          for deb in release/oee-gateway_*.deb; do
+            name=$(basename "$deb")
+            arch=${name##*_}
+            arch=${arch%.deb}
+            "$RUNNER_TEMP/oee-updater" sign --deb "$deb" --version "$VERSION" --arch "$arch" --url "$name" --key "$key" --out release
+            # Confere como o gateway vai conferir: com as chaves públicas do repositório.
+            "$RUNNER_TEMP/oee-updater" verify --manifest "release/${name%.deb}.manifest.json" --deb "$deb" --keys deploy/gateway/keys
+          done
+          (cd release && sha256sum -- * >SHA256SUMS)
+          cat release/SHA256SUMS
+
+      - name: Publicar a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+          PRERELEASE: ${{ steps.v.outputs.prerelease }}
+        run: |
+          notes="Gateway OEE $VERSION (commit ${GITHUB_SHA::7}). Pacotes .deb para arm64 (reComputer R1000) e amd64 (bancada), manifestos assinados do OTA e SHA256SUMS. Atualize pela plataforma: Console → Gateways → Atualizar agente."
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release/* --clobber
+          else
+            flags=""
+            if [ "$PRERELEASE" = true ]; then flags="--prerelease"; fi
+            # shellcheck disable=SC2086 # flags vazio ou uma opção
+            gh release create "$GITHUB_REF_NAME" release/* --verify-tag --title "Gateway $VERSION" --notes "$notes" $flags
+          fi

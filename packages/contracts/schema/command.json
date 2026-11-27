@@ -1123,6 +1123,75 @@
         "type",
         "payload"
       ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "description": "Id de entidade (UUID; a nuvem gera UUIDv7)"
+        },
+        "issued_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+          "description": "Timestamp ISO 8601 em UTC com sufixo Z"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+          "description": "Depois disso o comando não é executado (status expired)"
+        },
+        "type": {
+          "type": "string",
+          "const": "agent.update"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+              "description": "Versão do agente a instalar (a do manifesto)"
+            },
+            "manifests": {
+              "type": "object",
+              "properties": {
+                "arm64": {
+                  "type": "string",
+                  "maxLength": 2000,
+                  "pattern": "^https:\\/\\/[^\\s/?#@]+\\/[^\\s#]*\\.manifest\\.json$"
+                },
+                "amd64": {
+                  "type": "string",
+                  "maxLength": 2000,
+                  "pattern": "^https:\\/\\/[^\\s/?#@]+\\/[^\\s#]*\\.manifest\\.json$"
+                },
+                "armhf": {
+                  "type": "string",
+                  "maxLength": 2000,
+                  "pattern": "^https:\\/\\/[^\\s/?#@]+\\/[^\\s#]*\\.manifest\\.json$"
+                }
+              },
+              "description": "Manifesto assinado de cada arquitetura (https)"
+            }
+          },
+          "required": [
+            "version",
+            "manifests"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "expires_at",
+        "type",
+        "payload"
+      ]
     }
   ]
 }

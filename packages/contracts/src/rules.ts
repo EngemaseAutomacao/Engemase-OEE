@@ -58,6 +58,7 @@ export const RULES = {
   "command_result.unique": "Resultado repetido para o mesmo comando.",
   // Comandos
   "command.expiry": "expires_at precisa ser posterior a issued_at, com validade de no máximo 24 h.",
+  "command.update_manifests": "agent.update precisa do manifesto de pelo menos uma arquitetura.",
   "command.unique": "Comando repetido (mesmo id) na resposta.",
   "scan.range": "Faixa de varredura inválida (início maior que o fim ou faixa grande demais).",
   "device_test.bus": "serial_bus só vale para modbus-rtu e precisa ter o mesmo id de params.bus.",

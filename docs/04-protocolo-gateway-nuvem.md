@@ -155,6 +155,7 @@ Todo comando traz `id`, `type`, `payload`, `expires_at` e, opcionalmente, `issue
 | `device.test` | Testa a conexão com um CLP. Com `device_id`: dispositivo cadastrado. **Sem `device_id`:** IP ainda não cadastrado, só dentro da sub-rede OT, com liberação do firewall por 5 min, limite de taxa e auditoria. Em RTU com parâmetros novos, exige `allow_bus_pause` | 2 min | 10 s | MVP |
 | `config.reload` | Força baixar e aplicar a config | 10 min | 60 s | MVP |
 | `agent.restart` | Reinicia o serviço | 10 min | 10 s | MVP |
+| `agent.update` | Atualiza o agente (OTA): `version` e o manifesto assinado de cada arquitetura (`manifests`, https, GitHub Releases). O agente confere a assinatura, baixa o `.deb` e responde `downloaded` (ou `current`, se já está nela); **só depois da confirmação da nuvem** pede a instalação ao `oee-updater`, que reinicia o agente e volta ao anterior se o novo não sincronizar em 5 min. Erros: `update_busy`, `update_failed` | 30 min | 15 min | Tipo novo e compatível da v1 (27/11/2026) |
 | `modbus.scan` | Varre unit ids de um barramento RS-485 ou uma faixa de registradores, para ajudar no comissionamento | 10 min | 120 s | F2 (contrato pronto) |
 | `vpn.enable` · `vpn.disable` · `vpn.status` | Sessão de acesso remoto sob demanda, com aprovação assinada ([12](12-acesso-remoto-vpn.md)) | 5 min · 1 h · 2 min | 60 s · 30 s · 10 s | F2 (contrato pronto) |
 | `ot.forward.open` · `ot.forward.close` | Encaminhamento temporário para um CLP pela VPN (portas sugeridas 502, 102, 44818) | 5 min · 1 h | 30 s | F2 (contrato pronto) |

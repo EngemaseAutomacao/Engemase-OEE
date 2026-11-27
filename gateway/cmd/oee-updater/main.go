@@ -7,6 +7,7 @@
 //	oee-updater seed --manifest M --sig S --deb D     (bancada: registra o instalado)
 //	oee-updater sign --deb D --version V --arch A --url U --key K --out DIR   (CI)
 //	oee-updater keygen --out PREFIXO                  (gera PREFIXO.key e PREFIXO.pub)
+//	oee-updater verify --manifest M --sig S [--deb D] [--keys DIR]   (CI: confere antes de publicar)
 package main
 
 import (
@@ -35,7 +36,7 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-const usage = `uso: oee-updater <apply|boot-check|seed|sign|keygen|version> [opções]`
+const usage = `uso: oee-updater <apply|boot-check|seed|sign|keygen|verify|version> [opções]`
 
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
@@ -53,6 +54,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = runSign(args[1:], stdout, stderr)
 	case "keygen":
 		err = runKeygen(args[1:], stdout, stderr)
+	case "verify":
+		err = runVerify(args[1:], stdout, stderr)
 	case "version":
 		fmt.Fprintln(stdout, buildinfo.String())
 	case "-h", "--help", "help":
@@ -210,5 +213,57 @@ func runKeygen(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	fmt.Fprintln(stdout, *out+".key", *out+".pub")
+	return nil
+}
+
+// runVerify confere um manifesto publicado como o gateway vai conferir: assinatura com as chaves
+// públicas do pacote (deploy/gateway/keys no CI), regras do manifesto e, com --deb, tamanho e SHA-256.
+// O CI roda antes de publicar: uma chave privada que não bate com as públicas do repositório falha aqui,
+// e não em campo.
+func runVerify(args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("verify", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	manifest := fs.String("manifest", "", "<nome>.manifest.json")
+	sig := fs.String("sig", "", "assinatura (padrão: <manifesto>.sig)")
+	deb := fs.String("deb", "", ".deb a conferir contra o manifesto (opcional)")
+	keys := fs.String("keys", update.DefaultKeysDir, "pasta das chaves públicas *.pub")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *manifest == "" {
+		return errors.New("verify precisa de --manifest")
+	}
+	if *sig == "" {
+		*sig = *manifest + ".sig"
+	}
+	pubs, err := update.LoadKeys(*keys)
+	if err != nil {
+		return err
+	}
+	mb, err := os.ReadFile(*manifest)
+	if err != nil {
+		return err
+	}
+	sb, err := os.ReadFile(*sig)
+	if err != nil {
+		return err
+	}
+	if err := update.VerifyManifest(pubs, mb, sb); err != nil {
+		return err
+	}
+	m, err := update.ParseManifest(mb)
+	if err != nil {
+		return err
+	}
+	if *deb != "" {
+		size, sum, err := fileDigest(*deb)
+		if err != nil {
+			return err
+		}
+		if size != m.Size || sum != m.SHA256 {
+			return fmt.Errorf("%s não bate com o manifesto (tamanho ou SHA-256)", filepath.Base(*deb))
+		}
+	}
+	fmt.Fprintf(stdout, "ok: %s %s (%s)\n", m.Package, m.Version, m.Arch)
 	return nil
 }

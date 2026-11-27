@@ -141,6 +141,18 @@ describe("fila de comandos", () => {
     )
   })
 
+  it("agent.update: só manifestos https; vale 30 min", async () => {
+    const { client } = await freshClient()
+    const base = { organizationId: client.organizationId, gatewayId: client.gatewayId, now }
+    const m = "https://github.com/EngemaseAutomacao/Engemase-OEE/releases/download/gateway-v0.2.0/oee-gateway_0.2.0_arm64.manifest.json"
+    const cmd = await enqueueGatewayCommand(t.db, { ...base, type: "agent.update", payload: { version: "0.2.0", manifests: { arm64: m } } })
+    expect(cmd.expiresAt.getTime() - now.getTime()).toBe(30 * 60_000)
+    expect((await adminError(enqueueGatewayCommand(t.db, { ...base, type: "agent.update", payload: { version: "0.2.0", manifests: { arm64: m.replace("https", "http") } } }))).code).toBe(
+      "invalid_command",
+    )
+    expect((await adminError(enqueueGatewayCommand(t.db, { ...base, type: "agent.update", payload: { version: "0.2.0", manifests: {} } }))).code).toBe("invalid_command")
+  })
+
   it("payload fora do contrato, tipo desconhecido ou validade acima de 24 h → invalid_command", async () => {
     const { client } = await freshClient()
     const base = { organizationId: client.organizationId, gatewayId: client.gatewayId, now }
@@ -150,7 +162,7 @@ describe("fila de comandos", () => {
     expect(bad.code).toBe("invalid_command")
     expect(bad.issues.length).toBeGreaterThan(0)
     expect(
-      (await adminError(enqueueGatewayCommand(t.db, { ...base, type: "agent.update" as never, payload: {} }))).code,
+      (await adminError(enqueueGatewayCommand(t.db, { ...base, type: "fleet.rollout" as never, payload: {} }))).code,
     ).toBe("invalid_command")
     expect(
       (await adminError(enqueueGatewayCommand(t.db, { ...base, type: "config.reload", payload: {}, ttlS: 25 * 3600 }))).code,

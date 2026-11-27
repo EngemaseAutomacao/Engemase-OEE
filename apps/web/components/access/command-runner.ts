@@ -5,6 +5,7 @@ import { toast } from "sonner"
 
 import { consultarComandoAction, enviarComandoAction } from "@/app/(shell)/[cliente]/config/actions"
 import type { CommandVM } from "./gateway-detail-data"
+import type { Resultado } from "@/lib/data/admin/acesso"
 import { COMMAND_TYPE_LABEL, type CommandType } from "./labels"
 
 export interface CommandOutcome {
@@ -21,7 +22,10 @@ export interface CommandOutcome {
 export type RunCommand = (type: CommandType, target: string, exec: () => CommandOutcome, payload?: Record<string, unknown>) => Promise<CommandOutcome | null>
 
 /** Atraso simulado até o gateway buscar o comando no /sync e responder. */
-const DELAY: Record<CommandType, number> = { "tag.read": 900, "device.test": 1300, "config.reload": 1800, "agent.restart": 2400 }
+const DELAY: Record<CommandType, number> = { "tag.read": 900, "device.test": 1300, "config.reload": 1800, "agent.restart": 2400, "agent.update": 3000 }
+
+/** Envia o comando (com banco) e devolve o id criado. */
+export type SendCommand = () => Promise<Resultado<{ commandId: string }>>
 
 /** Com banco: quanto tempo a tela espera a resposta antes de deixar o comando "Enviado" na lista. */
 const ESPERA_MS = 45_000
@@ -51,8 +55,8 @@ export function useCommandRunner({
   const [commands, setCommands] = useState(initial)
   const seq = useRef(0)
 
-  const runReal = async (r: { slug: string; gatewayId: string }, type: CommandType, target: string, payload: Record<string, unknown>) => {
-    const sent = await enviarComandoAction({ slug: r.slug, gatewayId: r.gatewayId, type, payload })
+  const runReal = async (r: { slug: string; gatewayId: string }, type: CommandType, target: string, payload: Record<string, unknown>, send?: SendCommand) => {
+    const sent = send ? await send() : await enviarComandoAction({ slug: r.slug, gatewayId: r.gatewayId, type, payload })
     if (!sent.ok) {
       toast.error(`${COMMAND_TYPE_LABEL[type]}: não enviado`, { description: sent.problemas?.[0]?.mensagem ?? sent.mensagem })
       return null
@@ -115,5 +119,8 @@ export function useCommandRunner({
     })
   }
 
-  return { commands, run }
+  /** Com banco: comando enviado por outra ação (ex.: agent.update), acompanhado como os demais. */
+  const runWith = (type: CommandType, target: string, send: SendCommand) => (real ? runReal(real, type, target, {}, send) : Promise.resolve(null))
+
+  return { commands, run, runWith }
 }

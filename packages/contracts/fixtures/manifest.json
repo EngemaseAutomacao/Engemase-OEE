@@ -77,7 +77,7 @@
       "file": "command-envelope.valid.future-type.json",
       "schema": "command-envelope",
       "valid": true,
-      "description": "Tipo de comando de versão futura (agent.update): o envelope aceita; o agente responde rejected/unsupported."
+      "description": "Tipo de comando de versão futura (fleet.rollout): o envelope aceita; o agente responde rejected/unsupported."
     },
     {
       "file": "error-response.valid.invalid-payload.json",
@@ -956,7 +956,7 @@
         {
           "op": "set",
           "path": "commands.3.type",
-          "value": "agent.update"
+          "value": "fleet.rollout"
         }
       ]
     },
@@ -993,6 +993,43 @@
           "op": "set",
           "path": "commands.1.payload.probe.count",
           "value": 126
+        }
+      ]
+    },
+    {
+      "file": "sync-response.invalid.update-http-manifest.json",
+      "schema": "sync-response",
+      "valid": false,
+      "description": "agent.update com manifesto sem https.",
+      "layer": "schema",
+      "expect": {
+        "path": "commands.13.payload.manifests.arm64"
+      },
+      "derived_from": "sync-response.valid.all-command-types.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "commands.13.payload.manifests.arm64",
+          "value": "http://exemplo.com/oee-gateway_1.3.0_arm64.manifest.json"
+        }
+      ]
+    },
+    {
+      "file": "sync-response.invalid.update-without-manifest.json",
+      "schema": "sync-response",
+      "valid": false,
+      "description": "agent.update sem manifesto de nenhuma arquitetura.",
+      "layer": "semantic",
+      "expect": {
+        "path": "commands.13.payload.manifests",
+        "rule": "command.update_manifests"
+      },
+      "derived_from": "sync-response.valid.all-command-types.json",
+      "patch": [
+        {
+          "op": "set",
+          "path": "commands.13.payload.manifests",
+          "value": {}
         }
       ]
     },

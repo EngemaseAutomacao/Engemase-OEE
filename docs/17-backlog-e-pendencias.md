@@ -285,7 +285,7 @@ Pedido do Pablo pela Central: finalizar todas as pendências. Seis especialistas
 | **W5 (Segurança)** | Convite e "definir senha" (pessoa achada pelo e-mail no servidor), senha esquecida, aviso de bloqueio por e-mail (Resend opcional, senão log), reinício do 2FA de outra pessoa, limpeza do login no cron, seed da Engemase Lab (`db:seed:plataforma`), escopo nos agregados, testes de isolamento de nível 3 e 4 | Configurar Resend e domínio remetente; rodar o seed de plataforma na Neon (N1) |
 | **W8 (Frontend)** | Console Engemase e cadastros lendo e gravando no banco (0018: `app.platform_create_client`/`platform_update_client`); máquina colocada no ar pela web de ponta a ponta com o agente real e o plc-sim | Turnos, produtos, motivos, usuários, terminais e aparência ainda no mock; editar estado do cliente pela tela |
 | **W9 (Frontend)** | Visão geral, máquinas, linhas, relatórios, notificações, ajuda, andon e operador lendo do banco (oee-core; usa `oee_shift` quando existe) | Ações do operador (classificar parada, refugo, produto) ainda simuladas; terminal pareado sem token de aparelho |
-| **Gateway (G4b)** | `oee-updater` (assinatura Ed25519, saúde, rollback, regra da L25); operações reais do `oee-helper`; `oee-localui` com login e telas de status | Conferência na bancada (§5.7 do roteiro); par de chaves do OTA de produção; comando de atualização pela nuvem (contrato v2) |
+| **Gateway (G4b)** | `oee-updater` (assinatura Ed25519, saúde, rollback, regra da L25); operações reais do `oee-helper`; `oee-localui` com login e telas de status | Conferência na bancada (§5.7 do roteiro); par de chaves do OTA de produção; ~~comando de atualização pela nuvem~~ feito em 27/11/2026 (§8.4) |
 | **L15 (Docs)** | Guias por papel em [`guias/`](guias/README.md) e [notas de versão](notas-de-versao.md) | — |
 
 **Sobra só o que não depende de código:** contas (Vercel Pro, Neon, Sentry, Resend), hardware de bancada, proteção da `main` e Firewall da Vercel (administrador), minutas jurídicas e a escolha do piloto.
@@ -304,3 +304,20 @@ O programa da VPN está pronto e testado sem hardware: plataforma (pedido, aprov
 | V2 | ~~**Empacotamento**~~ **Feito em 27/11/2026:** pacote próprio `oee-gateway-remote-access` (programa, socket, usuário `oee-ra`, chave da aprovação em `/usr/share/oee-remote-access/keys`, nunca na pasta do OTA), TCP 443 liberado ao `oee-ra` no firewall; conferido pelo `deploy/gateway/validate.sh` (148 ok). Instala só à mão na bancada até o V3 | — | Feito |
 | V3 | **Teste na bancada** com gateway na internet e o Tailscale de verdade (instalar o `oee-gateway-remote-access` à mão): ligar, entrar por SSH, encerrar por prazo, inatividade, pedido e trava local; nó apagado no fim | Hardware (G0) e V1, V2 | Roteiro conferido; só então criar `VPN_HABILITADA=1` na Vercel |
 | V4 | Conferir na aba Actions do GitHub o job `go-remote-access` do CI | — | Job verde |
+
+### 8.4 Atualização do agente pela nuvem (27/11/2026)
+
+Decisão: os pacotes ficam no **GitHub Releases** do repositório (público). Feito:
+
+- `.github/workflows/gateway-release.yml`: tag `gateway-v<semver>` num commit da `main` → testes, `.deb` de arm64 e amd64 (agente, atualizador e VPN), manifestos assinados com o segredo `OTA_SIGNING_KEY` e conferidos contra `deploy/gateway/keys/*.pub` antes de publicar, release com `SHA256SUMS`.
+- Contrato: comando `agent.update` (versão + manifesto de cada arquitetura, só https), resultado `downloaded`/`current`, erros `update_busy` e `update_failed`.
+- Gateway: baixa e confere; **só pede a instalação depois que a nuvem confirma o resultado** (o reinício do `oee-updater` não perde a resposta). Teste de ponta a ponta com TLS e CA corporativa.
+- Plataforma: botão "Atualizar agente" no detalhe do gateway (equipe Engemase), versões lidas do GitHub e histórico na aba Comandos.
+- Ficha de TI: `github.com`, `release-assets.githubusercontent.com` e `objects.githubusercontent.com` (TCP 443) no lugar do Blob.
+
+| # | Falta | Quem |
+|---|---|---|
+| U1 | **Par de chaves do OTA de produção:** a pública em `deploy/gateway/keys/ota-2026.pub` e a privada no segredo `OTA_SIGNING_KEY` do GitHub e no cofre (2 pessoas). Sem ela, o workflow para com erro e o gateway recusa tudo | Pablo + equipe |
+| U2 | Proteger as tags `gateway-v*` no GitHub (só administradores criam) | Administrador do repositório |
+| U3 | Primeira release de teste e atualização de um gateway na bancada (com `oee-updater seed` antes) | Bancada |
+| U4 | Atualizar vários gateways de uma vez (ondas/canais) | Depois do piloto |

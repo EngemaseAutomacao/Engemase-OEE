@@ -98,6 +98,7 @@ export const DEFAULT_COMMAND_TTL_S = {
   "ot.forward.close": 3600,
   "log.level": 600,
   "logs.upload": 600,
+  "agent.update": 1800,
 } as const
 
 /** Prazo de execução de cada tipo de comando no agente, em segundos. */
@@ -114,6 +115,8 @@ export const COMMAND_EXEC_TIMEOUT_S = {
   "ot.forward.close": 30,
   "log.level": 10,
   "logs.upload": 30,
+  // Download do .deb (~11 MB) por links lentos de fábrica, com proxy.
+  "agent.update": 900,
 } as const
 
 /** Portas sugeridas para a política local de encaminhamento OT (Modbus, S7, EtherNet/IP). */

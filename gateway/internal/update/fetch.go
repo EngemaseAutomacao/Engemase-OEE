@@ -77,6 +77,12 @@ type FetchOptions struct {
 	Now         func() time.Time
 	// AllowHTTP aceita http:// (só testes).
 	AllowHTTP bool
+	// ExpectVersion, se não vazio, recusa um manifesto de outra versão (agent.update).
+	ExpectVersion string
+	// DeferRequest baixa e confere tudo, mas não grava o request.json: quem chama grava
+	// depois com RequestInstall (o agent.update espera a nuvem confirmar o resultado, porque
+	// o oee-updater reinicia o agente logo em seguida).
+	DeferRequest bool
 }
 
 // ErrBusy: já há um pedido de atualização em andamento.
@@ -152,6 +158,9 @@ func Fetch(ctx context.Context, o FetchOptions) (*Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
+	if o.ExpectVersion != "" && m.Version != o.ExpectVersion {
+		return nil, fmt.Errorf("manifesto da versão %s, pedida %s", m.Version, o.ExpectVersion)
+	}
 	if m.Arch != GoArch() {
 		return nil, fmt.Errorf("pacote para %s, este gateway é %s", m.Arch, GoArch())
 	}
@@ -182,11 +191,40 @@ func Fetch(ctx context.Context, o FetchOptions) (*Manifest, error) {
 	if err := writeAtomic(filepath.Join(o.Dir, SignatureFile), sb, 0o640); err != nil {
 		return nil, err
 	}
-	req := Request{ID: o.RequestID, Version: m.Version, RequestedAt: o.Now().UTC()}
-	if err := writeJSON(filepath.Join(o.Dir, RequestFile), req, 0o640); err != nil {
+	if o.DeferRequest {
+		return m, nil
+	}
+	if err := RequestInstall(o.Dir, Request{ID: o.RequestID, Version: m.Version, RequestedAt: o.Now().UTC()}); err != nil {
 		return nil, err
 	}
 	return m, nil
+}
+
+// RequestInstall grava o request.json, que dispara o oee-updater (pelo .path). Exige que o
+// pacote baixado por Fetch (com DeferRequest) ainda esteja lá e seja da versão pedida.
+func RequestInstall(dir string, req Request) error {
+	if _, err := os.Lstat(filepath.Join(dir, RequestFile)); err == nil {
+		return ErrBusy
+	}
+	mb, err := os.ReadFile(filepath.Join(dir, ManifestFile))
+	if err != nil {
+		return fmt.Errorf("pacote baixado não encontrado: %w", err)
+	}
+	m, err := ParseManifest(mb)
+	if err != nil {
+		return err
+	}
+	if req.Version != "" && m.Version != req.Version {
+		return fmt.Errorf("o pacote baixado é da versão %s, não %s", m.Version, req.Version)
+	}
+	if _, err := os.Lstat(filepath.Join(dir, PackageFile)); err != nil {
+		return fmt.Errorf("pacote baixado não encontrado: %w", err)
+	}
+	req.Version = m.Version
+	if req.RequestedAt.IsZero() {
+		req.RequestedAt = time.Now().UTC()
+	}
+	return writeJSON(filepath.Join(dir, RequestFile), req, 0o640)
 }
 
 func (o FetchOptions) checkURL(s string) (*url.URL, error) {

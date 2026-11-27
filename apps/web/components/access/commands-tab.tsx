@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { FileCogIcon, type LucideIcon, PlugZapIcon, PowerIcon, ScanSearchIcon, TerminalSquareIcon } from "lucide-react"
+import { DownloadIcon, FileCogIcon, type LucideIcon, PlugZapIcon, PowerIcon, ScanSearchIcon, TerminalSquareIcon } from "lucide-react"
 
 import { SectionCard } from "@/components/dashboard/section-card"
 import { IconCircle, type IconTone } from "@/components/dashboard/icon-circle"
@@ -18,9 +18,10 @@ const TYPE_ICON: Record<CommandType, { icon: LucideIcon; tone: IconTone }> = {
   "device.test": { icon: PlugZapIcon, tone: "teal" },
   "config.reload": { icon: FileCogIcon, tone: "navy" },
   "agent.restart": { icon: PowerIcon, tone: "orange" },
+  "agent.update": { icon: DownloadIcon, tone: "violet" },
 }
 
-const TYPES: CommandType[] = ["tag.read", "device.test", "config.reload", "agent.restart"]
+const TYPES: CommandType[] = ["tag.read", "device.test", "config.reload", "agent.restart", "agent.update"]
 
 const msLabel = (ms: number | null) => (ms === null ? "—" : ms >= 1000 ? `${(ms / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s` : `${ms} ms`)
 
@@ -42,7 +43,7 @@ export function CommandsTab({ commands }: { commands: CommandVM[] }) {
             <TerminalSquareIcon />
           </EmptyMedia>
           <EmptyTitle>Nenhum comando enviado</EmptyTitle>
-          <EmptyDescription>Testes de conexão, leituras de tag, recargas de configuração e reinícios aparecem aqui.</EmptyDescription>
+          <EmptyDescription>Testes de conexão, leituras de tag, recargas de configuração, reinícios e atualizações aparecem aqui.</EmptyDescription>
         </EmptyHeader>
       </Empty>
     )

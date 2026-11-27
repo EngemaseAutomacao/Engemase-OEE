@@ -49,6 +49,8 @@ const (
 	CodeConfigFetchFailed = "config_fetch_failed"
 	CodeConfigInvalid     = "config_invalid"
 	CodePolicyDenied      = "policy_denied"
+	CodeUpdateBusy        = "update_busy"
+	CodeUpdateFailed      = "update_failed"
 	CodeInternalError     = "internal_error"
 )
 

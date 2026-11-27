@@ -292,7 +292,7 @@ Bancada inicial de **4 posições** (~R$ 4–8 mil, mais 2–3 R1000 e SuperCAP)
 | Perder acesso a um gateway remoto por erro de rede | Sem `net.apply` pela nuvem no MVP; checkpoint com retorno; endereço de serviço; pendrive de reset |
 | Contagem dupla ou perda em casos de borda | `no_comm_s`, testes de propriedade, 500 cortes de energia, `kill -9` repetido e saltos de relógio no CI noturno e na bancada |
 | Desgaste do eMMC | Medir os bytes escritos por dia no teste de 14 dias; alerta pelo indicador de vida do eMMC; `/data` separada |
-| Pacote do OTA maior que o limite de 4,5 MB das Vercel Functions | Baixar do Vercel Blob (FQDN na ficha de TI) ou por streaming pelo endereço da plataforma, validado na Fase 0 |
+| Pacote do OTA maior que o limite de 4,5 MB das Vercel Functions | **Resolvido (27/11/2026):** o pacote é baixado direto do GitHub Releases (`github.com` e `*.githubusercontent.com` na ficha de TI); a plataforma só manda o endereço do manifesto assinado no `agent.update` |
 | Trocar o domínio da Vercel pelo próprio com gateways já instalados | Host novo liberado pelo TI antes; troca por gateway com volta automática (§4); o agente não segue redirecionamento |
 | TI do cliente com inspeção SSL ou proxy NTLM | Ficha de TI e teste do `/ping` antes da visita; `diag` que identifica o problema; roteador 4G homologado como alternativa |
 | Correção no piloto exigir ida à fábrica | OTA mínimo com `logs.upload`; piloto perto da Engemase |
@@ -307,7 +307,7 @@ Bancada inicial de **4 posições** (~R$ 4–8 mil, mais 2–3 R1000 e SuperCAP)
 | D29 | OTA mínimo antes do piloto | Sim, com `logs.upload` e `log.level` mínimos |
 | D-g1 | Sistema base | Trixie (plano B Bookworm), imagem própria já no MVP |
 | D27 | SuperCAP em todas as unidades | Só depois do teste T-PWR-3; até lá, `reboot` |
-| D28 | Domínio dos gateways e origem do pacote OTA | **Decidida (12/11/2026):** só o domínio da Vercel por enquanto (`engemase-oee.vercel.app`, produto e gateways); domínio próprio fica para depois (§4). OTA pelo Vercel Blob (proposta) |
+| D28 | Domínio dos gateways e origem do pacote OTA | **Decidida (12/11/2026):** só o domínio da Vercel por enquanto (`engemase-oee.vercel.app`, produto e gateways); domínio próprio fica para depois (§4). OTA pelo **GitHub Releases** (decidido em 27/11/2026: workflow `gateway-release.yml`, comando `agent.update`) |
 | D-g2 | Senha local | Cartão lacrado + cofre; visível só para a equipe Engemase com atribuição |
 | D-g3 | `device.test` em IP ainda não cadastrado | Sim, só na sub-rede OT, com limite e auditoria |
 | D2 | Hardware vendido ou em comodato | — |

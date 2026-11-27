@@ -188,6 +188,19 @@
         "lines": 500,
         "since_s": 3600
       }
+    },
+    {
+      "id": "01a1cab3-7c10-7e33-9c43-5e7f9a1b3c4d",
+      "type": "agent.update",
+      "issued_at": "2026-11-11T13:02:05.300Z",
+      "expires_at": "2026-11-11T13:32:05.300Z",
+      "payload": {
+        "version": "1.3.0",
+        "manifests": {
+          "arm64": "https://github.com/EngemaseAutomacao/Engemase-OEE/releases/download/gateway-v1.3.0/oee-gateway_1.3.0_arm64.manifest.json",
+          "amd64": "https://github.com/EngemaseAutomacao/Engemase-OEE/releases/download/gateway-v1.3.0/oee-gateway_1.3.0_amd64.manifest.json"
+        }
+      }
     }
   ],
   "next_sync_s": 1,

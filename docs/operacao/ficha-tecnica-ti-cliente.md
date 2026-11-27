@@ -59,13 +59,13 @@ flowchart LR
 | Destino | Porta | Para quê | Obrigatório |
 |---|---|---|---|
 | `engemase-oee.vercel.app` | TCP 443 | Plataforma Engemase OEE: API dos gateways. É também o endereço que os usuários abrem no navegador | Sim |
-| Host de download das atualizações do agente (`<nome>.public.blob.vercel-storage.com`)\* | TCP 443 | Atualização assinada do software | Sim (nome exato na proposta) |
+| `github.com`, `release-assets.githubusercontent.com` e `objects.githubusercontent.com` | TCP 443 | Download das atualizações do agente (GitHub Releases da Engemase). O pacote é assinado: o gateway confere a assinatura antes de instalar | Sim |
 | `deb.debian.org`, `archive.raspberrypi.com` | TCP 443 | Correções de segurança do sistema operacional (HTTPS) | Recomendado |
 | Servidor DNS interno | UDP/TCP 53 | Resolver os nomes acima | Sim |
 | Servidor NTP interno (preferido) ou `pool.ntp.br` | UDP 123 | Relógio. Sem relógio certo, a conexão segura falha | Sim |
 | Domínios da Tailscale (lista oficial anexa à proposta) | TCP 443; UDP 41641 e 3478 opcionais | Acesso remoto de manutenção sob demanda (seção 6) | Só se o cliente contratar |
 
-\* O host de atualização ainda está em definição e será confirmado na proposta.
+As atualizações vêm do `github.com`, que redireciona o download para um dos dois endereços `githubusercontent.com` acima. O gateway só baixa quando a Engemase manda atualizar pela plataforma, e só instala um pacote com a assinatura da Engemase.
 
 **Por que por nome, e não por IP:** a plataforma roda na Vercel, que não tem IP fixo nem exclusivo para o endereço. Os IPs são compartilhados com outros sites e mudam sem aviso: uma regra por IP pararia de funcionar sozinha ou liberaria sites de terceiros. Se o firewall não aceitar objeto FQDN, use o proxy com a lista de destinos.
 
@@ -124,6 +124,13 @@ Test-NetConnection engemase-oee.vercel.app -Port 443
 
 ```bash
 curl -sS -o /dev/null -w "%{http_code}\n" https://engemase-oee.vercel.app/
+```
+
+Atualizações (o mesmo teste para `github.com` e `release-assets.githubusercontent.com`):
+
+```powershell
+Test-NetConnection github.com -Port 443
+Test-NetConnection release-assets.githubusercontent.com -Port 443
 ```
 
 Qualquer **código HTTP** na resposta (200, 401, 404...) mostra que DNS, rota, firewall e TLS estão certos. Erro de conexão, tempo esgotado ou erro de certificado indicam bloqueio. Um endpoint público de teste (`/api/gateway/v1/ping`) está previsto. Envie à Engemase o resultado (print ou texto).

@@ -527,6 +527,56 @@ func TestFetch(t *testing.T) {
 	}
 }
 
+// agent.update: baixa e confere sem pedir; o pedido vem depois (RequestInstall), na versão certa.
+func TestFetchDeferredRequest(t *testing.T) {
+	e := newEnv(t)
+	arch := GoArch()
+	body := fakeDeb("1.1.0", arch)
+	n, sum, _ := Digest(strings.NewReader(string(body)))
+	mb, _ := json.Marshal(map[string]any{"package": "oee-gateway", "version": "1.1.0", "arch": arch, "sha256": sum, "size": n, "url": "pkg.deb"})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/r/m.json":
+			_, _ = w.Write(mb)
+		case "/r/m.json.sig":
+			_, _ = w.Write(SignManifest(e.priv, mb))
+		case "/r/pkg.deb":
+			_, _ = w.Write(body)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	o := FetchOptions{ManifestURL: srv.URL + "/r/m.json", Dir: e.xfer, Keys: e.keys, Client: srv.Client(), AllowHTTP: true,
+		ExpectVersion: "1.2.0", DeferRequest: true}
+	if _, err := Fetch(context.Background(), o); err == nil || !strings.Contains(err.Error(), "pedida 1.2.0") {
+		t.Fatalf("versão diferente da pedida: %v", err)
+	}
+	o.ExpectVersion = "1.1.0"
+	if _, err := Fetch(context.Background(), o); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(e.xfer, RequestFile)); err == nil {
+		t.Fatal("DeferRequest gravou o pedido")
+	}
+	if err := RequestInstall(e.xfer, Request{ID: "cmd-9", Version: "1.0.9"}); err == nil {
+		t.Fatal("pedido de outra versão aceito")
+	}
+	if err := RequestInstall(e.xfer, Request{ID: "cmd-9", Version: "1.1.0"}); err != nil {
+		t.Fatal(err)
+	}
+	var req Request
+	if err := readJSON(filepath.Join(e.xfer, RequestFile), 4096, &req); err != nil || req.ID != "cmd-9" || req.Version != "1.1.0" || req.RequestedAt.IsZero() {
+		t.Fatalf("pedido: %+v %v", req, err)
+	}
+	if err := RequestInstall(e.xfer, Request{ID: "cmd-9", Version: "1.1.0"}); !errors.Is(err, ErrBusy) {
+		t.Fatalf("segundo pedido: %v", err)
+	}
+	if err := RequestInstall(t.TempDir(), Request{Version: "1.1.0"}); err == nil {
+		t.Fatal("pedido sem pacote baixado")
+	}
+}
+
 func TestKeysAndVersions(t *testing.T) {
 	dir := t.TempDir()
 	if _, err := LoadKeys(dir); !errors.Is(err, ErrNoKeys) {

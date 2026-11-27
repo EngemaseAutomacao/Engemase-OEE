@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/buffer"
+	"github.com/engemaseautomacao/engemase-oee/gateway/internal/buildinfo"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/commands"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/config"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/contracts"
 	"github.com/engemaseautomacao/engemase-oee/gateway/internal/remoteaccess"
+	"github.com/engemaseautomacao/engemase-oee/gateway/internal/update"
 )
 
 // Comandos da nuvem no agente: o executor (internal/commands) com os handlers do MVP
@@ -58,7 +61,59 @@ func (a *agent) newExecutor() *commands.Executor {
 	}
 	commands.RegisterOps(x, ops)
 	commands.RegisterVpn(x, commands.VpnDeps{Service: a.remoteAccess(), GatewayID: a.gatewayID})
+	commands.RegisterUpdate(x, commands.UpdateDeps{Current: buildinfo.Version, Arch: update.GoArch(), Fetch: a.fetchUpdate, Downloaded: a.updateDownloaded})
 	return x
+}
+
+// updateDir é o diretório de troca com o oee-updater (dentro do estado do agente).
+func (a *agent) updateDir() string { return filepath.Join(a.local.Paths.StateDir, "update") }
+
+// fetchUpdate baixa e confere o pacote do agent.update (assinatura com as chaves do OTA, tamanho,
+// SHA-256, versão e arquitetura), sem pedir a instalação.
+func (a *agent) fetchUpdate(ctx context.Context, manifestURL, version string) (*update.Manifest, error) {
+	dir := a.opts.UpdateKeysDir
+	if dir == "" {
+		dir = update.DefaultKeysDir
+	}
+	keys, err := update.LoadKeys(dir)
+	if err != nil {
+		return nil, err
+	}
+	// Proxy do ambiente (proxy.env do serviço) e as CAs corporativas da config local.
+	client, err := update.NewHTTPClient(a.local.Cloud.ExtraCAFile)
+	if err != nil {
+		return nil, err
+	}
+	return update.Fetch(ctx, update.FetchOptions{ManifestURL: manifestURL, Dir: a.updateDir(), Keys: keys, Client: client,
+		ExpectVersion: version, DeferRequest: true})
+}
+
+// updateDownloaded guarda o pacote pronto até a nuvem confirmar o resultado do agent.update.
+func (a *agent) updateDownloaded(commandID, version string) {
+	a.updateMu.Lock()
+	defer a.updateMu.Unlock()
+	if a.updates == nil {
+		a.updates = map[string]string{}
+	}
+	a.updates[commandID] = version
+}
+
+// requestUpdate pede a instalação ao oee-updater: a nuvem já tem o resultado, então o reinício que
+// vem em seguida não o perde. Se o agente reiniciar antes, nada é pedido (o pacote fica baixado e um
+// novo agent.update baixa de novo).
+func (a *agent) requestUpdate(commandID string) {
+	a.updateMu.Lock()
+	version, ok := a.updates[commandID]
+	delete(a.updates, commandID)
+	a.updateMu.Unlock()
+	if !ok {
+		return
+	}
+	if err := update.RequestInstall(a.updateDir(), update.Request{ID: commandID, Version: version}); err != nil {
+		a.log.Warn("atualização não pedida ao oee-updater", "comando", commandID, "versao", version, "erro", err)
+		return
+	}
+	a.log.Info("atualização pedida ao oee-updater (o agente será reiniciado)", "comando", commandID, "versao", version)
 }
 
 // remoteAccess é o cliente do oee-remote-access (VPN de manutenção sob demanda, docs/12).
@@ -172,6 +227,10 @@ func (a *agent) scheduleRestart(id string, delay time.Duration, reason string) e
 // pode reiniciar, e o gravado (desta partida ou de uma anterior) sai do buffer.
 func (a *agent) onConfirmed(done []commands.Confirmed) {
 	for _, c := range done {
+		if c.Type == commands.TypeAgentUpdate {
+			a.requestUpdate(c.ID)
+			continue
+		}
 		if c.Type != commands.TypeAgentRestart {
 			continue
 		}

@@ -70,7 +70,7 @@ func TestExecutorDedupExpiryAndConfirm(t *testing.T) {
 	now := time.Date(2026, 11, 11, 13, 2, 5, 0, time.UTC)
 	cmds := []contracts.Command{
 		{ID: cmdA, Type: "tag.read", ExpiresAt: contracts.FormatTime(now.Add(time.Minute)), Payload: json.RawMessage(`{}`)},
-		{ID: cmdB, Type: "agent.update", ExpiresAt: contracts.FormatTime(now.Add(-time.Second)), Payload: json.RawMessage(`{}`)},
+		{ID: cmdB, Type: "fleet.rollout", ExpiresAt: contracts.FormatTime(now.Add(-time.Second)), Payload: json.RawMessage(`{}`)},
 	}
 	x := New(Options{Log: quiet})
 	x.Handle(cmds, now)

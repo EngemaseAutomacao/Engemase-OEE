@@ -46,6 +46,7 @@ import { createActivationCode } from "@/lib/server/gateway/activation"
 import { GatewayAdminError } from "@/lib/server/gateway/admin-errors"
 import { enqueueGatewayCommand, getGatewayCommand } from "@/lib/server/gateway/commands"
 import { publishGatewayConfig } from "@/lib/server/gateway/publish"
+import { listarVersoesDoAgente } from "@/lib/server/gateway/releases"
 import type { GatewayDb } from "@/lib/server/gateway/types"
 
 const Id = z.uuid("Identificador inválido.")
@@ -321,6 +322,67 @@ export async function consultarComandoAction(input: unknown): Promise<Resultado<
   const cmd = await getGatewayCommand(a.db, a.ctx.organizationId, d.commandId)
   if (cmd === null) return { ok: false, mensagem: "Comando não encontrado." }
   return { ok: true, dados: resumoDoComando(cmd) }
+}
+
+// ---------------------------------------------------------------------------
+// Atualização do agente pela nuvem (agent.update; versões do GitHub Releases)
+// ---------------------------------------------------------------------------
+
+export interface VersaoDoAgente {
+  readonly version: string
+  readonly prerelease: boolean
+  readonly publishedLabel: string | null
+  readonly url: string
+  readonly archs: string[]
+}
+
+/** Versões publicadas do agente (só a equipe Engemase: config.write). */
+export async function listarVersoesAgenteAction(input: unknown): Promise<Resultado<VersaoDoAgente[]>> {
+  const d = entrada(SlugInput, input)
+  if (invalida(d)) return d
+  const a = await acesso(d.slug, "config.write")
+  if (a === null) return SEM_ACESSO
+  try {
+    const rs = await listarVersoesDoAgente()
+    return {
+      ok: true,
+      dados: rs.map((r) => ({ version: r.version, prerelease: r.prerelease, publishedLabel: r.publishedAt ? dateTime(r.publishedAt) : null, url: r.url, archs: Object.keys(r.manifests) })),
+    }
+  } catch (error) {
+    return { ok: false, mensagem: error instanceof Error ? error.message : "Não foi possível listar as versões agora." }
+  }
+}
+
+const AtualizarAgenteInput = z.object({ slug: Slug, gatewayId: Id, version: z.string().min(5).max(64) })
+
+/**
+ * Pede ao gateway a versão escolhida. Os endereços dos manifestos vêm da lista do servidor (nunca do
+ * navegador); o gateway confere a assinatura, baixa, responde e só então pede a instalação.
+ */
+export async function atualizarAgenteAction(input: unknown): Promise<Resultado<{ commandId: string }>> {
+  const d = entrada(AtualizarAgenteInput, input)
+  if (invalida(d)) return d
+  const a = await acesso(d.slug, "config.write")
+  if (a === null) return SEM_ACESSO
+  let release
+  try {
+    release = (await listarVersoesDoAgente()).find((r) => r.version === d.version)
+  } catch (error) {
+    return { ok: false, mensagem: error instanceof Error ? error.message : "Não foi possível listar as versões agora." }
+  }
+  if (release === undefined) return { ok: false, mensagem: `A versão ${d.version} não está publicada no GitHub Releases.` }
+  try {
+    const cmd = await enqueueGatewayCommand(a.db, {
+      organizationId: a.ctx.organizationId,
+      gatewayId: d.gatewayId,
+      type: "agent.update",
+      payload: { version: release.version, manifests: release.manifests },
+      actor: atorDoContexto(a.ctx),
+    })
+    return { ok: true, dados: { commandId: cmd.id } }
+  } catch (error) {
+    return erroEsperado(error, "atualizarAgente")
+  }
 }
 
 // ---------------------------------------------------------------------------

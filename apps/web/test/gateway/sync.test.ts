@@ -180,8 +180,8 @@ describe("POST /sync", () => {
       [org],
     )
     expect(commands).toEqual([
-      { type: "agent.update", status: "rejected", error_code: "unsupported", has_result: true },
       { type: "device.test", status: "error", error_code: "modbus_exception", has_result: true },
+      { type: "fleet.rollout", status: "rejected", error_code: "unsupported", has_result: true },
       { type: "tag.read", status: "ok", error_code: null, has_result: true },
     ])
 
@@ -457,7 +457,7 @@ describe("POST /sync", () => {
     expect(statuses).toEqual([
       { status: "error", n: 1 },
       { status: "expired", n: 1 },
-      { status: "ok", n: 12 },
+      { status: "ok", n: 13 },
       { status: "rejected", n: 1 },
     ])
   })
@@ -469,7 +469,7 @@ describe("POST /sync", () => {
     const cmdId = await addCommand(client, { type: "tag.read", payload })
     const expiredId = await addCommand(client, { type: "agent.restart", createdAt: new Date(FIXTURE_NOW.getTime() - 3_600_000), ttlMs: 600_000 })
     const invalidId = await addCommand(client, { type: "tag.read", payload: { device_id: deviceId } })
-    const futureTypeId = await addCommand(client, { type: "agent.update", payload: { version: "1.3.0" } })
+    const futureTypeId = await addCommand(client, { type: "fleet.rollout", payload: { version: "1.3.0" } })
 
     const res = await syncOk(client, remap(HEALTH_ONLY))
     expect(res.next_sync_s).toBe(1)

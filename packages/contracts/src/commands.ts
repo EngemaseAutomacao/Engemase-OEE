@@ -15,6 +15,7 @@ import {
   JwsCompactSchema,
   NonNegativeIntSchema,
   QualitySchema,
+  SemverSchema,
   ShortTextSchema,
   TcpPortSchema,
   UserRefSchema,
@@ -51,11 +52,12 @@ export const COMMAND_TYPES = [
   "ot.forward.close",
   "log.level",
   "logs.upload",
+  "agent.update",
 ] as const
 export const CommandTypeSchema = z.enum(COMMAND_TYPES)
 export type CommandType = z.infer<typeof CommandTypeSchema>
 
-/** Nome de tipo de comando qualquer (inclusive de versões futuras), ex.: "agent.update". */
+/** Nome de tipo de comando qualquer (inclusive de versões futuras), ex.: "fleet.rollout". */
 export const CommandTypeNameSchema = z
   .string()
   .max(64)
@@ -113,6 +115,37 @@ export const AgentRestartPayloadSchema = z.object({
   delay_s: z.int().min(0).max(300).optional(),
 })
 export type AgentRestartPayload = z.infer<typeof AgentRestartPayloadSchema>
+
+/** Endereço https de um manifesto do OTA (GitHub Releases). */
+const ManifestUrlSchema = z
+  .string()
+  .max(2000)
+  .regex(/^https:\/\/[^\s/?#@]+\/[^\s#]*\.manifest\.json$/, "manifesto deve ser https e terminar em .manifest.json")
+
+/** Arquiteturas dos pacotes do agente (iguais às do manifesto assinado). */
+export const PackageArchSchema = z.enum(["arm64", "amd64", "armhf"])
+export type PackageArch = z.infer<typeof PackageArchSchema>
+
+/**
+ * agent.update — atualiza o agente pelo OTA (docs/16 §3, M4b). A nuvem manda a versão e o manifesto
+ * assinado de cada arquitetura (publicados no GitHub Releases); o agente escolhe o da sua arquitetura,
+ * confere a assinatura Ed25519 com as chaves do pacote oee-gateway-updater, baixa o .deb conferindo
+ * tamanho e SHA-256 e responde `downloaded`. Só depois que a nuvem confirma esse resultado ele pede a
+ * instalação ao oee-updater (que reinicia o agente e volta ao anterior se o novo não sincronizar em
+ * 5 min). Quem diz se instalou é a versão do agente nos /sync seguintes.
+ */
+export const AgentUpdatePayloadSchema = z
+  .object({
+    version: SemverSchema.describe("Versão do agente a instalar (a do manifesto)"),
+    manifests: z
+      .object({ arm64: ManifestUrlSchema.optional(), amd64: ManifestUrlSchema.optional(), armhf: ManifestUrlSchema.optional() })
+      .describe("Manifesto assinado de cada arquitetura (https)"),
+  })
+  .superRefine((p, ctx) => {
+    if (p.manifests.arm64 === undefined && p.manifests.amd64 === undefined && p.manifests.armhf === undefined)
+      addRuleIssue(ctx, "command.update_manifests", ["manifests"])
+  })
+export type AgentUpdatePayload = z.infer<typeof AgentUpdatePayloadSchema>
 
 /** modbus.scan — varre unit ids de um barramento RS-485 ou uma faixa de registradores de um dispositivo. */
 export const ModbusScanPayloadSchema = z
@@ -313,6 +346,7 @@ export type LogsUploadPayload = z.infer<typeof LogsUploadPayloadSchema>
 
 export const LogLevelCommandSchema = command("log.level", LogLevelPayloadSchema)
 export const LogsUploadCommandSchema = command("logs.upload", LogsUploadPayloadSchema)
+export const AgentUpdateCommandSchema = command("agent.update", AgentUpdatePayloadSchema)
 
 export const CommandSchema = z.discriminatedUnion("type", [
   TagReadCommandSchema,
@@ -327,6 +361,7 @@ export const CommandSchema = z.discriminatedUnion("type", [
   OtForwardCloseCommandSchema,
   LogLevelCommandSchema,
   LogsUploadCommandSchema,
+  AgentUpdateCommandSchema,
 ])
 export type Command = z.infer<typeof CommandSchema>
 export type CommandOf<T extends CommandType> = Extract<Command, { type: T }>
@@ -370,6 +405,8 @@ export const COMMAND_ERROR_CODES = {
   session_conflict: "Já existe outra sessão ou encaminhamento ativo incompatível.",
   session_not_found: "Sessão ou encaminhamento não existe ou já foi encerrado.",
   vpn_failed: "Falha ao iniciar ou manter a VPN.",
+  update_busy: "Já há uma atualização do agente em andamento.",
+  update_failed: "Falha ao baixar ou conferir o pacote (assinatura, tamanho, SHA-256 ou arquitetura).",
   internal_error: "Erro interno do agente.",
 } as const
 export const CommandErrorCodeSchema = z.enum(
@@ -416,6 +453,15 @@ export const AgentRestartResultSchema = z.object({
   restart_at: UtcDateTimeSchema,
 })
 export type AgentRestartResult = z.infer<typeof AgentRestartResultSchema>
+
+export const AgentUpdateResultSchema = z.object({
+  version: SemverSchema.describe("Versão baixada e conferida"),
+  previous: SemverSchema.describe("Versão em execução quando o comando chegou"),
+  state: z
+    .enum(["downloaded", "current"])
+    .describe("downloaded: conferido; a instalação é pedida depois da confirmação. current: já é a versão em execução"),
+})
+export type AgentUpdateResult = z.infer<typeof AgentUpdateResultSchema>
 
 const RangeSchema = z.object({ start: ModbusOffsetSchema, count: z.int().min(1).max(65536) })
 
@@ -552,6 +598,7 @@ export const CommandSuccessSchema = z.discriminatedUnion("type", [
   success("ot.forward.close", OtForwardCloseResultSchema),
   success("log.level", LogLevelResultSchema),
   success("logs.upload", LogsUploadResultSchema),
+  success("agent.update", AgentUpdateResultSchema),
 ])
 export type CommandSuccess = z.infer<typeof CommandSuccessSchema>
 

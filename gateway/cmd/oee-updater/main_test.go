@@ -50,6 +50,23 @@ func TestKeygenAndSign(t *testing.T) {
 	if err != nil || m.Schema() != buffer.SchemaVersion || m.Size != 6 || m.AllowedRollbackTo[0] != "1.1.0" {
 		t.Fatalf("manifesto: %+v %v", m, err)
 	}
+	// verify (CI): confere com as públicas, e o .deb contra o manifesto.
+	if code := run([]string{"verify", "--manifest", mpath, "--deb", deb, "--keys", keysDir}, &out, &errb); code != 0 {
+		t.Fatalf("verify: %d %s", code, errb.String())
+	}
+	_ = os.WriteFile(deb+".outro", []byte("pacotx"), 0o644)
+	if code := run([]string{"verify", "--manifest", mpath, "--deb", deb + ".outro", "--keys", keysDir}, &out, &errb); code == 0 {
+		t.Fatal("verify aceitou outro .deb")
+	}
+	otherKeys := filepath.Join(dir, "outras")
+	_ = os.MkdirAll(otherKeys, 0o755)
+	if code := run([]string{"keygen", "--out", filepath.Join(otherKeys, "x")}, &out, &errb); code != 0 {
+		t.Fatal("keygen 2")
+	}
+	_ = os.Remove(filepath.Join(otherKeys, "x.key"))
+	if code := run([]string{"verify", "--manifest", mpath, "--keys", otherKeys}, &out, &errb); code == 0 {
+		t.Fatal("verify aceitou assinatura de chave fora da pasta")
+	}
 	if code := run([]string{"sign", "--deb", deb, "--version", "1.2", "--arch", "arm64", "--key", filepath.Join(dir, "ota.key"),
 		"--out", dir}, &out, &errb); code == 0 {
 		t.Fatal("versão que não é semver assinada")

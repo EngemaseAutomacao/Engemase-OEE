@@ -234,10 +234,15 @@ export async function dadosGateway(slug: string, gatewayId: string): Promise<{ d
   })
   const deviceName = new Map(base.devices.map((d) => [d.id, d.name]))
   const commandVMs: CommandVM[] = commands
-    .filter((c) => ["tag.read", "device.test", "config.reload", "agent.restart"].includes(c.type))
+    .filter((c) => ["tag.read", "device.test", "config.reload", "agent.restart", "agent.update"].includes(c.type))
     .map((c) => {
       const s = resumoDoComando(c)
-      const target = typeof c.payload.device_id === "string" ? (deviceName.get(c.payload.device_id) ?? "CLP") : g.hostname
+      const target =
+        typeof c.payload.device_id === "string"
+          ? (deviceName.get(c.payload.device_id) ?? "CLP")
+          : c.type === "agent.update" && typeof c.payload.version === "string"
+            ? `Versão ${c.payload.version} · ${g.hostname}`
+            : g.hostname
       return {
         id: c.id,
         type: c.type as CommandType,

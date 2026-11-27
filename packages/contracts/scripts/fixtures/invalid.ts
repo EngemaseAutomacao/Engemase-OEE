@@ -434,7 +434,7 @@ export const INVALID_CASES: Readonly<Record<string, InvalidCase>> = {
   "sync-response.invalid.unknown-command-type": {
     schema: "sync-response",
     base: RESPONSE,
-    patch: [set("commands.3.type", "agent.update")],
+    patch: [set("commands.3.type", "fleet.rollout")],
     layer: "schema",
     path: "commands.3.type",
     description: "Tipo de comando fora do v1 na resposta tipada (o envelope aceitaria).",
@@ -454,6 +454,23 @@ export const INVALID_CASES: Readonly<Record<string, InvalidCase>> = {
     layer: "schema",
     path: "commands.1.payload.probe.count",
     description: "Leitura de teste de 126 registradores (máximo 125).",
+  },
+  "sync-response.invalid.update-http-manifest": {
+    schema: "sync-response",
+    base: RESPONSE,
+    patch: [set("commands.13.payload.manifests.arm64", "http://exemplo.com/oee-gateway_1.3.0_arm64.manifest.json")],
+    layer: "schema",
+    path: "commands.13.payload.manifests.arm64",
+    description: "agent.update com manifesto sem https.",
+  },
+  "sync-response.invalid.update-without-manifest": {
+    schema: "sync-response",
+    base: RESPONSE,
+    patch: [set("commands.13.payload.manifests", {})],
+    layer: "semantic",
+    rule: "command.update_manifests",
+    path: "commands.13.payload.manifests",
+    description: "agent.update sem manifesto de nenhuma arquitetura.",
   },
   "sync-response.invalid.approval-not-jws": {
     schema: "sync-response",

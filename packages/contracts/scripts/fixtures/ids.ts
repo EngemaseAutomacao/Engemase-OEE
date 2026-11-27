@@ -45,6 +45,7 @@ export const ID = {
   cmdOtForwardClose: "01a1cab3-7910-7e62-8c88-888f9222f5d9",
   cmdLogLevel: "01a1cab3-7a10-7c11-9a21-3c5d7e9f1a2b",
   cmdLogsUpload: "01a1cab3-7b10-7d22-8b32-4d6e8f0a2b3c",
+  cmdAgentUpdate: "01a1cab3-7c10-7e33-9c43-5e7f9a1b3c4d",
   vpnSession: "01a1cab3-7cf8-7f23-8fdf-c01d84c79403",
   otForward: "01a1cab3-5db8-7cc1-b976-af6c144eba3d",
   newDevice: "01a1cab3-6074-7dc2-ad6e-d8225a5aee79",

@@ -113,6 +113,11 @@ A demonstração na Vercel não tem banco. Por isso as telas leem por `lib/data/
   ao banco nem ao log. Encerrar e o cron `vpn` apagam o nó no Tailscale (`lib/server/remote/tailscale.ts`). A chave
   pública para o pacote do gateway: `GET /api/gateway/v1/vpn-approval-key`. Falta o programa do gateway que liga
   a VPN (tsnet) e confere a aprovação; até ele existir, `VPN_HABILITADA` fica desligada.
+- Atualização do agente pela nuvem (`lib/server/gateway/releases.ts`, `config.write`): botão "Atualizar agente" no
+  detalhe do gateway. A lista vem do GitHub Releases (tags `gateway-v<semver>`, workflow `gateway-release.yml`; 10 min
+  em memória) e o `agent.update` leva só endereços de manifestos do próprio repositório, montados no servidor. Opcionais:
+  `GITHUB_TOKEN` (só leitura; sobe o limite de 60 consultas/h da API) e `GATEWAY_RELEASES_REPO` (padrão
+  `EngemaseAutomacao/Engemase-OEE`).
 - Mapa de falhas do CLP (`lib/server/config/fault-map.ts`, `config.write`): `fault_code_map` com `fault_text` e
   `reason_id` opcional (0019); alvo = uma máquina ou, com `machine_id` e `template_id` nulos, o cliente todo (o da
   máquina ganha). "Salvar mapa" troca o mapa inteiro numa transação (as linhas por modelo ficam). No `/sync`
