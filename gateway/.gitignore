@@ -2,3 +2,5 @@
 /dist/
 *.test
 coverage.out
+# Binário do "go build" dentro do módulo da VPN (módulo próprio).
+/cmd/oee-remote-access/oee-remote-access
