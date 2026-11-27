@@ -13,6 +13,7 @@ import {
   device,
   downtimeReason,
   clientBranding,
+  clientLogo,
   faultCodeMap,
   gateway,
   gatewayDeviceStatus,
@@ -166,6 +167,7 @@ export async function lerClienteDoBanco(
       .where(isNull(downtimeReason.deletedAt))
       .orderBy(asc(downtimeReason.sortOrder), asc(downtimeReason.name))
     const [brandRow] = await tx.select().from(clientBranding).limit(1)
+    const [symbolRow] = await tx.select({ sha256: clientLogo.sha256 }).from(clientLogo).where(eq(clientLogo.kind, "symbol")).limit(1)
     const faultMap = await tx
       .select({ machineId: faultCodeMap.machineId, faultCode: faultCodeMap.faultCode, text: faultCodeMap.faultText, reasonId: faultCodeMap.reasonId })
       .from(faultCodeMap)
@@ -428,6 +430,7 @@ export async function lerClienteDoBanco(
         plannedDowntimes: plannedDowntimes.map((p) => ({ unitId: p.unitId, lineId: p.lineId, machineId: p.machineId, start: msNN(p.startsAt), end: msNN(p.endsAt) })),
         reasons,
         faultMap: faultMap.map((f) => ({ machineId: f.machineId, faultCode: Number(f.faultCode), text: f.text, reasonId: f.reasonId })),
+        ...(symbolRow !== undefined ? { symbolSha: symbolRow.sha256 } : {}),
         ...(brandRow !== undefined && brandingTokens(brandRow.tokens)
           ? {
               branding: {

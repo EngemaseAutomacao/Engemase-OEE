@@ -10,6 +10,7 @@ import { CarregandoPagina } from "@/components/shell/carregando"
 import { exigirCliente } from "@/lib/data/config/cliente"
 import { bancoObrigatorio } from "@/lib/data/admin/acesso"
 import { lerAparencia } from "@/lib/server/config/branding"
+import { lerLogos } from "@/lib/server/config/logos"
 
 export const metadata: Metadata = { title: "Aparência" }
 
@@ -40,6 +41,13 @@ async function Tela({ params }: { params: PageProps<"/[cliente]/config/aparencia
         tokens: null,
         custom: false,
       }
+
+  // Logotipos já enviados (sistema real): entregues pela rota /[cliente]/marca/[tipo], com o hash na URL.
+  if (ctx !== null) {
+    const NOMES = { light: "Logotipo para fundo claro", dark: "Logotipo para fundo escuro", symbol: "Símbolo" } as const
+    const logos = await lerLogos(bancoObrigatorio(), ctx)
+    initial.logos = Object.fromEntries(logos.map((l) => [l.kind, { url: `/${client.slug}/marca/${l.kind}?v=${l.sha256.slice(0, 16)}`, name: NOMES[l.kind], size: l.sizeBytes }]))
+  }
 
   const first = r.getMachines(client.id)[0]
   const machine: PreviewMachine = first ? { name: first.name, line: r.getLines(client.id).find((l) => l.id === first.lineId)?.name ?? "" } : { name: "Máquina 01", line: "Linha 1" }

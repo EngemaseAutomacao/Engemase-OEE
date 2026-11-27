@@ -25,6 +25,10 @@ const nextConfig: NextConfig = {
     return [{ source: "/produto", destination: "/", permanent: true }]
   },
   partialPrefetching: true,
+  experimental: {
+    // Envio dos logotipos (até 1 MB cada, conferido no servidor) + a sobra do formulário.
+    serverActions: { bodySizeLimit: "2mb" },
+  },
   turbopack: {
     rules: {
       "*.css": {

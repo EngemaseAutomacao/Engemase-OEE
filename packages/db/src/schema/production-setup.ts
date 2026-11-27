@@ -379,3 +379,32 @@ export const clientBranding = pgTable(
     check("client_branding_names_chk", sql`char_length(${t.displayName}) BETWEEN 1 AND 40 AND char_length(${t.shortName}) BETWEEN 1 AND 12`),
   ],
 )
+
+/** Tipos de logotipo do cliente (docs/14): horizontal p/ fundo claro, p/ fundo escuro e símbolo quadrado. */
+export const CLIENT_LOGO_KINDS = ["light", "dark", "symbol"] as const
+
+/**
+ * Logotipos do cliente (docs/14, F2), guardados no Vercel Blob PRIVADO (só o caminho fica aqui) e entregues
+ * por uma rota que confere o acesso ao cliente. Um por tipo; o caminho leva o hash do conteúdo.
+ */
+export const clientLogo = pgTable(
+  "client_logo",
+  {
+    organizationId: organizationId(),
+    kind: text("kind", { enum: CLIENT_LOGO_KINDS }).notNull(),
+    pathname: text("pathname").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256").notNull(),
+    uploadedBy: uuid("uploaded_by"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ name: "client_logo_pk", columns: [t.organizationId, t.kind] }),
+    check("client_logo_kind_chk", oneOf(t.kind, CLIENT_LOGO_KINDS)),
+    check("client_logo_type_chk", sql`${t.contentType} IN ('image/png', 'image/webp', 'image/svg+xml')`),
+    check("client_logo_size_chk", sql`${t.sizeBytes} BETWEEN 1 AND 1048576`),
+    check("client_logo_sha_chk", sql`${t.sha256} ~ '^[0-9a-f]{64}$'`),
+  ],
+)

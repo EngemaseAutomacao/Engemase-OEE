@@ -19,7 +19,10 @@ export function ClientSwitcher({
   current,
   clients,
   isPlatform,
+  iconSrc,
 }: {
+  /** Símbolo do cliente (se enviado). */
+  iconSrc?: string
   current: { slug: string; name: string }
   clients: { slug: string; name: string; status: string }[]
   isPlatform: boolean
@@ -30,7 +33,7 @@ export function ClientSwitcher({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent">
-              <Brand subtitle={current.name} />
+              <Brand subtitle={current.name} iconSrc={iconSrc} />
               <ChevronsUpDownIcon className="ml-auto" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>

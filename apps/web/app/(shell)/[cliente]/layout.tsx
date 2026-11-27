@@ -103,6 +103,7 @@ async function ClientShell({ children, params }: { children: React.ReactNode; pa
             current={{ slug: client.slug, name: client.name }}
             clients={[...data.accessibleClients]}
             isPlatform={me.isPlatform}
+            iconSrc={data.symbolUrl}
           />
         </SidebarHeader>
         <SidebarContent>

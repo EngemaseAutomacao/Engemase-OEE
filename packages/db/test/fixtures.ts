@@ -307,6 +307,10 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
         INSERT INTO client_branding (organization_id, display_name, short_name, brand_color, tokens)
         VALUES (${sql.raw(`'${organizationId}'`)}, 'Cliente OEE', 'Cliente', '#257bb4', '{}'::jsonb);
       END IF;
+      IF to_regclass('public.client_logo') IS NOT NULL THEN
+        INSERT INTO client_logo (organization_id, kind, pathname, content_type, size_bytes, sha256)
+        VALUES (${sql.raw(`'${organizationId}'`)}, 'symbol', 'logos/x/symbol.png', 'image/png', 10, repeat('a', 64));
+      END IF;
     END $$`)
   // SQL direto: o teste das partições usa esta carga num banco com as migrações só até a 0012 (sem `fault_text`).
   await db.execute(

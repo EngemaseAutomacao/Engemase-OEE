@@ -114,6 +114,8 @@ export interface BrandingInitial {
   /** Tokens já gravados (quando o cliente tem identidade própria). */
   tokens: BrandTokens | null
   custom: boolean
+  /** Logotipos já enviados (sistema real): URL da rota de entrega, nome e tamanho. */
+  logos?: Partial<Record<"light" | "dark" | "symbol", { url: string; name: string; size: number }>>
 }
 
 export interface PreviewMachine {

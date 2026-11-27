@@ -104,6 +104,8 @@ export interface BrutoCliente {
   readonly faultMap: readonly { machineId: string | null; faultCode: number; text: string; reasonId: string | null }[]
   /** Identidade visual do cliente (`client_branding`); sem ela, o padrão Engemase. */
   readonly branding?: ClientBranding
+  /** Hash do símbolo enviado (`client_logo`), para a URL da rota de entrega. */
+  readonly symbolSha?: string
 
   readonly live: readonly {
     machineId: string
@@ -844,6 +846,7 @@ export function montarClienteDados(raw: BrutoCliente, m: MontagemCliente): Clien
     access: m.access,
     accessibleClients: [{ slug: client.slug, name: client.name, status: client.status }],
     branding: raw.branding,
+    ...(raw.symbolSha ? { symbolUrl: `/${client.slug}/marca/symbol?v=${raw.symbolSha.slice(0, 16)}` } : {}),
     oeeTarget: (() => {
       const targets = raw.lines.map((l) => l.oeeTarget).filter((v): v is number => v !== null && v > 0)
       return targets.length > 0 ? targets.reduce((a, b) => a + b, 0) / targets.length : 0.75

@@ -52,6 +52,9 @@ const MAX_LOGO_BYTES = 1_048_576
 export interface BrandRemote {
   save: (v: { displayName: string; shortName: string; preset: string | null; brandColor: string; sidebarMode: SidebarMode }) => Promise<boolean>
   restore: () => Promise<boolean>
+  /** Envia o logotipo ao servidor (conferido lá); devolve a URL para mostrar, ou `null` se recusou. */
+  uploadLogo: (kind: "light" | "dark" | "symbol", file: File) => Promise<string | null>
+  removeLogo: (kind: "light" | "dark" | "symbol") => Promise<boolean>
 }
 
 export function BrandEditor({
@@ -75,7 +78,7 @@ export function BrandEditor({
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(initial.sidebarMode)
   const [displayName, setDisplayName] = useState(initial.displayName)
   const [shortName, setShortName] = useState(initial.shortName)
-  const [logos, setLogos] = useState<Partial<Record<LogoKey, LogoFile>>>({})
+  const [logos, setLogos] = useState<Partial<Record<LogoKey, LogoFile>>>(initial.logos ?? {})
   const [logosChanged, setLogosChanged] = useState(false)
   const [restoreOpen, setRestoreOpen] = useState(false)
   const [busy, startBusy] = useTransition()
@@ -153,6 +156,16 @@ export function BrandEditor({
       toast.error("Arquivo maior que 1 MB", { description: "Exporte o logotipo em SVG ou reduza o PNG." })
       return
     }
+    if (remote) {
+      // Sistema real: o arquivo vai para o servidor agora (conferido lá) e já vale para todos.
+      startBusy(async () => {
+        const url = await remote.uploadLogo(key, file)
+        if (url === null) return
+        setLogos((l) => ({ ...l, [key]: { url, name: file.name, size: file.size } }))
+        toast.success(`${file.name} publicado`, { description: "Já aparece para todos os usuários do cliente. Registrado na auditoria." })
+      })
+      return
+    }
     const prev = logos[key]
     if (prev) URL.revokeObjectURL(prev.url)
     setLogos((l) => ({ ...l, [key]: { url: URL.createObjectURL(file), name: file.name, size: file.size } }))
@@ -164,6 +177,18 @@ export function BrandEditor({
 
   const removeLogo = (key: LogoKey) => {
     if (!canEdit) return
+    if (remote) {
+      startBusy(async () => {
+        if (!(await remote.removeLogo(key))) return
+        setLogos((l) => {
+          const next = { ...l }
+          delete next[key]
+          return next
+        })
+        toast.success("Logotipo removido", { description: "Volta a aparecer o da Engemase. Registrado na auditoria." })
+      })
+      return
+    }
     const prev = logos[key]
     if (prev) URL.revokeObjectURL(prev.url)
     setLogos((l) => {
@@ -412,15 +437,15 @@ export function BrandEditor({
           <SectionCard
             title="Logotipos"
             description={
-              remote
-                ? "Em breve no sistema real: o envio dos logotipos. Até lá, aparece o logotipo da Engemase."
+              remote && canEdit
+                ? "Arraste o arquivo ou clique para escolher. Vale na hora para todos (não precisa salvar)."
                 : canEdit
                   ? "Arraste o arquivo para a área ou clique para escolher"
                   : "Enviados pela equipe Engemase. Para trocar, abra um chamado."
             }
             className="xl:col-span-8"
           >
-            <div className={cn("grid gap-3 md:grid-cols-3", remote && "pointer-events-none opacity-50")} aria-disabled={remote ? true : undefined}>
+            <div className={cn("grid gap-3 md:grid-cols-3", busy && "pointer-events-none opacity-60")} aria-busy={busy || undefined}>
               {LOGO_SLOTS.map((slot) => (
                 <LogoDrop
                   key={slot.key}
@@ -592,7 +617,7 @@ function LogoDrop({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 leading-tight">
           <div className="text-xs font-semibold">{slot.title}</div>
-          <div className="text-[11px] text-muted-foreground">{file ? `${file.name} · ${Math.max(1, Math.round(file.size / 1024))} KB` : slot.hint}</div>
+          <div className="text-[11px] text-muted-foreground">{file ? (file.size > 0 ? `${file.name} · ${Math.max(1, Math.round(file.size / 1024))} KB` : file.name) : slot.hint}</div>
         </div>
         {file && canEdit && (
           <button type="button" onClick={onRemove} aria-label={`Remover ${slot.title}`} className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">

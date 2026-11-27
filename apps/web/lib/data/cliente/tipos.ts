@@ -99,6 +99,8 @@ export interface ClienteDados {
   /** Clientes que a pessoa pode trocar no menu. */
   readonly accessibleClients: readonly { slug: string; name: string; status: Client["status"] }[]
   readonly branding: ClientBranding | undefined
+  /** Símbolo do cliente (URL da rota protegida, com o hash), se enviado. Sem ele, o da Engemase. */
+  readonly symbolUrl?: string
   /** Meta de OEE do cliente (média das metas das linhas; sem meta cadastrada, 75%). */
   readonly oeeTarget: number
 

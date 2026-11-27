@@ -104,6 +104,7 @@ describe("migrações", () => {
       "0019_fault_map_text_client",
       "0020_client_branding",
       "0021_terminal_theme",
+      "0022_client_logo",
     ])
   })
 

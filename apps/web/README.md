@@ -93,10 +93,15 @@ A demonstração na Vercel não tem banco. Por isso as telas leem por `lib/data/
   operadores do chão, e a auditoria do cliente (`lib/data/config/auditoria.ts`: `listAuditEntries` com `audit.read`,
   RLS e escopo; últimos 90 dias, até 500 eventos; rótulos das ações em `ACOES`, ação nova sem rótulo aparece com o
   código; CSV gerado no navegador a partir das linhas já filtradas). Ainda simulados com banco ("Em breve"):
-  ligar a VPN do acesso remoto (precisa do provedor); logotipos do cliente; concessões/atribuições da equipe; reverter versão de config.
+  ligar a VPN do acesso remoto (precisa do provedor); concessões/atribuições da equipe; reverter versão de config.
 - Aparência (`lib/server/config/branding.ts`, `config.write`): `client_branding` (0020, uma linha por cliente, RLS);
   os tokens são recalculados no servidor com `analyzeBrand` (`components/settings/brand-color.ts`) e cor bloqueada
   (perto das cores de estado) é recusada. `banco.ts` lê a linha e o layout do cliente injeta as cores.
+- Logotipos (`lib/server/config/logos.ts`, `config.write`): Vercel Blob PRIVADO (`BLOB_STORE_ID`, credencial por
+  OIDC; sem ele, o envio responde "armazenamento não ligado"), `client_logo` (0022, RLS) com caminho, tipo, tamanho e
+  hash. Conferência pelo conteúdo (PNG/WebP/SVG, 1 MB, símbolo PNG ≥ 512 px, SVG sem script/eventos/foreignObject/
+  referências externas). Entrega em `/[cliente]/marca/[tipo]` (route handler com `requireTenant`; SVG com CSP
+  `sandbox`). Server Actions aceitam até 2 MB (`next.config.ts`).
 - Acesso remoto (`lib/server/remote/access.ts`, docs/12): pedido (Engemase, `diagnostics.run`), aprovar/recusar e
   política (`remote_access.approve`; quem pede nunca decide), encerrar (ativa → `stopping` + `vpn.disable`).
   `remote_access_event` e auditoria. Falta `vpn.enable` (chave do provedor + aprovação assinada JWS).

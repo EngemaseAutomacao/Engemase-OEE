@@ -141,6 +141,13 @@
       "when": 1795792834234,
       "tag": "0021_terminal_theme",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795803648611,
+      "tag": "0022_client_logo",
+      "breakpoints": true
     }
   ]
 }

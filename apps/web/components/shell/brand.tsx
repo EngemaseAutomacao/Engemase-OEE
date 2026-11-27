@@ -12,10 +12,15 @@ import { cn } from "@/lib/utils"
  */
 
 /** Ícone + nome do produto (menu lateral). Mantém a assinatura usada pelos layouts. */
-export function Brand({ subtitle, className }: { subtitle?: string; className?: string }) {
+export function Brand({ subtitle, className, iconSrc }: { subtitle?: string; className?: string; iconSrc?: string }) {
   return (
     <div className={cn("flex min-w-0 items-center gap-2", className)}>
-      <Image src="/brand/engemase-icone.png" alt="" width={32} height={32} className="size-8 shrink-0" priority />
+      {iconSrc ? (
+        // Símbolo do cliente: rota protegida pelo login (o otimizador de imagens não leva o cookie).
+        <Image src={iconSrc} alt="" width={32} height={32} unoptimized className="size-8 shrink-0 rounded-md object-contain" />
+      ) : (
+        <Image src="/brand/engemase-icone.png" alt="" width={32} height={32} className="size-8 shrink-0" priority />
+      )}
       <div className="grid min-w-0 leading-tight">
         <span className="truncate text-sm font-semibold">Engemase OEE</span>
         {subtitle && <span className="truncate text-xs opacity-70">{subtitle}</span>}

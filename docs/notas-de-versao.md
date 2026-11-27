@@ -11,6 +11,14 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 - **Fechamento de turno automático:** os números de cada turno são fechados no fim do turno e recalculados se chegarem dados atrasados ou se uma parada for reclassificada.
 - **Atualização do programa do gateway à distância**, enviada pela Engemase.
 
+## 27/11/2026 · Logotipos do cliente
+
+**Para quem usa**
+- **O menu lateral mostra o símbolo do cliente** quando ele é enviado (sem ele, continua o da Engemase).
+
+**Para a equipe Engemase**
+- **Em "Configurações" › "Aparência", os logotipos funcionam no sistema real:** fundo claro, fundo escuro e símbolo quadrado. O arquivo é conferido no servidor (SVG, PNG ou WebP, até 1 MB, símbolo com pelo menos 512 px, SVG sem script) e fica guardado de forma privada: só quem tem acesso ao cliente consegue abrir. Tudo na auditoria.
+
 ## 27/11/2026 · Acesso remoto: pedido e aprovação de verdade
 
 **Para quem usa (admin do cliente)**
@@ -40,7 +48,7 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 
 **Para a equipe Engemase**
 - **"Configurações" › "Aparência" grava de verdade:** cor da marca (paleta pronta ou livre), menu lateral, nome exibido e nome curto. A plataforma recalcula as cores para passar no contraste e recusa cor parecida demais com as de estado. "Restaurar padrão Engemase" volta ao visual original. Tudo na auditoria.
-- Ainda não tem: envio dos logotipos (fica o da Engemase).
+- O envio dos logotipos chegou depois (veja acima).
 
 ## 27/11/2026 · Mapa de falhas do CLP de verdade
 

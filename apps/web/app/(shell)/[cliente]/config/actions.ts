@@ -33,6 +33,7 @@ import { requireTenant } from "@/lib/server/access/require-tenant"
 import { getDb } from "@/lib/server/db"
 import { excluirProduto, salvarMatrizCiclos, salvarProduto } from "@/lib/server/config/products"
 import { restaurarAparencia, salvarAparencia } from "@/lib/server/config/branding"
+import { blobStore, enviarLogo, removerLogo, removerTodosLogos } from "@/lib/server/config/logos"
 import { aprovarAcesso, encerrarAcesso, pedirAcesso, recusarAcesso, salvarPolitica } from "@/lib/server/remote/access"
 import { salvarMapaFalhas } from "@/lib/server/config/fault-map"
 import { definirAtivo, definirCor, excluirMotivo, salvarGrupo, salvarMotivo } from "@/lib/server/config/reasons"
@@ -622,7 +623,22 @@ export async function salvarAparenciaAction(input: unknown): Promise<Resultado<{
 }
 
 export async function restaurarAparenciaAction(input: unknown): Promise<Resultado<{ brandColor: string }>> {
-  return cadastro(input, "restaurarAparencia", (a) => restaurarAparencia(a.db, a.ctx))
+  return cadastro(input, "restaurarAparencia", async (a) => {
+    const r = await restaurarAparencia(a.db, a.ctx)
+    // O padrão Engemase também tira os logotipos do cliente.
+    if (r.ok) await removerTodosLogos(a.db, a.ctx, await blobStore())
+    return r
+  })
+}
+
+/** Envia um logotipo (formulário com `slug`, `kind` e `file`). */
+export async function enviarLogoAction(form: FormData): Promise<Resultado<{ kind: string; sha256: string }>> {
+  const slug = form.get("slug")
+  return cadastro({ slug }, "enviarLogo", async (a) => enviarLogo(a.db, a.ctx, form.get("kind"), form.get("file"), await blobStore()))
+}
+
+export async function removerLogoAction(input: unknown): Promise<Resultado<{ kind: string }>> {
+  return cadastro(input, "removerLogo", async (a) => removerLogo(a.db, a.ctx, (input as { kind?: unknown } | null)?.kind, await blobStore()))
 }
 
 // ---------------------------------------------------------------------------
