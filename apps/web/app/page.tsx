@@ -43,6 +43,14 @@ export const metadata: Metadata = {
   title: { absolute: "Engemase OEE · OEE em tempo real direto do CLP" },
   description:
     "Engemase OEE: monitoramento de OEE em tempo real direto do CLP, com gateway industrial próprio e operação pela Engemase.",
+  openGraph: {
+    type: "website",
+    locale: "pt_BR",
+    siteName: "Engemase OEE",
+    url: "/",
+    title: "Engemase OEE · OEE em tempo real direto do CLP",
+    description: "Saiba quanto suas máquinas produzem de verdade, a cada minuto. A Engemase instala e cuida de tudo.",
+  },
 }
 
 const contactHref = `mailto:${SALES_EMAIL}?subject=${encodeURIComponent("Demonstração do Engemase OEE")}`

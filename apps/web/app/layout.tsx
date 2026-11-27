@@ -15,6 +15,15 @@ export const metadata: Metadata = {
   title: { default: "Engemase OEE", template: "%s · Engemase OEE" },
   description: "Monitoramento de OEE de máquinas industriais — Engemase Engenharia",
   applicationName: "Engemase OEE",
+  metadataBase: new URL("https://engemase-oee.vercel.app"),
+  openGraph: {
+    type: "website",
+    locale: "pt_BR",
+    siteName: "Engemase OEE",
+    title: "Engemase OEE · OEE em tempo real direto do CLP",
+    description: "Saiba quanto suas máquinas produzem de verdade, a cada minuto. A Engemase instala e cuida de tudo.",
+  },
+  twitter: { card: "summary_large_image" },
 }
 
 /**
