@@ -11,6 +11,18 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 - **Fechamento de turno automático:** os números de cada turno são fechados no fim do turno e recalculados se chegarem dados atrasados ou se uma parada for reclassificada.
 - **Atualização do programa do gateway à distância**, enviada pela Engemase.
 
+## 27/11/2026 · TV e tablets pareados de verdade
+
+**Para quem usa**
+- **TV da linha e tablet da máquina funcionam no sistema real.** O aparelho é pareado com um **código de 8 dígitos** (vale 10 minutos e uma vez só) e passa a abrir direto na tela da linha (TV) ou da máquina (tablet), sem login de pessoa.
+- **No tablet, classificar parada, lançar refugo e trocar produto gravam de verdade**, só nas máquinas do tablet. Na auditoria aparece o nome do terminal.
+- A TV só mostra; não faz apontamentos.
+
+**Para a equipe Engemase**
+- **"Configurações" › "Terminais" funciona no sistema real**: cadastrar TV ou tablet com as linhas ou máquinas, gerar código, editar e revogar. Revogar corta o aparelho na hora.
+- O pareamento vale 12 meses. Cliente suspenso: os terminais param de abrir.
+- Ainda não tem: escolher o operador na lista da unidade ao apontar pelo tablet (os apontamentos ficam no nome do terminal) e o tema próprio de cada terminal.
+
 ## 27/11/2026 · Cadastro de turnos e paradas planejadas de verdade
 
 **Para a equipe Engemase**

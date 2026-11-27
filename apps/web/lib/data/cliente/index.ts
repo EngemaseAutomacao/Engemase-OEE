@@ -13,6 +13,7 @@
 import { notFound } from "next/navigation"
 import { connection } from "next/server"
 import { cache } from "react"
+import type { TenantContext } from "@/lib/server/access/context"
 import { requireTenant } from "@/lib/server/access/require-tenant"
 import { getDb } from "@/lib/server/db"
 import { usarBanco } from "../fonte"
@@ -47,4 +48,27 @@ export function getClientData(slug: string, needs: NecessidadesCliente = {}): Pr
     somenteCadastro: needs.somenteCadastro ?? false,
   })
   return carregar(slug, chave)
+}
+
+const carregarComContexto = cache(async (ctx: TenantContext, chave: string): Promise<ClienteDados> => {
+  const needs = JSON.parse(chave) as NecessidadesCliente
+  const db = getDb()
+  if (db === null) throw new Error("DATABASE_URL não configurado")
+  await connection()
+  return lerClienteDoBanco(db, ctx, needs, Date.now())
+})
+
+/**
+ * Dados do cliente para um contexto JÁ conferido que não vem de sessão de pessoa: o terminal pareado
+ * (`lib/server/terminal`, escopo = as máquinas do terminal). Só com banco.
+ */
+export function getClientDataForContext(ctx: TenantContext, needs: NecessidadesCliente = {}): Promise<ClienteDados> {
+  const chave = JSON.stringify({
+    diasOee: needs.diasOee ?? 0,
+    diasTurnos: needs.diasTurnos ?? 0,
+    paradas: needs.paradas ?? false,
+    notificacoes: needs.notificacoes ?? false,
+    somenteCadastro: needs.somenteCadastro ?? false,
+  })
+  return carregarComContexto(ctx, chave)
 }

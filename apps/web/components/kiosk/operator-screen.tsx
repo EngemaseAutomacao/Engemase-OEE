@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 
-import { getClientData } from "@/lib/data/cliente"
+import { getClientData, getClientDataForContext } from "@/lib/data/cliente"
+import type { TenantContext } from "@/lib/server/access/context"
 import { DEFAULT_TZ } from "@/lib/mock"
 import { ago, initials } from "@/lib/format"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -38,12 +39,15 @@ export function OperatorSkeleton() {
 export async function OperatorScreen({
   params,
   terminal,
+  ctx,
 }: {
   params: Promise<{ cliente: string; maquinaId: string }>
   terminal?: TerminalMode
+  /** Terminal pareado: contexto do aparelho (sem sessão de pessoa). */
+  ctx?: TenantContext
 }) {
   const { cliente, maquinaId } = await params
-  const data = await getClientData(cliente)
+  const data = ctx ? await getClientDataForContext(ctx) : await getClientData(cliente)
   const { client } = data
   // Máquina de outro cliente ou fora do escopo da pessoa: 404.
   const machine = data.getMachine(maquinaId)
@@ -155,6 +159,7 @@ export async function OperatorScreen({
     timeZone: tz,
     banco: data.fonte === "banco",
     clientSlug: client.slug,
+    viaTerminal: ctx?.access.kind === "terminal",
     rejectReasons: data.rejectReasons.map((r) => ({ id: r.id, name: r.name })),
   }
 

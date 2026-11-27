@@ -11,16 +11,26 @@ import { Button } from "@/components/ui/button"
 import { BrandLogo } from "@/components/shell/brand"
 import { NumericKeypad } from "@/components/kiosk/numeric-keypad"
 
-const LENGTH = 6
+/** Demonstração: 6 dígitos. Sistema real: 8 dígitos (`generatePairingCode`). */
+const DEMO_LENGTH = 6
+const REAL_LENGTH = 8
 
 type Status = { kind: "idle" } | { kind: "checking" } | { kind: "error"; message: string } | { kind: "paired"; terminalId: string; name: string }
 
 /**
- * Pareamento do aparelho: digita o código de 6 dígitos gerado em Configurações → Terminais.
- * Real: POST /api/terminal/pair (uso único, 10 min, limite de tentativas) → cookie de aparelho só em /terminal.
+ * Pareamento do aparelho: digita o código gerado em Configurações → Terminais.
+ * Real (`pair`): Server Action com uso único, 10 min e limite de tentativas → cookie de aparelho só em /terminal.
  */
-export function PairingScreen({ pending }: { pending: { terminalId: string; name: string; code: string }[] }) {
+export function PairingScreen({
+  pending,
+  pair,
+}: {
+  pending: { terminalId: string; name: string; code: string }[]
+  /** Sistema real: confere o código no servidor e grava o cookie do aparelho. */
+  pair?: (code: string) => Promise<{ ok: true } | { ok: false; mensagem: string }>
+}) {
   const router = useRouter()
+  const LENGTH = pair ? REAL_LENGTH : DEMO_LENGTH
   const [code, setCode] = useState("")
   const [status, setStatus] = useState<Status>({ kind: "idle" })
   const busy = status.kind === "checking" || status.kind === "paired"
@@ -36,6 +46,23 @@ export function PairingScreen({ pending }: { pending: { terminalId: string; name
   const submit = () => {
     if (code.length !== LENGTH || busy) return
     setStatus({ kind: "checking" })
+    if (pair) {
+      pair(code)
+        .then((r) => {
+          if (!r.ok) {
+            setStatus({ kind: "error", message: r.mensagem })
+            setCode("")
+            return
+          }
+          setStatus({ kind: "paired", terminalId: "", name: "Aparelho" })
+          window.setTimeout(() => {
+            router.replace("/terminal")
+            router.refresh()
+          }, 1200)
+        })
+        .catch(() => setStatus({ kind: "error", message: "Sem conexão com o servidor. Confira a rede e tente de novo." }))
+      return
+    }
     window.setTimeout(() => {
       const hit = pending.find((p) => p.code === code)
       if (!hit) {
@@ -112,10 +139,12 @@ export function PairingScreen({ pending }: { pending: { terminalId: string; name
                 <span
                   key={i}
                   className={cn(
-                    "flex h-16 w-12 items-center justify-center rounded-xl border-2 bg-card font-mono text-3xl font-bold tabular-nums sm:h-[72px] sm:w-14",
+                    "flex items-center justify-center rounded-xl border-2 bg-card font-mono font-bold tabular-nums",
+                    // 8 casas cabem no celular (390 px) com casas menores; 6 mantêm o tamanho do protótipo.
+                    LENGTH > 6 ? "h-14 w-9 text-2xl sm:h-[72px] sm:w-12 sm:text-3xl" : "h-16 w-12 text-3xl sm:h-[72px] sm:w-14",
                     i === code.length && !busy ? "border-primary" : "border-border",
                     status.kind === "error" && "border-destructive/60",
-                    i === 2 && "mr-3",
+                    i === LENGTH / 2 - 1 && "mr-3",
                   )}
                 >
                   {code[i] ?? ""}

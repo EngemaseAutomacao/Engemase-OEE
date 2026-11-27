@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { Suspense } from "react"
 import Link from "next/link"
 import { MonitorIcon, TabletIcon, LinkIcon } from "lucide-react"
 
@@ -6,17 +7,35 @@ import { usarBanco } from "@/lib/data/fonte"
 import { getClientById, getTerminal, terminalParams } from "@/lib/mock"
 import { Button } from "@/components/ui/button"
 import { BrandLogo, BrandWatermark } from "@/components/shell/brand"
+import { TerminalHome } from "@/components/kiosk/terminal-home"
+import { currentTerminal } from "@/lib/server/terminal/cookie"
 
 export const metadata: Metadata = { title: "Terminal" }
 
 /**
- * Entrada do terminal. Na versão real, o servidor lê o token do aparelho e abre direto a tela pareada
- * (Andon da linha ou tela do operador). Sem token → manda para /terminal/parear.
- * Protótipo: não há token; mostramos o estado "não pareado" e atalhos para simular aparelhos já pareados.
+ * Entrada do terminal. Sistema real: o servidor lê o token do aparelho (cookie próprio de /terminal) e abre
+ * direto a tela pareada (Andon da linha ou tela do operador); sem token válido, "não pareado".
+ * Demonstração: não há token; mostramos o estado "não pareado" e atalhos para simular aparelhos já pareados.
  */
 export default function Page() {
+  if (!usarBanco()) return <NaoPareado />
+  return (
+    <Suspense fallback={null}>
+      <Aparelho />
+    </Suspense>
+  )
+}
+
+/** Sistema real: a tela do aparelho pareado, ou "não pareado" (sem dado nenhum de cliente). */
+async function Aparelho() {
+  const session = await currentTerminal()
+  if (session === null) return <NaoPareado semDemo />
+  return <TerminalHome session={session} />
+}
+
+function NaoPareado({ semDemo = false }: { semDemo?: boolean }) {
   // Com banco, a simulação de aparelhos do protótipo some (os dados reais só chegam ao aparelho pareado).
-  const demo = (usarBanco() ? [] : terminalParams())
+  const demo = (semDemo ? [] : terminalParams())
     .map(({ terminalId }) => getTerminal(terminalId)!)
     .filter((t) => t.status !== "pending")
     .map((t) => ({ ...t, clientName: getClientById(t.clientId)?.name ?? "" }))

@@ -34,6 +34,7 @@ import { getDb } from "@/lib/server/db"
 import { excluirProduto, salvarMatrizCiclos, salvarProduto } from "@/lib/server/config/products"
 import { definirAtivo, definirCor, excluirMotivo, salvarGrupo, salvarMotivo } from "@/lib/server/config/reasons"
 import { cancelarParada, excluirTurno, salvarParada, salvarTurno } from "@/lib/server/config/shifts"
+import { criarTerminal, editarTerminal, gerarCodigoTerminal, revogarTerminal } from "@/lib/server/terminal/terminals"
 import { createActivationCode } from "@/lib/server/gateway/activation"
 import { GatewayAdminError } from "@/lib/server/gateway/admin-errors"
 import { enqueueGatewayCommand, getGatewayCommand } from "@/lib/server/gateway/commands"
@@ -566,4 +567,24 @@ export async function salvarParadaAction(input: unknown): Promise<Resultado<{ id
 
 export async function cancelarParadaAction(input: unknown): Promise<Resultado<{ id: string }>> {
   return cadastro(input, "cancelarParada", (a) => cancelarParada(a.db, a.ctx, (input as { id?: unknown } | null)?.id))
+}
+
+// ---------------------------------------------------------------------------
+// Terminais (config.write = equipe Engemase, D12; regras em lib/server/terminal/terminals.ts)
+// ---------------------------------------------------------------------------
+
+export async function criarTerminalAction(input: unknown): Promise<Resultado<{ id: string; code: string; expiresAt: Date }>> {
+  return cadastro(input, "criarTerminal", (a) => criarTerminal(a.db, a.ctx, input))
+}
+
+export async function editarTerminalAction(input: unknown): Promise<Resultado<{ id: string }>> {
+  return cadastro(input, "editarTerminal", (a) => editarTerminal(a.db, a.ctx, input))
+}
+
+export async function gerarCodigoTerminalAction(input: unknown): Promise<Resultado<{ code: string; expiresAt: Date }>> {
+  return cadastro(input, "gerarCodigoTerminal", (a) => gerarCodigoTerminal(a.db, a.ctx, (input as { id?: unknown } | null)?.id))
+}
+
+export async function revogarTerminalAction(input: unknown): Promise<Resultado<{ id: string }>> {
+  return cadastro(input, "revogarTerminal", (a) => revogarTerminal(a.db, a.ctx, (input as { id?: unknown } | null)?.id))
 }

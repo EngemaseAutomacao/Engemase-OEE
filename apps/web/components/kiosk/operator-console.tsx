@@ -37,6 +37,12 @@ import {
   launchRejectAction,
   undoRejectAction,
 } from "@/app/(kiosk)/[cliente]/operador/actions"
+import {
+  changeProductTerminalAction,
+  classifyStopTerminalAction,
+  launchRejectTerminalAction,
+  undoRejectTerminalAction,
+} from "@/app/terminal/actions"
 import { STATE_ICON, STATE_ON } from "@/components/kiosk/state-style"
 import { useMockClock } from "@/components/kiosk/use-mock-clock"
 
@@ -69,7 +75,21 @@ export interface TerminalMode {
 
 /** Tela do operador (tablet/celular): estado ao vivo, paradas a classificar, refugo e troca de produto. */
 export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorData; panelHref: string; terminal?: TerminalMode }) {
-  const { machine, live, shift, reasons, products, operator, timeZone, banco, clientSlug } = data
+  const { machine, live, shift, reasons, products, operator, timeZone, banco, clientSlug, viaTerminal } = data
+  // Pessoa logada: ações pela sessão e pelo cliente da URL. Tablet pareado: pelo token do aparelho.
+  const acts = viaTerminal
+    ? {
+        classify: (i: unknown) => classifyStopTerminalAction(i),
+        reject: (i: unknown) => launchRejectTerminalAction(i),
+        undoReject: (id: unknown) => undoRejectTerminalAction(id),
+        product: (i: unknown) => changeProductTerminalAction(i),
+      }
+    : {
+        classify: (i: unknown) => classifyStopAction(clientSlug, i),
+        reject: (i: unknown) => launchRejectAction(clientSlug, i),
+        undoReject: (id: unknown) => undoRejectAction(clientSlug, id),
+        product: (i: unknown) => changeProductAction(clientSlug, i),
+      }
   const { now, read } = useMockClock(10_000)
   const [saving, startSaving] = useTransition()
 
@@ -140,7 +160,7 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
       return
     }
     save(
-      () => classifyStopAction(clientSlug, { eventId: stop.eventId, reasonId: picked.reason.id }),
+      () => acts.classify({ eventId: stop.eventId, reasonId: picked.reason.id }),
       () => applyClassify(stop, picked),
     )
   }
@@ -160,7 +180,7 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
         label: "Desfazer",
         onClick: () =>
           save(
-            () => classifyStopAction(clientSlug, { eventId: stop.eventId, reasonId: null }),
+            () => acts.classify({ eventId: stop.eventId, reasonId: null }),
             () => {
               setPending((list) => sortStops([...list.filter((s) => s.id !== stop.id), stop]))
               setClassified((c) => {
@@ -177,7 +197,7 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
 
   function launchReject(qty: number, defect: RejectDefect | null) {
     save(
-      () => launchRejectAction(clientSlug, { machineId: machine.id, quantity: qty, rejectReasonId: defect?.id ?? null, productCode: product?.code ?? null }),
+      () => acts.reject({ machineId: machine.id, quantity: qty, rejectReasonId: defect?.id ?? null, productCode: product?.code ?? null }),
       (saved) => applyReject(qty, defect?.name ?? null, saved?.id ?? null),
     )
   }
@@ -193,7 +213,7 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
         label: "Desfazer",
         onClick: () =>
           save(
-            () => undoRejectAction(clientSlug, entryId),
+            () => acts.undoReject(entryId),
             () => {
               setRejectAdded((r) => r - qty)
               removeLog(id)
@@ -205,7 +225,7 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
 
   function changeProduct(p: ProductOption) {
     save(
-      () => changeProductAction(clientSlug, { machineId: machine.id, productId: p.id }),
+      () => acts.product({ machineId: machine.id, productId: p.id }),
       (saved) => applyProduct(p, saved?.previousProductId),
     )
   }
@@ -227,7 +247,7 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
               label: "Desfazer",
               onClick: () =>
                 save(
-                  () => changeProductAction(clientSlug, { machineId: machine.id, productId: previousProductId }),
+                  () => acts.product({ machineId: machine.id, productId: previousProductId }),
                   () => {
                     setProduct(previous)
                     removeLog(id)

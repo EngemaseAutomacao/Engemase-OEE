@@ -15,7 +15,7 @@ Quem cadastra e pareia os terminais é a **equipe Engemase**. A empresa cliente 
 
 1. Abra o navegador e entre no endereço de terminal da plataforma (o endereço da plataforma seguido de `/terminal`).
 2. Aparece "Este aparelho não está pareado". Toque em "Parear este aparelho".
-3. A tela "Parear TV ou tablet" pede o código de 6 dígitos.
+3. A tela "Parear TV ou tablet" pede o código de 8 dígitos.
 
 **Na plataforma (equipe Engemase):**
 
@@ -23,10 +23,12 @@ Quem cadastra e pareia os terminais é a **equipe Engemase**. A empresa cliente 
 2. Escolha o "Tipo de terminal" ("TV Andon" ou "Tablet do operador").
 3. Dê um "Nome do terminal" que identifique o aparelho no chão de fábrica (ex.: TV Linha Injeção A, Tablet Injetoras 01–02).
 4. Escolha a "Unidade" e o que ele mostra: as linhas da TV ou as máquinas do tablet.
-5. Escolha o "Tema da tela". Para TV, o **escuro** cansa menos a vista e destaca os estados.
+5. (Só na demonstração) Escolha o "Tema da tela". No sistema real a TV abre no tema escuro, que cansa menos a vista e destaca os estados, e o tablet segue o tema do aparelho.
 6. Clique em "Gerar código de pareamento".
 
-**De volta ao aparelho:** digite o código em até **10 minutos**. O aparelho passa a abrir direto na tela da linha ou da máquina, e aparece como online na lista.
+**De volta ao aparelho:** digite o código em até **10 minutos**. O código vale **uma vez só**. O aparelho passa a abrir direto na tela da linha ou da máquina, e aparece como online na lista. O pareamento vale **12 meses**; depois disso, gere um código novo.
+
+Por segurança, o código errado várias vezes seguidas no mesmo lugar bloqueia novas tentativas por alguns minutos. O código fica guardado só de forma cifrada: se precisar ver de novo, use "Ver código de pareamento", que gera um novo (o anterior deixa de valer).
 
 Se a Engemase não está no local, o cliente pode abrir a tela de pareamento no aparelho e passar o código pelo chamado, dizendo a unidade, a linha ou máquina e o tema.
 
@@ -49,7 +51,7 @@ Quem tem login também pode abrir o painel da linha no computador: no detalhe da
 
 Em "Configurações" › "Terminais (TV/tablet)" aparecem: "Online agora", "Aguardando pareamento" e "Sem contato", com o último contato e quem pareou cada aparelho.
 
-- **Mudar o nome, o que o aparelho mostra ou o tema:** "Editar nome, escopo e tema" (equipe Engemase). O aparelho continua funcionando.
+- **Mudar o nome ou o que o aparelho mostra:** "Editar nome, escopo e tema" (equipe Engemase). O aparelho continua funcionando e mostra o novo conteúdo na próxima atualização da tela.
 - **Código vencido antes de digitar:** gere um novo código, ou "Cancelar pareamento".
 - **Aparelho perdido, roubado ou trocado:** "Revogar terminal". Ele para de mostrar dados **na hora** e volta para a tela de pareamento. Para usar de novo, gere um código novo.
 - **Quem pareou saiu da empresa?** O terminal continua funcionando: ele não depende da conta de ninguém.

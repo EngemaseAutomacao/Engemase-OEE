@@ -70,6 +70,8 @@ export interface OperatorData {
   banco: boolean
   /** Cliente da URL (as Server Actions conferem o acesso por ele). */
   clientSlug: string
+  /** Aberta pelo tablet pareado: as ações vão pelo token do aparelho (`app/terminal/actions.ts`). */
+  viaTerminal: boolean
   /** Motivos de refugo cadastrados (sistema real). */
   rejectReasons: { id: string; name: string }[]
 }

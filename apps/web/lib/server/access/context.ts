@@ -48,6 +48,15 @@ export type TenantAccess =
       /** Atribuição vigente do técnico ao cliente, se houver. */
       readonly assignmentId: string | null
     }
+  | {
+      /**
+       * Terminal pareado (TV Andon ou tablet do operador, docs/15 seção 1): token de aparelho, não é pessoa.
+       * Escopo = as linhas/máquinas do terminal; TV só lê, tablet também faz as ações do chão.
+       */
+      readonly kind: "terminal"
+      readonly terminalId: string
+      readonly terminalKind: "tv" | "tablet"
+    }
 
 /** Pessoa autenticada (vem da sessão do Better Auth, nunca do navegador). */
 export interface SessionUser {
@@ -195,6 +204,8 @@ export function decideAccess(user: SessionUser, sessionId: string, facts: Access
     return { ok: false, reason: "client_suspended" }
   }
 
+  // Pessoa: só vínculo de cliente ou papel de plataforma (o acesso de terminal é montado em `terminalContext`).
+  if (access.kind === "terminal") return { ok: false, reason: "not_found" }
   const permissions = access.kind === "member" ? clientRolePermissions(access.role) : platformRolePermissions(access.role)
   return {
     ok: true,

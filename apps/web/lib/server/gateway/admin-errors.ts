@@ -39,7 +39,7 @@ export class GatewayAdminError extends Error {
 
 /** Quem fez a operação (vai para a auditoria). */
 export interface GatewayAdminActor {
-  readonly type: "user" | "engemase" | "system"
+  readonly type: "user" | "engemase" | "terminal" | "system"
   readonly id?: string | null
   readonly label?: string | null
 }

@@ -11,6 +11,9 @@ export interface AuditActor {
 }
 
 export function auditActor(ctx: TenantContext): AuditActor {
+  if (ctx.access.kind === "terminal") {
+    return { actorType: "terminal", actorId: ctx.access.terminalId, actorLabel: `Terminal ${ctx.user.name}`, accessGrantId: null }
+  }
   if (ctx.access.kind === "engemase") {
     return {
       actorType: "engemase",

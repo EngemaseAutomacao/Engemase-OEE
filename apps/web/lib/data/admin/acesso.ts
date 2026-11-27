@@ -67,6 +67,7 @@ export async function equipeNaAcao(papeis: readonly PlatformRole[]): Promise<Equ
 
 /** Ator da auditoria a partir do contexto do cliente. */
 export function atorDoContexto(ctx: TenantContext): GatewayAdminActor {
+  if (ctx.access.kind === "terminal") return { type: "terminal", id: ctx.access.terminalId, label: `Terminal ${ctx.user.name}` }
   if (ctx.access.kind === "engemase") {
     return { type: "engemase", id: ctx.user.id, label: `${ctx.user.name} (${PLATFORM_ROLE_LABEL[ctx.access.role].toLowerCase()} Engemase)` }
   }

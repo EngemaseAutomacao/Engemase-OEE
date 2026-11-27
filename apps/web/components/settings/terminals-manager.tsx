@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
   BanIcon,
@@ -36,7 +37,8 @@ import { SectionCard } from "@/components/dashboard/section-card"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { ConfirmAction, SettingsTitle, SquareAction, StatusDot, plural } from "@/components/settings/bits"
 import { EngemaseOnlyChip, useCanEdit } from "@/components/config/engemase-managed"
-import { KIND_LABEL, PAIRING_HOST, THEME_LABEL, TerminalDialog, type TerminalFormValue } from "@/components/settings/terminal-dialog"
+import { KIND_LABEL, PAIRING_HOST, THEME_LABEL, TerminalDialog, type TerminalFormValue, type TerminalRemote } from "@/components/settings/terminal-dialog"
+import { criarTerminalAction, editarTerminalAction, gerarCodigoTerminalAction, revogarTerminalAction } from "@/app/(shell)/[cliente]/config/actions"
 import type { SettingsUnit, TerminalKind, TerminalLine, TerminalMachine, TerminalRow } from "@/components/settings/types"
 
 const THEME_ICON = { dark: MoonIcon, light: SunIcon, system: SunMoonIcon } as const
@@ -49,6 +51,7 @@ export function TerminalsManager({
   lines,
   machines,
   initialTerminals,
+  banco = false,
 }: {
   clientSlug: string
   clientName: string
@@ -57,8 +60,57 @@ export function TerminalsManager({
   lines: TerminalLine[]
   machines: TerminalMachine[]
   initialTerminals: TerminalRow[]
+  /** Sistema real: grava no banco (Server Actions) e a lista vem do servidor. Sem banco: demonstração local. */
+  banco?: boolean
 }) {
-  const [terminals, setTerminals] = useState(initialTerminals)
+  const router = useRouter()
+  const [, startTransition] = useTransition()
+  const [localTerminals, setTerminals] = useState(initialTerminals)
+  // Com banco, a lista é sempre a do servidor (recarregada depois de cada gravação).
+  const terminals = banco ? initialTerminals : localTerminals
+
+  /** Chama a ação; erro → aviso e `null`; sucesso → recarrega a lista e devolve os dados. */
+  const call = async <T,>(fn: () => Promise<{ ok: true; dados: T } | { ok: false; mensagem: string }>): Promise<T | null> => {
+    try {
+      const r = await fn()
+      if (!r.ok) {
+        toast.error(r.mensagem)
+        return null
+      }
+      startTransition(() => router.refresh())
+      return r.dados
+    } catch {
+      toast.error("Não foi possível gravar agora. Tente de novo.")
+      return null
+    }
+  }
+
+  /** Sistema real: o diálogo pede ao servidor o cadastro e os códigos (nunca gerados no navegador). */
+  const remote: TerminalRemote | undefined = banco
+    ? {
+        create: async (v) => {
+          const r = await call(() => criarTerminalAction({ slug: clientSlug, name: v.name, kind: v.kind, unitId: v.unitId, lineIds: v.lineIds, machineIds: v.machineIds }))
+          if (r) toast.success(`${v.name} aguardando pareamento`, { description: `Digite ${r.code} no aparelho em até 10 minutos.` })
+          return r ? { id: r.id, code: r.code } : null
+        },
+        newCode: async (id) => (await call(() => gerarCodigoTerminalAction({ slug: clientSlug, id })))?.code ?? null,
+        save: async (id, v) => {
+          const r = await call(() => editarTerminalAction({ slug: clientSlug, id, name: v.name, lineIds: v.lineIds, machineIds: v.machineIds }))
+          if (r) {
+            setDialog(null)
+            toast.success("Terminal atualizado", { description: "O aparelho mostra o novo conteúdo na próxima atualização da tela. Registrado na auditoria." })
+          }
+          return r !== null
+        },
+      }
+    : undefined
+
+  /** Sistema real: o código guardado nunca é mostrado (só o hash existe); "Ver código" gera um novo. */
+  const showCode = async (t: TerminalRow) => {
+    if (!banco) return setDialog({ editing: { row: t, mode: "code" } })
+    const r = await call(() => gerarCodigoTerminalAction({ slug: clientSlug, id: t.id }))
+    if (r) setDialog({ editing: { row: { ...t, pairingCode: r.code }, mode: "code" } })
+  }
   const [kindFilter, setKindFilter] = useState<TerminalKind | "all">("all")
   const [unitFilter, setUnitFilter] = useState<string>("all")
   const [dialog, setDialog] = useState<{ editing: { row: TerminalRow; mode: "edit" | "code" } | null } | null>(null)
@@ -120,6 +172,15 @@ export function TerminalsManager({
   }
 
   const revoke = (t: TerminalRow) => {
+    if (banco) {
+      void call(() => revogarTerminalAction({ slug: clientSlug, id: t.id })).then((r) => {
+        if (r)
+          toast.success(t.status === "pending" ? `Pareamento de ${t.name} cancelado` : `${t.name} revogado`, {
+            description: t.status === "pending" ? "O código deixou de valer." : "O token do aparelho foi invalidado agora; ele volta para a tela de pareamento.",
+          })
+      })
+      return
+    }
     setTerminals((list) => list.filter((x) => x.id !== t.id))
     toast.success(t.status === "pending" ? `Pareamento de ${t.name} cancelado` : `${t.name} revogado`, {
       description: t.status === "pending" ? "O código deixou de valer." : "O token do aparelho foi invalidado agora; ele volta para a tela de pareamento.",
@@ -287,7 +348,7 @@ export function TerminalsManager({
                       <td className="py-3 pr-5 pl-3">
                         <div className="flex justify-end gap-1.5">
                           {t.status === "pending" ? (
-                            canEdit && <SquareAction icon={QrCodeIcon} label="Ver código de pareamento" onClick={() => setDialog({ editing: { row: t, mode: "code" } })} />
+                            canEdit && <SquareAction icon={QrCodeIcon} label="Ver código de pareamento" onClick={() => void showCode(t)} />
                           ) : (
                             href && (
                               <Tooltip>
@@ -368,6 +429,7 @@ export function TerminalsManager({
         open={dialog !== null}
         onOpenChange={(o) => !o && setDialog(null)}
         editing={dialog?.editing ?? null}
+        remote={remote}
         units={units}
         lines={lines}
         machines={machines}

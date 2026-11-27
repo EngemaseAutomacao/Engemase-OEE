@@ -498,7 +498,14 @@ export async function lerClienteDoBanco(
     viewer: {
       name: ctx.user.name,
       email: ctx.user.email,
-      roleLabel: isEngemase ? `Engemase · ${PLATFORM_ROLE_LABEL[access.role]}` : CLIENT_ROLE_LABEL[access.role],
+      roleLabel:
+        access.kind === "engemase"
+          ? `Engemase · ${PLATFORM_ROLE_LABEL[access.role]}`
+          : access.kind === "terminal"
+            ? access.terminalKind === "tv"
+              ? "TV Andon"
+              : "Tablet do operador"
+            : CLIENT_ROLE_LABEL[access.role],
       isPlatform: isEngemase,
     },
     access: {

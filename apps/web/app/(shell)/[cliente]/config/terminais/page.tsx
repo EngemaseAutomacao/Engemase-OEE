@@ -1,57 +1,39 @@
 import type { Metadata } from "next"
-import { usarBanco } from "@/lib/data/fonte"
-import { TelaEmBreve } from "@/components/shell/tela-em-breve"
-import { notFound } from "next/navigation"
-
-import { getClientBySlug, getConfigAccess, getCurrentUser, getLines, getMachines, getTerminals, getUnits } from "@/lib/mock"
-import { ago, date } from "@/lib/format"
+import { Suspense } from "react"
 import { ConfigAccessProvider, EngemaseManagedNote } from "@/components/config/engemase-managed"
 import { TerminalsManager } from "@/components/settings/terminals-manager"
-import type { TerminalRow } from "@/components/settings/types"
+import { CarregandoPagina } from "@/components/shell/carregando"
+import { dadosTerminais } from "@/lib/data/config/terminais"
 
 export const metadata: Metadata = { title: "Terminais" }
 
-export default async function Page({ params }: PageProps<"/[cliente]/config/terminais">) {
+/** Lê a sessão e o cadastro (com banco, `requireTenant`): fica dentro do <Suspense>. */
+async function Tela({ params }: { params: PageProps<"/[cliente]/config/terminais">["params"] }) {
   const { cliente } = await params
-  // Sem versão real ainda: no sistema real, nunca mostra os dados simulados.
-  if (usarBanco()) return <TelaEmBreve titulo="Terminais" voltarPara={`/${cliente}`} voltarTexto="Voltar ao painel" />
-  const client = getClientBySlug(cliente)
-  if (!client) notFound()
-
-  const me = getCurrentUser()
-  const units = getUnits(client.id).map((u) => ({ id: u.id, name: u.name }))
-  const lines = getLines(client.id).map((l) => ({ id: l.id, unitId: l.unitId, name: l.name, code: l.code }))
-  const machines = getMachines(client.id).map((m) => ({ id: m.id, unitId: m.unitId, lineId: m.lineId, name: m.name, code: m.code }))
-
-  const terminals: TerminalRow[] = getTerminals(client.id).map((t) => ({
-    id: t.id,
-    unitId: t.unitId,
-    name: t.name,
-    kind: t.kind,
-    lineIds: t.scope.lineIds ?? [],
-    machineIds: t.scope.machineIds ?? [],
-    theme: t.theme,
-    status: t.status,
-    pairedBy: t.pairedBy,
-    pairedAt: t.pairedAt ? date(t.pairedAt) : null,
-    lastSeen: ago(t.lastSeen),
-    pairingCode: t.pairingCode ?? null,
-  }))
-
+  const d = await dadosTerminais(cliente)
   return (
-    <ConfigAccessProvider canEdit={getConfigAccess(client.id).canConfigure}>
+    <ConfigAccessProvider canEdit={d.canEdit}>
       <div className="flex flex-col gap-5 p-4 md:p-6">
-        <EngemaseManagedNote clientSlug={client.slug} subject="Terminais (TVs Andon e tablets) e o que cada um mostra" />
+        <EngemaseManagedNote clientSlug={d.client.slug} subject="Terminais (TVs Andon e tablets) e o que cada um mostra" />
         <TerminalsManager
-          clientSlug={client.slug}
-          clientName={client.name}
-          currentUserName={me.platformRole ? `${me.name} (Engemase)` : me.name}
-          units={units}
-          lines={lines}
-          machines={machines}
-          initialTerminals={terminals}
+          clientSlug={d.client.slug}
+          clientName={d.client.name}
+          currentUserName={d.currentUserName}
+          units={d.units}
+          lines={d.lines}
+          machines={d.machines}
+          initialTerminals={d.terminals}
+          banco={d.banco}
         />
       </div>
     </ConfigAccessProvider>
+  )
+}
+
+export default function Page({ params }: PageProps<"/[cliente]/config/terminais">) {
+  return (
+    <Suspense fallback={<CarregandoPagina />}>
+      <Tela params={params} />
+    </Suspense>
   )
 }

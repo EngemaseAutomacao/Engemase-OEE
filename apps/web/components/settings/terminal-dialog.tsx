@@ -22,6 +22,16 @@ export const THEME_LABEL: Record<TerminalTheme, string> = { dark: "Escuro", ligh
 /** Endereço de pareamento (D28): definido em `@/lib/site`. */
 export { PAIRING_HOST }
 
+/**
+ * Sistema real: o código vem do servidor (nunca do navegador). `create` cadastra e devolve o primeiro código;
+ * `newCode` gera outro (o anterior deixa de valer). `null` = deu erro (a tela já avisou).
+ */
+export interface TerminalRemote {
+  create(value: TerminalFormValue): Promise<{ id: string; code: string } | null>
+  newCode(id: string): Promise<string | null>
+  save(id: string, value: TerminalFormValue): Promise<boolean>
+}
+
 export interface TerminalFormValue {
   name: string
   kind: TerminalKind
@@ -58,6 +68,7 @@ export function TerminalDialog({
   onCreate,
   onSave,
   onSimulateConnect,
+  remote,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -69,6 +80,8 @@ export function TerminalDialog({
   onCreate: (value: TerminalFormValue, code: string) => void
   onSave: (id: string, value: TerminalFormValue) => void
   onSimulateConnect: (value: TerminalFormValue, code: string, id: string | null) => void
+  /** Sistema real (ver `TerminalRemote`). Sem ele: demonstração local. */
+  remote?: TerminalRemote
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -84,6 +97,7 @@ export function TerminalDialog({
             onCreate={onCreate}
             onSave={onSave}
             onSimulateConnect={onSimulateConnect}
+            remote={remote}
           />
         )}
       </DialogContent>
@@ -100,6 +114,7 @@ function TerminalForm({
   onCreate,
   onSave,
   onSimulateConnect,
+  remote,
 }: {
   editing: { row: TerminalRow; mode: "edit" | "code" } | null
   units: SettingsUnit[]
@@ -109,8 +124,12 @@ function TerminalForm({
   onCreate: (value: TerminalFormValue, code: string) => void
   onSave: (id: string, value: TerminalFormValue) => void
   onSimulateConnect: (value: TerminalFormValue, code: string, id: string | null) => void
+  remote?: TerminalRemote
 }) {
   const row = editing?.row
+  /** Terminal já gravado no servidor (criado agora ou o da linha): para "Gerar outro". */
+  const [savedId, setSavedId] = useState<string | null>(row?.id ?? null)
+  const [busy, setBusy] = useState(false)
   const [kind, setKind] = useState<TerminalKind>(row?.kind ?? "andon_tv")
   const [name, setName] = useState(row?.name ?? "")
   const [unitId, setUnitId] = useState(row?.unitId ?? units[0]?.id ?? "")
@@ -180,6 +199,26 @@ function TerminalForm({
     e.preventDefault()
     setTouched(true)
     if (!valid) return
+    if (busy) return
+    if (remote) {
+      setBusy(true)
+      void (async () => {
+        try {
+          if (isEdit && row) {
+            await remote.save(row.id, value)
+            return
+          }
+          const created = await remote.create(value)
+          if (created) {
+            setSavedId(created.id)
+            setCode(created.code)
+          }
+        } finally {
+          setBusy(false)
+        }
+      })()
+      return
+    }
     if (isEdit && row) {
       onSave(row.id, value)
       return
@@ -242,7 +281,22 @@ function TerminalForm({
             <Button
               type="button"
               variant="outline"
+              disabled={busy}
               onClick={() => {
+                if (remote) {
+                  if (savedId === null) return
+                  setBusy(true)
+                  void remote
+                    .newCode(savedId)
+                    .then((fresh) => {
+                      if (fresh) {
+                        setCode(fresh)
+                        toast("Novo código gerado", { description: "O código anterior deixou de valer." })
+                      }
+                    })
+                    .finally(() => setBusy(false))
+                  return
+                }
                 setCode(newPairingCode())
                 toast("Novo código gerado", { description: "O código anterior deixou de valer." })
               }}
@@ -252,13 +306,15 @@ function TerminalForm({
             </Button>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" variant="ghost" onClick={() => onSimulateConnect(value, code, pendingId)}>
-              Simular aparelho conectado
-            </Button>
+            {!remote && (
+              <Button type="button" variant="ghost" onClick={() => onSimulateConnect(value, code, pendingId)}>
+                Simular aparelho conectado
+              </Button>
+            )}
             <Button
               type="button"
               onClick={() => {
-                if (pendingId) onCancel()
+                if (pendingId || remote) onCancel()
                 else onCreate(value, code)
               }}
             >
@@ -276,7 +332,7 @@ function TerminalForm({
       <DialogHeader>
         <DialogTitle>{isEdit ? `Editar terminal · ${row?.name}` : "Parear novo terminal"}</DialogTitle>
         <DialogDescription>
-          {isEdit ? "O aparelho recebe as mudanças em até 1 minuto, sem precisar parear de novo." : "Escolha o que o aparelho vai mostrar. Em seguida geramos um código de 6 dígitos para digitar nele."}
+          {isEdit ? "O aparelho recebe as mudanças em até 1 minuto, sem precisar parear de novo." : "Escolha o que o aparelho vai mostrar. Em seguida geramos um código para digitar nele."}
         </DialogDescription>
       </DialogHeader>
 
@@ -388,6 +444,7 @@ function TerminalForm({
         {touched && errors.scope && <p className="text-xs text-destructive">{errors.scope}</p>}
       </fieldset>
 
+      {!remote && (
       <div className="grid gap-1.5">
         <Label>Tema da tela</Label>
         <ToggleGroup type="single" variant="outline" value={theme} onValueChange={(v) => v && setTheme(v as TerminalTheme)} className="bg-card">
@@ -400,13 +457,14 @@ function TerminalForm({
         </ToggleGroup>
         <p className="text-xs text-muted-foreground">Tema próprio do terminal: não muda o tema de nenhuma pessoa. Para TV, o escuro cansa menos a vista e destaca os estados.</p>
       </div>
+      )}
 
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={touched && !valid}>
-          {isEdit ? "Salvar alterações" : "Gerar código de pareamento"}
+        <Button type="submit" disabled={busy || (touched && !valid)}>
+          {busy ? "Salvando…" : isEdit ? "Salvar alterações" : "Gerar código de pareamento"}
         </Button>
       </DialogFooter>
     </form>

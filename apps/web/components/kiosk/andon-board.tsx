@@ -2,7 +2,8 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { FactoryIcon, LogOutIcon } from "lucide-react"
 
-import { getClientData, type ClienteDados } from "@/lib/data/cliente"
+import { getClientData, getClientDataForContext, type ClienteDados } from "@/lib/data/cliente"
+import type { TenantContext } from "@/lib/server/access/context"
 import { DEFAULT_TZ, type MachineState, type MachineWithLive } from "@/lib/mock"
 import { ago, duration, num, pct } from "@/lib/format"
 import { STATE_META, STATE_ORDER, TONE_TEXT, oeeTone } from "@/lib/states"
@@ -75,9 +76,18 @@ function commDetail(data: ClienteDados, m: MachineWithLive): string {
 
 /** Conteúdo do Andon de uma linha (lê os params dentro do <Suspense> da página). */
 /** `terminal`: aberto por uma TV pareada (/terminal); some o "Sair do modo TV" (não há sessão de pessoa). */
-export async function AndonBoard({ params, terminal }: { params: Promise<{ cliente: string; linhaId: string }>; terminal?: { name: string } }) {
+export async function AndonBoard({
+  params,
+  terminal,
+  ctx,
+}: {
+  params: Promise<{ cliente: string; linhaId: string }>
+  terminal?: { name: string }
+  /** Terminal pareado: contexto do aparelho (sem sessão de pessoa). */
+  ctx?: TenantContext
+}) {
   const { cliente, linhaId } = await params
-  const data = await getClientData(cliente)
+  const data = ctx ? await getClientDataForContext(ctx) : await getClientData(cliente)
   const { client } = data
   // Linha de outro cliente ou fora do escopo da pessoa: 404.
   const line = data.getLine(linhaId)
