@@ -87,7 +87,7 @@ export function MfaCodeInput({
             else if (e.key === "ArrowRight") focus(i + 1)
           }}
           className={cn(
-            "h-12 w-10 rounded-xl border border-input bg-background text-center font-mono text-xl font-semibold tabular-nums shadow-xs transition outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 sm:h-14 sm:w-12",
+            "h-12 w-10 rounded-xl border border-input bg-background text-center font-mono text-xl font-semibold tabular-nums shadow-xs transition outline-none focus:border-ring focus:ring-[3px] focus:ring-ring/50 disabled:opacity-50 sm:h-14 sm:w-12",
             d && "border-primary/50",
             invalid && "border-destructive ring-destructive/20",
             i === 2 && "mr-2 sm:mr-3",
