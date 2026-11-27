@@ -1,12 +1,12 @@
-# Chaves públicas do OTA (pacote oee-gateway-updater)
+# Chaves públicas confiáveis do gateway
 
-O `oee-updater` só instala um pacote do agente cujo manifesto (`*.manifest.json`) tenha a
-assinatura Ed25519 (`*.manifest.json.sig`) de uma das chaves `*.pub` deste diretório. Sem
-nenhuma chave aqui, ele recusa tudo (falha fechada).
+| Arquivo | Para quê | Onde está a privada |
+|---|---|---|
+| `vpn-approval-<kid>.pub` | Conferir a **aprovação assinada** do acesso remoto (JWS EdDSA, `kid` no cabeçalho) antes de ligar a VPN (docs/12) | Vercel, variável `VPN_APPROVAL_SIGNING_KEY` (Sensitive, só produção) |
 
-- Formato: uma linha com a chave pública em base64 (32 bytes); linhas com `#` são comentário.
-- Nomes: `ota-AAAA.pub` (a atual) e `ota-AAAA+1.pub` (a próxima, para a troca anual).
-- Gerar um par: `oee-updater keygen --out ota-2026`. A privada (`ota-2026.key`) vai para o cofre
-  de senhas da empresa e para o segredo do CI; **nunca** para o repositório. A pública vem para cá.
-- Assinar: `oee-updater sign --deb oee-gateway_<versão>_<arq>.deb --version <versão> --arch <arq>
-  --url <nome ou URL do .deb> --key ota-2026.key --out <dir>` (o `buffer_schema` vai sozinho).
+Formato: os 32 bytes da chave pública Ed25519 em base64, uma por arquivo. O `kid` é o começo (16 hex) do
+SHA-256 desses 32 bytes; a plataforma publica a chave atual em `GET /api/gateway/v1/vpn-approval-key`.
+
+Troca da chave: gere a nova privada na Vercel, copie a nova pública para cá **sem apagar a anterior**,
+publique o pacote do gateway e só depois troque a variável na Vercel. A anterior sai no pacote seguinte.
+Estes arquivos vão no pacote do gateway; só a parte pública fica no repositório.
