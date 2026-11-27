@@ -116,6 +116,13 @@ describe("terminais pareados", () => {
     expect(tvSession?.terminal.machineIds).not.toContain(a.mDeleted)
     expect(tvSession?.terminal.machineIds).not.toContain(a.m3)
 
+    // Tema: sem informar, TV escura e tablet automático; editar troca; tema inválido é recusado.
+    expect(tvSession?.terminal.theme).toBe("dark")
+    expect(session?.terminal.theme).toBe("system")
+    expect(await editarTerminal(h.t.db, eng, { id: t.id, name: "Tablet claro", lineIds: [], machineIds: [a.m1, a.m2], theme: "light" })).toEqual({ ok: true, dados: { id: t.id } })
+    expect((await terminalContext(h.t.db, p.ok ? p.token : "", NOW))?.terminal.theme).toBe("light")
+    expect(await editarTerminal(h.t.db, eng, { id: t.id, name: "Tablet", lineIds: [], machineIds: [a.m1], theme: "rosa" })).toMatchObject({ ok: false })
+
     // Token inexistente, malformado ou vazio: sem acesso.
     expect(await terminalContext(h.t.db, "tm_" + "A".repeat(43), NOW)).toBeNull()
     expect(await terminalContext(h.t.db, "qualquer coisa", NOW)).toBeNull()

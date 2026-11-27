@@ -3,7 +3,7 @@
  * Gravado como dono do banco (superusuário no PGlite, que ignora a RLS), como faria um seed.
  */
 import { randomUUID } from "node:crypto"
-import { sql } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 import { sha256Hex } from "../src/lookups"
 import * as s from "../src/schema/index"
 import type { TestDb } from "./helpers"
@@ -405,21 +405,13 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
     endsAt: new Date(now + 2 * HOUR),
   })
   const terminalToken = `term_${slug}_${randomUUID()}`
+  // SQL direto e colunas explícitas: o teste das partições usa esta carga num banco só até a 0012 (sem `theme`).
+  await db.execute(sql`
+    INSERT INTO terminal (organization_id, unit_id, name, kind, line_ids, token_hash, paired_by, paired_at, expires_at)
+    VALUES (${organizationId}, ${unitRow.id}, 'TV Linha A', 'tv', ARRAY[${lineRow.id}]::uuid[], ${sha256Hex(terminalToken)},
+            ${person.id}, ${new Date(now).toISOString()}::timestamptz, ${new Date(now + 90 * 24 * HOUR).toISOString()}::timestamptz)`)
   const term = first(
-    await db
-      .insert(s.terminal)
-      .values({
-        organizationId,
-        unitId: unitRow.id,
-        name: "TV Linha A",
-        kind: "tv",
-        lineIds: [lineRow.id],
-        tokenHash: sha256Hex(terminalToken),
-        pairedBy: person.id,
-        pairedAt: new Date(now),
-        expiresAt: new Date(now + 90 * 24 * HOUR),
-      })
-      .returning(),
+    await db.select({ id: s.terminal.id }).from(s.terminal).where(eq(s.terminal.tokenHash, sha256Hex(terminalToken))),
   )
   const accountToken = `acct_${slug}_${randomUUID()}`
   await db.insert(s.accountToken).values({

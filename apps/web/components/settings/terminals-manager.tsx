@@ -89,13 +89,13 @@ export function TerminalsManager({
   const remote: TerminalRemote | undefined = banco
     ? {
         create: async (v) => {
-          const r = await call(() => criarTerminalAction({ slug: clientSlug, name: v.name, kind: v.kind, unitId: v.unitId, lineIds: v.lineIds, machineIds: v.machineIds }))
+          const r = await call(() => criarTerminalAction({ slug: clientSlug, name: v.name, kind: v.kind, unitId: v.unitId, lineIds: v.lineIds, machineIds: v.machineIds, theme: v.theme }))
           if (r) toast.success(`${v.name} aguardando pareamento`, { description: `Digite ${r.code} no aparelho em até 10 minutos.` })
           return r ? { id: r.id, code: r.code } : null
         },
         newCode: async (id) => (await call(() => gerarCodigoTerminalAction({ slug: clientSlug, id })))?.code ?? null,
         save: async (id, v) => {
-          const r = await call(() => editarTerminalAction({ slug: clientSlug, id, name: v.name, lineIds: v.lineIds, machineIds: v.machineIds }))
+          const r = await call(() => editarTerminalAction({ slug: clientSlug, id, name: v.name, lineIds: v.lineIds, machineIds: v.machineIds, theme: v.theme }))
           if (r) {
             setDialog(null)
             toast.success("Terminal atualizado", { description: "O aparelho mostra o novo conteúdo na próxima atualização da tela. Registrado na auditoria." })

@@ -68,6 +68,7 @@ export async function dadosTerminais(slug: string) {
         pairedAt: terminal.pairedAt,
         expiresAt: terminal.expiresAt,
         lastSeenAt: terminal.lastSeenAt,
+        theme: terminal.theme,
       })
       .from(terminal)
       .where(isNull(terminal.revokedAt))
@@ -89,7 +90,7 @@ export async function dadosTerminais(slug: string) {
       kind,
       lineIds: t.lineIds,
       machineIds: t.machineIds,
-      theme: kind === "andon_tv" ? "dark" : "system",
+      theme: t.theme,
       status: !paired ? "pending" : t.lastSeenAt !== null && now - t.lastSeenAt.getTime() < ONLINE_MS ? "online" : "offline",
       pairedBy: t.pairedBy === null ? null : (names.get(t.pairedBy) ?? "—"),
       pairedAt: t.pairedAt ? date(t.pairedAt.toISOString()) : null,

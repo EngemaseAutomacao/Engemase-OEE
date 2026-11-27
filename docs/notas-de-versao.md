@@ -11,6 +11,14 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 - **Fechamento de turno automático:** os números de cada turno são fechados no fim do turno e recalculados se chegarem dados atrasados ou se uma parada for reclassificada.
 - **Atualização do programa do gateway à distância**, enviada pela Engemase.
 
+## 27/11/2026 · Tema de cada terminal
+
+**Para quem usa**
+- **A TV e o tablet abrem no tema escolhido para eles** (escuro, claro ou automático), sem mudar o tema de nenhuma pessoa. TVs já pareadas ficam no escuro; tablets, no automático.
+
+**Para a equipe Engemase**
+- **Em "Configurações" › "Terminais", o tema da tela pode ser escolhido** ao cadastrar e ao editar o terminal.
+
 ## 27/11/2026 · Paradas planejadas que se repetem
 
 **Para a equipe Engemase**
@@ -63,7 +71,7 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 **Para a equipe Engemase**
 - **"Configurações" › "Terminais" funciona no sistema real**: cadastrar TV ou tablet com as linhas ou máquinas, gerar código, editar e revogar. Revogar corta o aparelho na hora.
 - O pareamento vale 12 meses. Cliente suspenso: os terminais param de abrir.
-- Ainda não tem: o tema próprio de cada terminal.
+- O tema próprio de cada terminal chegou depois (veja acima).
 
 ## 27/11/2026 · Cadastro de turnos e paradas planejadas de verdade
 

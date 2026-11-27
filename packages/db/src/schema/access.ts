@@ -34,6 +34,7 @@ import {
   CLIENT_STATUSES,
   SUPPORT_GRANT_STATUSES,
   TERMINAL_KINDS,
+  TERMINAL_THEMES,
 } from "./enums"
 
 /**
@@ -301,11 +302,14 @@ export const terminal = pgTable(
     revokedAt: tstz("revoked_at"),
     revokedBy: uuid("revoked_by"),
     lastSeenAt: tstz("last_seen_at"),
+    /** Tema do aparelho (docs/14): próprio do terminal, não muda o tema de nenhuma pessoa. */
+    theme: text("theme", { enum: TERMINAL_THEMES }).notNull().default("system"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     unique("terminal_id_org_uq").on(t.id, t.organizationId),
+    check("terminal_theme_chk", oneOf(t.theme, TERMINAL_THEMES)),
     foreignKey({
       name: "terminal_unit_fk",
       columns: [t.unitId, t.organizationId],

@@ -103,6 +103,7 @@ describe("migrações", () => {
       "0018_platform_client_admin",
       "0019_fault_map_text_client",
       "0020_client_branding",
+      "0021_terminal_theme",
     ])
   })
 

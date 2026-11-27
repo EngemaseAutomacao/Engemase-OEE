@@ -199,3 +199,7 @@ export const REMOTE_FORWARD_STATUSES = [
   "failed",
 ] as const
 export type RemoteForwardStatus = (typeof REMOTE_FORWARD_STATUSES)[number]
+
+/** Tema de um terminal pareado (TV Andon ou tablet). */
+export const TERMINAL_THEMES = ["dark", "light", "system"] as const
+export type TerminalThemeValue = (typeof TERMINAL_THEMES)[number]

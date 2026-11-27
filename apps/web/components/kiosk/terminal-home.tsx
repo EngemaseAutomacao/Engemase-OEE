@@ -15,8 +15,18 @@ import type { TerminalSession } from "@/lib/server/terminal/terminals"
 import { AndonBoard, AndonSkeleton } from "@/components/kiosk/andon-board"
 import { OperatorScreen, OperatorSkeleton } from "@/components/kiosk/operator-screen"
 import { BrandLogo } from "@/components/shell/brand"
+import { TerminalTheme } from "@/components/kiosk/terminal-theme"
 
 export async function TerminalHome({ session, machineId }: { session: TerminalSession; machineId?: string }) {
+  return (
+    <>
+      <TerminalTheme theme={session.terminal.theme} />
+      <Conteudo session={session} machineId={machineId} />
+    </>
+  )
+}
+
+async function Conteudo({ session, machineId }: { session: TerminalSession; machineId?: string }) {
   const { ctx, terminal } = session
   const params = (maquinaId: string) => Promise.resolve({ cliente: ctx.slug, maquinaId })
 

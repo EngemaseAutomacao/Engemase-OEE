@@ -119,6 +119,8 @@ export const TerminalInput = z.object({
   unitId: z.uuid("Unidade inválida."),
   lineIds: z.array(z.uuid()).max(50).default([]),
   machineIds: z.array(z.uuid()).max(200).default([]),
+  /** Tema do aparelho; sem informar: TV escura, tablet automático. */
+  theme: z.enum(["dark", "light", "system"], "Tema inválido.").optional(),
 })
 
 const EditInput = z.object({
@@ -126,6 +128,7 @@ const EditInput = z.object({
   name: TerminalInput.shape.name,
   lineIds: TerminalInput.shape.lineIds,
   machineIds: TerminalInput.shape.machineIds,
+  theme: TerminalInput.shape.theme,
 })
 
 const NAO_ENCONTRADO = { ok: false, mensagem: "Terminal não encontrado. Atualize a página." } as const
@@ -188,7 +191,15 @@ export async function criarTerminal(db: GatewayDb, ctx: TenantContext, input: un
     if (problema !== null) return { ok: false, mensagem: problema }
     const [row] = await tx
       .insert(terminal)
-      .values({ organizationId: ctx.organizationId, unitId: u.id, name: v.name, kind, lineIds: [...new Set(v.lineIds)], machineIds: [...new Set(v.machineIds)] })
+      .values({
+        organizationId: ctx.organizationId,
+        unitId: u.id,
+        name: v.name,
+        kind,
+        lineIds: [...new Set(v.lineIds)],
+        machineIds: [...new Set(v.machineIds)],
+        theme: v.theme ?? (kind === "tv" ? "dark" : "system"),
+      })
       .returning({ id: terminal.id })
     if (row === undefined) throw new Error("terminal não gravado")
     const { code, expiresAt } = await novoCodigo(tx, ctx.organizationId, row.id, ctx.user.id, now)
@@ -214,9 +225,9 @@ export async function editarTerminal(db: GatewayDb, ctx: TenantContext, input: u
     if (problema !== null) return { ok: false, mensagem: problema }
     await tx
       .update(terminal)
-      .set({ name: v.name, lineIds: [...new Set(v.lineIds)], machineIds: [...new Set(v.machineIds)], updatedAt: new Date() })
+      .set({ name: v.name, lineIds: [...new Set(v.lineIds)], machineIds: [...new Set(v.machineIds)], ...(v.theme ? { theme: v.theme } : {}), updatedAt: new Date() })
       .where(eq(terminal.id, t.id))
-    await auditar(tx, ctx, "terminal.updated", t.id, t.unitId, { name: v.name, line_ids: v.lineIds, machine_ids: v.machineIds })
+    await auditar(tx, ctx, "terminal.updated", t.id, t.unitId, { name: v.name, line_ids: v.lineIds, machine_ids: v.machineIds, theme: v.theme ?? null })
     return { ok: true, dados: { id: t.id } }
   })
 }
@@ -345,6 +356,8 @@ export interface TerminalSession {
     readonly lineIds: readonly string[]
     /** Máquinas que o terminal mostra (TV: das linhas; tablet: as escolhidas), sem as excluídas. */
     readonly machineIds: readonly string[]
+    /** Tema do aparelho (não muda o tema de nenhuma pessoa). */
+    readonly theme: "dark" | "light" | "system"
   }
 }
 
@@ -358,7 +371,7 @@ export async function terminalContext(db: GatewayDb, deviceToken: string | undef
   if (ref === null) return null
   return withTenant(db, ref.organizationId, async (tx): Promise<TerminalSession | null> => {
     const [t] = await tx
-      .select({ id: terminal.id, name: terminal.name, kind: terminal.kind, unitId: terminal.unitId, lineIds: terminal.lineIds, machineIds: terminal.machineIds, lastSeenAt: terminal.lastSeenAt })
+      .select({ id: terminal.id, name: terminal.name, kind: terminal.kind, unitId: terminal.unitId, lineIds: terminal.lineIds, machineIds: terminal.machineIds, theme: terminal.theme, lastSeenAt: terminal.lastSeenAt })
       .from(terminal)
       .where(and(eq(terminal.id, ref.id), isNull(terminal.revokedAt)))
       .limit(1)
@@ -395,7 +408,7 @@ export async function terminalContext(db: GatewayDb, deviceToken: string | undef
         scope: { kind: "machines", machineIds },
         permissions: t.kind === "tv" ? TV_PERMISSIONS : TABLET_PERMISSIONS,
       },
-      terminal: { id: t.id, name: t.name, kind: t.kind, unitId: t.unitId, lineIds: t.lineIds, machineIds },
+      terminal: { id: t.id, name: t.name, kind: t.kind, unitId: t.unitId, lineIds: t.lineIds, machineIds, theme: t.theme },
     }
   })
 }

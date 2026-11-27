@@ -444,7 +444,6 @@ function TerminalForm({
         {touched && errors.scope && <p className="text-xs text-destructive">{errors.scope}</p>}
       </fieldset>
 
-      {!remote && (
       <div className="grid gap-1.5">
         <Label>Tema da tela</Label>
         <ToggleGroup type="single" variant="outline" value={theme} onValueChange={(v) => v && setTheme(v as TerminalTheme)} className="bg-card">
@@ -457,7 +456,6 @@ function TerminalForm({
         </ToggleGroup>
         <p className="text-xs text-muted-foreground">Tema próprio do terminal: não muda o tema de nenhuma pessoa. Para TV, o escuro cansa menos a vista e destaca os estados.</p>
       </div>
-      )}
 
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
