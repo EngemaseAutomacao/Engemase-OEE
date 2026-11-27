@@ -11,6 +11,13 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 - **Fechamento de turno automático:** os números de cada turno são fechados no fim do turno e recalculados se chegarem dados atrasados ou se uma parada for reclassificada.
 - **Atualização do programa do gateway à distância**, enviada pela Engemase.
 
+## 27/11/2026 · Cadastro de motivos de parada de verdade
+
+**Para a equipe Engemase**
+- **"Configurações" › "Motivos de parada" funciona no sistema real**: criar e editar grupos (com categoria e cor) e motivos, mostrar ou ocultar para o operador e excluir. Os motivos herdam a categoria e a cor do grupo.
+- Motivo já usado em alguma parada não é apagado: fica oculto, e o histórico e os relatórios continuam com ele. Motivos do sistema (como "Sem comunicação") não podem ser ocultados nem excluídos.
+- O cliente vê a tela só para consulta. O **mapa de códigos de falha** ainda não existe no sistema real (aparece como "em breve").
+
 ## 27/11/2026 · Cadastro de produtos de verdade
 
 **Para a equipe Engemase**

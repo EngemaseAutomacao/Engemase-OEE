@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import type { LucideIcon } from "lucide-react"
 import {
   CalendarClockIcon,
@@ -33,6 +34,13 @@ import { FaultMap, type FaultMapRow } from "@/components/config/fault-map"
 import { ColorPopover, ReasonDialog, type ReasonEdit, type ReasonNode } from "@/components/config/reason-dialogs"
 import { ConfirmDialog, IconAction, PageTitle } from "@/components/config/ui-bits"
 import { EngemaseOnlyChip, useCanEdit } from "@/components/config/engemase-managed"
+import {
+  definirCorMotivoAction,
+  definirMotivoAtivoAction,
+  excluirMotivoAction,
+  salvarGrupoMotivoAction,
+  salvarMotivoAction,
+} from "@/app/(shell)/[cliente]/config/actions"
 
 /** Ícone do grupo na prévia do operador (mesma convenção da tela do operador). */
 const GROUP_ICON: Record<string, LucideIcon> = {
@@ -50,12 +58,37 @@ export function ReasonsManager({
   initialReasons,
   initialFaultMap,
   machineTypes,
+  banco = false,
+  clientSlug = "",
 }: {
   initialReasons: ReasonNode[]
   initialFaultMap: FaultMapRow[]
   machineTypes: string[]
+  /** Sistema real: grava no banco (Server Actions) e a árvore vem do servidor. Sem banco: demonstração local. */
+  banco?: boolean
+  clientSlug?: string
 }) {
-  const [nodes, setNodes] = useState(initialReasons)
+  const router = useRouter()
+  const [, startTransition] = useTransition()
+  const [localNodes, setNodes] = useState(initialReasons)
+  // Com banco, a árvore é sempre a do servidor (recarregada depois de cada gravação).
+  const nodes = banco ? initialReasons : localNodes
+
+  /** Grava no servidor; com sucesso, recarrega. Erro → aviso, nada muda. */
+  const gravar = <T,>(fn: () => Promise<{ ok: true; dados: T } | { ok: false; mensagem: string }>, onOk: (dados: T) => void) =>
+    startTransition(async () => {
+      try {
+        const r = await fn()
+        if (!r.ok) {
+          toast.error(r.mensagem)
+          return
+        }
+        onOk(r.dados)
+        router.refresh()
+      } catch {
+        toast.error("Não foi possível gravar agora. Tente de novo.")
+      }
+    })
   const [faultMap, setFaultMap] = useState(initialFaultMap)
   const [edit, setEdit] = useState<ReasonEdit | null>(null)
   const [removing, setRemoving] = useState<ReasonNode | null>(null)
@@ -78,6 +111,31 @@ export function ReasonsManager({
 
   const save = (data: { name: string; category: ReasonCategory; color: string }) => {
     if (!edit) return
+    if (banco) {
+      const current = edit
+      if (current.mode === "group") {
+        gravar(
+          () => salvarGrupoMotivoAction({ slug: clientSlug, ...(current.node ? { id: current.node.id } : {}), ...data }),
+          () => {
+            toast.success(current.node ? "Grupo atualizado" : "Grupo criado", {
+              description: current.node ? `${data.name} · ${REASON_CATEGORY_META[data.category].label}` : "Adicione os motivos do 2º nível para ele aparecer na tela do operador.",
+            })
+            setEdit(null)
+          },
+        )
+      } else {
+        gravar(
+          () => salvarMotivoAction({ slug: clientSlug, ...(current.node ? { id: current.node.id } : {}), parentId: current.parent.id, name: data.name }),
+          () => {
+            toast.success(current.node ? "Motivo renomeado" : "Motivo adicionado", {
+              description: current.node ? `O histórico passa a exibir “${data.name}”.` : `${current.parent.name} › ${data.name}`,
+            })
+            setEdit(null)
+          },
+        )
+      }
+      return
+    }
     if (edit.mode === "group") {
       if (edit.node) {
         const id = edit.node.id
@@ -109,6 +167,16 @@ export function ReasonsManager({
   }
 
   const setActive = (n: ReasonNode, active: boolean) => {
+    if (banco) {
+      gravar(
+        () => definirMotivoAtivoAction({ slug: clientSlug, id: n.id, active }),
+        () =>
+          toast.success(active ? `“${n.name}” visível para o operador` : `“${n.name}” oculto do operador`, {
+            description: active ? undefined : "O histórico e os relatórios continuam com o motivo.",
+          }),
+      )
+      return
+    }
     setNodes((list) => list.map((x) => (x.id === n.id || (!n.parentId && x.parentId === n.id) ? { ...x, active } : x)))
     toast.success(active ? `“${n.name}” visível para o operador` : `“${n.name}” oculto do operador`, {
       description: active ? undefined : "O histórico e os relatórios continuam com o motivo.",
@@ -118,6 +186,17 @@ export function ReasonsManager({
   const confirmRemove = () => {
     const n = removing
     if (!n) return
+    if (banco) {
+      setRemoving(null)
+      gravar(
+        () => excluirMotivoAction({ slug: clientSlug, id: n.id }),
+        (r) =>
+          r.modo === "excluido"
+            ? toast.success(`“${n.name}” excluído`)
+            : toast.success(`“${n.name}” oculto do operador`, { description: "Já foi usado em paradas: continua no histórico e nos relatórios." }),
+      )
+      return
+    }
     if (usedIn(n) > 0) {
       setActive(n, false)
     } else {
@@ -223,8 +302,10 @@ export function ReasonsManager({
                             color={g.color}
                             label={g.name}
                             onChange={(color) => {
+                              const done = () => toast.success("Cor atualizada", { description: `${g.name} no Pareto e na tela do operador.` })
+                              if (banco) return gravar(() => definirCorMotivoAction({ slug: clientSlug, id: g.id, color }), done)
                               setNodes((list) => list.map((n) => (n.id === g.id || n.parentId === g.id ? { ...n, color } : n)))
-                              toast.success("Cor atualizada", { description: `${g.name} no Pareto e na tela do operador.` })
+                              done()
                             }}
                           />
                           <div className="min-w-0 flex-1">
@@ -341,7 +422,16 @@ export function ReasonsManager({
         </div>
       </div>
 
-      <FaultMap rows={faultMap} onChange={setFaultMap} reasons={nodes} machineTypes={machineTypes} />
+      {banco ? (
+        <SectionCard title="Mapa de códigos de falha" description="Código de alarme do CLP → motivo automático">
+          <p className="text-sm text-muted-foreground">
+            Em breve no sistema real: o mapa passa a ser cadastrado por máquina ou por modelo de máquina. Até lá, as falhas do CLP
+            aparecem para o operador classificar.
+          </p>
+        </SectionCard>
+      ) : (
+        <FaultMap rows={faultMap} onChange={setFaultMap} reasons={nodes} machineTypes={machineTypes} />
+      )}
 
       <ReasonDialog edit={edit} onOpenChange={(o) => !o && setEdit(null)} siblings={siblings} onSave={save} />
       <ConfirmDialog

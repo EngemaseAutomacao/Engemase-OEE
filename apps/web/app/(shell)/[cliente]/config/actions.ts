@@ -32,6 +32,7 @@ import type { Permission } from "@/lib/server/access/permissions"
 import { requireTenant } from "@/lib/server/access/require-tenant"
 import { getDb } from "@/lib/server/db"
 import { excluirProduto, salvarMatrizCiclos, salvarProduto } from "@/lib/server/config/products"
+import { definirAtivo, definirCor, excluirMotivo, salvarGrupo, salvarMotivo } from "@/lib/server/config/reasons"
 import { createActivationCode } from "@/lib/server/gateway/activation"
 import { GatewayAdminError } from "@/lib/server/gateway/admin-errors"
 import { enqueueGatewayCommand, getGatewayCommand } from "@/lib/server/gateway/commands"
@@ -520,4 +521,28 @@ export async function salvarMatrizCiclosAction(input: unknown): Promise<Resultad
 
 export async function excluirProdutoAction(input: unknown): Promise<Resultado<{ id: string }>> {
   return cadastro(input, "excluirProduto", (a) => excluirProduto(a.db, a.ctx, (input as { id?: unknown } | null)?.id))
+}
+
+// ---------------------------------------------------------------------------
+// Motivos de parada (config.write = equipe Engemase, D12; regras em lib/server/config/reasons.ts)
+// ---------------------------------------------------------------------------
+
+export async function salvarGrupoMotivoAction(input: unknown): Promise<Resultado<{ id: string }>> {
+  return cadastro(input, "salvarGrupoMotivo", (a) => salvarGrupo(a.db, a.ctx, input))
+}
+
+export async function salvarMotivoAction(input: unknown): Promise<Resultado<{ id: string }>> {
+  return cadastro(input, "salvarMotivo", (a) => salvarMotivo(a.db, a.ctx, input))
+}
+
+export async function definirMotivoAtivoAction(input: unknown): Promise<Resultado<{ id: string }>> {
+  return cadastro(input, "definirMotivoAtivo", (a) => definirAtivo(a.db, a.ctx, input))
+}
+
+export async function definirCorMotivoAction(input: unknown): Promise<Resultado<{ id: string }>> {
+  return cadastro(input, "definirCorMotivo", (a) => definirCor(a.db, a.ctx, input))
+}
+
+export async function excluirMotivoAction(input: unknown): Promise<Resultado<{ modo: "ocultado" | "excluido" }>> {
+  return cadastro(input, "excluirMotivo", (a) => excluirMotivo(a.db, a.ctx, (input as { id?: unknown } | null)?.id))
 }

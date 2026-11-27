@@ -1,71 +1,28 @@
 import type { Metadata } from "next"
-import { usarBanco } from "@/lib/data/fonte"
-import { TelaEmBreve } from "@/components/shell/tela-em-breve"
-import { notFound } from "next/navigation"
-
-import { faultTexts, getClientBySlug, getConfigAccess, getDowntimeReasons, getMachines, getPareto } from "@/lib/mock"
+import { Suspense } from "react"
 import { ConfigAccessProvider, EngemaseManagedNote } from "@/components/config/engemase-managed"
-import { REASON_PALETTE } from "@/components/config/labels"
-import type { FaultMapRow } from "@/components/config/fault-map"
-import type { ReasonNode } from "@/components/config/reason-dialogs"
 import { ReasonsManager } from "@/components/config/reasons-manager"
-
-/** Motivo sugerido para cada alarme simulado (pelo nome do motivo; os códigos sem sugestão perguntam ao operador). */
-const FAULT_SUGGESTION: Record<number, string> = {
-  27: "Ajuste de parâmetros",
-  31: "Vazamento hidráulico",
-  47: "Falta de material",
-  58: "Sobrecarga de motor",
-}
+import { CarregandoPagina } from "@/components/shell/carregando"
+import { dadosMotivos } from "@/lib/data/config/motivos"
 
 export const metadata: Metadata = { title: "Motivos de parada" }
 
-export default async function Page({ params }: PageProps<"/[cliente]/config/motivos">) {
+/** Lê a sessão e o cadastro (com banco, `requireTenant`): fica dentro do <Suspense>. */
+async function Tela({ params }: { params: PageProps<"/[cliente]/config/motivos">["params"] }) {
   const { cliente } = await params
-  // Sem versão real ainda: no sistema real, nunca mostra os dados simulados.
-  if (usarBanco()) return <TelaEmBreve titulo="Motivos de parada" voltarPara={`/${cliente}`} voltarTexto="Voltar ao painel" />
-  const client = getClientBySlug(cliente)
-  if (!client) notFound()
-
-  const machines = getMachines(client.id)
-  const raw = getDowntimeReasons(client.id)
-  const pareto = new Map(getPareto(machines.map((m) => m.id)).map((p) => [p.reasonId, p]))
-
-  // Cores dos grupos: paleta na ordem; planejadas em cinza-azulado (não competem com perdas).
-  const groupColor = new Map(
-    raw
-      .filter((r) => !r.parentId)
-      .map((g, i) => [g.id, g.category === "planned" ? REASON_PALETTE[REASON_PALETTE.length - 1] : REASON_PALETTE[i % (REASON_PALETTE.length - 1)]]),
-  )
-
-  const reasons: ReasonNode[] = raw.map((r) => {
-    const p = pareto.get(r.id)
-    return {
-      id: r.id,
-      parentId: r.parentId,
-      name: r.name,
-      category: r.category,
-      color: groupColor.get(r.parentId ?? r.id) ?? REASON_PALETTE[0],
-      active: true,
-      minutes: p?.minutes ?? 0,
-      occurrences: p?.occurrences ?? 0,
-    }
-  })
-
-  const faultMap: FaultMapRow[] = Object.entries(faultTexts)
-    .map(([code, text]) => {
-      const suggestion = FAULT_SUGGESTION[Number(code)]
-      const reason = suggestion ? raw.find((r) => r.parentId && r.name === suggestion) : undefined
-      return { code: Number(code), text, reasonId: reason?.id ?? null, machineType: "all" }
-    })
-    .sort((a, b) => a.code - b.code)
-
-  const machineTypes = [...new Set(machines.map((m) => m.type))]
-
+  const d = await dadosMotivos(cliente)
   return (
-    <ConfigAccessProvider canEdit={getConfigAccess(client.id).canConfigure}>
-      <EngemaseManagedNote padded clientSlug={client.slug} subject="Motivos de parada e mapa de códigos de falha" />
-      <ReasonsManager initialReasons={reasons} initialFaultMap={faultMap} machineTypes={machineTypes} />
+    <ConfigAccessProvider canEdit={d.canEdit}>
+      <EngemaseManagedNote padded clientSlug={d.client.slug} subject="Motivos de parada e mapa de códigos de falha" />
+      <ReasonsManager initialReasons={d.reasons} initialFaultMap={d.faultMap} machineTypes={d.machineTypes} banco={d.banco} clientSlug={d.client.slug} />
     </ConfigAccessProvider>
+  )
+}
+
+export default function Page({ params }: PageProps<"/[cliente]/config/motivos">) {
+  return (
+    <Suspense fallback={<CarregandoPagina />}>
+      <Tela params={params} />
+    </Suspense>
   )
 }
