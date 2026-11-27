@@ -33,6 +33,7 @@ import {
   organization,
   resolveGatewayEnrollmentState,
   sha256Hex,
+  withAppRole,
   withTenant,
 } from "@engemase/db"
 import { and, eq, isNull, ne } from "drizzle-orm"
@@ -72,7 +73,9 @@ function rejectedCodeError(state: Exclude<GatewayEnrollmentState, "valid">): Gat
 }
 
 export async function enrollGateway(db: GatewayDb, input: EnrollRequest, ctx: EnrollContext): Promise<EnrollResponse> {
-  const ref = await resolveGatewayEnrollmentState(rowsExecutor(db), hashActivationCode(input.code))
+  const codeHash = hashActivationCode(input.code)
+  // Antes de saber o cliente: só a função de busca, como app_user (o login de produção é NOINHERIT).
+  const ref = await withAppRole(db, (tx) => resolveGatewayEnrollmentState(rowsExecutor(tx), codeHash))
   if (ref === null) throw new GatewayApiError("activation_code_invalid", INVALID_CODE_MESSAGE)
   if (ref.state !== "valid") throw rejectedCodeError(ref.state)
 

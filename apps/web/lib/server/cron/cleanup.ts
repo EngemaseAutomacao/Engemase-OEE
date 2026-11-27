@@ -15,7 +15,7 @@
  * da conexão do DONO das tabelas, `DATABASE_MAINTENANCE_URL`. Sem ela, registra no log e pula (a 0013 já
  * deixou 3 meses / 8 semanas criados adiante), sem falhar a tarefa.
  */
-import { gatewayCommand, gatewayEnrollment, gatewayHealthSample, maintainPartitions } from "@engemase/db"
+import { gatewayCommand, gatewayEnrollment, gatewayHealthSample, maintainPartitions, withAppRole } from "@engemase/db"
 import { and, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm"
 import { getAuthDb } from "../db"
 import { queryRows } from "../gateway/types"
@@ -65,9 +65,9 @@ async function purgeAudit(ctx: CronContext): Promise<{ deleted: number; retentio
   let deleted = 0
   // Lotes até esvaziar ou acabar o tempo (deixa 10 s para o resto da limpeza).
   for (;;) {
-    const [row] = await queryRows<{ n: number }>(
-      ctx.db,
-      sql`SELECT app.audit_log_purge(${before}::timestamptz, ${AUDIT_PURGE_BATCH}::integer) AS n`,
+    // Um lote por transação, como app_user (o login de produção é NOINHERIT).
+    const [row] = await withAppRole(ctx.db, (tx) =>
+      queryRows<{ n: number }>(tx, sql`SELECT app.audit_log_purge(${before}::timestamptz, ${AUDIT_PURGE_BATCH}::integer) AS n`),
     )
     const n = Number(row?.n ?? 0)
     deleted += n
@@ -111,10 +111,12 @@ export const cleanupJob: CronJob = {
     const now = ctx.now
     const ago = (days: number) => new Date(now.getTime() - days * DAY_MS)
 
-    const [rate] = await queryRows<{ n: number }>(ctx.db, sql`SELECT app.rate_limit_purge(${now.toISOString()}::timestamptz) AS n`)
-    const [crons] = await queryRows<{ n: number }>(
-      ctx.db,
-      sql`SELECT app.cron_purge(${ago(RETENTION_DAYS.cronRuns).toISOString()}::timestamptz) AS n`,
+    // Funções de plataforma (sem cliente) como app_user: o login de produção é NOINHERIT.
+    const [rate] = await withAppRole(ctx.db, (tx) =>
+      queryRows<{ n: number }>(tx, sql`SELECT app.rate_limit_purge(${now.toISOString()}::timestamptz) AS n`),
+    )
+    const [crons] = await withAppRole(ctx.db, (tx) =>
+      queryRows<{ n: number }>(tx, sql`SELECT app.cron_purge(${ago(RETENTION_DAYS.cronRuns).toISOString()}::timestamptz) AS n`),
     )
 
     const run = await ctx.forEachOrganization(async (tx) => {

@@ -14,7 +14,7 @@
  *   a próxima janela começa do primeiro cliente de novo.
  */
 import { createHash, timingSafeEqual } from "node:crypto"
-import { withTenant } from "@engemase/db"
+import { withAppRole, withTenant } from "@engemase/db"
 import { sql } from "drizzle-orm"
 import type { MaintenanceDbRunner } from "../db"
 import { type GatewayDb, type GatewayTx, queryRows } from "../gateway/types"
@@ -92,7 +92,7 @@ function json(body: unknown, status = 200): Response {
 }
 
 async function organizationIds(db: GatewayDb): Promise<string[]> {
-  const rows = await queryRows<{ id: string }>(db, sql`SELECT id FROM app.cron_organizations()`)
+  const rows = await withAppRole(db, (tx) => queryRows<{ id: string }>(tx, sql`SELECT id FROM app.cron_organizations()`))
   return rows.map((r) => r.id)
 }
 
@@ -111,9 +111,13 @@ export async function runCronJob(request: Request, job: CronJob, deps: CronDeps)
   const now = deps.now?.() ?? new Date()
   const windowKey = job.windowKey(now)
   const logError = deps.logError ?? ((message: string, error: unknown) => console.error(message, error))
-  const [claim] = await queryRows<{ ok: boolean }>(
-    db,
-    sql`SELECT app.cron_claim(${job.name}, ${windowKey}, ${now.toISOString()}::timestamptz, ${job.lockS}::integer) AS ok`,
+  // Funções de plataforma (sem cliente) como app_user: o login de produção é NOINHERIT e, fora de uma
+  // transação com SET LOCAL ROLE, não tem nem USAGE no schema app (erro em produção em 27/11/2026).
+  const [claim] = await withAppRole(db, (tx) =>
+    queryRows<{ ok: boolean }>(
+      tx,
+      sql`SELECT app.cron_claim(${job.name}, ${windowKey}, ${now.toISOString()}::timestamptz, ${job.lockS}::integer) AS ok`,
+    ),
   )
   if (claim?.ok !== true) {
     return json({ job: job.name, window: windowKey, skipped: "janela já executada ou em andamento" })
@@ -154,18 +158,20 @@ export async function runCronJob(request: Request, job: CronJob, deps: CronDeps)
   try {
     const result = await job.run(ctx)
     const body = { job: job.name, window: windowKey, duration_ms: Date.now() - started, ...result }
-    await db.execute(
-      sql`SELECT app.cron_finish(${job.name}, ${windowKey}, ${elapsedNow()}::timestamptz, true, ${JSON.stringify(body)}::jsonb)`,
+    await withAppRole(db, (tx) =>
+      tx.execute(
+        sql`SELECT app.cron_finish(${job.name}, ${windowKey}, ${elapsedNow()}::timestamptz, true, ${JSON.stringify(body)}::jsonb)`,
+      ),
     )
     return json(body, (result.failures ?? 0) > 0 ? 500 : 200)
   } catch (error) {
     logError(`[cron] ${job.name} falhou (janela ${windowKey})`, error)
     const message = error instanceof Error ? error.message.slice(0, 500) : "erro desconhecido"
-    await db
-      .execute(
+    await withAppRole(db, (tx) =>
+      tx.execute(
         sql`SELECT app.cron_finish(${job.name}, ${windowKey}, ${elapsedNow()}::timestamptz, false, ${JSON.stringify({ error: message })}::jsonb)`,
-      )
-      .catch((finishError: unknown) => logError(`[cron] ${job.name}: não liberou a janela`, finishError))
+      ),
+    ).catch((finishError: unknown) => logError(`[cron] ${job.name}: não liberou a janela`, finishError))
     return json({ job: job.name, window: windowKey, error: "Falha na tarefa; a janela foi liberada para nova tentativa." }, 500)
   }
 }
