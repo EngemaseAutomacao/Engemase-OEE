@@ -15,7 +15,8 @@
  * permissões mínimas (TV: `data.read`; tablet: `data.read` + `floor.act`). Cliente suspenso ou encerrado,
  * terminal revogado ou vencido: sem acesso.
  */
-import { randomBytes, randomInt } from "node:crypto"
+import { createHmac, randomBytes, randomInt } from "node:crypto"
+import { isIPv6 } from "node:net"
 import {
   accountToken,
   auditLog,
@@ -42,8 +43,16 @@ import type { ConfigResult } from "@/lib/server/config/products"
 export const PAIRING_CODE_TTL_MS = 10 * 60_000
 /** Prazo absoluto do token do aparelho (docs/15, risco 11). */
 export const DEVICE_TOKEN_TTL_MS = 365 * 86_400_000
-/** Tentativas de pareamento por IP: 10 por hora (rajada de 10). */
+/** Tentativas de pareamento por IP (IPv6: por bloco /64): 10 por hora (rajada de 10). */
 const PAIR_LIMIT = { intervalMs: 360_000, burst: 10 }
+/**
+ * Tentativas de pareamento no sistema todo: 1.000 por hora (rajada de 300). Pareamento legítimo é raro; isto
+ * segura uma varredura distribuída (muitos IPs): no máximo ~1.000 palpites/h contra 100 milhões de códigos.
+ * Estourou: ninguém pareia por alguns minutos e o log avisa.
+ */
+const PAIR_GLOBAL_LIMIT = { intervalMs: 3_600, burst: 300 }
+/** Estados do cliente em que os terminais funcionam (fail-closed: estado desconhecido não entra). */
+const OPEN_STATUSES: ReadonlySet<string> = new Set(["active", "onboarding"])
 /** `last_seen_at` só é regravado depois deste intervalo (não escreve a cada tela aberta). */
 const LAST_SEEN_EVERY_MS = 5 * 60_000
 
@@ -69,9 +78,26 @@ export function generatePairingCode(): string {
   return `${raw.slice(0, 4)} ${raw.slice(4)}`
 }
 
-/** Hash do código como guardado em `account_token` (só os dígitos). */
+/**
+ * Hash do código como guardado em `account_token` (só os dígitos). Com segredo do servidor (HMAC), quem ler
+ * um backup ou uma cópia do banco não consegue reverter os códigos (8 dígitos se testam em segundos). Sem
+ * segredo (desenvolvimento e testes), um SHA-256 com domínio próprio.
+ */
 export function hashPairingCode(code: string): string {
-  return sha256Hex(`terminal-pairing:${normalizePairingCode(code)}`)
+  const digits = normalizePairingCode(code)
+  const secret = (process.env.TERMINAL_PAIRING_SECRET ?? process.env.BETTER_AUTH_SECRET ?? "").trim()
+  return secret === "" ? sha256Hex(`terminal-pairing:${digits}`) : createHmac("sha256", secret).update(`terminal-pairing:${digits}`).digest("hex")
+}
+
+/** Chave do limite por IP: IPv6 agrupado pelo bloco /64 (um atacante tem o bloco inteiro). */
+export function pairingIpKey(ip: string | null): string {
+  if (ip === null) return "terminal-pair:ip:desconhecido"
+  if (!isIPv6(ip)) return `terminal-pair:ip:${ip}`
+  const [head = "", tail = ""] = ip.toLowerCase().split("::")
+  const left = head === "" ? [] : head.split(":")
+  const right = tail === "" ? [] : tail.split(":")
+  const groups = ip.includes("::") ? [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill("0"), ...right] : left
+  return `terminal-pair:ip6:${groups.slice(0, 4).map((g) => g.replace(/^0+(?=.)/, "")).join(":")}::/64`
 }
 
 /** Token de aparelho novo (`tm_` + 32 bytes em base64url). */
@@ -132,10 +158,21 @@ async function novoCodigo(tx: GatewayTx, organizationId: string, terminalId: str
     .update(accountToken)
     .set({ usedAt: now })
     .where(and(eq(accountToken.terminalId, terminalId), eq(accountToken.purpose, "terminal_pairing"), isNull(accountToken.usedAt)))
-  const code = generatePairingCode()
+  // O hash é único entre TODOS os clientes, para sempre (códigos antigos ficam guardados), e a RLS não deixa
+  // ver os dos outros: tenta gravar num savepoint e, se colidir, sorteia outro código.
   const expiresAt = new Date(now.getTime() + PAIRING_CODE_TTL_MS)
-  await tx.insert(accountToken).values({ organizationId, purpose: "terminal_pairing", tokenHash: hashPairingCode(code), terminalId, expiresAt, createdBy, createdAt: now })
-  return { code, expiresAt }
+  for (let attempt = 0; ; attempt++) {
+    const code = generatePairingCode()
+    try {
+      await tx.transaction((sp) =>
+        sp.insert(accountToken).values({ organizationId, purpose: "terminal_pairing", tokenHash: hashPairingCode(code), terminalId, expiresAt, createdBy, createdAt: now }),
+      )
+      return { code, expiresAt }
+    } catch (error) {
+      const unique = (error as { code?: unknown; cause?: { code?: unknown } })?.cause?.code ?? (error as { code?: unknown })?.code
+      if (unique !== "23505" || attempt >= 4) throw error
+    }
+  }
 }
 
 /** Cadastra o terminal e devolve o primeiro código de pareamento. */
@@ -235,13 +272,19 @@ const CODIGO_INVALIDO = {
 export async function parearAparelho(db: GatewayDb, rawCode: unknown, opts: { readonly now?: Date; readonly ip: string | null }): Promise<PairResult> {
   const now = opts.now ?? new Date()
   // Limite por IP antes de olhar o código (força bruta).
-  const [limit] = await withAppRole(db, (tx) =>
-    queryRows<{ allowed: boolean }>(
-      tx,
-      sql`SELECT allowed FROM app.rate_limit_take(${`terminal-pair:ip:${opts.ip ?? "desconhecido"}`}, ${PAIR_LIMIT.intervalMs}::integer, ${PAIR_LIMIT.burst}::integer, ${now.toISOString()}::timestamptz)`,
-    ),
-  )
-  if (limit?.allowed !== true) return { ok: false, code: "rate_limited", mensagem: "Muitas tentativas. Espere alguns minutos e tente de novo." }
+  const take = (key: string, l: { intervalMs: number; burst: number }) =>
+    withAppRole(db, (tx) =>
+      queryRows<{ allowed: boolean }>(
+        tx,
+        sql`SELECT allowed FROM app.rate_limit_take(${key}, ${l.intervalMs}::integer, ${l.burst}::integer, ${now.toISOString()}::timestamptz)`,
+      ),
+    ).then((rows) => rows[0]?.allowed === true)
+  const muitas = { ok: false, code: "rate_limited", mensagem: "Muitas tentativas. Espere alguns minutos e tente de novo." } as const
+  if (!(await take(pairingIpKey(opts.ip), PAIR_LIMIT))) return muitas
+  if (!(await take("terminal-pair:global", PAIR_GLOBAL_LIMIT))) {
+    console.error("[terminal] limite geral de tentativas de pareamento atingido: possível varredura de códigos")
+    return muitas
+  }
   if (typeof rawCode !== "string" || rawCode.length > 20 || normalizePairingCode(rawCode).length !== 8) return CODIGO_INVALIDO
   const codeHash = hashPairingCode(rawCode)
   const ref = await withAppRole(db, (tx) => resolveByTokenHash(rowsExecutor(tx), "accountToken", codeHash))
@@ -257,6 +300,9 @@ export async function parearAparelho(db: GatewayDb, rawCode: unknown, opts: { re
       .for("update")
       .limit(1)
     if (pairing === undefined || pairing.terminalId === null) return CODIGO_INVALIDO
+    // Cliente suspenso, encerrado ou sem conta: não gasta o código nem grava pareamento.
+    const [acct] = await tx.select({ status: clientAccount.status }).from(clientAccount).limit(1)
+    if (acct === undefined || !OPEN_STATUSES.has(acct.status)) return CODIGO_INVALIDO
     const [t] = await tx
       .select({ id: terminal.id, unitId: terminal.unitId, name: terminal.name })
       .from(terminal)
@@ -320,9 +366,9 @@ export async function terminalContext(db: GatewayDb, deviceToken: string | undef
     const [org] = await tx
       .select({ id: organization.id, slug: organization.slug, status: clientAccount.status })
       .from(organization)
-      .leftJoin(clientAccount, eq(clientAccount.organizationId, organization.id))
+      .innerJoin(clientAccount, eq(clientAccount.organizationId, organization.id))
       .limit(1)
-    if (org === undefined || org.status === "suspended" || org.status === "closed") return null
+    if (org === undefined || !OPEN_STATUSES.has(org.status)) return null
     const machines = await tx
       .select({ id: machine.id })
       .from(machine)
@@ -342,7 +388,7 @@ export async function terminalContext(db: GatewayDb, deviceToken: string | undef
       ctx: {
         organizationId: org.id,
         slug: org.slug,
-        clientStatus: (org.status ?? "active") as TenantContext["clientStatus"],
+        clientStatus: org.status as TenantContext["clientStatus"],
         user: { id: t.id, name: t.name, email: "" },
         sessionId: t.id,
         access: { kind: "terminal", terminalId: t.id, terminalKind: t.kind },

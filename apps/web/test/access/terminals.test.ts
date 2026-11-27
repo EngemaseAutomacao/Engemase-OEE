@@ -15,6 +15,7 @@ import {
   gerarCodigoTerminal,
   hashDeviceToken,
   PAIRING_CODE_TTL_MS,
+  pairingIpKey,
   parearAparelho,
   revogarTerminal,
   terminalContext,
@@ -146,6 +147,26 @@ describe("terminais pareados", () => {
     expect(await terminalContext(h.t.db, token, NOW)).toBeNull()
   })
 
+  it("limite por IP: IPv6 conta pelo bloco /64 (o atacante tem o bloco inteiro)", () => {
+    expect(pairingIpKey("2001:db8:abcd:12::1")).toBe(pairingIpKey("2001:0db8:abcd:0012:ffff:ffff:ffff:ffff"))
+    expect(pairingIpKey("2001:db8:abcd:12::1")).not.toBe(pairingIpKey("2001:db8:abcd:13::1"))
+    expect(pairingIpKey("::1")).toBe("terminal-pair:ip6:0:0:0:0::/64")
+    expect(pairingIpKey("10.0.0.1")).toBe("terminal-pair:ip:10.0.0.1")
+    expect(pairingIpKey(null)).toBe("terminal-pair:ip:desconhecido")
+  })
+
+  it("cliente suspenso: o pareamento é recusado sem gastar o código", async () => {
+    const c = await seedClient(h.t.db, "delta-terminais")
+    const engC = await ctxOf(c.slug, superAdmin)
+    const t = await tablet(c, engC, [c.m1])
+    await h.t.db.update(s.clientAccount).set({ status: "suspended" }).where(eq(s.clientAccount.organizationId, c.organizationId))
+    expect(await parearAparelho(h.t.db, t.code, { now: NOW, ip: nextIp() })).toMatchObject({ ok: false, code: "invalid" })
+    const [row] = await h.t.db.select().from(s.terminal).where(eq(s.terminal.id, t.id))
+    expect(row?.tokenHash).toBeNull()
+    await h.t.db.update(s.clientAccount).set({ status: "active" }).where(eq(s.clientAccount.organizationId, c.organizationId))
+    expect((await parearAparelho(h.t.db, t.code, { now: NOW, ip: nextIp() })).ok).toBe(true)
+  })
+
   it("escopo validado; nível 3: unidade, linha, máquina ou terminal de outro cliente não existem aqui", async () => {
     expect(await criarTerminal(h.t.db, eng, { name: "TV sem linha", kind: "andon_tv", unitId: a.unit1, lineIds: [] }, NOW)).toMatchObject({ ok: false })
     expect(await criarTerminal(h.t.db, eng, { name: "Tablet outra unidade", kind: "operator_tablet", unitId: a.unit1, machineIds: [a.m3] }, NOW)).toMatchObject({ ok: false })
@@ -166,4 +187,15 @@ describe("terminais pareados", () => {
     await expect(criarTerminal(h.t.db, admin, { name: "Do admin", kind: "operator_tablet", unitId: a.unit1, machineIds: [a.m1] }, NOW)).rejects.toBeInstanceOf(AccessDeniedError)
     await expect(revogarTerminal(h.t.db, admin, a.m1, NOW)).rejects.toBeInstanceOf(AccessDeniedError)
   })
+  // Por último: esgota o balde geral de propósito.
+  it("limite geral: varredura de muitos IPs diferentes também para", async () => {
+    // Horário próprio (bem depois dos outros testes) para o balde geral começar vazio.
+    const later = new Date(NOW.getTime() + 30 * 86_400_000)
+    let blocked = 0
+    for (let i = 0; i < 320; i++) {
+      const r = await parearAparelho(h.t.db, "9999 0000", { now: later, ip: `172.16.${Math.floor(i / 250)}.${i % 250}` })
+      if (!r.ok && r.code === "rate_limited") blocked++
+    }
+    expect(blocked).toBeGreaterThan(0)
+  }, 60_000)
 })
