@@ -71,14 +71,24 @@ function formatDeadline(ms: number, timeZone: string): string {
   return new Intl.DateTimeFormat("pt-BR", { timeZone, day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(ms)
 }
 
-/** Confere o prazo do lançamento atrasado (L3). Devolve se o lançamento é atrasado (fora do prazo, por supervisor). */
-async function checkDeadline(tx: GatewayTx, m: { unitId: string; timezone: string }, at: Date, now: Date, actor: ProductionActor): Promise<boolean> {
+/**
+ * Confere o prazo do lançamento atrasado (L3; vale também para classificar parada, L19). Devolve se o
+ * lançamento é atrasado (fora do prazo, por supervisor ou admin). `what` completa a mensagem do erro.
+ */
+export async function checkDeadline(
+  tx: GatewayTx,
+  m: { unitId: string; timezone: string },
+  at: Date,
+  now: Date,
+  actor: ProductionActor,
+  what = "lançar refugo",
+): Promise<boolean> {
   const deadline = lateEntryDeadline(at.getTime(), await unitWindowsAround(tx, m.unitId, at))
   if (now.getTime() <= deadline) return false
   if (actor.clientRole !== null && LATE_ENTRY_ROLES.has(actor.clientRole)) return true
   throw new ProductionRuleError(
     "late_entry_deadline",
-    `O prazo para lançar refugo desse horário terminou em ${formatDeadline(deadline, m.timezone)} (fim do turno seguinte). ` +
+    `O prazo para ${what} desse horário terminou em ${formatDeadline(deadline, m.timezone)} (fim do turno seguinte). ` +
       "Peça a um supervisor para fazer o lançamento.",
   )
 }
@@ -99,7 +109,7 @@ export async function markShiftDirtyAt(tx: GatewayTx, machineId: string, at: Dat
            AT TIME ZONE u.timezone) > ${iso}::timestamptz`)
 }
 
-async function loadMachine(tx: GatewayTx, machineId: string): Promise<{ id: string; unitId: string; timezone: string }> {
+export async function loadMachine(tx: GatewayTx, machineId: string): Promise<{ id: string; unitId: string; timezone: string }> {
   const [m] = await tx
     .select({ id: machine.id, unitId: machine.unitId, timezone: unit.timezone })
     .from(machine)

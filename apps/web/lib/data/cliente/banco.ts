@@ -20,6 +20,8 @@ import {
   machine,
   machineLive,
   machineStateEvent,
+  productionRun,
+  rejectReason,
   notification,
   oeeShift,
   organization,
@@ -202,6 +204,7 @@ export async function lerClienteDoBanco(
 
     const events = !series ? [] : await tx
       .select({
+        id: machineStateEvent.id,
         machineId: machineStateEvent.machineId,
         state: machineStateEvent.state,
         start: machineStateEvent.startedAt,
@@ -218,6 +221,24 @@ export async function lerClienteDoBanco(
         ),
       )
       .orderBy(asc(machineStateEvent.machineId), asc(machineStateEvent.startedAt))
+
+    // Trocas de produto (CLP e operador) no mesmo período dos eventos: completam os minutos sem produto.
+    const runs = !series ? [] : await tx
+      .select({ machineId: productionRun.machineId, start: productionRun.startedAt, end: productionRun.endedAt, productCode: productionRun.productCode })
+      .from(productionRun)
+      .where(
+        and(
+          inMachines(productionRun.machineId),
+          lt(productionRun.startedAt, nowDate),
+          or(isNull(productionRun.endedAt), gt(productionRun.endedAt, eventsFrom)),
+        ),
+      )
+      .orderBy(asc(productionRun.machineId), asc(productionRun.startedAt))
+    const rejectReasons = await tx
+      .select({ id: rejectReason.id, name: rejectReason.name })
+      .from(rejectReason)
+      .where(and(eq(rejectReason.active, true), isNull(rejectReason.deletedAt)))
+      .orderBy(asc(rejectReason.name))
 
     const minutes = !series ? [] : await tx
       .select({
@@ -413,6 +434,7 @@ export async function lerClienteDoBanco(
           at: msNN(l.at),
         })),
         events: events.map((e) => ({
+          id: e.id,
           machineId: e.machineId,
           state: e.state,
           start: msNN(e.start),
@@ -420,6 +442,8 @@ export async function lerClienteDoBanco(
           reasonId: e.reasonId,
           faultCode: e.faultCode === null ? null : Number(e.faultCode),
         })),
+        runs: runs.map((r) => ({ machineId: r.machineId, start: msNN(r.start), end: ms(r.end), productCode: r.productCode })),
+        rejectReasons,
         minutes: minutes.map((m) => ({ machineId: m.machineId, start: msNN(m.start), total: m.total, reject: m.reject, productCode: m.productCode })),
         quarterMinutes: quarterMinutes.map((m) => ({
           machineId: m.machineId,

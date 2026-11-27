@@ -171,7 +171,7 @@ Lógica em `lib/server/cron/` (`runner.ts` + um arquivo por job); os `route.ts` 
 
 ### Regras de produção conferidas no servidor (`lib/server/production`)
 
-Funções para as telas da W8 chamarem (a rota confere login, permissão e escopo antes). Erros esperados saem como
+Funções para as telas da W8 chamarem (a rota confere login, permissão e escopo antes). A tela do operador usa as Server Actions de `app/(kiosk)/[cliente]/operador/actions.ts` (`floor.act` + máquina no escopo; refugo e estorno por `recordQualityEntry`/`reverseQualityEntry`). Erros esperados saem como
 `ProductionRuleError` (código + mensagem em português; status HTTP em `PRODUCTION_ERROR_STATUS`).
 
 | Função | Regra |
@@ -179,6 +179,8 @@ Funções para as telas da W8 chamarem (a rota confere login, permissão e escop
 | `saveShift` (`shifts.ts`) | Turnos da mesma unidade não se sobrepõem (dias da semana, vigência e turno noturno, L2); turno com turnos já fechados não muda horário, dias nem pausas (encerre a vigência e crie outro); pausas dentro do turno; auditoria |
 | `recordQualityEntry` (`quality.ts`) | Refugo manual soma ao do CLP; prazo até o fim do turno seguinte, depois só supervisor ou admin do cliente (L3); motivo ativo; operador ativo da mesma unidade (L19); marca o turno consolidado como sujo; auditoria |
 | `reverseQualityEntry` (`quality.ts`) | Estorno com motivo, um por lançamento, mesmo prazo do lançamento; auditoria |
+| `classifyStop` (`floor.ts`) | Motivo numa parada ou falha (STOPPED/FAULT); motivo ativo do cliente; vale a última classificação e `reasonId = null` desfaz (L19); mesmo prazo do refugo (L3); máquina no escopo de quem age (`allowMachine`); auditoria (`downtime.classified`/`downtime.unclassified`) e turno sujo |
+| `changeProduct` (`floor.ts`) | Troca de produto pelo operador (docs/05: quando não vier do CLP): fecha a corrida aberta e abre outra em `production_run` (origem `operator`); auditoria e turno sujo. O cálculo (tela e fechamento de turno) preenche os minutos SEM produto do CLP com a corrida que valia (`fillMinuteProducts`, `runs.ts`); minuto com produto do CLP fica como está |
 
 ### Variáveis de ambiente
 

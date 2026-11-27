@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useRef, useState, useTransition } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -29,7 +29,14 @@ import { KioskThemeToggle } from "@/components/kiosk/kiosk-theme-toggle"
 import type { OperatorData, PendingStop, ProductOption } from "@/components/kiosk/operator-types"
 import { ProductDialog } from "@/components/kiosk/product-dialog"
 import { ReasonPicker, type PickedReason } from "@/components/kiosk/reason-picker"
-import { RejectDialog } from "@/components/kiosk/reject-dialog"
+import { RejectDialog, type RejectDefect } from "@/components/kiosk/reject-dialog"
+import {
+  changeProductAction,
+  classifyStopAction,
+  type FloorResult,
+  launchRejectAction,
+  undoRejectAction,
+} from "@/app/(kiosk)/[cliente]/operador/actions"
 import { STATE_ICON, STATE_ON } from "@/components/kiosk/state-style"
 import { useMockClock } from "@/components/kiosk/use-mock-clock"
 
@@ -62,8 +69,23 @@ export interface TerminalMode {
 
 /** Tela do operador (tablet/celular): estado ao vivo, paradas a classificar, refugo e troca de produto. */
 export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorData; panelHref: string; terminal?: TerminalMode }) {
-  const { machine, live, shift, reasons, products, operator, timeZone } = data
+  const { machine, live, shift, reasons, products, operator, timeZone, banco, clientSlug } = data
   const { now, read } = useMockClock(10_000)
+  const [saving, startSaving] = useTransition()
+
+  /** Grava no servidor (sistema real). Erro → aviso, nada muda na tela. Sem banco, só aplica na tela. */
+  function save<T>(fn: () => Promise<FloorResult<T>>, onOk: (data: T | undefined) => void) {
+    if (!banco) return onOk(undefined)
+    startSaving(async () => {
+      try {
+        const r = await fn()
+        if (r.status === "error") toast.error(r.message)
+        else onOk(r.data)
+      } catch {
+        toast.error("Sem conexão com o servidor. Confira a rede e tente de novo.")
+      }
+    })
+  }
   const seq = useRef(0)
 
   const [pending, setPending] = useState<PendingStop[]>(() => sortStops(data.pendingStops))
@@ -113,6 +135,17 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
   const removeLog = (id: string) => setLog((l) => l.filter((e) => e.id !== id))
 
   function classify(stop: PendingStop, picked: PickedReason) {
+    if (banco && stop.eventId === undefined) {
+      toast.error("Esta parada ainda não chegou ao servidor. Atualize a tela daqui a pouco.")
+      return
+    }
+    save(
+      () => classifyStopAction(clientSlug, { eventId: stop.eventId, reasonId: picked.reason.id }),
+      () => applyClassify(stop, picked),
+    )
+  }
+
+  function applyClassify(stop: PendingStop, picked: PickedReason) {
     const label = picked.group ? `${picked.group.name} › ${picked.reason.name}` : picked.reason.name
     const end = stop.ongoing ? read() : Date.parse(stop.end)
     const dur = duration((end - Date.parse(stop.start)) / 1000)
@@ -125,20 +158,31 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
       description: `${label} · ${dur}`,
       action: {
         label: "Desfazer",
-        onClick: () => {
-          setPending((list) => sortStops([...list.filter((s) => s.id !== stop.id), stop]))
-          setClassified((c) => {
-            const next = { ...c }
-            delete next[stop.id]
-            return next
-          })
-          removeLog(id)
-        },
+        onClick: () =>
+          save(
+            () => classifyStopAction(clientSlug, { eventId: stop.eventId, reasonId: null }),
+            () => {
+              setPending((list) => sortStops([...list.filter((s) => s.id !== stop.id), stop]))
+              setClassified((c) => {
+                const next = { ...c }
+                delete next[stop.id]
+                return next
+              })
+              removeLog(id)
+            },
+          ),
       },
     })
   }
 
-  function launchReject(qty: number, defect: string | null) {
+  function launchReject(qty: number, defect: RejectDefect | null) {
+    save(
+      () => launchRejectAction(clientSlug, { machineId: machine.id, quantity: qty, rejectReasonId: defect?.id ?? null, productCode: product?.code ?? null }),
+      (saved) => applyReject(qty, defect?.name ?? null, saved?.id ?? null),
+    )
+  }
+
+  function applyReject(qty: number, defect: string | null, entryId: string | null) {
     const id = nextId("reject")
     setRejectAdded((r) => r + qty)
     setRejectOpen(false)
@@ -147,15 +191,27 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
       description: `${machine.name}${defect ? ` · ${defect}` : ""}`,
       action: {
         label: "Desfazer",
-        onClick: () => {
-          setRejectAdded((r) => r - qty)
-          removeLog(id)
-        },
+        onClick: () =>
+          save(
+            () => undoRejectAction(clientSlug, entryId),
+            () => {
+              setRejectAdded((r) => r - qty)
+              removeLog(id)
+            },
+          ),
       },
     })
   }
 
   function changeProduct(p: ProductOption) {
+    save(
+      () => changeProductAction(clientSlug, { machineId: machine.id, productId: p.id }),
+      (saved) => applyProduct(p, saved?.previousProductId),
+    )
+  }
+
+  /** `previousProductId`: produto anterior apontado pelo operador (sistema real); `null` = não dá para desfazer. */
+  function applyProduct(p: ProductOption, previousProductId: string | null | undefined) {
     const previous = product
     const id = nextId("product")
     setProduct({ code: p.code, name: p.name, idealCycleS: p.idealCycleS })
@@ -163,13 +219,22 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
     addLog({ id, at: read(), kind: "product", title: "Troca de produto", detail: `${previous ? `${previous.code} → ` : ""}${p.code} · ${p.name}` })
     toast.success("Produto alterado", {
       description: `Agora em produção: ${p.name} (${p.code})`,
-      action: {
-        label: "Desfazer",
-        onClick: () => {
-          setProduct(previous)
-          removeLog(id)
-        },
-      },
+      // No sistema real, desfazer = voltar ao produto anterior apontado pelo operador (se havia um).
+      ...(banco && !previousProductId
+        ? {}
+        : {
+            action: {
+              label: "Desfazer",
+              onClick: () =>
+                save(
+                  () => changeProductAction(clientSlug, { machineId: machine.id, productId: previousProductId }),
+                  () => {
+                    setProduct(previous)
+                    removeLog(id)
+                  },
+                ),
+            },
+          }),
     })
   }
 
@@ -481,7 +546,9 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
               </ul>
             )}
             <p className="mt-auto border-t px-4 py-2.5 text-xs text-muted-foreground">
-              Sem rede? Os lançamentos ficam guardados no tablet e são enviados quando a conexão voltar.
+              {banco
+                ? "Sem rede, o lançamento não é gravado: a tela avisa e você tenta de novo quando a conexão voltar."
+                : "Sem rede? Os lançamentos ficam guardados no tablet e são enviados quando a conexão voltar."}
             </p>
           </section>
         </div>
@@ -500,6 +567,8 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
         onOpenChange={setRejectOpen}
         machineName={machine.name}
         maxQty={good}
+        defects={banco ? data.rejectReasons : undefined}
+        submitting={saving}
         onConfirm={launchReject}
       />
       <ProductDialog

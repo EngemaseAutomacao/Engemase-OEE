@@ -11,6 +11,15 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 - **Fechamento de turno automático:** os números de cada turno são fechados no fim do turno e recalculados se chegarem dados atrasados ou se uma parada for reclassificada.
 - **Atualização do programa do gateway à distância**, enviada pela Engemase.
 
+## 27/11/2026 · Tela do operador grava de verdade
+
+**Para quem usa**
+- Na tela do operador, **classificar parada, lançar refugo e trocar produto agora gravam no sistema** (antes só apareciam na tela). O "Desfazer" também vale de verdade: tira o motivo, estorna o refugo ou volta ao produto anterior.
+- O **tipo de defeito** do refugo vem da lista cadastrada para a sua empresa.
+- A **troca de produto** pela tela entra no cálculo do OEE nas máquinas em que o CLP não informa o produto.
+- Prazo: paradas e refugos podem ser lançados até o fim do turno seguinte; depois, só o supervisor ou o admin da empresa.
+- Tudo fica na auditoria, e o turno já fechado é recalculado quando uma parada ou um refugo dele muda.
+
 ## 27/11/2026 · Usuários da empresa de verdade
 
 **Para quem usa**

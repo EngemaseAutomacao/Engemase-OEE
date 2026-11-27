@@ -260,6 +260,8 @@ export interface StateEvent {
   end: string
   reasonId: string | null
   faultCode?: number
+  /** Id do evento no banco (`machine_state_event.id`), para classificar a parada. Só no sistema real. */
+  eventId?: string
 }
 
 export interface HourlyProduction {

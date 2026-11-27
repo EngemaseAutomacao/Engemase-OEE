@@ -87,6 +87,7 @@ export function clienteSimulado(slug: string): ClienteDados | null {
     gateways: getGateways(client.id),
     reasons: getDowntimeReasons(client.id),
     products: getProducts(client.id),
+    rejectReasons: [],
     shifts: getShifts(client.id),
 
     getUnit: (id) => {

@@ -10,7 +10,17 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { NumericKeypad } from "@/components/kiosk/numeric-keypad"
 
 /** Tipos de defeito mais comuns (motivo de refugo do lançamento manual). */
-const DEFECTS = ["Rebarba", "Peça incompleta", "Dimensional fora", "Mancha / risco", "Trinca / quebra", "Outro"] as const
+/** Tipos de defeito da demonstração (no sistema real vêm do cadastro de motivos de refugo, L3). */
+const DEFECTS: readonly RejectDefect[] = ["Rebarba", "Peça incompleta", "Dimensional fora", "Mancha / risco", "Trinca / quebra", "Outro"].map((name) => ({
+  id: null,
+  name,
+}))
+
+/** Tipo de defeito: `id` do motivo de refugo cadastrado (sistema real) ou `null` (demonstração). */
+export interface RejectDefect {
+  readonly id: string | null
+  readonly name: string
+}
 
 const MAX_DIGITS = 5
 
@@ -19,6 +29,8 @@ export function RejectDialog({
   onOpenChange,
   machineName,
   maxQty,
+  defects = DEFECTS,
+  submitting = false,
   onConfirm,
 }: {
   open: boolean
@@ -26,7 +38,11 @@ export function RejectDialog({
   machineName: string
   /** Peças boas no turno: não dá para refugar mais do que isso. */
   maxQty: number
-  onConfirm: (qty: number, defect: string | null) => void
+  /** Tipos de defeito oferecidos (padrão: os da demonstração). Lista vazia esconde a escolha. */
+  defects?: readonly RejectDefect[]
+  /** Gravando: o botão fica desativado e mostra "Lançando…". */
+  submitting?: boolean
+  onConfirm: (qty: number, defect: RejectDefect | null) => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -34,7 +50,16 @@ export function RejectDialog({
         showCloseButton={false}
         className="flex max-h-[calc(100dvh-1rem)] max-w-[calc(100%-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
       >
-        {open && <RejectBody machineName={machineName} maxQty={maxQty} onCancel={() => onOpenChange(false)} onConfirm={onConfirm} />}
+        {open && (
+          <RejectBody
+            machineName={machineName}
+            maxQty={maxQty}
+            defects={defects}
+            submitting={submitting}
+            onCancel={() => onOpenChange(false)}
+            onConfirm={onConfirm}
+          />
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -43,16 +68,20 @@ export function RejectDialog({
 function RejectBody({
   machineName,
   maxQty,
+  defects,
+  submitting,
   onCancel,
   onConfirm,
 }: {
   machineName: string
   maxQty: number
+  defects: readonly RejectDefect[]
+  submitting: boolean
   onCancel: () => void
-  onConfirm: (qty: number, defect: string | null) => void
+  onConfirm: (qty: number, defect: RejectDefect | null) => void
 }) {
   const [value, setValue] = useState("")
-  const [defect, setDefect] = useState<string | null>(null)
+  const [defect, setDefect] = useState<RejectDefect | null>(null)
   const qty = Number(value || "0")
   const tooMany = qty > maxQty
   const valid = qty > 0 && !tooMany
@@ -101,17 +130,18 @@ function RejectBody({
           />
         </div>
 
+        {defects.length > 0 && (
         <div className="flex flex-col gap-3">
           <div>
             <div className="text-sm font-medium">Tipo de defeito</div>
             <p className="text-xs text-muted-foreground">Opcional, mas ajuda a qualidade a achar a causa.</p>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {DEFECTS.map((d) => {
-              const active = defect === d
+            {defects.map((d) => {
+              const active = defect?.name === d.name
               return (
                 <button
-                  key={d}
+                  key={d.id ?? d.name}
                   type="button"
                   aria-pressed={active}
                   onClick={() => setDefect(active ? null : d)}
@@ -121,21 +151,22 @@ function RejectBody({
                     active ? "border-primary bg-primary/10" : "border-input bg-card hover:bg-accent",
                   )}
                 >
-                  {d}
+                  {d.name}
                   {active && <CheckIcon className="size-5 shrink-0 text-primary" />}
                 </button>
               )
             })}
           </div>
         </div>
+        )}
       </div>
 
       <div className="flex flex-col-reverse gap-3 border-t p-4 sm:flex-row sm:justify-end">
-        <Button variant="ghost" className="h-12 text-base sm:px-6" onClick={onCancel}>
+        <Button variant="ghost" className="h-12 text-base sm:px-6" onClick={onCancel} disabled={submitting}>
           Cancelar
         </Button>
-        <Button className="h-14 text-lg sm:min-w-56" disabled={!valid} onClick={() => onConfirm(qty, defect)}>
-          {qty > 0 ? `Lançar ${num(qty)} ${qty === 1 ? "peça" : "peças"}` : "Digite a quantidade"}
+        <Button className="h-14 text-lg sm:min-w-56" disabled={!valid || submitting} onClick={() => onConfirm(qty, defect)}>
+          {submitting ? "Lançando…" : qty > 0 ? `Lançar ${num(qty)} ${qty === 1 ? "peça" : "peças"}` : "Digite a quantidade"}
         </Button>
       </div>
     </>

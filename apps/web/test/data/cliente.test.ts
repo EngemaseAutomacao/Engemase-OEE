@@ -165,6 +165,8 @@ describe("montarClienteDados (puro)", () => {
     ],
     minutes: Array.from({ length: (NOW - shiftStart) / 60_000 }, (_, i) => ({ machineId, start: shiftStart + i * 60_000, total: 9, reject: i % 10 === 0 ? 1 : 0, productCode: null })),
     quarterMinutes: [],
+    runs: [],
+    rejectReasons: [],
     quality: [],
     closedShifts: [],
     gateways: [],

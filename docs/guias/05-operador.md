@@ -54,8 +54,10 @@ Use para peças descartadas que o CLP **não contou** como refugo.
 
 1. Toque em **"Lançar refugo"**.
 2. Digite a quantidade no teclado da tela.
-3. Escolha o "Tipo de defeito" (opcional, mas ajuda a qualidade a achar a causa): dimensional fora, mancha ou risco, peça incompleta, trinca ou quebra.
-4. Toque em "Lançar" (o botão mostra a quantidade de peças).
+3. Escolha o "Tipo de defeito" (opcional, mas ajuda a qualidade a achar a causa). A lista é a que a Engemase cadastrou para a sua empresa.
+4. Toque em "Lançar" (o botão mostra a quantidade de peças). Lançou errado? Toque em **"Desfazer"** logo em seguida: o lançamento é estornado e fica registrado.
+
+O refugo lançado **soma** ao que o CLP já contou; nunca substitui.
 
 ## Trocar produto
 
@@ -63,7 +65,7 @@ Use para peças descartadas que o CLP **não contou** como refugo.
 2. Escolha em "Produtos desta máquina" ou busque pelo código ou nome.
 3. Toque em "Trocar para" o produto escolhido.
 
-A partir daí, a meta e o ritmo da máquina seguem o ciclo ideal do produto novo. Produto que não aparece na lista: avise o supervisor.
+A partir daí, a meta e o ritmo da máquina seguem o ciclo ideal do produto novo. Se o CLP informa o produto sozinho, vale o que ele informa; a troca pela tela serve para as máquinas em que o CLP não manda o produto. Produto que não aparece na lista: avise o supervisor.
 
 ## Histórico do turno
 
@@ -79,4 +81,6 @@ Se o tablet atende mais de uma máquina, ele abre em "Escolha a máquina". Toque
 |---|---|
 | O tablet mostra "Este aparelho não está pareado" | Chame o supervisor: o tablet precisa ser pareado de novo pela Engemase (veja [TV e terminal](06-tv-e-terminal.md)) |
 | A tela não atualiza | Confira o Wi-Fi do tablet. Se continuar, avise o supervisor |
-| Classifiquei errado | Toque em "Desfazer" na hora, ou peça ao supervisor para reclassificar |
+| Classifiquei errado | Toque em "Desfazer" na hora, ou classifique de novo: vale a última classificação |
+| Aparece "O prazo para ... terminou" | Paradas e refugos podem ser lançados até o fim do turno seguinte. Depois disso, peça ao supervisor |
+| Aparece um aviso de erro ao lançar | Nada foi gravado. Confira a conexão e tente de novo |

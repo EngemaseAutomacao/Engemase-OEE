@@ -53,6 +53,7 @@ import type {
 } from "@/lib/mock"
 import { UNCLASSIFIED_ID, UNCLASSIFIED_NAME } from "@/components/reports/report-utils"
 import type { StopRecord } from "@/components/reports/stops-data"
+import { fillMinuteProducts, type ProductRunSpan } from "@/lib/server/production/runs"
 import type { AcessoTela, ClienteDados, JanelaTurno, NecessidadesCliente, OeeAgregado, Visitante } from "./tipos"
 
 // ---------------------------------------------------------------------------
@@ -110,6 +111,7 @@ export interface BrutoCliente {
   }[]
   /** Eventos de estado desde o início do histórico pedido (com folga), ordenados por início. */
   readonly events: readonly {
+    id?: string
     machineId: string
     state: string
     start: number
@@ -117,6 +119,10 @@ export interface BrutoCliente {
     reasonId: string | null
     faultCode: number | null
   }[]
+  /** Trocas de produto (CLP e operador) no período dos eventos (`production_run`). */
+  readonly runs: readonly { machineId: string; start: number; end: number | null; productCode: string | null }[]
+  /** Motivos de refugo ativos (para a tela do operador). */
+  readonly rejectReasons: readonly { id: string; name: string }[]
   /** Minutos a partir de `rawSince` (turno corrente; contagem por hora exata). */
   readonly minutes: readonly { machineId: string; start: number; total: number; reject: number; productCode: string | null }[]
   /** Minutos antes de `rawSince`, somados em blocos de 15 min (histórico; menos linhas). */
@@ -340,7 +346,7 @@ export function inicioDosTurnosCorrentes(
 interface MachineInputs {
   readonly events: CoreStateEvent[]
   readonly rawEvents: BrutoCliente["events"][number][]
-  readonly minutes: ProductionMinute[]
+  minutes: ProductionMinute[]
   readonly quality: QualityAdjustment[]
   readonly plannedDowntimes: { start: number; end: number }[]
   readonly idealCycles: { byProduct: Record<string, number>; defaultS: number | null }
@@ -587,6 +593,13 @@ export function montarClienteDados(raw: BrutoCliente, m: MontagemCliente): Clien
   for (const list of [raw.quarterMinutes, raw.minutes]) {
     for (const mi of list) inputsOf.get(mi.machineId)?.minutes.push({ start: mi.start, total: mi.total, reject: mi.reject, productCode: mi.productCode })
   }
+  // Minutos sem produto do CLP recebem o produto apontado pelo operador (docs/05), como no fechamento de turno.
+  const runsOf = new Map<string, ProductRunSpan[]>()
+  for (const r of raw.runs) runsOf.set(r.machineId, [...(runsOf.get(r.machineId) ?? []), r])
+  for (const [machineId, inp] of inputsOf) {
+    const runs = runsOf.get(machineId)
+    if (runs !== undefined) inp.minutes = fillMinuteProducts(inp.minutes, runs)
+  }
   for (const q of raw.quality) inputsOf.get(q.machineId)?.quality.push({ at: q.at, quantity: q.quantity, productCode: q.productCode })
 
   // ---- Turno corrente por unidade ------------------------------------------------
@@ -629,6 +642,7 @@ export function montarClienteDados(raw: BrutoCliente, m: MontagemCliente): Clien
         end: iso(eEnd),
         reasonId: e.reasonId,
         ...(e.faultCode !== null ? { faultCode: e.faultCode } : {}),
+        ...(e.id !== undefined ? { eventId: e.id } : {}),
       })
     })
     timelineOf.set(x.id, timeline)
@@ -636,7 +650,9 @@ export function montarClienteDados(raw: BrutoCliente, m: MontagemCliente): Clien
     const l = liveRow.get(x.id)
     const result = calculate(inp, { start, end }, schedule)
     const lastProduct = [...inp.minutes].reverse().find((mi) => mi.productCode !== null)?.productCode ?? null
-    const product = l?.productCode ?? lastProduct ?? ""
+    // Produto atual: o do CLP; sem ele, a corrida aberta (troca pelo operador); senão, o último minuto com produto.
+    const openRun = [...(runsOf.get(x.id) ?? [])].reverse().find((r) => r.end === null && r.start <= now)?.productCode ?? null
+    const product = l?.productCode ?? openRun ?? lastProduct ?? ""
     const cycle = (product && inp.idealCycles.byProduct[product]) || inp.idealCycles.defaultS || x.idealCycleS || 0
 
     // Produção por hora do turno (minutos exatos).
@@ -833,6 +849,7 @@ export function montarClienteDados(raw: BrutoCliente, m: MontagemCliente): Clien
     machines,
     gateways,
     reasons,
+    rejectReasons: raw.rejectReasons,
     products,
     shifts,
 

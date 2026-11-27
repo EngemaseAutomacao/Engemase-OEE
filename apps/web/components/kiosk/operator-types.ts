@@ -11,6 +11,8 @@ export interface PendingStop {
   ongoing: boolean
   faultCode?: number
   faultText?: string
+  /** Id do evento no banco (sistema real), usado para gravar a classificação. */
+  eventId?: string
 }
 
 export interface ReasonOption {
@@ -64,4 +66,10 @@ export interface OperatorData {
   products: ProductOption[]
   operator: { name: string; username: string | null; initials: string }
   timeZone: string
+  /** Sistema real: as ações gravam no banco (Server Actions). Sem banco: demonstração local. */
+  banco: boolean
+  /** Cliente da URL (as Server Actions conferem o acesso por ele). */
+  clientSlug: string
+  /** Motivos de refugo cadastrados (sistema real). */
+  rejectReasons: { id: string; name: string }[]
 }

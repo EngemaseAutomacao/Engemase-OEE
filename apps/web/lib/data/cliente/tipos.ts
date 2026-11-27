@@ -108,6 +108,8 @@ export interface ClienteDados {
   readonly gateways: readonly Gateway[]
   readonly reasons: readonly DowntimeReason[]
   readonly products: readonly Product[]
+  /** Motivos de refugo ativos (cadastro da Engemase, L3). Vazio nos dados simulados. */
+  readonly rejectReasons: readonly { readonly id: string; readonly name: string }[]
   readonly shifts: readonly Shift[]
 
   getUnit(id: string): Unit | undefined

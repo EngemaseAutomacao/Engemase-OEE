@@ -26,6 +26,7 @@ import {
   plannedDowntime,
   product,
   productionMinute,
+  productionRun,
   productMachine,
   qualityEntry,
   shift,
@@ -36,6 +37,7 @@ import { addDays, calculateMachineOee, type Interval, plantDateOf, type ShiftWin
 import { and, asc, eq, gt, gte, isNull, lt, or, sql } from "drizzle-orm"
 import { type GatewayTx, queryRows } from "../gateway/types"
 import { type ShiftRow, shiftWindowOn, unitShiftWindows } from "./calendar"
+import { fillMinuteProducts } from "./runs"
 
 /** Quantos dias para trás o fechamento procura turnos sem linha (cobre uma semana sem a tarefa). */
 export const SHIFT_CLOSE_LOOKBACK_DAYS = 7
@@ -166,6 +168,11 @@ export async function calculateShift(
     .select({ start: productionMinute.bucketStart, total: productionMinute.total, reject: productionMinute.reject, productCode: productionMinute.productCode })
     .from(productionMinute)
     .where(and(eq(productionMinute.machineId, m.id), gte(productionMinute.bucketStart, start), lt(productionMinute.bucketStart, end)))
+  // Trocas de produto (CLP e operador) que valem no turno: preenchem os minutos sem produto do CLP.
+  const runs = await tx
+    .select({ start: productionRun.startedAt, end: productionRun.endedAt, productCode: productionRun.productCode })
+    .from(productionRun)
+    .where(and(eq(productionRun.machineId, m.id), lt(productionRun.startedAt, end), or(isNull(productionRun.endedAt), gt(productionRun.endedAt, start))))
   const quality = await tx
     .select({ at: qualityEntry.at, quantity: qualityEntry.quantity, productCode: qualityEntry.productCode })
     .from(qualityEntry)
@@ -194,7 +201,10 @@ export async function calculateShift(
       state: e.state,
       reasonCategory: e.category ?? null,
     })),
-    minutes: minutes.map((r) => ({ start: ms(r.start), total: r.total, reject: r.reject, productCode: r.productCode })),
+    minutes: fillMinuteProducts(
+      minutes.map((r) => ({ start: ms(r.start), total: r.total, reject: r.reject, productCode: r.productCode })),
+      runs.map((r) => ({ start: ms(r.start), end: r.end === null ? null : ms(r.end), productCode: r.productCode })),
+    ),
     qualityAdjustments: quality.map((q) => ({ at: ms(q.at), quantity: q.quantity, productCode: q.productCode })),
     idealCycles: { byProduct: await idealCycles(tx, m, cycleCache), defaultS: m.idealCycleS === null ? null : Number(m.idealCycleS) },
     options: { microStopThresholdS: m.microStopThresholdS },

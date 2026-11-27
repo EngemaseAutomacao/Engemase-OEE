@@ -81,6 +81,7 @@ export async function OperatorScreen({
       ongoing,
       faultCode: e.faultCode,
       faultText: ongoing && live?.state === "FAULT" ? live.faultText : undefined,
+      ...(e.eventId !== undefined ? { eventId: e.eventId } : {}),
     })
   }
 
@@ -152,6 +153,9 @@ export async function OperatorScreen({
     }),
     operator: { name: operatorUser.name, username: operatorUser.username, initials: initials(operatorUser.name) },
     timeZone: tz,
+    banco: data.fonte === "banco",
+    clientSlug: client.slug,
+    rejectReasons: data.rejectReasons.map((r) => ({ id: r.id, name: r.name })),
   }
 
   return (
