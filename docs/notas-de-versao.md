@@ -11,6 +11,16 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 - **Fechamento de turno automático:** os números de cada turno são fechados no fim do turno e recalculados se chegarem dados atrasados ou se uma parada for reclassificada.
 - **Atualização do programa do gateway à distância**, enviada pela Engemase.
 
+## 27/11/2026 · Mapa de falhas do CLP de verdade
+
+**Para quem usa**
+- **Falha do CLP com código conhecido já chega classificada.** Na tela do operador e na TV aparece o texto do alarme (ex.: "F47 · Falta de material no funil"), não só o número.
+- O operador continua podendo corrigir o motivo.
+
+**Para a equipe Engemase**
+- **"Configurações" › "Motivos de parada" › "Mapa de códigos de falha" funciona no sistema real:** código, texto do alarme, motivo automático (ou "Perguntar ao operador") e para quais máquinas vale (todas ou uma). "Salvar mapa" grava tudo de uma vez e registra na auditoria.
+- Excluir um motivo não apaga mais o código do mapa: ele fica, só sem motivo automático.
+
 ## 27/11/2026 · Auditoria do cliente de verdade
 
 **Para quem usa (admin do cliente)**

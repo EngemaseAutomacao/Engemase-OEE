@@ -5,10 +5,11 @@
  */
 import { downtimeReason, machineStateEvent, withTenant } from "@engemase/db"
 import { and, asc, gt, isNotNull, isNull, sql } from "drizzle-orm"
-import type { FaultMapRow } from "@/components/config/fault-map"
+import type { FaultMapRow, FaultTarget } from "@/components/config/fault-map"
 import { REASON_PALETTE } from "@/components/config/labels"
 import type { ReasonNode } from "@/components/config/reason-dialogs"
 import { faultTexts, getDowntimeReasons, getPareto } from "@/lib/mock"
+import { lerMapaFalhas } from "@/lib/server/config/fault-map"
 import { bancoObrigatorio } from "../admin/acesso"
 import { exigirCliente } from "./cliente"
 
@@ -31,6 +32,9 @@ export async function dadosMotivos(slug: string) {
   const { r, client, ctx } = await exigirCliente(slug)
   const machines = r.getMachines(client.id)
   const machineTypes = [...new Set(machines.map((m) => m.type))]
+  // Demonstração: por tipo de máquina. Sistema real: por máquina (modelos de máquina ainda sem tela).
+  const demoTargets: FaultTarget[] = machineTypes.map((t) => ({ value: t, label: `Só ${t.toLowerCase()}s` }))
+  const machineTargets: FaultTarget[] = machines.map((m) => ({ value: m.id, label: `Só ${m.name}` }))
   const canEdit = r.getConfigAccess(client.id).canConfigure
 
   if (ctx === null) {
@@ -54,10 +58,10 @@ export async function dadosMotivos(slug: string) {
       .map(([code, text]) => {
         const suggestion = FAULT_SUGGESTION[Number(code)]
         const reason = suggestion ? raw.find((x) => x.parentId && x.name === suggestion) : undefined
-        return { code: Number(code), text, reasonId: reason?.id ?? null, machineType: "all" }
+        return { code: Number(code), text, reasonId: reason?.id ?? null, target: "all" }
       })
       .sort((a, b) => a.code - b.code)
-    return { client, banco: false, canEdit, reasons, faultMap, machineTypes }
+    return { client, banco: false, canEdit, reasons, faultMap, faultTargets: demoTargets }
   }
 
   const since = new Date(Date.now() - 7 * DAY)
@@ -97,6 +101,11 @@ export async function dadosMotivos(slug: string) {
     minutes: Math.round(Number(used.get(x.id)?.minutes ?? 0)),
     occurrences: Number(used.get(x.id)?.occurrences ?? 0),
   }))
-  // O mapa de códigos de falha do sistema real (por máquina ou modelo, F2) ainda não tem tela.
-  return { client, banco: true, canEdit, reasons, faultMap: [] as FaultMapRow[], machineTypes }
+  const faultMap: FaultMapRow[] = (await lerMapaFalhas(bancoObrigatorio(), ctx)).map((f) => ({
+    code: f.code,
+    text: f.text,
+    reasonId: f.reasonId,
+    target: f.machineId ?? "all",
+  }))
+  return { client, banco: true, canEdit, reasons, faultMap, faultTargets: machineTargets }
 }

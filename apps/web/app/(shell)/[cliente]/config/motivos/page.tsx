@@ -14,7 +14,7 @@ async function Tela({ params }: { params: PageProps<"/[cliente]/config/motivos">
   return (
     <ConfigAccessProvider canEdit={d.canEdit}>
       <EngemaseManagedNote padded clientSlug={d.client.slug} subject="Motivos de parada e mapa de códigos de falha" />
-      <ReasonsManager initialReasons={d.reasons} initialFaultMap={d.faultMap} machineTypes={d.machineTypes} banco={d.banco} clientSlug={d.client.slug} />
+      <ReasonsManager initialReasons={d.reasons} initialFaultMap={d.faultMap} faultTargets={d.faultTargets} banco={d.banco} clientSlug={d.client.slug} />
     </ConfigAccessProvider>
   )
 }

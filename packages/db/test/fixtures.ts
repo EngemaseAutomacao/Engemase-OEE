@@ -3,6 +3,7 @@
  * Gravado como dono do banco (superusuário no PGlite, que ignora a RLS), como faria um seed.
  */
 import { randomUUID } from "node:crypto"
+import { sql } from "drizzle-orm"
 import { sha256Hex } from "../src/lookups"
 import * as s from "../src/schema/index"
 import type { TestDb } from "./helpers"
@@ -299,9 +300,10 @@ export async function seedTenant(db: TestDb, slug: string): Promise<SeededTenant
     startsAt: new Date(now + 48 * HOUR),
     endsAt: new Date(now + 50 * HOUR),
   })
-  await db
-    .insert(s.faultCodeMap)
-    .values({ organizationId, machineId: machineRow.id, faultCode: 47, reasonId: reason.id })
+  // SQL direto: o teste das partições usa esta carga num banco com as migrações só até a 0012 (sem `fault_text`).
+  await db.execute(
+    sql`INSERT INTO fault_code_map (organization_id, machine_id, fault_code, reason_id) VALUES (${organizationId}, ${machineRow.id}, 47, ${reason.id})`,
+  )
 
   const minute = new Date(Math.floor(now / 60_000) * 60_000 - 60_000)
   await db.insert(s.machineStateEvent).values({

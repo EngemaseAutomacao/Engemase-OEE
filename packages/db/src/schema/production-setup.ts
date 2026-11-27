@@ -250,7 +250,10 @@ export const faultCodeMap = pgTable(
     /** Modelo de máquina (F2, `machine_template`); ainda sem FK. */
     templateId: uuid("template_id"),
     faultCode: faultCode().notNull(),
-    reasonId: uuid("reason_id").notNull(),
+    /** Texto do alarme como aparece no CLP/IHM (mostrado ao operador e na TV). */
+    faultText: text("fault_text").notNull().default(""),
+    /** Motivo automático; `null` = o operador escolhe (só o texto do alarme aparece). */
+    reasonId: uuid("reason_id"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -267,7 +270,11 @@ export const faultCodeMap = pgTable(
     }),
     unique("fault_code_map_machine_code_uq").on(t.machineId, t.faultCode),
     unique("fault_code_map_template_code_uq").on(t.templateId, t.faultCode),
-    check("fault_code_map_target_chk", sql`(${t.machineId} IS NULL) <> (${t.templateId} IS NULL)`),
+    // Alvo: uma máquina, um modelo (F2) ou, com os dois nulos, todas as máquinas do cliente.
+    check("fault_code_map_target_chk", sql`NOT (${t.machineId} IS NOT NULL AND ${t.templateId} IS NOT NULL)`),
+    uniqueIndex("fault_code_map_client_code_uq")
+      .on(t.organizationId, t.faultCode)
+      .where(sql`${t.machineId} IS NULL AND ${t.templateId} IS NULL`),
     check("fault_code_map_fault_code_chk", faultCodeInRange(t.faultCode)),
   ],
 )

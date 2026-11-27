@@ -32,6 +32,7 @@ import type { Permission } from "@/lib/server/access/permissions"
 import { requireTenant } from "@/lib/server/access/require-tenant"
 import { getDb } from "@/lib/server/db"
 import { excluirProduto, salvarMatrizCiclos, salvarProduto } from "@/lib/server/config/products"
+import { salvarMapaFalhas } from "@/lib/server/config/fault-map"
 import { definirAtivo, definirCor, excluirMotivo, salvarGrupo, salvarMotivo } from "@/lib/server/config/reasons"
 import { cancelarParada, excluirTurno, salvarParada, salvarTurno } from "@/lib/server/config/shifts"
 import { definirOperadorAtivo, salvarOperador } from "@/lib/server/terminal/operators"
@@ -544,6 +545,10 @@ export async function definirMotivoAtivoAction(input: unknown): Promise<Resultad
 
 export async function definirCorMotivoAction(input: unknown): Promise<Resultado<{ id: string }>> {
   return cadastro(input, "definirCorMotivo", (a) => definirCor(a.db, a.ctx, input))
+}
+
+export async function salvarMapaFalhasAction(input: unknown): Promise<Resultado<{ codigos: number; comMotivo: number }>> {
+  return cadastro(input, "salvarMapaFalhas", (a) => salvarMapaFalhas(a.db, a.ctx, input))
 }
 
 export async function excluirMotivoAction(input: unknown): Promise<Resultado<{ modo: "ocultado" | "excluido" }>> {

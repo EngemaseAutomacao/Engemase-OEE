@@ -199,7 +199,8 @@ export async function excluirMotivo(db: GatewayDb, ctx: TenantContext, id: unkno
       await auditar(tx, ctx, "downtime_reason.hidden", id, { ids, reason: "já usado em paradas" })
       return { ok: true, dados: { modo: "ocultado" } }
     }
-    await tx.delete(faultCodeMap).where(inArray(faultCodeMap.reasonId, ids))
+    // Os códigos do mapa de falhas continuam (com o texto do alarme), só sem motivo automático.
+    await tx.update(faultCodeMap).set({ reasonId: null, updatedAt: now }).where(inArray(faultCodeMap.reasonId, ids))
     await tx.update(downtimeReason).set({ deletedAt: now, active: false, updatedAt: now }).where(inArray(downtimeReason.id, ids))
     await auditar(tx, ctx, "downtime_reason.deleted", id, { ids })
     return { ok: true, dados: { modo: "excluido" } }

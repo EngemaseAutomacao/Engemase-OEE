@@ -22,9 +22,17 @@ export interface FaultMapRow {
   text: string
   /** Motivo de 2º nível; null = o operador escolhe. */
   reasonId: string | null
-  /** "all" ou um tipo de máquina. */
-  machineType: string
+  /** "all" (todas as máquinas) ou um alvo da lista `targets` (máquina no sistema real; tipo na demonstração). */
+  target: string
 }
+
+/** Para onde vale um código: além de "Todas as máquinas". */
+export interface FaultTarget {
+  value: string
+  label: string
+}
+
+const keyOf = (r: FaultMapRow) => `${r.code}:${r.target}`
 
 const ASK = "__ask"
 
@@ -33,12 +41,20 @@ export function FaultMap({
   rows,
   onChange,
   reasons,
-  machineTypes,
+  targets,
+  onSave,
+  saving = false,
+  dirty = false,
 }: {
   rows: FaultMapRow[]
   onChange: (rows: FaultMapRow[]) => void
   reasons: ReasonNode[]
-  machineTypes: string[]
+  targets: FaultTarget[]
+  /** Sistema real: grava o mapa no servidor. Sem isso, só avisa (demonstração). */
+  onSave?: () => void
+  saving?: boolean
+  /** Há mudanças ainda não salvas (sistema real). */
+  dirty?: boolean
 }) {
   const [code, setCode] = useState("")
   const [text, setText] = useState("")
@@ -54,19 +70,20 @@ export function FaultMap({
   const codeError =
     code.trim() === ""
       ? "Informe o código."
-      : !Number.isInteger(n) || n < 1 || n > 65535
-        ? "Código de 1 a 65535."
-        : rows.some((r) => r.code === n)
-          ? "Código já mapeado."
+      : !Number.isInteger(n) || n < 1 || n > 4_294_967_295
+        ? "Código inválido."
+        : rows.some((r) => r.code === n && r.target === "all")
+          ? "Código já mapeado para todas as máquinas."
           : null
   const textError = text.trim().length < 3 ? "Descreva o alarme." : null
 
-  const update = (c: number, patch: Partial<FaultMapRow>) => onChange(rows.map((r) => (r.code === c ? { ...r, ...patch } : r)))
+  const update = (k: string, patch: Partial<FaultMapRow>) => onChange(rows.map((r) => (keyOf(r) === k ? { ...r, ...patch } : r)))
+  const targetLabel = new Map(targets.map((t) => [t.value, t.label]))
 
   const add = () => {
     setShowNew(true)
     if (codeError || textError) return
-    onChange([...rows, { code: n, text: text.trim(), reasonId: null, machineType: "all" }].sort((a, b) => a.code - b.code))
+    onChange([...rows, { code: n, text: text.trim(), reasonId: null, target: "all" }].sort((a, b) => a.code - b.code))
     setCode("")
     setText("")
     setShowNew(false)
@@ -81,14 +98,18 @@ export function FaultMap({
         canEdit && (
           <Button
             size="sm"
+            variant={onSave && !dirty ? "outline" : "default"}
+            disabled={saving || (onSave !== undefined && !dirty)}
             onClick={() =>
-              toast.success("Mapa de falhas salvo", {
-                description: `${mapped} de ${rows.length} códigos com motivo automático. Vale para as próximas paradas em falha.`,
-              })
+              onSave
+                ? onSave()
+                : toast.success("Mapa de falhas salvo", {
+                    description: `${mapped} de ${rows.length} códigos com motivo automático. Vale para as próximas paradas em falha.`,
+                  })
             }
           >
             <SaveIcon />
-            Salvar mapa
+            {saving ? "Salvando…" : onSave && !dirty ? "Mapa salvo" : "Salvar mapa"}
           </Button>
         )
       }
@@ -125,14 +146,15 @@ export function FaultMap({
               const reason = r.reasonId ? byId.get(r.reasonId) : undefined
               const group = reason?.parentId ? byId.get(reason.parentId) : undefined
               const inactive = reason && !reason.active
+              const k = keyOf(r)
               return (
-                <TableRow key={r.code}>
+                <TableRow key={k}>
                   <TableCell>
                     <span className="inline-flex min-w-10 justify-center rounded-md bg-state-fault/10 px-1.5 py-0.5 font-mono text-xs font-semibold text-state-fault">{r.code}</span>
                   </TableCell>
                   <TableCell className="text-sm">{r.text}</TableCell>
                   <TableCell>
-                    <Select value={reason ? reason.id : ASK} onValueChange={(v) => update(r.code, { reasonId: v === ASK ? null : v })} disabled={!canEdit}>
+                    <Select value={reason ? reason.id : ASK} onValueChange={(v) => update(k, { reasonId: v === ASK ? null : v })} disabled={!canEdit}>
                       <SelectTrigger size="sm" className={cn("w-full", !reason && "text-muted-foreground", inactive && "border-state-stopped")} aria-label={`Motivo do código ${r.code}`}>
                         <SelectValue />
                       </SelectTrigger>
@@ -173,15 +195,25 @@ export function FaultMap({
                     )}
                   </TableCell>
                   <TableCell>
-                    <Select value={r.machineType} onValueChange={(v) => update(r.code, { machineType: v })} disabled={!canEdit}>
+                    <Select
+                      value={r.target}
+                      onValueChange={(v) => {
+                        if (rows.some((x) => x !== r && x.code === r.code && x.target === v)) {
+                          toast.error(`O código ${r.code} já está mapeado para ${v === "all" ? "todas as máquinas" : (targetLabel.get(v) ?? v)}.`)
+                          return
+                        }
+                        update(k, { target: v })
+                      }}
+                      disabled={!canEdit}
+                    >
                       <SelectTrigger size="sm" className="w-full" aria-label={`Máquinas do código ${r.code}`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todas as máquinas</SelectItem>
-                        {machineTypes.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            Só {t.toLowerCase()}s
+                        {targets.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>
+                            {t.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -194,7 +226,7 @@ export function FaultMap({
                         label={`Remover código ${r.code}`}
                         tone="red"
                         onClick={() => {
-                          onChange(rows.filter((x) => x.code !== r.code))
+                          onChange(rows.filter((x) => keyOf(x) !== k))
                           toast.success(`Código ${r.code} removido do mapa`, {
                             action: { label: "Desfazer", onClick: () => onChange(rows) },
                           })
@@ -241,7 +273,8 @@ export function FaultMap({
           </>
         )}
         <p className="text-[11px] text-muted-foreground">
-          {plural(rows.length - mapped, "código pergunta", "códigos perguntam")} ao operador. O código vem do registrador “Código de falha” mapeado em cada máquina.
+          {plural(rows.length - mapped, "código pergunta", "códigos perguntam")} ao operador. O código vem do registrador “Código de falha” mapeado em cada máquina; o cadastrado para uma máquina vale mais que o de todas.
+          {onSave && dirty && <span className="font-medium text-amber-700 dark:text-state-stopped"> Há mudanças não salvas.</span>}
         </p>
       </div>
     </SectionCard>

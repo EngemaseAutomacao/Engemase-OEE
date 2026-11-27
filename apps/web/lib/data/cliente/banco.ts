@@ -164,9 +164,9 @@ export async function lerClienteDoBanco(
       .where(isNull(downtimeReason.deletedAt))
       .orderBy(asc(downtimeReason.sortOrder), asc(downtimeReason.name))
     const faultMap = await tx
-      .select({ machineId: faultCodeMap.machineId, faultCode: faultCodeMap.faultCode, reasonId: faultCodeMap.reasonId })
+      .select({ machineId: faultCodeMap.machineId, faultCode: faultCodeMap.faultCode, text: faultCodeMap.faultText, reasonId: faultCodeMap.reasonId })
       .from(faultCodeMap)
-      .where(or(isNull(faultCodeMap.machineId), inMachines(faultCodeMap.machineId)))
+      .where(and(isNull(faultCodeMap.templateId), or(isNull(faultCodeMap.machineId), inMachines(faultCodeMap.machineId))))
 
     // Turno corrente de cada unidade → de onde vêm os minutos exatos; histórico pedido → até onde voltar.
     const calendario = {
@@ -424,7 +424,7 @@ export async function lerClienteDoBanco(
         holidays: calendario.holidays,
         plannedDowntimes: plannedDowntimes.map((p) => ({ unitId: p.unitId, lineId: p.lineId, machineId: p.machineId, start: msNN(p.startsAt), end: msNN(p.endsAt) })),
         reasons,
-        faultMap: faultMap.map((f) => ({ machineId: f.machineId, faultCode: Number(f.faultCode), reasonId: f.reasonId })),
+        faultMap: faultMap.map((f) => ({ machineId: f.machineId, faultCode: Number(f.faultCode), text: f.text, reasonId: f.reasonId })),
         live: live.map((l) => ({
           machineId: l.machineId,
           state: l.state,

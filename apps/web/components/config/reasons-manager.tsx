@@ -30,7 +30,7 @@ import { Switch } from "@/components/ui/switch"
 import { SectionCard } from "@/components/dashboard/section-card"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { REASON_CATEGORIES, REASON_CATEGORY_META, REASON_PALETTE, plural } from "@/components/config/labels"
-import { FaultMap, type FaultMapRow } from "@/components/config/fault-map"
+import { FaultMap, type FaultMapRow, type FaultTarget } from "@/components/config/fault-map"
 import { ColorPopover, ReasonDialog, type ReasonEdit, type ReasonNode } from "@/components/config/reason-dialogs"
 import { ConfirmDialog, IconAction, PageTitle } from "@/components/config/ui-bits"
 import { EngemaseOnlyChip, useCanEdit } from "@/components/config/engemase-managed"
@@ -40,6 +40,7 @@ import {
   excluirMotivoAction,
   salvarGrupoMotivoAction,
   salvarMotivoAction,
+  salvarMapaFalhasAction,
 } from "@/app/(shell)/[cliente]/config/actions"
 
 /** Ícone do grupo na prévia do operador (mesma convenção da tela do operador). */
@@ -57,13 +58,13 @@ const usage = (minutes: number) => (minutes > 0 ? duration(minutes * 60) : "sem 
 export function ReasonsManager({
   initialReasons,
   initialFaultMap,
-  machineTypes,
+  faultTargets,
   banco = false,
   clientSlug = "",
 }: {
   initialReasons: ReasonNode[]
   initialFaultMap: FaultMapRow[]
-  machineTypes: string[]
+  faultTargets: FaultTarget[]
   /** Sistema real: grava no banco (Server Actions) e a árvore vem do servidor. Sem banco: demonstração local. */
   banco?: boolean
   clientSlug?: string
@@ -90,6 +91,30 @@ export function ReasonsManager({
       }
     })
   const [faultMap, setFaultMap] = useState(initialFaultMap)
+  // Sistema real: quando o servidor manda um mapa novo (depois de salvar ou de excluir um motivo), recomeça dele.
+  const [faultBase, setFaultBase] = useState(initialFaultMap)
+  if (banco && faultBase !== initialFaultMap) {
+    setFaultBase(initialFaultMap)
+    setFaultMap(initialFaultMap)
+  }
+  const faultDirty = banco && JSON.stringify(faultMap) !== JSON.stringify(initialFaultMap)
+  const [savingMap, startSavingMap] = useTransition()
+  const saveFaultMap = () =>
+    startSavingMap(async () => {
+      try {
+        const r = await salvarMapaFalhasAction({
+          slug: clientSlug,
+          rows: faultMap.map((x) => ({ code: x.code, text: x.text, reasonId: x.reasonId, machineId: x.target === "all" ? null : x.target })),
+        })
+        if (!r.ok) return void toast.error(r.mensagem)
+        toast.success("Mapa de falhas salvo", {
+          description: `${r.dados.comMotivo} de ${r.dados.codigos} códigos com motivo automático. Vale para as próximas paradas em falha. Registrado na auditoria.`,
+        })
+        router.refresh()
+      } catch {
+        toast.error("Não foi possível gravar agora. Tente de novo.")
+      }
+    })
   const [edit, setEdit] = useState<ReasonEdit | null>(null)
   const [removing, setRemoving] = useState<ReasonNode | null>(null)
   const [previewGroup, setPreviewGroup] = useState<string | null>(null)
@@ -422,16 +447,13 @@ export function ReasonsManager({
         </div>
       </div>
 
-      {banco ? (
-        <SectionCard title="Mapa de códigos de falha" description="Código de alarme do CLP → motivo automático">
-          <p className="text-sm text-muted-foreground">
-            Em breve no sistema real: o mapa passa a ser cadastrado por máquina ou por modelo de máquina. Até lá, as falhas do CLP
-            aparecem para o operador classificar.
-          </p>
-        </SectionCard>
-      ) : (
-        <FaultMap rows={faultMap} onChange={setFaultMap} reasons={nodes} machineTypes={machineTypes} />
-      )}
+      <FaultMap
+        rows={faultMap}
+        onChange={setFaultMap}
+        reasons={nodes}
+        targets={faultTargets}
+        {...(banco ? { onSave: saveFaultMap, saving: savingMap, dirty: faultDirty } : {})}
+      />
 
       <ReasonDialog edit={edit} onOpenChange={(o) => !o && setEdit(null)} siblings={siblings} onSave={save} />
       <ConfirmDialog

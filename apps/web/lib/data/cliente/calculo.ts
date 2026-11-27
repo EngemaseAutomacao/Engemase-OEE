@@ -100,7 +100,7 @@ export interface BrutoCliente {
   readonly holidays: readonly { unitId: string; date: string }[]
   readonly plannedDowntimes: readonly { unitId: string; lineId: string | null; machineId: string | null; start: number; end: number }[]
   readonly reasons: readonly { id: string; parentId: string | null; name: string; category: ReasonCategory }[]
-  readonly faultMap: readonly { machineId: string | null; faultCode: number; reasonId: string }[]
+  readonly faultMap: readonly { machineId: string | null; faultCode: number; text: string; reasonId: string | null }[]
   readonly live: readonly {
     machineId: string
     state: string
@@ -614,7 +614,8 @@ export function montarClienteDados(raw: BrutoCliente, m: MontagemCliente): Clien
   const faultText = (machineId: string, code: number | null) => {
     if (code === null) return undefined
     const hit = raw.faultMap.find((f) => f.faultCode === code && f.machineId === machineId) ?? raw.faultMap.find((f) => f.faultCode === code && f.machineId === null)
-    return hit ? reasonById.get(hit.reasonId)?.name : undefined
+    // Texto do alarme cadastrado; sem texto, o nome do motivo automático.
+    return hit ? hit.text || (hit.reasonId ? reasonById.get(hit.reasonId)?.name : undefined) : undefined
   }
 
   const liveOf = new Map<string, MachineLive>()

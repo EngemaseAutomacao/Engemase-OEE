@@ -93,7 +93,12 @@ A demonstração na Vercel não tem banco. Por isso as telas leem por `lib/data/
   operadores do chão, e a auditoria do cliente (`lib/data/config/auditoria.ts`: `listAuditEntries` com `audit.read`,
   RLS e escopo; últimos 90 dias, até 500 eventos; rótulos das ações em `ACOES`, ação nova sem rótulo aparece com o
   código; CSV gerado no navegador a partir das linhas já filtradas). Ainda simulados com banco ("Em breve"):
-  aparência, acesso remoto, mapa de falhas do CLP; concessões/atribuições da equipe; reverter versão de config.
+  aparência, acesso remoto; concessões/atribuições da equipe; reverter versão de config.
+- Mapa de falhas do CLP (`lib/server/config/fault-map.ts`, `config.write`): `fault_code_map` com `fault_text` e
+  `reason_id` opcional (0019); alvo = uma máquina ou, com `machine_id` e `template_id` nulos, o cliente todo (o da
+  máquina ganha). "Salvar mapa" troca o mapa inteiro numa transação (as linhas por modelo ficam). No `/sync`
+  (`gateway/sync.ts`, `faultReasons`), FAULT com código mapeado e motivo já nasce com `reason_id` e `classified_at`
+  (sem `classified_by`); o texto aparece ao operador e na TV (`calculo.ts`, `faultText`).
 
 ## Checagens
 

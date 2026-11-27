@@ -38,6 +38,7 @@ import {
 import {
   auditLog,
   device,
+  faultCodeMap,
   gateway,
   gatewayCommand,
   gatewayDeviceStatus,
@@ -54,7 +55,7 @@ import {
   tagSample,
   withTenant,
 } from "@engemase/db"
-import { and, asc, eq, gt, gte, inArray, isNull, lte, sql } from "drizzle-orm"
+import { and, asc, eq, gt, gte, inArray, isNull, lte, or, sql } from "drizzle-orm"
 import { ensureSystemRule, raiseAlert } from "../alerts/system"
 import { assertTokenStillValid, tokenStateInTx } from "./auth"
 import { GatewayApiError, MAX_ERROR_ISSUES, pathFromDotted } from "./errors"
@@ -405,9 +406,45 @@ async function linkIntervals(
     WHERE id = ${id}::uuid`)
 }
 
+/**
+ * Motivo automático das falhas pelo mapa de códigos do cliente (F2): o da máquina ganha do geral.
+ * Devolve `máquina:código → motivo` só para os códigos com motivo (sem motivo, o operador escolhe).
+ */
+async function faultReasons(w: Writer, events: readonly StateEvent[]): Promise<Map<string, string>> {
+  const faults = events.filter((e) => e.state === "FAULT" && e.fault_code !== undefined && e.fault_code !== null)
+  const out = new Map<string, string>()
+  if (faults.length === 0) return out
+  const codes = [...new Set(faults.map((e) => Number(e.fault_code)))]
+  const machines = [...new Set(faults.map((e) => e.machine_id))]
+  const rows = await w.tx
+    .select({ machineId: faultCodeMap.machineId, code: faultCodeMap.faultCode, reasonId: faultCodeMap.reasonId })
+    .from(faultCodeMap)
+    .where(
+      and(
+        inArray(faultCodeMap.faultCode, codes),
+        or(inArray(faultCodeMap.machineId, machines), and(isNull(faultCodeMap.machineId), isNull(faultCodeMap.templateId))),
+      ),
+    )
+  const general = new Map<number, string | null>()
+  const specific = new Map<string, string | null>()
+  for (const r of rows) {
+    if (r.machineId === null) general.set(Number(r.code), r.reasonId)
+    else specific.set(`${r.machineId}:${Number(r.code)}`, r.reasonId)
+  }
+  for (const e of faults) {
+    const code = Number(e.fault_code)
+    const k = `${e.machine_id}:${code}`
+    // Mapeado na máquina sem motivo = "perguntar ao operador", mesmo que o geral tenha motivo.
+    const reasonId = specific.has(k) ? specific.get(k) : general.get(code)
+    if (reasonId) out.set(k, reasonId)
+  }
+  return out
+}
+
 /** `state` → `machine_state_event` (fecha o intervalo anterior e abre o novo). */
 async function saveStateEvents(w: Writer, events: readonly StateEvent[]): Promise<void> {
   if (events.length === 0) return
+  const auto = await faultReasons(w, events)
   const inserted = await w.tx
     .insert(machineStateEvent)
     .values(
@@ -420,6 +457,11 @@ async function saveStateEvents(w: Writer, events: readonly StateEvent[]): Promis
         // uint32 do contrato em `bigint` (0..4294967295, CHECK no banco).
         faultCode: e.fault_code ?? null,
         source: "edge" as const,
+        // Falha com código mapeado: já nasce classificada (sem pessoa; o operador pode corrigir).
+        ...(() => {
+          const reasonId = e.state === "FAULT" && e.fault_code != null ? auto.get(`${e.machine_id}:${Number(e.fault_code)}`) : undefined
+          return reasonId ? { reasonId, classifiedAt: new Date(e.at) } : {}
+        })(),
       })),
     )
     .onConflictDoNothing({ target: machineStateEvent.id })

@@ -602,4 +602,42 @@ describe("POST /sync", () => {
     expect(res.config.latest_version).toBe(0)
     expect(res.next_sync_s).toBe(10)
   })
+  it("falha com código no mapa: nasce classificada; o da máquina ganha do geral; sem motivo, pergunta ao operador", async () => {
+    async function motivo(org: string, name: string): Promise<string> {
+      const [g] = await t.db.insert(s.downtimeReason).values({ organizationId: org, name: `Grupo ${name}`, category: "unplanned" }).returning()
+      const [r] = await t.db.insert(s.downtimeReason).values({ organizationId: org, parentId: g?.id, name, category: "unplanned" }).returning()
+      return r?.id ?? ""
+    }
+    async function faultOf(org: string) {
+      const [ev] = await rows<{ reason_id: string | null; classified_by: string | null; classified_at: Date | null }>(
+        t,
+        "SELECT reason_id, classified_by, classified_at FROM machine_state_event WHERE organization_id = $1 AND state = 'FAULT'",
+        [org],
+      )
+      return ev
+    }
+
+    // Geral (todas as máquinas): 47 → "Falta de material".
+    const a = await freshClient()
+    const geral = await motivo(a.client.organizationId, "Falta de material")
+    await t.db.insert(s.faultCodeMap).values({ organizationId: a.client.organizationId, faultCode: 47, faultText: "Falta de material no funil", reasonId: geral })
+    await syncOk(a.client, a.remap(REALISTIC))
+    expect(await faultOf(a.client.organizationId)).toMatchObject({ reason_id: geral, classified_by: null })
+    expect((await faultOf(a.client.organizationId))?.classified_at).not.toBeNull()
+
+    // Na máquina, sem motivo: vale mais que o geral → o operador escolhe.
+    const b = await freshClient()
+    const geralB = await motivo(b.client.organizationId, "Falta de material")
+    await t.db.insert(s.faultCodeMap).values([
+      { organizationId: b.client.organizationId, faultCode: 47, faultText: "Geral", reasonId: geralB },
+      { organizationId: b.client.organizationId, machineId: b.id(MCH_INJ), faultCode: 47, faultText: "Termopar aberto", reasonId: null },
+    ])
+    await syncOk(b.client, b.remap(REALISTIC))
+    expect(await faultOf(b.client.organizationId)).toMatchObject({ reason_id: null, classified_at: null })
+
+    // O mapa geral do cliente A (47) não vale para outro cliente (RLS).
+    const c = await freshClient()
+    await syncOk(c.client, c.remap(REALISTIC))
+    expect(await faultOf(c.client.organizationId)).toMatchObject({ reason_id: null })
+  })
 })

@@ -73,16 +73,17 @@ describe("cadastro de motivos de parada", () => {
     expect((await rowsOf([g, m])).every((r) => r.active)).toBe(true)
   })
 
-  it("excluir: sem uso é exclusão lógica (e sai do mapa de falhas); já usado só oculta", async () => {
+  it("excluir: sem uso é exclusão lógica (o código do mapa de falhas fica, sem motivo); já usado só oculta", async () => {
     const g = idOf(await salvarGrupo(h.t.db, eng, { name: "Logística", category: "unplanned", color: "#6366F1" }))
     const livre = idOf(await salvarMotivo(h.t.db, eng, { parentId: g, name: "Falta de embalagem" }))
     const usado = idOf(await salvarMotivo(h.t.db, eng, { parentId: g, name: "Falta de material" }))
-    await h.t.db.insert(s.faultCodeMap).values({ organizationId: a.organizationId, machineId: a.m1, faultCode: 47, reasonId: livre })
+    const [mapa] = await h.t.db.insert(s.faultCodeMap).values({ organizationId: a.organizationId, machineId: a.m1, faultCode: 47, faultText: "Falta de embalagem", reasonId: livre }).returning()
     await h.t.db.insert(s.machineStateEvent).values({ organizationId: a.organizationId, machineId: a.m1, state: "STOPPED", startedAt: new Date(NOW.getTime() - 3_600_000), reasonId: usado })
 
     expect(await excluirMotivo(h.t.db, eng, livre)).toEqual({ ok: true, dados: { modo: "excluido" } })
     expect((await rowsOf([livre]))[0]?.deletedAt).not.toBeNull()
     expect(await h.t.db.select().from(s.faultCodeMap).where(eq(s.faultCodeMap.reasonId, livre))).toEqual([])
+    expect((await h.t.db.select().from(s.faultCodeMap).where(eq(s.faultCodeMap.id, mapa?.id ?? "")))[0]).toMatchObject({ faultText: "Falta de embalagem", reasonId: null })
 
     expect(await excluirMotivo(h.t.db, eng, usado)).toEqual({ ok: true, dados: { modo: "ocultado" } })
     expect((await rowsOf([usado]))[0]).toMatchObject({ active: false, deletedAt: null })
