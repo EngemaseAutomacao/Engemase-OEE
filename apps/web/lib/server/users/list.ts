@@ -3,8 +3,9 @@
  * situação, mais o que a tela oferece no escopo (unidades e máquinas) e o limite do contrato.
  *
  * - Vínculo, papel, escopo, unidades e máquinas: banco do app, sob a RLS do cliente (`withContext`).
- * - Nome, e-mail, 2FA, senha criada, último uso e outros clientes: banco do login (`auth_service`), só das
- *   pessoas que a RLS mostrou neste cliente (nunca uma lista aberta de contas).
+ * - Nome, e-mail, 2FA, senha criada e último uso: banco do login (`auth_service`), só das pessoas que a RLS
+ *   mostrou neste cliente (nunca uma lista aberta de contas). Não diz se a pessoa tem vínculo com outros
+ *   clientes: isso revelaria, de um cliente para outro, quem mais atende a Engemase.
  *
  * Situação: `disabled` quando o vínculo está inativo (`member_access.active = false`) ou a conta foi bloqueada
  * pela Engemase (`user.banned`); `invited` quando ainda não criou a senha; senão `active`.
@@ -12,7 +13,7 @@
  * "nunca" também cobre quem não entra há mais de 30 dias).
  */
 import { account, clientAccount, line, machine, member, memberAccess, memberMachine, memberUnit, organization, session, unit, user } from "@engemase/db"
-import { and, eq, inArray, isNotNull, isNull, max, ne, sql } from "drizzle-orm"
+import { and, eq, inArray, isNotNull, isNull, max } from "drizzle-orm"
 import type { TenantContext } from "@/lib/server/access/context"
 import { withContext } from "@/lib/server/access/load"
 import type { ThrottleDb } from "@/lib/server/auth/throttle"
@@ -30,8 +31,6 @@ export interface ClientUser {
   readonly status: UserStatus
   readonly twoFactor: boolean
   readonly lastSeenAt: Date | null
-  /** Em quantos outros clientes a pessoa tem vínculo (só o número). */
-  readonly otherClients: number
   /** É quem está vendo a tela (não altera o próprio acesso por aqui). */
   readonly isSelf: boolean
 }
@@ -92,7 +91,6 @@ export async function listClientUsers(db: GatewayDb, authDb: ThrottleDb, ctx: Te
   const people = new Map<string, { name: string; email: string; banned: boolean; twoFactor: boolean }>()
   const withPassword = new Set<string>()
   const lastSeen = new Map<string, Date>()
-  const others = new Map<string, number>()
   if (userIds.length > 0) {
     for (const p of await authDb
       .select({ id: user.id, name: user.name, email: user.email, banned: user.banned, twoFactor: user.twoFactorEnabled })
@@ -112,13 +110,6 @@ export async function listClientUsers(db: GatewayDb, authDb: ThrottleDb, ctx: Te
       .where(inArray(session.userId, userIds))
       .groupBy(session.userId)) {
       if (s.at !== null) lastSeen.set(s.userId, s.at)
-    }
-    for (const o of await authDb
-      .select({ userId: member.userId, n: sql<number>`count(*)::int` })
-      .from(member)
-      .where(and(inArray(member.userId, userIds), ne(member.organizationId, ctx.organizationId)))
-      .groupBy(member.userId)) {
-      others.set(o.userId, Number(o.n))
     }
   }
 
@@ -141,7 +132,6 @@ export async function listClientUsers(db: GatewayDb, authDb: ThrottleDb, ctx: Te
       status,
       twoFactor: p.twoFactor,
       lastSeenAt: lastSeen.get(m.userId) ?? null,
-      otherClients: others.get(m.userId) ?? 0,
       isSelf: m.userId === ctx.user.id,
     })
   }

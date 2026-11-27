@@ -19,7 +19,7 @@ import { AUTH_ERROR } from "@/lib/server/auth/auth"
 import { authEnforced } from "@/lib/server/auth/env"
 import { landingPath, safeNextPath } from "@/lib/server/auth/landing"
 import { PASSWORD_MAX_LENGTH } from "@/lib/server/auth/password"
-import { getAuthDb } from "@/lib/server/db"
+import { getAuthDb, getDb } from "@/lib/server/db"
 
 export type SignInResult =
   | { readonly status: "ok"; readonly redirectTo: string }
@@ -55,7 +55,7 @@ async function destination(user: { id: string; role?: unknown }, next: string | 
   if (safe !== null) return safe
   const db = getAuthDb()
   if (db === null) return "/inicio"
-  return landingPath(db, { id: user.id, role: typeof user.role === "string" ? user.role : null })
+  return landingPath(db, { id: user.id, role: typeof user.role === "string" ? user.role : null }, getDb())
 }
 
 export async function signInAction(input: unknown): Promise<SignInResult> {

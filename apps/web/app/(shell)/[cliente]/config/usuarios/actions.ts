@@ -7,19 +7,15 @@
  * (`requirePermission`; sem acesso → 404) e só então chama a regra em `lib/server/users` (que valida a
  * entrada, aplica a RLS e audita). Usadas pela tela `config/usuarios` (`components/settings/users-manager.tsx`).
  */
-import { headers } from "next/headers"
-import { user } from "@engemase/db"
-import { eq } from "drizzle-orm"
 import { z } from "zod"
 import { requirePermission } from "@/lib/server/access/require-tenant"
 import { getAuth } from "@/lib/server/auth"
 import { authSettings } from "@/lib/server/auth/env"
 import { requestPasswordReset } from "@/lib/server/auth/password-reset"
-import { requestIp } from "@/lib/server/auth/request-ip"
 import { getAuthDb, getDb } from "@/lib/server/db"
 import { getEmailSender } from "@/lib/server/email"
 import { type InviteResult, inviteMember, type ResendResult, resendInvite, type UsersDeps } from "@/lib/server/users/invite"
-import { changeMemberAccess, type ManageResult, memberUserId, setMemberActive } from "@/lib/server/users/manage"
+import { changeMemberAccess, type ManageResult, requestMemberPasswordReset, setMemberActive } from "@/lib/server/users/manage"
 import { type ResetTwoFactorResult, resetMemberTwoFactor } from "@/lib/server/users/two-factor-reset"
 
 type Unavailable = { readonly status: "error"; readonly code: "unavailable"; readonly message: string }
@@ -69,28 +65,20 @@ export async function setActiveAction(slug: unknown, input: unknown): Promise<Ma
   return run(slug, (d, ctx) => setMemberActive(d, ctx, input))
 }
 
-export type PasswordResetByAdminResult =
-  | { readonly status: "ok" }
-  | { readonly status: "error"; readonly code: "not_found" | "throttled"; readonly message: string }
-
 /**
- * Manda para a pessoa o mesmo e-mail do "Esqueci minha senha" (link de 30 min; a senha atual vale até ela
- * definir outra). Só para vínculo ativo deste cliente e conta que já tem senha; os limites por IP e por
- * e-mail do pedido normal continuam valendo.
+ * Manda para a pessoa o mesmo e-mail do "Esqueci minha senha" (regra e auditoria em
+ * `requestMemberPasswordReset`). O limite por e-mail do pedido normal continua valendo; o "por IP" usa uma
+ * chave própria de quem pede, para não gastar o limite do IP do escritório (colegas atrás do mesmo IP).
  */
-export async function sendPasswordResetAction(slug: unknown, memberId: unknown): Promise<PasswordResetByAdminResult | Unavailable> {
+export async function sendPasswordResetAction(slug: unknown, memberId: unknown): Promise<ManageResult | Unavailable> {
   return run(slug, async (d, ctx) => {
-    const notFound = { status: "error", code: "not_found", message: "Usuário não encontrado neste cliente. Atualize a página." } as const
-    const target = await memberUserId(d, ctx, typeof memberId === "string" ? memberId : "")
-    if (target === null || !target.active) return notFound
     const auth = getAuth()
     if (auth === null) return UNAVAILABLE
-    const [person] = await d.authDb.select({ email: user.email, banned: user.banned }).from(user).where(eq(user.id, target.userId)).limit(1)
-    if (person === undefined || person.banned) return notFound
-    const reset = await requestPasswordReset({ auth, authDb: d.authDb, now: d.now, ip: requestIp(await headers()) }, person.email)
-    if (reset.status === "throttled") {
-      return { status: "error", code: "throttled", message: "Muitos pedidos de redefinição. Tente de novo mais tarde." }
-    }
-    return { status: "ok" }
+    const resetKey = `admin:${ctx.organizationId}:${ctx.user.id}`
+    return requestMemberPasswordReset(
+      { ...d, reset: (email) => requestPasswordReset({ auth, authDb: d.authDb, now: d.now, ip: resetKey }, email) },
+      ctx,
+      typeof memberId === "string" ? memberId : "",
+    )
   })
 }

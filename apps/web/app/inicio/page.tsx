@@ -2,8 +2,6 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Suspense } from "react"
-import { member, organization } from "@engemase/db"
-import { asc, eq } from "drizzle-orm"
 import { Building2Icon, CalendarClockIcon, FactoryIcon, HourglassIcon, LogOutIcon, RouterIcon } from "lucide-react"
 
 import {
@@ -29,8 +27,8 @@ import { PageTitle } from "@/components/refresh/page-title"
 import { CarregandoPagina } from "@/components/shell/carregando"
 import { usarBanco } from "@/lib/data/fonte"
 import { getCurrentSession } from "@/lib/server/auth/current"
-import { landingPath } from "@/lib/server/auth/landing"
-import { getAuthDb } from "@/lib/server/db"
+import { activeClients, landingPath } from "@/lib/server/auth/landing"
+import { getAuthDb, getDb } from "@/lib/server/db"
 import { signOutAction } from "@/app/(auth)/login/actions"
 
 export const metadata: Metadata = { title: "Escolha o cliente" }
@@ -219,15 +217,12 @@ async function InicioReal() {
   if (session === null) redirect("/login?next=/inicio")
   const db = getAuthDb()
   if (db === null) redirect("/login")
-  const destino = await landingPath(db, { id: session.user.id, role: session.user.role })
+  const appDb = getDb()
+  const destino = await landingPath(db, { id: session.user.id, role: session.user.role }, appDb)
   if (destino !== "/inicio") redirect(destino)
 
-  const clientes = await db
-    .select({ slug: organization.slug, name: organization.name })
-    .from(member)
-    .innerJoin(organization, eq(organization.id, member.organizationId))
-    .where(eq(member.userId, session.user.id))
-    .orderBy(asc(organization.name))
+  // Só os clientes com vínculo ativo (desativado pelo admin do cliente não aparece).
+  const clientes = await activeClients(db, appDb, session.user.id)
   const firstName = session.user.name.split(" ")[0] ?? session.user.name
 
   return (

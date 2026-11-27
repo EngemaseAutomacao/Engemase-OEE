@@ -44,6 +44,7 @@ import { type EmailSender, sendSafely } from "@/lib/server/email"
 import { accessGrantedEmail, setPasswordEmail } from "@/lib/server/email/templates"
 import type { GatewayDb, GatewayTx } from "@/lib/server/gateway/types"
 import { actorDisplayName, auditActor } from "./audit"
+import { lockSeats } from "./seats"
 
 export interface UsersDeps {
   /** Banco do app (`app_user`, RLS). */
@@ -164,6 +165,8 @@ export async function inviteMember(deps: UsersDeps, ctx: TenantContext, raw: unk
   // 1. Escopo e limite, sob a RLS do cliente.
   const precheck = await withContext(deps.db, ctx, async (tx) => {
     if (!(await scopeTargetsExist(tx, unitIds, machineIds))) return "invalid_scope" as const
+    // Vagas travadas (`lockSeats`): dois convites (ou convite e reativação) ao mesmo tempo não passam do limite.
+    await lockSeats(tx, ctx.organizationId)
     const [acct] = await tx.select({ limits: clientAccount.limits }).from(clientAccount).limit(1)
     const maxUsers = acct?.limits.users
     if (typeof maxUsers === "number") {

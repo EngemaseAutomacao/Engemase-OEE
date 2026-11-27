@@ -33,6 +33,8 @@ export async function dadosUsuarios(slug: string) {
   const nowIso = now.toISOString()
 
   const data = await listClientUsers(db, authDb, ctx)
+  // 2FA e último acesso dos colegas só para quem gerencia os usuários; quem só lê vê papel, escopo e situação.
+  const canManage = hasPermission(ctx, "users.manage")
   const users: ClientUserRow[] = data.users.map((u) => ({
     id: u.memberId,
     name: u.name,
@@ -41,10 +43,10 @@ export async function dadosUsuarios(slug: string) {
     role: u.role,
     scope: u.scope,
     status: u.status,
-    twoFactor: u.twoFactor,
-    lastLogin: ago(u.lastSeenAt?.toISOString() ?? null, nowIso),
-    lastLoginAt: u.lastSeenAt?.toISOString() ?? null,
-    otherClients: u.otherClients,
+    twoFactor: canManage && u.twoFactor,
+    lastLogin: canManage ? ago(u.lastSeenAt?.toISOString() ?? null, nowIso) : "—",
+    lastLoginAt: canManage ? (u.lastSeenAt?.toISOString() ?? null) : null,
+    otherClients: 0,
     isSelf: u.isSelf,
   }))
 
@@ -132,6 +134,6 @@ export async function dadosUsuarios(slug: string) {
     machines: data.machines.map((m) => ({ ...m })),
     users,
     engemase,
-    canManage: hasPermission(ctx, "users.manage"),
+    canManage,
   }
 }

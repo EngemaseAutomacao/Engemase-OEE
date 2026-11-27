@@ -103,6 +103,8 @@ export function UsersManager({
   const [localUsers, setUsers] = useState(initialUsers)
   // Com banco, a lista é sempre a do servidor (recarregada com router.refresh() depois de cada ação).
   const users = banco ? initialUsers : localUsers
+  // 2FA e último acesso dos colegas só para quem gerencia (no sistema real o servidor nem manda para os outros).
+  const showDetails = canManage || !banco
   const [resettingTwoFactor, setResettingTwoFactor] = useState<ClientUserRow | null>(null)
 
   /** Roda uma Server Action; com sucesso, mostra a mensagem e recarrega a lista. Erro → aviso, nada muda. */
@@ -289,6 +291,7 @@ export function UsersManager({
           aside={seatLimit !== null ? <Ring value={seatLimit > 0 ? seatsUsed / seatLimit : 1} size={52} stroke={6} color="#257bb4" /> : undefined}
         />
         <StatCard icon={MailQuestionIcon} tone="orange" label="Convites pendentes" value={invited.length} hint={invited.length ? "Aguardando definir a senha" : "Nenhum pendente"} />
+        {showDetails && (
         <StatCard
           icon={ShieldCheckIcon}
           tone="teal"
@@ -302,6 +305,7 @@ export function UsersManager({
           hint="Opcional e recomendado: cada pessoa ativa em Minha conta"
           aside={<Ring value={active.length ? withTwoFactor / active.length : 0} size={52} stroke={6} color="#0e9384" />}
         />
+        )}
         <StatCard icon={CrownIcon} tone="navy" label="Admins do cliente" value={admins.length} hint={admins.length <= 1 ? "Recomendado: ao menos 2" : "Gerenciam os usuários do cliente"} />
       </div>
 
@@ -363,8 +367,8 @@ export function UsersManager({
                   <th className="px-3 py-2.5 font-medium">Papel</th>
                   <th className="px-3 py-2.5 font-medium">Escopo</th>
                   <th className="px-3 py-2.5 font-medium">Situação</th>
-                  <th className="px-3 py-2.5 font-medium">2FA</th>
-                  <th className="px-3 py-2.5 font-medium">Último acesso</th>
+                  {showDetails && <th className="px-3 py-2.5 font-medium">2FA</th>}
+                  {showDetails && <th className="px-3 py-2.5 font-medium">Último acesso</th>}
                   <th className="py-2.5 pr-5 pl-3 text-right font-medium">
                     <span className="sr-only">Ações</span>
                   </th>
@@ -424,6 +428,7 @@ export function UsersManager({
                           {!u.email && u.status !== "disabled" && <SoftBadge tone="orange">Sem e-mail</SoftBadge>}
                         </div>
                       </td>
+                      {showDetails && (
                       <td className="px-3 py-3">
                         {u.twoFactor ? (
                           <span className="inline-flex items-center gap-1 text-xs font-medium text-state-running">
@@ -435,9 +440,12 @@ export function UsersManager({
                           </span>
                         )}
                       </td>
+                      )}
+                      {showDetails && (
                       <td className="px-3 py-3 text-xs whitespace-nowrap text-muted-foreground tabular-nums">
                         {u.status === "invited" ? <span className="xl:max-2xl:whitespace-normal">Aguardando senha</span> : u.lastLogin}
                       </td>
+                      )}
                       <td className="py-3 pr-5 pl-3 text-right">
                         {canManage && u.isSelf ? (
                           <span className="text-xs text-muted-foreground">Você</span>

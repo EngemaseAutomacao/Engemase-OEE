@@ -8,8 +8,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { AccessDeniedError, type TenantContext } from "@/lib/server/access/context"
 import { loadTenantContext } from "@/lib/server/access/load"
 import type { UsersDeps } from "@/lib/server/users/invite"
+import { activeClients, landingPath } from "@/lib/server/auth/landing"
 import { listClientUsers } from "@/lib/server/users/list"
-import { changeMemberAccess, setMemberActive } from "@/lib/server/users/manage"
+import { changeMemberAccess, requestMemberPasswordReset, setMemberActive } from "@/lib/server/users/manage"
 import { type AuthHarness, BASE_URL, createAuthHarness } from "../auth/support"
 import { createPerson, type SeededClient, type SeededPerson, seedClient } from "./support"
 
@@ -38,6 +39,11 @@ describe("usuários do cliente: lista, alterar acesso, desativar e reativar", ()
     return row.id
   }
 
+  /** Senha criada (conta `credential`): conta como admin que consegue entrar. */
+  async function givePassword(person: SeededPerson): Promise<void> {
+    await h.t.db.insert(s.account).values({ userId: person.user.id, accountId: person.user.id, providerId: "credential", password: "hash-de-teste" })
+  }
+
   async function accessOf(memberId: string) {
     const [row] = await h.t.db.select().from(s.memberAccess).where(eq(s.memberAccess.memberId, memberId))
     return row
@@ -48,6 +54,7 @@ describe("usuários do cliente: lista, alterar acesso, desativar e reativar", ()
     a = await seedClient(h.t.db, "alfa-gestao")
     b = await seedClient(h.t.db, "beta-gestao")
     superAdmin = await createPerson(h.t.db, "super-gestao", { role: "super_admin", twoFactor: true })
+    for (const p of [a.admin, a.adminNo2fa, a.supervisorUnit1]) await givePassword(p)
   }, 60_000)
 
   afterAll(async () => {
@@ -189,6 +196,86 @@ describe("usuários do cliente: lista, alterar acesso, desativar e reativar", ()
         .from(s.auditLog)
         .where(and(eq(s.auditLog.action, "user.access_change"), eq(s.auditLog.entityId, only)))
       expect(audit?.actorType).toBe("engemase")
+    })
+  })
+  describe("achados da revisão de segurança", () => {
+    // Cliente próprio: os testes acima mudam papéis do cliente alfa.
+    let g: SeededClient
+    beforeAll(async () => {
+      g = await seedClient(h.t.db, "gama-gestao")
+      for (const p of [g.admin, g.adminNo2fa, g.supervisorUnit1]) await givePassword(p)
+    })
+
+    it("admin que nunca criou a senha não conta como outro admin", async () => {
+      const ctx = await ctxOf(g.slug, g.admin)
+      const engemase = await ctxOf(g.slug, superAdmin)
+      // Um terceiro admin convidado (sem senha) e o segundo admin desativado.
+      const pendente = await createPerson(h.t.db, "admin-sem-senha")
+      const [m] = await h.t.db.insert(s.member).values({ organizationId: g.organizationId, userId: pendente.user.id }).returning()
+      await h.t.db.insert(s.memberAccess).values({ organizationId: g.organizationId, memberId: m?.id ?? "", role: "client_admin", scope: "all" })
+      const second = await memberIdOf(g, g.adminNo2fa)
+      expect(await setMemberActive(deps(), ctx, { memberId: second, active: false })).toEqual({ status: "ok" })
+      // Só sobra o admin com senha + o convidado: o com senha não pode sair.
+      const only = await memberIdOf(g, g.admin)
+      expect(await setMemberActive(deps(), engemase, { memberId: only, active: false })).toMatchObject({ code: "last_admin" })
+      expect(await setMemberActive(deps(), engemase, { memberId: second, active: true })).toEqual({ status: "ok" })
+    })
+
+    it("pessoa da equipe Engemase com vínculo no cliente não é gerida por aqui", async () => {
+      const tecnico = await createPerson(h.t.db, "tecnico-vinculo", { role: "technician", twoFactor: true })
+      const [m] = await h.t.db.insert(s.member).values({ organizationId: g.organizationId, userId: tecnico.user.id }).returning()
+      await h.t.db.insert(s.memberAccess).values({ organizationId: g.organizationId, memberId: m?.id ?? "", role: "engineer", scope: "all" })
+      const ctx = await ctxOf(g.slug, g.admin)
+      const memberId = m?.id ?? ""
+      expect(await changeMemberAccess(deps(), ctx, { memberId, role: "client_admin", scope: "all" })).toMatchObject({ code: "not_found" })
+      expect(await setMemberActive(deps(), ctx, { memberId, active: false })).toMatchObject({ code: "not_found" })
+      const asked: string[] = []
+      const reset = async (email: string) => (asked.push(email), { status: "ok" as const })
+      expect(await requestMemberPasswordReset({ ...deps(), reset }, ctx, memberId)).toMatchObject({ code: "not_found" })
+      expect(asked).toEqual([])
+      expect((await accessOf(memberId))?.role).toBe("engineer")
+    })
+
+    it("redefinição pedida pelo admin: só com senha criada e vínculo ativo, auditada (inclusive barrada pelo limite)", async () => {
+      const ctx = await ctxOf(g.slug, g.admin)
+      const asked: string[] = []
+      let answer: "ok" | "throttled" = "ok"
+      const reset = async (email: string) => {
+        asked.push(email)
+        return answer === "ok" ? ({ status: "ok" } as const) : ({ status: "throttled", retryAt: null } as const)
+      }
+      const supervisor = await memberIdOf(g, g.supervisorUnit1)
+      expect(await requestMemberPasswordReset({ ...deps(), reset }, ctx, supervisor)).toEqual({ status: "ok" })
+      expect(asked).toEqual([g.supervisorUnit1.user.email])
+      answer = "throttled"
+      expect(await requestMemberPasswordReset({ ...deps(), reset }, ctx, supervisor)).toMatchObject({ code: "throttled" })
+      const audit = await h.t.db
+        .select({ after: s.auditLog.after })
+        .from(s.auditLog)
+        .where(and(eq(s.auditLog.action, "user.password_reset_requested"), eq(s.auditLog.entityId, supervisor)))
+      expect(audit.map((x) => x.after)).toEqual([{ result: "ok" }, { result: "throttled" }])
+
+      // Sem senha criada: use o reenvio do convite. De outro cliente: não existe aqui.
+      expect(await requestMemberPasswordReset({ ...deps(), reset }, ctx, await memberIdOf(g, g.viewerAll))).toMatchObject({ code: "no_password" })
+      expect(await requestMemberPasswordReset({ ...deps(), reset }, ctx, await memberIdOf(b, b.viewerAll))).toMatchObject({ code: "not_found" })
+      expect(asked).toHaveLength(2)
+    })
+
+    it("vínculo desativado some do login e do /inicio", async () => {
+      // Uma pessoa com vínculo em alfa (ativo) e em beta (que será desativado).
+      const p = await createPerson(h.t.db, "dois-clientes")
+      for (const c of [g, b]) {
+        const [m] = await h.t.db.insert(s.member).values({ organizationId: c.organizationId, userId: p.user.id }).returning()
+        await h.t.db.insert(s.memberAccess).values({ organizationId: c.organizationId, memberId: m?.id ?? "", role: "viewer", scope: "all" })
+      }
+      expect((await activeClients(h.t.db, h.t.db, p.user.id)).map((c) => c.slug).sort()).toEqual([g.slug, b.slug].sort())
+      expect(await landingPath(h.t.db, { id: p.user.id, role: null }, h.t.db)).toBe("/inicio")
+
+      await givePassword(b.admin)
+      const ctxB = await ctxOf(b.slug, b.admin)
+      expect(await setMemberActive(deps(), ctxB, { memberId: await memberIdOf(b, p), active: false })).toEqual({ status: "ok" })
+      expect((await activeClients(h.t.db, h.t.db, p.user.id)).map((c) => c.slug)).toEqual([g.slug])
+      expect(await landingPath(h.t.db, { id: p.user.id, role: null }, h.t.db)).toBe(`/${g.slug}`)
     })
   })
 })
