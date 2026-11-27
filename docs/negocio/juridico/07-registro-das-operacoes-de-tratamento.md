@@ -118,7 +118,7 @@
 | CT-05 | Suporte e relacionamento | Contatos do cliente que abrem chamados ou falam com o suporte | Legítimo interesse (IX) | [PROPOSTA: contrato + 5 anos] |
 | CT-06 | Equipe Engemase na plataforma | Pessoas da Engemase | Execução do contrato de trabalho (V); legítimo interesse (IX); depois do fim do contrato do cliente, exercício regular de direitos (VI) | Conta: enquanto ativa; registros de acesso aos clientes: 5 anos, inclusive depois do fim do contrato do cliente |
 | CT-07 | Propostas e contatos comerciais | Contatos de clientes em prospecção | Legítimo interesse (IX) | [PROPOSTA: 2 anos sem negócio] |
-| CT-08 | Monitoramento de erros | Usuários (identificador técnico) | Legítimo interesse (IX) | [CONFIRMAR: prazo do Sentry] |
+| CT-08 | Monitoramento de erros | Usuários (identificador técnico) | Legítimo interesse (IX) | [CONFIRMAR: prazo dos logs da Vercel no plano contratado] |
 | CT-09 | Pedidos de titulares e registro de incidentes | Quem pede; titulares afetados | Obrigação legal (II) | Incidentes: 5 anos (Res. 15/2024); pedidos: [PROPOSTA: 5 anos] |
 | CT-10 | Ciclo de vida do hardware | Técnicos da Engemase | Legítimo interesse (IX) | Enquanto existir o equipamento + 5 anos |
 | CT-11 | Página de status e avisos de disponibilidade | Quem se inscreve nos avisos (usuários, contatos do cliente) | Legítimo interesse (IX) | Até cancelar a inscrição |
@@ -170,8 +170,9 @@
 
 **CT-08 · Monitoramento de erros**
 - **Finalidade:** encontrar e corrigir falhas.
-- **Dados:** identificador técnico do usuário, rota, mensagem de erro. Configurado para não enviar IP, e-mail nem corpo de requisição.
-- **Compartilhamento:** Sentry (região [DECIDIR: UE recomendada]).
+- **Dados:** identificador técnico do usuário, rota, mensagem de erro. Regra: não gravar e-mail nem corpo de requisição nas mensagens de erro.
+- **Sistema:** logs da Vercel (Observability).
+- **Compartilhamento:** Vercel (logs).
 
 **CT-09 · Pedidos de titulares e registro de incidentes**
 - **Finalidade:** atender o art. 18 da LGPD e guardar o registro dos incidentes (Resolução CD/ANPD nº 15/2024).

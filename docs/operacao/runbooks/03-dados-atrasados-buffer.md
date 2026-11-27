@@ -49,7 +49,7 @@ Os dados chegam à plataforma com atraso ou não chegam, e a fila de envio do ga
 1. **O gateway está online?** Se não, [RB-01](01-gateway-offline.md).
 2. **A fila está caindo?** Acompanhe `buffer_pending` por 5 min. Caindo → é só recuperação depois de uma queda: aguarde e confira o recálculo dos turnos. Parada ou subindo → continue.
 3. **`quarantined` > 0?** A nuvem recusou itens (400). Anote a quantidade e a hora: N2 precisa ver o erro de validação na ingestão.
-4. **Só equipe Engemase (N2):** logs da rota `/api/gateway/v1/sync` para este gateway na Vercel e erros no Sentry: códigos de resposta (`400`, `413`, `429`, `5xx`), tempo de resposta e mensagens de validação. Compare com outros gateways: se todos estão com 5xx ou 429, é a plataforma.
+4. **Só equipe Engemase (N2):** logs da rota `/api/gateway/v1/sync` para este gateway nos logs da Vercel (Observability): códigos de resposta (`400`, `413`, `429`, `5xx`), tempo de resposta e mensagens de validação. Compare com outros gateways: se todos estão com 5xx ou 429, é a plataforma.
 5. **Situação C (uma máquina):** a máquina está em `NO_COMM`? Então é o [RB-02](02-clp-sem-comunicacao.md). Ela está na config aplicada do gateway (`config_status` com a versão mais recente)? Uma máquina recém-cadastrada só aparece depois de a config ser aplicada.
 6. **`clock_offset_ms`** fora de ±2 s → [RB-04](04-relogio-fora-de-sincronia.md).
 7. **Eventos `data_loss` ou `buffer_corrupted`** → seção 6, sempre.

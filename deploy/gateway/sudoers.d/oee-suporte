@@ -1,0 +1,7 @@
+# Pacote oee-gateway-remote-access: sudo do usuário suporte (acesso remoto de manutenção, docs/12).
+# Só existe login do suporte durante uma sessão aprovada pelo admin do cliente (certificado SSH com
+# validade até o fim dela). Root completo para a manutenção, com TUDO registrado: entrada e saída
+# do terminal (log_input/log_output) em /var/log/sudo-io/suporte, uma pasta por comando.
+Defaults:suporte log_input, log_output, iolog_dir=/var/log/sudo-io/%{user}, iolog_file=%{seq}
+Defaults:suporte use_pty, lecture=never, !visiblepw, logfile=/var/log/sudo-suporte.log
+suporte ALL=(ALL:ALL) NOPASSWD: ALL

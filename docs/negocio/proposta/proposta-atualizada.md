@@ -63,7 +63,7 @@ Detalhes: [arquitetura](../../02-arquitetura.md), [gateway](../../16-projeto-do-
 | Primeiro ano | 100 | R$ 1.540–3.030 | R$ 15–30 |
 | Meta | 500 | R$ 6.960–9.650 | R$ 14–19 |
 
-Inclui Vercel Pro, Neon Scale (com SLA de 99,95%), Sentry, e-mail, monitor externo e página de status. Domínio próprio: cerca de R$ 40 por ano.
+Inclui Vercel Pro, Neon Scale (com SLA de 99,95%), e-mail, monitor externo e página de status. Os valores ainda contam ~US$ 26–29/mês de Sentry, que saiu do plano (os erros ficam nos logs da Vercel): o custo real fica esse valor mais baixo. Domínio próprio: cerca de R$ 40 por ano.
 
 **Bancada, uma vez** (estimativas; pedir cotação):
 
@@ -137,7 +137,7 @@ Com acompanhamento semanal, atualizado às sextas-feiras, no [status do projeto]
 
 ## 8. Solicitações
 
-1. **Contas na nuvem:** Vercel Pro, Neon (Scale), Sentry e domínio próprio. Cerca de R$ 500–700 por mês no piloto.
+1. **Contas na nuvem:** Vercel Pro, Neon (Scale) e domínio próprio. Cerca de R$ 500–700 por mês no piloto.
 2. **Bancada:** 2 gateways R1000, os 4 CLPs de bancada e a licença do TIA Portal (seção 3.1).
 3. **Equipe:** um segundo desenvolvedor, ou técnico em tempo parcial, para manter o piloto em fevereiro–março de 2027.
 4. **Cliente-piloto:** escolher o cliente e a linha, com uma das quatro marcas de CLP prioritárias.

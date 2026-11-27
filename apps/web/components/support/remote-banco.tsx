@@ -4,7 +4,7 @@
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
-import { aprovarAcessoAction, encerrarAcessoAction, recusarAcessoAction, salvarPoliticaAcessoAction } from "@/app/(shell)/[cliente]/config/actions"
+import { aprovarAcessoAction, emitirCertificadoSshAction, encerrarAcessoAction, recusarAcessoAction, salvarPoliticaAcessoAction } from "@/app/(shell)/[cliente]/config/actions"
 import { RemoteAccessProvider, type RemoteServer } from "@/components/support/remote-provider"
 import type { RemoteData } from "@/components/support/remote-types"
 
@@ -31,6 +31,13 @@ export function RemoteAccessBanco({ data, children }: { data: RemoteData; childr
     end: (id) => run(() => encerrarAcessoAction({ slug, id })),
     savePolicy: (p) =>
       run(() => salvarPoliticaAcessoAction({ slug, mode: p.mode === "disabled" ? "disabled" : "approval", maxDurationMin: p.maxDurationMin, idleTimeoutMin: p.idleTimeoutMin })),
+    issueSshCert: async (id, publicKey) => {
+      try {
+        return await emitirCertificadoSshAction({ slug, id, publicKey })
+      } catch {
+        return { ok: false, mensagem: "Sem conexão com o servidor. Tente de novo." }
+      }
+    },
   }
   return (
     <RemoteAccessProvider data={data} server={server}>

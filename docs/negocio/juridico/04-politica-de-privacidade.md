@@ -92,7 +92,6 @@ Não usamos cookies de publicidade nem de rastreamento. **[CONFIRMAR antes de pu
 |---|---|---|
 | Vercel | Hospedagem da aplicação | EUA |
 | Neon | Banco de dados (em São Paulo) | EUA |
-| Sentry | Monitoramento de erros | EUA |
 | Resend | Envio de e-mails | EUA |
 | Tailscale (só se a empresa contratar acesso remoto, Fase 2) | VPN de manutenção dos gateways | Canadá / EUA |
 | Ferramenta de chamados [DECIDIR: proposta, Jira Service Management, da Atlassian] | Registro dos chamados de suporte | Austrália / EUA [CONFIRMAR] |
@@ -120,7 +119,7 @@ Nesses casos usamos os mecanismos da LGPD (art. 33): **cláusulas-padrão contra
 | Identificação do operador nos apontamentos | Enquanto durar o contrato da empresa. [PROPOSTA: anonimizada após 2 anos] |
 | Notificações | [PROPOSTA: 12 meses] |
 | Dados de cobrança | Prazo da legislação fiscal [CONFIRMAR com o contador] |
-| Registros de erros técnicos | [CONFIRMAR: prazo do plano do Sentry, ex.: 90 dias] |
+| Registros de erros técnicos | [CONFIRMAR: prazo dos logs da Vercel no plano contratado] |
 | Inscrição nos avisos da página de status | Até você cancelar a inscrição |
 
 Quando o contrato da empresa termina, ela tem 30 dias para exportar os dados, e eles são eliminados até o 60º dia **[PADRÃO PROPOSTO — D4]**. As cópias de segurança expiram depois, em prazo fixo. Ficam só: os registros de acesso exigidos pelo Marco Civil (6 meses); os documentos fiscais; e o registro dos acessos da equipe Engemase à empresa (até 5 anos, para defesa em processos). O restante da auditoria só fica se a empresa pedir por escrito.

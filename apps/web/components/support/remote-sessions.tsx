@@ -35,6 +35,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { ApproveDialog, type ApproveMode } from "./remote-approve-dialog"
 import { CONNECTION_LABEL, STATUS_META, agoLabel, countdown, dateTimeOf, minutesLabel, timeOf, windowLabel } from "./remote-labels"
 import { useRemote } from "./remote-provider"
+import { SshCertDialog } from "./ssh-cert-dialog"
 import { RejectDialog } from "./remote-reject-dialog"
 import type { RemoteSessionVM } from "./remote-types"
 
@@ -358,6 +359,7 @@ function LiveSession({ s }: { s: RemoteSessionVM }) {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        <SshCertDialog s={s} />
         <Button variant="outline" asChild className="sm:flex-1">
           <Link href={`/${clientSlug}/config/gateways/${s.gatewayId}`}>Ver gateway</Link>
         </Button>

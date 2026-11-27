@@ -113,6 +113,11 @@ A demonstração na Vercel não tem banco. Por isso as telas leem por `lib/data/
   ao banco nem ao log. Encerrar e o cron `vpn` apagam o nó no Tailscale (`lib/server/remote/tailscale.ts`). A chave
   pública para o pacote do gateway: `GET /api/gateway/v1/vpn-approval-key`. Falta o programa do gateway que liga
   a VPN (tsnet) e confere a aprovação; até ele existir, `VPN_HABILITADA` fica desligada.
+- Certificado SSH do acesso remoto (`lib/server/remote/ssh-cert.ts`, docs/12): "Certificado SSH" na sessão, só para quem
+  pediu, com a sessão aprovada ou ativa. Certificado Ed25519 da CA (`SSH_CA_SIGNING_KEY`: semente de 32 bytes em base64,
+  Sensitive, só produção), principal `oee-gw-<gateway>`, `source-address` 127.0.0.1, só `permit-pty`, validade até o fim
+  da sessão (máx. 8 h). Serial e impressão digital na auditoria (`remote.ssh_cert`). A pública da CA vai no pacote do
+  gateway (`deploy/gateway/ssh-ca/trusted-user-ca.pub`). O IP do gateway na VPN vem do resultado do `vpn.enable`.
 - Atualização do agente pela nuvem (`lib/server/gateway/releases.ts`, `config.write`): botão "Atualizar agente" no
   detalhe do gateway. A lista vem do GitHub Releases (tags `gateway-v<semver>`, workflow `gateway-release.yml`; 10 min
   em memória) e o `agent.update` leva só endereços de manifestos do próprio repositório, montados no servidor. Opcionais:

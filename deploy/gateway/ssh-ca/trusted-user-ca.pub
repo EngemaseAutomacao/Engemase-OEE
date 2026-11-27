@@ -1,0 +1,2 @@
+# CA SSH do acesso remoto (Ed25519). A privada fica na Vercel (SSH_CA_SIGNING_KEY) e no cofre.
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHCQnkOrMKdJI7Jr2Dy+XHlvC5boT/3E02xiK5lWU8JF engemase-oee-ssh-ca-2026

@@ -90,7 +90,7 @@ flowchart LR
 | O quê | Onde |
 |---|---|
 | Logs e métricas das funções | Vercel Observability / logs (com Log Drain para retenção maior, se necessário) |
-| Erros do app | Sentry |
+| Erros do app | Logs da Vercel (Observability) |
 | Saúde dos gateways | No próprio produto: online/offline, versão, fila pendente, latência por CLP, relógio, disco (enviados no `/sync`) |
 | Logs do gateway | journald local. Envio sob demanda com `logs.upload` mínimo junto do OTA mínimo (D29); completo na F2 |
 | Banco | Métricas da Neon + `pg_stat_statements` para consultas lentas |
@@ -105,7 +105,6 @@ flowchart LR
 | Vercel Pro | US$ 20 por membro/mês + uso | Functions, Cron, Blob e Firewall entram no uso. Na escala de 100 gateways sincronizando a cada 10 s, são ~26 milhões de invocações/mês, na casa de dezenas de US$. Preços de uso variam por região: conferir os de São Paulo (`gru1`, D7) |
 | Neon (produção) | ~US$ 20–160/mês | Compute 24/7 (0,25–1 CU) + armazenamento (~5 GB/ano para 100 máquinas). Ver [06](06-banco-de-dados.md#custo-de-referência-estimativa-de-nov2026-confirmar-na-página-de-preços) |
 | Neon (previews/dev) | Quase zero | Escala a zero |
-| Sentry | Plano gratuito ou Team | |
 | Hardware de gateway | Investimento por planta | Custo único, normalmente repassado ao cliente |
 
 **Alavancas de custo:** intervalo de sync (10 s → 30 s reduz as invocações em 3×, mantendo o envio imediato nas mudanças de estado), lotes maiores e retenção de `tag_sample`.

@@ -111,14 +111,14 @@ flowchart TD
 | **Conta de admin do cliente comprometida** | Avisar o cliente; bloquear sessões a pedido dele; revisar usuários e escopos alterados | Cliente é o controlador |
 | **Token de gateway roubado** | Revogar o token pela plataforma (o gateway para de enviar e a VPN cai); reativar com novo código | [RB-09 — Rotação do token do gateway](../../operacao/runbooks/09-rotacao-token-gateway.md) |
 | **Chave de assinatura das atualizações ou CA SSH vazada** (S1) | Suspender publicação de atualizações; trocar a chave; publicar versão assinada com a chave nova; desligar o acesso remoto (kill switch global) | [docs/12](../../12-acesso-remoto-vpn.md); cofre de chaves (L14) |
-| **Incidente num fornecedor** (Vercel, Neon, Sentry, Resend, Tailscale, ferramenta de chamados, Better Stack) | Obter do fornecedor o alcance e o período; avaliar quais dados de quais clientes; seguir a seção 2 | [DPA, Apêndice 3](02-acordo-de-tratamento-de-dados.md#apêndice-3--suboperadores) |
+| **Incidente num fornecedor** (Vercel, Neon, Resend, Tailscale, ferramenta de chamados, Better Stack) | Obter do fornecedor o alcance e o período; avaliar quais dados de quais clientes; seguir a seção 2 | [DPA, Apêndice 3](02-acordo-de-tratamento-de-dados.md#apêndice-3--suboperadores) |
 | **E-mail ou exportação para a pessoa errada** | Pedir ao destinatário que apague e confirme; invalidar o link; avisar o cliente | — |
 | **Perda ou corrupção de dados** (integridade ou disponibilidade) | Restaurar a um ponto no tempo (PITR); reprocessar turnos; apagar de novo os dados de clientes já eliminados ([contrato, cl. 16.1](01-contrato-de-assinatura.md#16-encerramento-exportação-e-eliminação-dos-dados-padrão-proposto--d4-em-aberto)). **Depois de restaurar o banco, os dados já confirmados não voltam dos gateways** | [RB-08 — Restauração do banco (PITR)](../../operacao/runbooks/08-restauracao-banco-pitr.md); L14 |
 | **Gateway furtado ou perdido** | Bloquear o token; pedir boletim de ocorrência ao cliente; avaliar dados no equipamento (até 30 dias de produção, configuração de rede do cliente); instalar a unidade nova | [RB-09](../../operacao/runbooks/09-rotacao-token-gateway.md); [RB-10 — Troca do hardware](../../operacao/runbooks/10-troca-hardware-gateway.md); [Anexo H](01-anexo-h-hardware.md), cláusula H.6 |
 
 ## 9. Preservação de evidências
 
-- **Exportar na hora** os logs que expiram rápido: logs da Vercel e eventos do Sentry têm retenção curta **[CONFIRMAR prazos do plano]**.
+- **Exportar na hora** os logs que expiram rápido: os logs da Vercel têm retenção curta **[CONFIRMAR prazos do plano]**.
 - Guardar: `audit_log`, eventos de acesso remoto, logs do gateway (quando houver envio), comunicações recebidas e enviadas.
 - Anotar cada passo no registro com data, hora (com fuso) e autor.
 - Guardar cópias num local de acesso restrito, com hash dos arquivos.

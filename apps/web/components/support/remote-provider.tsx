@@ -30,6 +30,8 @@ interface RemoteCtx {
   endNow: (id: string) => void
   savePolicy: (p: PolicyVM) => void
   exportHistory: (format: "csv" | "pdf") => void
+  /** Certificado SSH da sessão (só sistema real). */
+  issueSshCert?: RemoteServer["issueSshCert"]
 }
 
 /** Sistema real: o servidor decide e grava; a tela recarrega com os dados novos. Devolve `false` se recusou. */
@@ -38,6 +40,8 @@ export interface RemoteServer {
   reject: (id: string, reason: string) => Promise<boolean>
   end: (id: string) => Promise<boolean>
   savePolicy: (p: PolicyVM) => Promise<boolean>
+  /** Certificado SSH da sessão (só sistema real, só para quem pediu). */
+  issueSshCert?: (id: string, publicKey: string) => Promise<{ ok: true; dados: { certificado: string; validoAteMs: number; fingerprint: string; usuario: string; vpnIp: string | null } } | { ok: false; mensagem: string }>
 }
 
 const Ctx = createContext<RemoteCtx | null>(null)
@@ -251,6 +255,7 @@ export function RemoteAccessProvider({ data, children, server }: { data: RemoteD
     [data.clientSlug, effectiveSessions],
   )
 
+  const issueSshCert = server?.issueSshCert
   const value = useMemo<RemoteCtx>(
     () => ({
       clientName: data.clientName,
@@ -266,8 +271,9 @@ export function RemoteAccessProvider({ data, children, server }: { data: RemoteD
       endNow,
       savePolicy,
       exportHistory,
+      issueSshCert,
     }),
-    [data, now, effectiveSessions, policy, approve, reject, endNow, savePolicy, exportHistory],
+    [data, now, effectiveSessions, policy, approve, reject, endNow, savePolicy, exportHistory, issueSshCert],
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

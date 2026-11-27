@@ -1,0 +1,55 @@
+# SSH do acesso remoto de manutenção (docs/12). Pacote oee-gateway-remote-access:
+# /usr/share/oee-remote-access/ssh/sshd_config. NÃO é o sshd do sistema (ssh.service fica
+# mascarado): roda por conexão (oee-sshd@.service, modo inetd) a partir do oee-sshd.socket,
+# que escuta SÓ em 127.0.0.1:22. De fora, só se chega pela VPN, encaminhada pelo
+# oee-remote-access, e só durante uma sessão aprovada pelo cliente.
+#
+# Entra só o usuário suporte, só com certificado SSH da CA da Engemase (emitido pela
+# plataforma para aquela sessão, com validade até o fim dela) e só se o certificado for para
+# ESTE gateway (principal oee-gw-<id>, dado pelo "oee-gateway ssh-principals"). Sem senha,
+# sem chave avulsa, sem encaminhamento de portas.
+
+HostKey /var/lib/oee-remote-access/ssh/ssh_host_ed25519_key
+HostKeyAlgorithms ssh-ed25519
+
+AllowUsers suporte
+PermitRootLogin no
+AuthenticationMethods publickey
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+HostbasedAuthentication no
+AuthorizedKeysFile none
+TrustedUserCAKeys /usr/share/oee-remote-access/ssh/trusted-user-ca.pub
+AuthorizedPrincipalsCommand /usr/bin/oee-gateway ssh-principals %u
+AuthorizedPrincipalsCommandUser oee
+PubkeyAcceptedAlgorithms ssh-ed25519-cert-v01@openssh.com
+CASignatureAlgorithms ssh-ed25519
+
+AllowTcpForwarding no
+AllowStreamLocalForwarding no
+AllowAgentForwarding no
+X11Forwarding no
+PermitTunnel no
+GatewayPorts no
+PermitUserEnvironment no
+PermitUserRC no
+DisableForwarding yes
+
+MaxAuthTries 2
+MaxSessions 4
+LoginGraceTime 30
+ClientAliveInterval 60
+ClientAliveCountMax 3
+
+# VERBOSE registra a impressão digital, o Key ID e o serial do certificado em cada login
+# (auth.log/journal): é o que liga o login à sessão aprovada na plataforma.
+LogLevel VERBOSE
+SyslogFacility AUTH
+# PAM só para a sessão (o usuário suporte nasce com a senha bloqueada).
+UsePAM yes
+PrintMotd no
+PrintLastLog yes
+Banner none
+Subsystem sftp internal-sftp

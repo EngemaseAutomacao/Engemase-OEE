@@ -22,6 +22,7 @@ import type { ConfigResult } from "@/lib/server/config/products"
 import type { GatewayDb, GatewayTx } from "@/lib/server/gateway/types"
 import { auditActor } from "@/lib/server/users/audit"
 import type { ApprovalSigner } from "./approval"
+import { lerChaveDoTecnico, MAX_CERT_VALIDITY_S, principalDoGateway, type SshCa } from "./ssh-cert"
 import { nodeNameFor, type VpnProvider } from "./tailscale"
 
 export interface PoliticaCliente {
@@ -303,6 +304,67 @@ export async function encerrarAcesso(
   // Garantia extra: tira o gateway da rede de manutenção agora (o gateway também desliga sozinho).
   if (r.ok && noParaApagar && vpn) await apagarNo(vpn, noParaApagar)
   return r
+}
+
+export interface CertificadoDaSessao {
+  /** Conteúdo do arquivo `id_ed25519-cert.pub`. */
+  readonly certificado: string
+  readonly serial: string
+  readonly validoAteMs: number
+  readonly fingerprint: string
+  /** Usuário e endereço na VPN (null até o gateway ligar). */
+  readonly usuario: string
+  readonly vpnIp: string | null
+}
+
+const CertificadoInput = z.object({ id: z.uuid(), publicKey: z.string().trim().min(20, "Cole a sua chave pública SSH.").max(1000, "Chave muito longa.") })
+
+/**
+ * Certificado SSH da sessão (docs/12): só quem pediu (equipe Engemase), só com a sessão aprovada ou ativa,
+ * válido até o fim dela (nunca mais de 8 h) e só para ESTE gateway (principal `oee-gw-<id>`). O gateway
+ * aceita só pelo encaminhamento da VPN (`source-address` 127.0.0.1). Pode ser emitido de novo (outra chave
+ * ou outro computador); cada emissão vai para a auditoria com o serial e a impressão digital da chave.
+ */
+export async function emitirCertificadoSsh(db: GatewayDb, ctx: TenantContext, input: unknown, ca: SshCa | null, now = new Date()): Promise<ConfigResult<CertificadoDaSessao>> {
+  assertPermission(ctx, "diagnostics.run")
+  if (ctx.access.kind !== "engemase") return { ok: false, mensagem: "Só a equipe Engemase recebe certificado de acesso." }
+  const parsed = CertificadoInput.safeParse(input)
+  if (!parsed.success) return erroDe(parsed)
+  if (ca === null) return { ok: false, mensagem: "A autoridade de certificados SSH não está configurada na plataforma (SSH_CA_SIGNING_KEY)." }
+  let chave
+  try {
+    chave = lerChaveDoTecnico(parsed.data.publicKey)
+  } catch (error) {
+    return { ok: false, mensagem: error instanceof Error ? error.message : "Chave pública inválida." }
+  }
+  return withTenant(db, ctx.organizationId, async (tx): Promise<ConfigResult<CertificadoDaSessao>> => {
+    const [s] = await tx.select().from(remoteAccessSession).where(eq(remoteAccessSession.id, parsed.data.id)).for("update").limit(1)
+    if (s === undefined) return NAO_ENCONTRADO
+    if (s.requestedBy !== ctx.user.id) return { ok: false, mensagem: "Só quem pediu a sessão recebe o certificado dela." }
+    if (!["approved", "activating", "active"].includes(s.status)) return { ok: false, mensagem: "O certificado só sai com a sessão aprovada ou ativa." }
+    const duracaoMs = (s.approvedDurationMin ?? s.requestedDurationMin) * 60_000
+    // Até o prazo da sessão; antes de ela ligar, conta a duração aprovada a partir de agora (o gateway ainda
+    // corta no prazo dele). Nunca mais de 8 h.
+    const fim = Math.min(s.expiresAt?.getTime() ?? now.getTime() + duracaoMs, now.getTime() + MAX_CERT_VALIDITY_S * 1000)
+    if (fim <= now.getTime() + 60_000) return { ok: false, mensagem: "A sessão está no fim; peça uma nova." }
+    const emitido = ca.emitir({
+      chave,
+      keyId: `engemase:${ctx.user.id}:sessao:${s.id}`,
+      principals: [principalDoGateway(s.gatewayId)],
+      // Folga de 1 min para relógio do gateway um pouco atrasado.
+      validoDe: new Date(now.getTime() - 60_000),
+      validoAte: new Date(fim),
+    })
+    const serial = emitido.serial.toString()
+    await tx.update(remoteAccessSession).set({ sshCertSerial: serial, updatedAt: now }).where(eq(remoteAccessSession.id, s.id))
+    const dados = { serial, fingerprint: chave.fingerprint, valid_before: new Date(fim).toISOString() }
+    await evento(tx, ctx, s.id, "ssh_cert_issued", dados)
+    await auditar(tx, ctx, "remote.ssh_cert", s.id, dados)
+    return {
+      ok: true,
+      dados: { certificado: emitido.linha, serial, validoAteMs: fim, fingerprint: chave.fingerprint, usuario: "suporte", vpnIp: s.vpnIp ?? null },
+    }
+  })
 }
 
 /** Apaga o nó do gateway no Tailscale; falha só vai para o log (o cron tenta de novo). */

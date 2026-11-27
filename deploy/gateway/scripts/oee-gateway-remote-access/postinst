@@ -2,15 +2,19 @@
 # postinst do pacote oee-gateway-remote-access (VPN sob demanda, docs/12).
 # Idempotente; respeita DPKG_ROOT e o chroot de build (sem systemd rodando).
 #
-# Só habilita e inicia o SOCKET: o serviço sobe sozinho no primeiro pedido do
-# agente e sai depois de 10 min sem sessão. NUNCA reinicia o serviço numa
-# atualização: isso derrubaria uma sessão de manutenção em andamento. O binário
-# novo vale na próxima ativação (o serviço sai sozinho quando fica ocioso).
+# Só habilita e inicia os SOCKETS: o da VPN (o serviço sobe no primeiro pedido do
+# agente e sai depois de 10 min sem sessão) e o do SSH do suporte (só 127.0.0.1:22,
+# um sshd por conexão). NUNCA reinicia o serviço da VPN numa atualização: isso
+# derrubaria uma sessão de manutenção em andamento. O binário novo vale na próxima
+# ativação (o serviço sai sozinho quando fica ocioso).
+#
+# O ssh.service do sistema fica MASCARADO: o SSH nunca escuta nas redes da fábrica.
 set -e
 set -f
 
 ROOT="${DPKG_ROOT:-}"
-UNIT=oee-remote-access.socket
+UNITS="oee-remote-access.socket oee-sshd.socket"
+HOSTKEY=/var/lib/oee-remote-access/ssh/ssh_host_ed25519_key
 RENDERED=/etc/oee-gateway/nftables.nft
 
 log() { echo "oee-gateway-remote-access: $*"; }
@@ -31,22 +35,60 @@ create_user() {
 	fi
 }
 
-enable_socket() {
+enable_sockets() {
 	if [ -n "$ROOT" ]; then
 		if [ -z "$PREV_VERSION" ]; then
-			systemctl --root="$ROOT" enable "$UNIT" >/dev/null 2>&1 ||
-				warn "não foi possível habilitar $UNIT em $ROOT."
+			# shellcheck disable=SC2086 # lista de units, separação intencional
+			systemctl --root="$ROOT" enable $UNITS >/dev/null 2>&1 ||
+				warn "não foi possível habilitar $UNITS em $ROOT."
 		fi
 		return 0
 	fi
-	if have deb-systemd-helper; then
-		if deb-systemd-helper --quiet was-enabled "$UNIT"; then
-			deb-systemd-helper enable "$UNIT" >/dev/null || true
-		else
-			deb-systemd-helper update-state "$UNIT" >/dev/null || true
+	for u in $UNITS; do
+		if have deb-systemd-helper; then
+			if deb-systemd-helper --quiet was-enabled "$u"; then
+				deb-systemd-helper enable "$u" >/dev/null || true
+			else
+				deb-systemd-helper update-state "$u" >/dev/null || true
+			fi
+		elif [ -z "$PREV_VERSION" ]; then
+			systemctl enable "$u" >/dev/null || true
 		fi
-	elif [ -z "$PREV_VERSION" ]; then
-		systemctl enable "$UNIT" >/dev/null || true
+	done
+}
+
+# O sshd do sistema escutaria em todas as interfaces (0.0.0.0:22): para e mascara. O SSH do
+# acesso remoto é o oee-sshd.socket, só em 127.0.0.1. (A imagem já entrega mascarado.)
+mask_system_ssh() {
+	if [ -n "$ROOT" ]; then
+		systemctl --root="$ROOT" mask ssh.service ssh.socket >/dev/null 2>&1 || true
+		return 0
+	fi
+	if systemd_running; then
+		systemctl stop ssh.socket ssh.service >/dev/null 2>&1 || true
+	fi
+	systemctl mask ssh.service ssh.socket >/dev/null 2>&1 || warn "não foi possível mascarar o ssh.service do sistema."
+}
+
+# Chave de host própria do SSH do acesso remoto (a do sistema não é usada; a imagem nem a tem).
+host_key() {
+	have ssh-keygen || {
+		warn "ssh-keygen ausente: o SSH do acesso remoto não sobe até gerar $HOSTKEY."
+		return 0
+	}
+	if [ ! -s "$ROOT$HOSTKEY" ]; then
+		ssh-keygen -q -t ed25519 -N '' -C "oee-remote-access" -f "$ROOT$HOSTKEY"
+	fi
+	chmod 0600 "$ROOT$HOSTKEY"
+}
+
+check_sudoers() {
+	f="$ROOT/etc/sudoers.d/oee-suporte"
+	[ -f "$f" ] || return 0
+	have visudo || return 0
+	if ! visudo -cqf "$f" >/dev/null 2>&1; then
+		echo "oee-gateway-remote-access: ERRO: $f não é aceito por este sudo (visudo -cf $f)." >&2
+		exit 1
 	fi
 }
 
@@ -67,14 +109,19 @@ case "$1" in
 	configure | abort-upgrade | abort-remove | abort-deconfigure)
 		PREV_VERSION="${2:-}"
 		create_user
+		check_sudoers
+		host_key
+		mask_system_ssh
 		if systemd_running; then
 			systemctl daemon-reload
 		fi
-		enable_socket
+		enable_sockets
 		if systemd_running; then
-			if systemctl is-enabled --quiet "$UNIT" 2>/dev/null; then
-				systemctl --no-block start "$UNIT" || warn "falha ao iniciar $UNIT."
-			fi
+			for u in $UNITS; do
+				if systemctl is-enabled --quiet "$u" 2>/dev/null; then
+					systemctl --no-block start "$u" || warn "falha ao iniciar $u."
+				fi
+			done
 			if [ -n "$PREV_VERSION" ] && systemctl is-active --quiet oee-remote-access.service; then
 				log "o serviço segue com a versão anterior até ficar ocioso (não derruba sessão em andamento)."
 			fi

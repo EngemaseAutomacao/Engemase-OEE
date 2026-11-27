@@ -15,7 +15,7 @@
 | Jobs | **Vercel Cron** | Precisão de 1 minuto no Pro, até 100 jobs por projeto |
 | Arquivos | **Vercel Blob** | Exportações e binários do gateway |
 | E-mail | **Resend** (MVP) | E-mail transacional: definir senha, redefinição, avisos de acesso Engemase e de suspensão ([15](15-multi-cliente-e-acesso.md#5-better-auth-o-que-usamos-e-o-que-fica-fechado)). Alertas e resumos por e-mail na F2 |
-| Erros | Sentry + Vercel Observability | |
+| Erros | Logs da Vercel (Observability) | |
 | Testes | Vitest (unidade), Playwright (e2e) | |
 
 ## Mapa de telas e rotas

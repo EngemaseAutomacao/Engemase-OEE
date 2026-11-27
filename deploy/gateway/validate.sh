@@ -108,6 +108,7 @@ step "3. sudoers do tecnico"
 sudoers=$here/sudoers.d/oee-tecnico
 if have visudo; then
 	if visudo -cqf "$sudoers"; then ok "visudo -cf sudoers.d/oee-tecnico"; else ko "visudo -cf sudoers.d/oee-tecnico"; fi
+	if visudo -cqf "$here/sudoers.d/oee-suporte"; then ok "visudo -cf sudoers.d/oee-suporte"; else ko "visudo -cf sudoers.d/oee-suporte"; fi
 else
 	skip "visudo ausente"
 fi
@@ -170,6 +171,30 @@ if is_root && have unshare && have sudo && have su; then
 	fi
 else
 	skip "matriz do sudo real (precisa de root, unshare, sudo e su)"
+fi
+
+# --- 3b. SSH do acesso remoto ------------------------------------------------------------
+step "3b. SSH do acesso remoto (sshd_config e CA)"
+if have ssh-keygen && ssh-keygen -l -f "$here/ssh-ca/trusted-user-ca.pub" >/dev/null 2>&1; then
+	ok "ssh-ca/trusted-user-ca.pub: chave pública válida ($(ssh-keygen -l -f "$here/ssh-ca/trusted-user-ca.pub" | awk '{print $2}'))"
+elif have ssh-keygen; then
+	ko "ssh-ca/trusted-user-ca.pub ilegível"
+else
+	skip "ssh-keygen ausente"
+fi
+[[ -z $(grep -l 'PRIVATE KEY' "$here"/ssh-ca/* "$here"/vpn-keys/* "$here"/keys/* 2>/dev/null) ]] && ok "nenhuma chave privada nas pastas de chaves" || ko "chave PRIVADA no repositório"
+if have sshd && have ssh-keygen; then
+	hk=$tmp/sshd-hk; rm -f "$hk" "$hk.pub"; ssh-keygen -q -t ed25519 -N '' -f "$hk"
+	if out=$(sshd -t -f "$here/ssh/sshd_config" -o HostKey="$hk" -o TrustedUserCAKeys="$here/ssh-ca/trusted-user-ca.pub" 2>&1 | grep -v 'Unable to load host key: /var/lib/oee-remote-access'); [[ -z $out ]]; then
+		ok "sshd -t ssh/sshd_config"
+	else
+		ko "sshd -t ssh/sshd_config: $out"
+	fi
+	for opt in 'passwordauthentication no' 'permitrootlogin no' 'allowtcpforwarding no' 'authorizedkeysfile none' 'allowusers suporte'; do
+		sshd -T -f "$here/ssh/sshd_config" -o HostKey="$hk" -C user=suporte,host=x,addr=127.0.0.1 2>/dev/null | grep -qix "$opt" && ok "sshd: $opt" || ko "sshd sem $opt"
+	done
+else
+	skip "sshd ausente (apt install openssh-server)"
 fi
 
 # --- 4. nftables ---------------------------------------------------------------------------
@@ -315,10 +340,14 @@ if [[ $built == yes ]] && { have nfpm || [[ -n ${NFPM:-} ]]; }; then
 			rlist=$(dpkg-deb -c "$rdeb")
 			for p in ./usr/lib/oee-gateway/oee-remote-access ./usr/lib/systemd/system/oee-remote-access.socket \
 				./usr/lib/systemd/system/oee-remote-access.service ./usr/lib/sysusers.d/oee-remote-access.conf \
-				./usr/lib/tmpfiles.d/oee-remote-access.conf; do
+				./usr/lib/tmpfiles.d/oee-remote-access.conf ./usr/lib/systemd/system/oee-sshd.socket \
+				./usr/lib/systemd/system/oee-sshd@.service ./usr/share/oee-remote-access/ssh/sshd_config \
+				./usr/share/oee-remote-access/ssh/trusted-user-ca.pub ./etc/sudoers.d/oee-suporte; do
 				grep -qF -- " $p" <<<"$rlist" && ok "VPN contém ${p#.}" || ko "VPN sem ${p#.}"
 			done
 			grep -qE '^-rwxr-xr-x root/root .* ./usr/lib/oee-gateway/oee-remote-access$' <<<"$rlist" && ok "oee-remote-access 0755" || ko "oee-remote-access sem modo 0755"
+			grep -qE '^-r--r----- root/root .* ./etc/sudoers.d/oee-suporte$' <<<"$rlist" && ok "sudoers do suporte 0440" || ko "sudoers do suporte sem modo 0440"
+			[[ $(dpkg-deb -f "$rdeb" Depends) == *openssh-server* ]] && ok "VPN depende do openssh-server" || ko "VPN sem openssh-server"
 			grep -qE ' ./usr/share/oee-remote-access/keys/vpn-approval-[0-9a-f]{16}\.pub$' <<<"$rlist" && ok "VPN leva a chave da aprovação" || ko "VPN sem chave da aprovação (todo vpn.enable seria recusado)"
 			[[ -z $(grep -E ' ./usr/share/oee-remote-access/keys/' <<<"$rlist" | grep -vE '/keys/(vpn-approval-[0-9a-f]{16}\.pub)?$') ]] && ok "pasta de chaves da VPN só com vpn-approval-*.pub" || ko "arquivo estranho nas chaves da VPN"
 		else
@@ -362,7 +391,7 @@ else
 	echo "  [FALHA]  systemd-analyze verify"; exit 1
 fi
 if [ -f oee-remote-access.service ]; then
-	if systemd-analyze verify --man=no oee-remote-access.socket oee-remote-access.service; then
+	if systemd-analyze verify --man=no oee-remote-access.socket oee-remote-access.service oee-sshd.socket; then
 		echo "  [ok]     systemd-analyze verify (VPN: socket e serviço)"
 	else
 		echo "  [FALHA]  systemd-analyze verify da VPN"; exit 1
@@ -413,12 +442,18 @@ if [[ -n $deb ]] && is_root && have systemd-sysusers && have systemd-tmpfiles &&
 		run_ra postinst configure && ok "VPN: postinst configure" || { ko "VPN: postinst configure"; cat "$tmp/ms.out"; }
 		run_ra postinst configure 0.0.1 && ok "VPN: postinst de novo (idempotente)" || { ko "VPN: postinst 2x"; cat "$tmp/ms.out"; }
 		grep -q '^oee-ra:.*:/usr/sbin/nologin$' "$root/etc/passwd" && ok "VPN: usuário oee-ra sem login" || ko "VPN: usuário oee-ra ausente"
+		grep -q '^suporte:' "$root/etc/passwd" && ok "VPN: usuário suporte" || ko "VPN: usuário suporte ausente"
+		grep -qE '^suporte:!' "$root/etc/shadow" 2>/dev/null && ok "VPN: suporte com senha bloqueada" || ko "VPN: suporte sem senha bloqueada"
+		[[ $(stat -c %a "$root/var/lib/oee-remote-access/ssh/ssh_host_ed25519_key" 2>/dev/null) == 600 ]] && ok "VPN: chave de host do SSH 0600" || ko "VPN: chave de host do SSH ausente"
+		[[ -L $root/etc/systemd/system/sockets.target.wants/oee-sshd.socket ]] && ok "VPN: SSH local habilitado (oee-sshd.socket)" || ko "VPN: oee-sshd.socket não habilitado"
+		[[ $(readlink "$root/etc/systemd/system/ssh.service") == /dev/null ]] && ok "VPN: ssh.service do sistema mascarado" || ko "VPN: ssh.service do sistema não mascarado"
 		grep -qE '^oee:[^:]*:[0-9]+:.*oee-ra' "$root/etc/group" && ko "VPN: oee-ra no grupo do agente" || ok "VPN: oee-ra fora do grupo do agente"
 		[[ -L $root/etc/systemd/system/sockets.target.wants/oee-remote-access.socket ]] && ok "VPN: socket habilitado" || ko "VPN: socket não habilitado"
 		[[ -z $(find "$root/etc/systemd/system" -name 'oee-remote-access.service' 2>/dev/null) ]] && ok "VPN: serviço não habilitado (só pelo socket)" || ko "VPN: serviço habilitado direto"
 		run_ra prerm remove && ok "VPN: prerm remove" || { ko "VPN: prerm remove"; cat "$tmp/ms.out"; }
 		run_ra postrm purge && ok "VPN: postrm purge" || { ko "VPN: postrm purge"; cat "$tmp/ms.out"; }
-		[[ -z $(find "$root/etc/systemd/system" -name 'oee-remote-access*' 2>/dev/null) ]] && ok "VPN: purge removeu a habilitação" || ko "VPN: links sobraram no purge"
+		[[ -z $(find "$root/etc/systemd/system" -name 'oee-remote-access*' -o -name 'oee-sshd*' 2>/dev/null) ]] && ok "VPN: purge removeu a habilitação" || ko "VPN: links sobraram no purge"
+		[[ ! -e $root/var/lib/oee-remote-access ]] && ok "VPN: purge apagou a chave de host" || ko "VPN: chave de host sobrou no purge"
 	fi
 else
 	skip "scripts do pacote (precisa do .deb, root, systemd-sysusers, systemd-tmpfiles e systemctl)"

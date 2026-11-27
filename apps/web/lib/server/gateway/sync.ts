@@ -830,6 +830,19 @@ async function saveCommandResults(w: Writer, results: readonly CommandResult[], 
           inArray(gatewayCommand.status, [...RESULT_ACCEPTING_STATUSES]),
         ),
       )
+    // VPN ligada: guarda o IP do gateway na VPN (o técnico entra por ele: ssh suporte@<ip>).
+    if (r.type === "vpn.enable" && r.status === "ok" && typeof r.result.node_ip === "string" && r.result.node_ip !== "") {
+      await w.tx
+        .update(remoteAccessSession)
+        .set({ vpnIp: r.result.node_ip, updatedAt: w.now })
+        .where(
+          and(
+            eq(remoteAccessSession.id, r.result.session_id),
+            eq(remoteAccessSession.gatewayId, w.principal.gatewayId),
+            inArray(remoteAccessSession.status, ["approved", "activating", "active"]),
+          ),
+        )
+    }
     // O gateway não conseguiu ligar a VPN (aprovação recusada, política local, rede): a sessão falhou.
     if (r.type === "vpn.enable" && r.status !== "ok") {
       const [cmd] = await w.tx.select({ payload: gatewayCommand.payload }).from(gatewayCommand).where(eq(gatewayCommand.id, r.id)).limit(1)

@@ -10,7 +10,7 @@ ROOT="${DPKG_ROOT:-}"
 case "$1" in
 	remove | deconfigure)
 		if [ -z "$ROOT" ] && [ -d /run/systemd/system ]; then
-			systemctl stop oee-remote-access.socket oee-remote-access.service >/dev/null 2>&1 || true
+			systemctl stop oee-sshd.socket oee-remote-access.socket oee-remote-access.service >/dev/null 2>&1 || true
 		fi
 		;;
 	upgrade | failed-upgrade)

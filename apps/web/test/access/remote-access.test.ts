@@ -8,7 +8,8 @@ import { and, eq } from "drizzle-orm"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { AccessDeniedError, type TenantContext } from "@/lib/server/access/context"
 import { loadTenantContext } from "@/lib/server/access/load"
-import { aprovarAcesso, encerrarAcesso, lerPolitica, pedirAcesso, recusarAcesso, salvarPolitica } from "@/lib/server/remote/access"
+import { aprovarAcesso, emitirCertificadoSsh, encerrarAcesso, lerPolitica, pedirAcesso, recusarAcesso, salvarPolitica } from "@/lib/server/remote/access"
+import { sshCa } from "@/lib/server/remote/ssh-cert"
 import { approvalSigner } from "@/lib/server/remote/approval"
 import { generateKeyPairSync } from "node:crypto"
 import { type AuthHarness, createAuthHarness } from "../auth/support"
@@ -76,6 +77,41 @@ describe("acesso remoto: pedido, decisão e política", () => {
 
     // Aprovada que não ligou: encerrar fecha na hora (sem comando ao gateway).
     expect(await encerrarAcesso(h.t.db, admin, id)).toMatchObject({ ok: true, dados: { status: "ended" } })
+  })
+
+  it("certificado SSH: só quem pediu, com a sessão aprovada, até o prazo dela e para este gateway; auditado", async () => {
+    const { privateKey } = generateKeyPairSync("ed25519")
+    const ca = sshCa(Buffer.from(privateKey.export({ format: "jwk" }).d!, "base64url").toString("base64"))!
+    const { publicKey } = generateKeyPairSync("ed25519")
+    const raw = publicKey.export({ format: "der", type: "spki" }).subarray(-32)
+    const len = (n: number) => Buffer.from([0, 0, 0, n])
+    const linha = `ssh-ed25519 ${Buffer.concat([len(11), Buffer.from("ssh-ed25519"), len(32), raw]).toString("base64")} tecnico`
+
+    const r = await pedirAcesso(h.t.db, eng, pedido(gw2, { durationMin: 30 }))
+    const id = r.ok ? r.dados.id : ""
+    expect(await emitirCertificadoSsh(h.t.db, eng, { id, publicKey: linha }, ca)).toMatchObject({ ok: false, mensagem: "O certificado só sai com a sessão aprovada ou ativa." })
+    await aprovarAcesso(h.t.db, admin, { id })
+    expect(await emitirCertificadoSsh(h.t.db, eng, { id, publicKey: linha }, null)).toMatchObject({ ok: false })
+    await expect(emitirCertificadoSsh(h.t.db, admin, { id, publicKey: linha }, ca)).rejects.toBeInstanceOf(AccessDeniedError)
+    expect(await emitirCertificadoSsh(h.t.db, eng, { id, publicKey: "ssh-rsa AAAA x" }, ca)).toMatchObject({ ok: false })
+
+    const now = new Date()
+    const c = await emitirCertificadoSsh(h.t.db, eng, { id, publicKey: linha }, ca, now)
+    expect(c.ok).toBe(true)
+    if (!c.ok) return
+    const [row] = await h.t.db.select().from(s.remoteAccessSession).where(eq(s.remoteAccessSession.id, id))
+    expect(row?.sshCertSerial).toBe(c.dados.serial)
+    expect(c.dados.validoAteMs).toBeLessThanOrEqual(row!.expiresAt!.getTime())
+    expect(c.dados.usuario).toBe("suporte")
+    const blob = Buffer.from(c.dados.certificado.split(" ")[1]!, "base64")
+    expect(blob.includes(Buffer.from(`oee-gw-${gw2}`))).toBe(true)
+    const audit = await h.t.db.select({ action: s.auditLog.action, after: s.auditLog.after }).from(s.auditLog).where(and(eq(s.auditLog.entityId, id), eq(s.auditLog.action, "remote.ssh_cert")))
+    expect(audit).toHaveLength(1)
+    expect(audit[0]?.after).toMatchObject({ serial: c.dados.serial })
+
+    // Encerrada: não sai mais certificado.
+    await encerrarAcesso(h.t.db, eng, id)
+    expect(await emitirCertificadoSsh(h.t.db, eng, { id, publicKey: linha }, ca)).toMatchObject({ ok: false })
   })
 
   it("quem pode: admin do cliente não pede; supervisor e a Engemase não aprovam; quem pediu só cancela", async () => {

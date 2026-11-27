@@ -58,7 +58,7 @@ Os scripts usados ficaram fora do repositório (scratchpad da sessão). Para rep
 
 - **Modo TV/andon dentro de iframe:** docs/08 previa abrir exceção se ele fosse embutido. Hoje nada é embutido e todas as rotas têm `frame-ancestors 'none'`. Se um cliente pedir, abrir **só** `/[cliente]/andon/*` para a origem combinada.
 - **Vercel Firewall** (taxa por IP/rota): depende da conta (N1).
-- **Relatório de violações** (`report-to`): quando houver Sentry (N1), apontar a CSP para ele.
+- **Relatório de violações** (`report-to`): o projeto não usa Sentry. O endereço que vai receber os relatórios da CSP ainda está por decidir.
 - **`preload` do HSTS:** só com domínio próprio.
 
 ## 3. Isolamento entre clientes no banco (RLS, D38)

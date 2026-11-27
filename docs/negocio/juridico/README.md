@@ -31,7 +31,7 @@
 | **[OPCIONAL]** | Cláusula que pode sair |
 | **[CONFIRMAR: ...]** | Fato a conferir: fornecedor, norma no Diário Oficial ou produto |
 | **[ADVOGADO: ...]** | Ponto que precisa de opinião jurídica |
-| **[DECIDIR]** | Escolha da Engemase ainda não feita (ex.: região do Sentry) |
+| **[DECIDIR]** | Escolha da Engemase ainda não feita (ex.: fornecedor da cópia lógica externa) |
 
 ## 3. Quem é quem (resumo)
 
@@ -69,7 +69,7 @@
 | **LGPD** (Lei 13.709/2018) | Papéis de controlador e operador (art. 5º), bases legais (art. 7º e 10), adolescentes (art. 14), eliminação e conservação (art. 16), direitos (arts. 18 e 19), transferência internacional (art. 33), registro (art. 37), operador segue instruções (art. 39), encarregado (art. 41), responsabilidade (art. 42), segurança e incidentes (arts. 46 a 48) | Todos |
 | **Resolução CD/ANPD nº 15/2024** (incidentes) | Controlador comunica a ANPD e os titulares em **3 dias úteis** do conhecimento; complemento em 20 dias úteis; comunicação obrigatória quando há risco ou dano relevante (afeta significativamente direitos **e** envolve dado sensível, de criança, adolescente ou idoso, financeiro, **de autenticação**, sigiloso ou em larga escala); registro de todo incidente por **5 anos**; prazo em dobro para agente de pequeno porte | Plano de incidentes; DPA, cl. 11 |
 | **Resolução CD/ANPD nº 19/2024** (transferência internacional) | Cláusulas-padrão contratuais (Anexo II) adotadas **na íntegra e sem alteração**; servem para exportador e importador como controlador ou operador; prazo para adaptar contratos terminou em **23/08/2025** | DPA, cl. 9 e Apêndice 3 |
-| **Resolução CD/ANPD nº 32/2026** (adequação da União Europeia) | A ANPD reconheceu a UE como destino com proteção adequada (janeiro de 2026), em decisão recíproca com a Comissão Europeia | DPA, cl. 9.3 (Sentry na UE) |
+| **Resolução CD/ANPD nº 32/2026** (adequação da União Europeia) | A ANPD reconheceu a UE como destino com proteção adequada (janeiro de 2026), em decisão recíproca com a Comissão Europeia | DPA, cl. 9.3 (destinos na UE) |
 | **Resolução CD/ANPD nº 18/2024** (encarregado) | Controlador indica encarregado, com substituto, e divulga identidade e contato no site; para o **operador**, a indicação é **facultativa** (conta como boa prática); agente de pequeno porte dispensado deve manter canal de comunicação | Política, seção 1; seção 6 abaixo |
 | **Resolução CD/ANPD nº 2/2022** (agentes de pequeno porte) | Microempresas, empresas de pequeno porte e startups, **exceto** se fizerem tratamento de alto risco, tiverem receita acima do limite legal (R$ 4,8 milhões por ano para empresa de pequeno porte; limite próprio para startups) ou pertencerem a grupo econômico acima desse limite: dispensa de encarregado (com canal de comunicação), registro simplificado, prazos em dobro [CONFIRMAR no texto oficial] | Seção 6 abaixo |
 | **Marco Civil da Internet** (Lei 12.965/2014), art. 15 | Provedor de aplicação guarda os registros de acesso (IP, data e hora) por **6 meses**, em sigilo. O STJ incluiu a **porta lógica de origem** enquanto o IP for IPv4 (REsp 1.784.156/SP, 2019) | Política; ROPA CT-03 |
@@ -82,8 +82,8 @@
 | 1 | **Revisão jurídica** de todas as minutas (proteção de dados e contratos). A nota do operador de chão também por advogado **trabalhista**; o Anexo H também pelo **contador** (venda × locação) | Direção da Engemase | Piloto |
 | 2 | **Nomear o encarregado (DPO)** e um substituto, e publicar nome e contato na política. Mesmo se a Engemase puder ser dispensada como agente de pequeno porte, **a recomendação é nomear**: a Engemase acessa os dados de todos os clientes (D5) e os clientes vão pedir um contato formal. Pode ser pessoa da equipe sem conflito de interesse ou serviço externo | Direção | Piloto |
 | 3 | **Confirmar o enquadramento** como agente de pequeno porte: receita bruta anual (até R$ 4,8 milhões para empresa de pequeno porte), grupo econômico e ausência de tratamento de alto risco. Muda os prazos (em dobro) e a dispensa de encarregado | Direção e contador | Piloto |
-| 4 | **Cláusulas-padrão da ANPD com cada fornecedor:** conferir se os DPAs da Vercel, Neon, Sentry, Resend e Tailscale, da ferramenta de chamados (se externa), da Better Stack e do armazenamento da cópia lógica externa já as incluem; se não, assinar em instrumento separado ou trocar o fornecedor. Os termos do WhatsApp são de adesão: ver com o advogado | Direção e advogado | Primeiro dado real de cliente |
-| 5 | **Confirmar onde cada fornecedor guarda os dados** (logs da Vercel, região do Blob, cópias da Neon, retenção do Resend e do Sentry, ferramenta de chamados, Better Stack) e decidir a região do Sentry (UE recomendada), a região reserva da Vercel (DPA, cl. 9.6) e o prazo máximo da cópia lógica externa (DPA, cl. 14.2) | Equipe técnica | Contas criadas (N1) |
+| 4 | **Cláusulas-padrão da ANPD com cada fornecedor:** conferir se os DPAs da Vercel, Neon, Resend e Tailscale, da ferramenta de chamados (se externa), da Better Stack e do armazenamento da cópia lógica externa já as incluem; se não, assinar em instrumento separado ou trocar o fornecedor. Os termos do WhatsApp são de adesão: ver com o advogado | Direção e advogado | Primeiro dado real de cliente |
+| 5 | **Confirmar onde cada fornecedor guarda os dados** (logs da Vercel, região do Blob, cópias da Neon, retenção do Resend, ferramenta de chamados, Better Stack) e decidir a região reserva da Vercel (DPA, cl. 9.6) e o prazo máximo da cópia lógica externa (DPA, cl. 14.2) | Equipe técnica | Contas criadas (N1) |
 | 6 | Preencher dados: razão social, CNPJ, endereços, foro, e-mails de privacidade, segurança e suporte, contatos 24 horas | Direção | Assinatura |
 | 7 | Preços e limites dos planos (L9) e SLA (L11) para os Anexos A e B | Comercial | Venda |
 | 8 | Decisões abertas que mudam o texto: D2, D3, D4, D14, D20 | Dono do produto | Assinatura |
@@ -102,7 +102,7 @@
 | P6 | Exportar os registros de uma pessoa (pedido de titular) | DPA, cl. 10 |
 | P7 | Eliminar ou anonimizar a conta de acesso sem vínculo depois do prazo | Política, seção 9; ROPA CT-01 |
 | P8 | Validade do link e exclusão dos arquivos de exportação | DPA, Apêndice 1 |
-| P9 | Sentry sem dados pessoais (sem IP, e-mail ou corpo de requisição) | DPA, Apêndice 3 |
+| P9 | Mensagens de erro nos logs da Vercel sem e-mail nem corpo de requisição | ROPA CT-08 |
 | P10 | Exportação completa em CSV e roteiro de encerramento (dias 0, 30 e 60) com termo de eliminação, que lista as cópias de segurança e a data em que a última expira | Contrato, cl. 16 |
 | P11 | Travar a retenção em 24 meses no console (hoje o campo "Retenção (meses)" de cada cliente é editável, com mínimo de 6) ou tirar o campo | Contrato, cl. 11.2 |
 | P12 | Lista dos clientes já eliminados, para apagar os dados deles de novo depois de restaurar uma cópia de segurança (runbook RB-08) | Contrato, cl. 16.1; DPA, cl. 14.2 |
@@ -134,6 +134,5 @@ Consultadas em 12/11/2026. Os sites `gov.br` e `in.gov.br` não estavam acessív
 **Fornecedores:**
 - Neon, regiões (São Paulo `aws-sa-east-1`, disponível desde fev/2025): <https://neon.com/docs/introduction/regions> · <https://neon.com/docs/changelog/2025-02-28>
 - Vercel, regiões das funções: <https://vercel.com/docs/functions/configuring-functions/region> · DPA: <https://vercel.com/legal/dpa>
-- Sentry, local de armazenamento (EUA ou UE/Frankfurt): <https://docs.sentry.io/organization/data-storage-location/>
 - Resend, regiões (São Paulo disponível; dados da conta nos EUA): <https://resend.com/docs/dashboard/domains/regions>
 - Tailscale, privacidade e DPA: <https://tailscale.com/privacy-policy> · <https://tailscale.com/dpa>

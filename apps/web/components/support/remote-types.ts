@@ -35,6 +35,9 @@ export interface RemoteSessionVM {
   bytes: number | null
   onsiteContact: string | null
   changes: string[]
+  /** Sistema real: IP do gateway na VPN (depois de ligar) e se a sessão é de quem está vendo. */
+  vpnIp?: string | null
+  mine?: boolean
 }
 
 export interface PolicyWindow {

@@ -35,14 +35,20 @@ description: |-
   Acesso remoto de manutenção (VPN sob demanda) do gateway OEE da Engemase
   Liga a VPN só com uma aprovação do admin do cliente assinada pela plataforma
   e respeitando a política local do gateway. Abre apenas a porta 22 na VPN,
-  repassada ao SSH local; a rede da fábrica e os CLPs ficam de fora. Desliga no
-  prazo, por inatividade ou a pedido, e não religa depois de reiniciar.
+  repassada ao SSH local (só 127.0.0.1), que aceita só o usuário suporte com
+  certificado da CA Engemase emitido para este gateway e válido até o fim da
+  sessão; o sudo do suporte registra entrada e saída. A rede da fábrica e os
+  CLPs ficam de fora. Desliga no prazo, por inatividade ou a pedido, e não
+  religa depois de reiniciar.
 
-# O grupo oee (dono do socket) e /etc/oee-gateway vêm do agente.
+# O grupo oee (dono do socket) e /etc/oee-gateway vêm do agente. O sshd do sistema
+# (openssh-server) é usado só pelo oee-sshd.socket, em 127.0.0.1; o ssh.service fica mascarado.
 depends:
   - systemd (>= 252)
   - ca-certificates
   - oee-gateway
+  - openssh-server
+  - sudo (>= 1.9.10)
 
 deb:
   compression: xz
@@ -61,6 +67,29 @@ contents:
     dst: /usr/lib/systemd/system/oee-remote-access.service
     file_info:
       mode: 0644
+  - src: deploy/gateway/systemd/oee-sshd.socket
+    dst: /usr/lib/systemd/system/oee-sshd.socket
+    file_info:
+      mode: 0644
+  - src: deploy/gateway/systemd/oee-sshd@.service
+    dst: /usr/lib/systemd/system/oee-sshd@.service
+    file_info:
+      mode: 0644
+  # SSH do acesso remoto: configuração própria (só suporte, só certificado da CA para este
+  # gateway) e a chave pública da CA. A privada fica na plataforma (SSH_CA_SIGNING_KEY).
+  - src: deploy/gateway/ssh/sshd_config
+    dst: /usr/share/oee-remote-access/ssh/sshd_config
+    file_info:
+      mode: 0644
+  - src: deploy/gateway/ssh-ca/trusted-user-ca.pub
+    dst: /usr/share/oee-remote-access/ssh/trusted-user-ca.pub
+    file_info:
+      mode: 0644
+  - src: deploy/gateway/sudoers.d/oee-suporte
+    dst: /etc/sudoers.d/oee-suporte
+    type: config|noreplace
+    file_info:
+      mode: 0440
   - src: deploy/gateway/sysusers.d/oee-remote-access.conf
     dst: /usr/lib/sysusers.d/oee-remote-access.conf
     file_info:

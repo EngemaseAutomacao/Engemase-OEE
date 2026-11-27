@@ -1,12 +1,12 @@
 #!/bin/sh
 # postrm do pacote oee-gateway-remote-access. Idempotente; respeita DPKG_ROOT.
-# O purge não apaga o usuário oee-ra (a imagem também o declara) nem a política
-# local /etc/oee-gateway/remote-access.json (é do cliente).
+# O purge não apaga os usuários oee-ra e suporte (a imagem também os declara), a política
+# local /etc/oee-gateway/remote-access.json (é do cliente) nem o registro de I/O do sudo.
 set -e
 set -f
 
 ROOT="${DPKG_ROOT:-}"
-UNIT=oee-remote-access.socket
+UNITS="oee-remote-access.socket oee-sshd.socket"
 
 systemd_running() {
 	[ -z "$ROOT" ] && [ -d /run/systemd/system ]
@@ -19,15 +19,20 @@ case "$1" in
 		fi
 		;;
 	purge)
-		if [ -z "$ROOT" ] && command -v deb-systemd-helper >/dev/null 2>&1; then
-			deb-systemd-helper purge "$UNIT" >/dev/null || true
-		else
-			set +f
-			for link in "$ROOT"/etc/systemd/system/*.wants/"$UNIT"; do
-				if [ -L "$link" ]; then rm -f "$link"; fi
-			done
-			set -f
-		fi
+		for u in $UNITS; do
+			if [ -z "$ROOT" ] && command -v deb-systemd-helper >/dev/null 2>&1; then
+				deb-systemd-helper purge "$u" >/dev/null || true
+			else
+				set +f
+				for link in "$ROOT"/etc/systemd/system/*.wants/"$u"; do
+					if [ -L "$link" ]; then rm -f "$link"; fi
+				done
+				set -f
+			fi
+		done
+		# A chave de host do SSH do acesso remoto. O registro de I/O do sudo (/var/log/sudo-io)
+		# fica: é auditoria. O ssh.service do sistema continua mascarado (política da imagem).
+		rm -rf "$ROOT/var/lib/oee-remote-access"
 		if systemd_running; then
 			systemctl daemon-reload || true
 		fi

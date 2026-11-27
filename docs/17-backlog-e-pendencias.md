@@ -19,8 +19,8 @@ Premissas: 2 desenvolvedores (**Web** e **Gateway**), semana 1 = 16/11/2026, sem
 
 | ID | Épico | Trilha | Fase | Semanas | Depende de | Pronto quando |
 |---|---|---|---|---|---|---|
-| N1 | Contas e ambientes (Vercel Pro, Neon, domínio, Sentry, proteção de branch) | Fora do código | F0 | 1 | — | Projeto, banco e domínio criados |
-| W1 | Fundação do monorepo, CI, `.env.example`, Sentry básico | Web | F0 | 1 | N1 | PR verde e preview funcionando |
+| N1 | Contas e ambientes (Vercel Pro, Neon, domínio, proteção de branch) | Fora do código | F0 | 1 | — | Projeto, banco e domínio criados |
+| W1 | Fundação do monorepo, CI, `.env.example` | Web | F0 | 1 | N1 | PR verde e preview funcionando |
 | X1 | `packages/contracts` (Zod → JSON Schema + fixtures + teste em Go) | Ambos | F0 | 1 | Ajustes do protocolo (D-proto) | Fixtures validam em TS e em Go |
 | W2a | Schema núcleo + primeira migração | Web | F0 | 1 | W1 | Migração aplicada no branch de preview |
 | W3 | `/enroll` + `/sync` mínimos gravando na Neon + PoC do driver com 100 gateways | Web | F0 | 1 | W2a, X1 | Saída da Fase 0 (com G0) |
@@ -118,7 +118,7 @@ Em 12/11/2026 o dono do produto decidiu D1, D5, D6, D7, D11, D12, D13, D26, D28 
 | Cobrança | Mensalidade sobre o **maior** entre máquinas contratadas e máquinas ativas no mês. Cadastrar acima do contratado gera aviso à Engemase, sem bloquear. Começa quando o cliente vira "Ativo" ou 30 dias depois do primeiro gateway instalado, o que vier primeiro |
 | Preços iniciais | Por máquina por mês: Starter R$ 230, Pro R$ 330, Enterprise R$ 420. Mínimo de 5, 10 e 40 máquinas. Contrato mínimo de 12 meses; desconto total de no máximo 20%. Tabela inicial, revisar depois do piloto ([`docs/negocio/planos-e-precos.md`](negocio/planos-e-precos.md)) |
 | Retenção | Igual para todos os planos e clientes (D6) |
-| Operação | Monitor externo pago a partir do primeiro contrato Pro ou Enterprise. Plantão 24×7 só para P1 nos planos Pro e Enterprise, com escala de 3 pessoas. Restauração completa do banco em até 2 h; PITR de 14 dias; cópias externas por 90 dias. Região reserva da Vercel: `iad1`. Sentry na região da UE. Encarregado (DPO) e substituto a nomear |
+| Operação | Monitor externo pago a partir do primeiro contrato Pro ou Enterprise. Plantão 24×7 só para P1 nos planos Pro e Enterprise, com escala de 3 pessoas. Restauração completa do banco em até 2 h; PITR de 14 dias; cópias externas por 90 dias. Região reserva da Vercel: `iad1`. Encarregado (DPO) e substituto a nomear |
 | Rockwell | CompactLogix e ControlLogix: AOI de servidor Modbus TCP da Rockwell quando o controlador suportar; senão, gateway de protocolo EtherNet/IP ↔ Modbus TCP. Driver nativo EtherNet/IP no roadmap |
 | Protocolos nativos | F2: S7comm (Siemens) primeiro, depois EtherNet/IP (Rockwell); OPC UA e outros depois |
 | Siemens legado | S7-300 e S7-400: a licença Modbus/TCP por CPU entra na proposta, paga pelo cliente; ou I/O remoto até existir S7comm |
@@ -169,7 +169,7 @@ Em 12/11/2026 o dono do produto decidiu D1, D5, D6, D7, D11, D12, D13, D26, D28 
 | L5 | MTBF = tempo produzindo ÷ número de falhas; MTTR = tempo total em falha ÷ número de falhas; TEEP = OEE × (tempo planejado ÷ tempo de calendário). F2 |
 | L6 | CSV UTF-8 com BOM, separador `;` e vírgula decimal (abre direto no Excel em português). Datas no fuso da unidade, em ISO 8601 com o deslocamento. Colunas iguais às da tela. Acima de 100 mil linhas, vira tarefa assíncrona com link por e-mail |
 | L12 | OEE da plataforma igual ao da planilha de referência com diferença de até 0,5 ponto percentual por turno. Peças iguais ao contador do CLP no turno, salvo período `NO_COMM` registrado. Navegadores: Chrome e Edge atuais, Safari do iOS atual; TV com Chrome ou Android TV. Carga: 100 gateways simulados (W3) |
-| L13 | Sentry para erros e logs da Vercel. Meta: 99% dos `/sync` respondidos em menos de 1 s. Alerta para a Engemase quando um gateway passa 15 min sem `/sync` ou o atraso do buffer passa de 10 min |
+| L13 | Erros vistos nos logs da Vercel (Observability). Meta: 99% dos `/sync` respondidos em menos de 1 s. Alerta para a Engemase quando um gateway passa 15 min sem `/sync` ou o atraso do buffer passa de 10 min |
 | L14 | PITR do Neon na janela do plano contratado; RPO e RTO os do SLA ([`docs/negocio/sla-e-suporte.md`](negocio/sla-e-suporte.md)). Teste de restauração a cada 3 meses (runbook 08). Chaves (OTA, VAPID, CA SSH) num cofre de senhas da empresa, com 2 pessoas com acesso |
 | L17 | Vercel Cron: alertas (1 min); expiração de concessões, tokens e códigos (5 min); reconciliação da VPN (15 min); partições e limpeza (diário); resumo diário por e-mail (diário). **Implementado** em `/api/cron/*` (24/11/2026; partições quando houver pg_partman) |
 | L18 | Só português do Brasil até a F2. Quando entrar o segundo idioma (provavelmente espanhol), usar `next-intl` |
@@ -195,7 +195,7 @@ Continua valendo: `generateStaticParams` e `instant = false` são permitidos só
   - kit do técnico;
   - tablet Android e TV, se houver tablet.
 - **Contas:**
-  - agora: Vercel Pro, Neon, domínio e DNS, Sentry;
+  - agora: Vercel Pro, Neon, domínio e DNS;
   - semana 6: Resend;
   - antes da F2: Tailscale.
 - **Compra e importação:** cotação formal; despachante para a NCM; consulta a um OCD sobre a ANATEL para equipamento sem rádio.
@@ -206,7 +206,7 @@ Continua valendo: `generateStaticParams` e `instant = false` são permitidos só
 
 1. Pedir cotação formal e comprar o hardware de bancada. O prazo de importação é o maior risco.
 2. Consultar o despachante e um OCD sobre a NCM e a ANATEL.
-3. Criar as contas (Vercel Pro, Neon, domínio, Sentry) e a proteção de branch no GitHub.
+3. Criar as contas (Vercel Pro, Neon, domínio) e a proteção de branch no GitHub.
 4. ~~Dono do produto decide os bloqueios da Fase 0 (D2, D7, D26, D28, D29, D36, D37, D38).~~ Feito em 12/11/2026 (seção 3).
 5. Abrir o PR do branch de trabalho, revisar e ligar o CI (já inclui o teste de ponta a ponta).
 6. Aplicar as migrações 0000–0004 num branch Neon de preview e confirmar que o papel de login é membro de `app_user` e que o dono das tabelas não tem BYPASSRLS.
@@ -251,7 +251,7 @@ Continua valendo: `generateStaticParams` e `instant = false` são permitidos só
 | **Design (Melissa)** | Só depois da troca do mock: revisar estados vazios, carregando e erro com dados reais | W8, W9 | Prints no celular e no computador |
 | **Pesquisa e docs (Sofia)** | ~~Guias por papel e notas de versão (L15)~~ (feito em 24/11/2026: `docs/guias/` e `docs/notas-de-versao.md`); manter este documento, o `docs/00`, os guias e as notas de versão em dia a cada entrega | L15 | — |
 
-**Depende só da Engemase (nenhum especialista resolve):** compra do hardware de bancada e consulta ao despachante/OCD (passos 1 e 2); contas Vercel Pro, Neon e Sentry (passo 3); preencher os dados das minutas (CNPJ, nomes dos super admins, DPO, escala de plantão) e a revisão por advogado (L7); escolher cliente e linha do piloto (passo 9).
+**Depende só da Engemase (nenhum especialista resolve):** compra do hardware de bancada e consulta ao despachante/OCD (passos 1 e 2); contas Vercel Pro e Neon (passo 3); preencher os dados das minutas (CNPJ, nomes dos super admins, DPO, escala de plantão) e a revisão por advogado (L7); escolher cliente e linha do piloto (passo 9).
 
 **Incerto:** não deu para conferir daqui se o projeto na Vercel já existe nem se `engemase-oee.vercel.app` responde (a rede desta sessão bloqueia o acesso). As minutas foram revisadas em parte em 13/11 (commit `08570fb`, "correções parciais"); falta uma leitura final para ver se a revisão ficou completa.
 
@@ -288,7 +288,7 @@ Pedido do Pablo pela Central: finalizar todas as pendências. Seis especialistas
 | **Gateway (G4b)** | `oee-updater` (assinatura Ed25519, saúde, rollback, regra da L25); operações reais do `oee-helper`; `oee-localui` com login e telas de status | Conferência na bancada (§5.7 do roteiro); par de chaves do OTA de produção; ~~comando de atualização pela nuvem~~ feito em 27/11/2026 (§8.4) |
 | **L15 (Docs)** | Guias por papel em [`guias/`](guias/README.md) e [notas de versão](notas-de-versao.md) | — |
 
-**Sobra só o que não depende de código:** contas (Vercel Pro, Neon, Sentry, Resend), hardware de bancada, proteção da `main` e Firewall da Vercel (administrador), minutas jurídicas e a escolha do piloto.
+**Sobra só o que não depende de código:** contas (Vercel Pro, Neon, Resend), hardware de bancada, proteção da `main` e Firewall da Vercel (administrador), minutas jurídicas e a escolha do piloto.
 
 **Atenção na implantação (N1):** o usuário do `DATABASE_URL` deve ser `NOINHERIT` com `SET app_user` (revisão W11), e o do `AUTH_DATABASE_URL` precisa herdar `auth_service`. ~~Antes disso, conferir que a API dos gateways funciona com o login `NOINHERIT`~~ **Conferido e corrigido em 27/11/2026:** a busca do token e do código, o limitador e o registro das tarefas agendadas falhavam com `permission denied for schema app`; agora rodam em `withAppRole` (`@engemase/db`), com o teste `apps/web/test/server/login-producao.test.ts`. As tarefas que rodam mais de uma vez por dia são chamadas pelo cron-job.org (ver apps/web/README.md, "Tarefas agendadas").
 
@@ -300,7 +300,7 @@ O programa da VPN está pronto e testado sem hardware: plataforma (pedido, aprov
 
 | # | Falta | Depende de | Pronto quando |
 |---|---|---|---|
-| V1 | **SSH do gateway:** OpenSSH escutando só em `127.0.0.1`, só certificados de curta duração, usuário `suporte` com registro do `sudo` | Decidir onde fica a chave que emite os certificados (CA SSH; sugestão no `docs/12`: KMS, com cópia no cofre da L14) | Técnico entra pela VPN com certificado de poucas horas e o acesso aparece na auditoria |
+| V1 | ~~**SSH do gateway**~~ **Feito em 27/11/2026:** sshd só em 127.0.0.1 com certificados curtos da CA Engemase (principal por gateway), usuário `suporte` com registro do `sudo`, emissão na plataforma. Falta pôr `SSH_CA_SIGNING_KEY` na Vercel (Sensitive, Production) e no cofre; depois, enviar o registro do `sudo` à plataforma no fim da sessão | Pablo (variável) | Técnico entra pela VPN com o certificado da sessão |
 | V2 | ~~**Empacotamento**~~ **Feito em 27/11/2026:** pacote próprio `oee-gateway-remote-access` (programa, socket, usuário `oee-ra`, chave da aprovação em `/usr/share/oee-remote-access/keys`, nunca na pasta do OTA), TCP 443 liberado ao `oee-ra` no firewall; conferido pelo `deploy/gateway/validate.sh` (148 ok). Instala só à mão na bancada até o V3 | — | Feito |
 | V3 | **Teste na bancada** com gateway na internet e o Tailscale de verdade (instalar o `oee-gateway-remote-access` à mão): ligar, entrar por SSH, encerrar por prazo, inatividade, pedido e trava local; nó apagado no fim | Hardware (G0) e V1, V2 | Roteiro conferido; só então criar `VPN_HABILITADA=1` na Vercel |
 | V4 | Conferir na aba Actions do GitHub o job `go-remote-access` do CI | — | Job verde |

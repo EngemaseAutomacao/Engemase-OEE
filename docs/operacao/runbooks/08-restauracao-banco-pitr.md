@@ -4,7 +4,7 @@
 |---|---|
 | **Vale a partir de** | Banco de produção na Neon: ramo `main`, projeto na AWS `sa-east-1` (São Paulo, D7), funções da Vercel em `gru1`. As contas ainda vão ser criadas ([docs/17 §6](../../17-backlog-e-pendencias.md#6-itens-fora-do-código)) |
 | **Severidade típica** | Crítica (incidente de plataforma) |
-| **Alerta** | Nenhum automático. Chega pelo Sentry, por `5xx` na ingestão ou por relato de clientes (seção 2) |
+| **Alerta** | Nenhum automático. Chega pelos logs da Vercel, por `5xx` na ingestão ou por relato de clientes (seção 2) |
 | **Quem atende** | **N3** decide e coordena (coordenador do incidente); **N2** (engenharia web) executa; N1 e os gestores de conta avisam os clientes |
 | **Perde dados?** | **Sim**, tudo o que foi gravado depois do ponto escolhido, se nada for feito. **Os gateways não reenviam o que a nuvem já confirmou** (L14): a única cópia desse período é o estado de antes da restauração, que a Neon guarda num ramo de backup (seção 5.4) |
 
@@ -25,7 +25,7 @@ Dados de produção, cadastros ou o esquema do banco apagados, sobrescritos ou c
 
 ## 2. Como aparece na plataforma e nos alertas
 
-- **Sentry e logs da Vercel:** erros de banco, `5xx` na ingestão (`/api/gateway/v1/sync`), telas vazias ou com dados faltando.
+- **Logs da Vercel (Observability):** erros de banco, `5xx` na ingestão (`/api/gateway/v1/sync`), telas vazias ou com dados faltando.
 - **Clientes** relatando máquinas, turnos ou apontamentos que sumiram.
 - **Auditoria:** a ação que causou o dano, quando passou pelo app (com `before` e `after`). Comando direto no banco não aparece na auditoria.
 - **Gateways**, durante a restauração: erro `5xx` ou de conexão, selo "dados atrasados" e fila crescendo. É o esperado: voltam sozinhos.
@@ -54,7 +54,7 @@ Dados de produção, cadastros ou o esquema do banco apagados, sobrescritos ou c
 ### 4.1 Pela plataforma e pela auditoria (sempre primeiro)
 
 1. **Abrir o incidente** ([plano de resposta a incidentes](../../negocio/juridico/06-plano-de-resposta-a-incidentes.md#3-papéis)): coordenador, severidade, registro com horários e fuso. Perda ou corrupção de dados pessoais segue também os prazos do plano.
-2. **Hora do dano:** pela auditoria, pelos deploys e migrações na Vercel, pelos erros no Sentry. **T0** = um pouco antes do dano, em UTC.
+2. **Hora do dano:** pela auditoria, pelos deploys e migrações na Vercel, pelos erros nos logs da Vercel. **T0** = um pouco antes do dano, em UTC.
 3. **Alcance:** quais tabelas, quais clientes, quantas linhas. Compare as contagens com um ramo temporário em T0 (4.2).
 4. **Caminho:** recuperação parcial (5.2) sempre que o dano for limitado; restauração do ramo `main` (5.3) só quando for amplo ou estrutural.
 
@@ -78,7 +78,7 @@ Nada a fazer antes. A coleta não depende da nuvem: durante a restauração os g
 
 ### 5.1 Antes de restaurar
 
-1. **Preservar evidências** ([plano, seção 9](../../negocio/juridico/06-plano-de-resposta-a-incidentes.md#9-preservação-de-evidências)): logs da Vercel e eventos do Sentry expiram rápido.
+1. **Preservar evidências** ([plano, seção 9](../../negocio/juridico/06-plano-de-resposta-a-incidentes.md#9-preservação-de-evidências)): os logs da Vercel expiram rápido.
 2. **Avisar os clientes:** plataforma em manutenção; a coleta continua nos gateways.
 3. **Tirar a plataforma do ar** durante a restauração, pausando o projeto na Vercel. Confira o código de resposta antes:
 

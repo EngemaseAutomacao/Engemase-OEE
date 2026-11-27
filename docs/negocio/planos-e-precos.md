@@ -280,7 +280,6 @@ A equipe técnica propôs o **comodato** como escolha provisória ([docs/17 §3]
 | Vercel, uso em São Paulo (`gru1`) | Pro | Edge Requests: 10 milhões inclusos, depois **US$ 3,20 por milhão**. Transferência: 1 TB incluso, depois US$ 0,22/GB. CPU ativa: **US$ 0,221/hora** (16 h inclusas). Memória: US$ 0,0183/GB-hora (1.440 GB-h inclusos). Invocações: 1 milhão inclusas, depois a partir de US$ 0,60 por milhão | Varia com gateways e, principalmente, **telas abertas** (8.2) | [3] [4] |
 | **Neon** | Scale (recomendado) | Compute **US$ 0,222/CU-hora**; armazenamento US$ 0,35/GB-mês; histórico para restauração (PITR) US$ 0,20/GB-mês; **SLA de 99,95%**; restauração até **30 dias** | 0,25 a 1 CU ligado 24/7 ([docs/06](../06-banco-de-dados.md#custo-de-referência-estimativa-de-nov2026-confirmar-na-página-de-preços)) | [5] [6] [7] |
 | Neon | Launch | Compute US$ 0,106/CU-hora; **sem SLA**; restauração até 7 dias | Só para dev e preview | [5] [6] |
-| **Sentry** | Team | ~US$ 26/mês (anual) ou ~US$ 29/mês (mensal), 50 mil erros/mês | 1 conta | [8] |
 | **Resend** | Pro | US$ 20/mês para 50 mil e-mails; US$ 0,90 por mil a mais | Gratuito no MVP; Pro quando entrarem os e-mails de alerta (F2a) | [9] |
 | **Tailscale** | Standard | **US$ 8 por usuário/mês**; dispositivos marcados (gateways) além de 50 por ~US$ 1/mês cada [CONFIRMAR] | Técnicos da Engemase (F2, só se houver acesso remoto) | [10] |
 | Monitor externo e página de status | Better Stack: gratuito no piloto; **pago** a partir do primeiro contrato com crédito | Gratuito: verificação a cada **3 min**. Pago: até 30 s, ~US$ 29–34/mês [CONFIRMAR] | Pago: o SLA mede de minuto em minuto. Ver [SLA, §3.2 e §8](sla-e-suporte.md#8-página-de-status) | [SLA] |
@@ -302,9 +301,11 @@ Premissas (de [docs/02](../02-arquitetura.md#números-de-referência) e [docs/05
 | Requisições por mês | ~5 milhões | ~39 milhões | ~195 milhões |
 | Vercel (plataforma + assento + uso) | US$ 20–40 | US$ 170–200 | US$ 950–1.050 |
 | Neon Scale (compute 24/7 + armazenamento + histórico) | US$ 40–50 (0,25 CU) | US$ 50–175 (0,25–1 CU) | US$ 185–375 (1–2 CU) |
-| Sentry, Resend, monitor e status, chamados, cópia externa, Tailscale (F2) | US$ 25–35 (monitor gratuito) | US$ 60–175 (monitor pago) | US$ 130–330 (monitor pago) |
+| Resend, monitor e status, chamados, cópia externa, Tailscale (F2) | US$ 25–35 (monitor gratuito) | US$ 60–175 (monitor pago) | US$ 130–330 (monitor pago) |
 | **Total por mês** | **US$ 85–125 ≈ R$ 470–690** | **US$ 280–550 ≈ R$ 1.540–3.030** | **US$ 1.265–1.755 ≈ R$ 6.960–9.650** |
 | **Por máquina por mês** | **R$ 47–69** | **R$ 15–30** | **R$ 14–19** |
+
+> O projeto não usa Sentry (decisão de 27/11/2026): os erros ficam nos logs da Vercel (Observability). As faixas acima foram estimadas com o Sentry Team (~US$ 26–29/mês) incluído; o custo real fica esse valor mais baixo.
 
 **O que esta conta mostra:**
 - **A TV é o maior custo variável.** Uma TV ligada 24 h custa ~US$ 6 por mês (~R$ 33) na Vercel em São Paulo, quase todo em Edge Requests. Um gateway custa ~US$ 1,20 por mês. Na meta de 500 máquinas, as 100 TVs são ~60% da conta da Vercel. Por isso o plano limita os terminais incluídos e cobra o adicional.
@@ -411,7 +412,6 @@ Consultadas em 12/11/2026 por busca na web. Conferir na página oficial antes de
 - [5] Neon, preços e planos: <https://neon.com/pricing> · <https://neon.com/docs/introduction/plans> · <https://neon.com/blog/new-usage-based-pricing>
 - [6] Neon, janela de restauração (Launch até 7 dias, Scale até 30, padrão 1 dia): <https://neon.com/docs/introduction/restore-window>
 - [7] Neon, SLA: <https://neon.com/sla>
-- [8] Sentry, preços: <https://sentry.io/pricing/> · <https://docs.sentry.io/pricing> · comparação de 2026: <https://www.activepieces.com/blog/sentry-pricing-2026-developer-team-business-plans>
 - [9] Resend, preços: <https://resend.com/pricing> · <https://resend.com/changelog/pay-as-you-go-pricing>
 - [10] Tailscale, preços: <https://tailscale.com/pricing> · resumo de 2026: <https://www.activepieces.com/blog/tailscale-pricing-plans-costs-and-features-2026>
 - Better Stack, intervalo de verificação (3 min no gratuito, até 30 s nos pagos): <https://betterstack.com/docs/uptime/check-frequency/> · preço pago (resumo de terceiros): <https://hyperping.com/blog/betterstack-pricing>

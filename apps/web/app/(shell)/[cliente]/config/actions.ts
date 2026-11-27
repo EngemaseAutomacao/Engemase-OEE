@@ -34,8 +34,9 @@ import { getDb } from "@/lib/server/db"
 import { excluirProduto, salvarMatrizCiclos, salvarProduto } from "@/lib/server/config/products"
 import { restaurarAparencia, salvarAparencia } from "@/lib/server/config/branding"
 import { blobStore, enviarLogo, removerLogo, removerTodosLogos } from "@/lib/server/config/logos"
-import { aprovarAcesso, encerrarAcesso, pedirAcesso, recusarAcesso, salvarPolitica } from "@/lib/server/remote/access"
+import { aprovarAcesso, type CertificadoDaSessao, emitirCertificadoSsh, encerrarAcesso, pedirAcesso, recusarAcesso, salvarPolitica } from "@/lib/server/remote/access"
 import { approvalSignerFromEnv } from "@/lib/server/remote/approval"
+import { sshCaFromEnv } from "@/lib/server/remote/ssh-cert"
 import { tailscaleFromEnv } from "@/lib/server/remote/tailscale"
 import { salvarMapaFalhas } from "@/lib/server/config/fault-map"
 import { definirAtivo, definirCor, excluirMotivo, salvarGrupo, salvarMotivo } from "@/lib/server/config/reasons"
@@ -742,6 +743,11 @@ export async function recusarAcessoAction(input: unknown): Promise<Resultado<{ i
 
 export async function encerrarAcessoAction(input: unknown): Promise<Resultado<{ id: string; status: string }>> {
   return remoto(input, "data.read", "encerrarAcesso", (a) => encerrarAcesso(a.db, a.ctx, (input as { id?: unknown } | null)?.id, new Date(), tailscaleFromEnv()))
+}
+
+/** Certificado SSH da sessão para quem pediu (equipe Engemase); a CA fica em SSH_CA_SIGNING_KEY. */
+export async function emitirCertificadoSshAction(input: unknown): Promise<Resultado<CertificadoDaSessao>> {
+  return remoto(input, "diagnostics.run", "emitirCertificadoSsh", (a) => emitirCertificadoSsh(a.db, a.ctx, input, sshCaFromEnv()))
 }
 
 export async function salvarPoliticaAcessoAction(input: unknown): Promise<Resultado<{ recusados: number }>> {

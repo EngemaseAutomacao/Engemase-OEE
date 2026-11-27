@@ -139,7 +139,7 @@ flowchart LR
 | 6 | Impersonação "somente leitura" escrevendo pelas rotas do Better Auth | Impersonação só na F2, com bloqueio global de escrita em `/api/auth/*` para sessões impersonadas |
 | 7 | Gateway de A escrevendo em máquina de B | FKs compostas e vínculo gateway↔máquina (seção 4) |
 | 8 | **Branches de preview copiando produção** (sessões e dados de todos os clientes) | Preview a partir de **branch-semente sintético/anonimizado**, tabelas de auth truncadas, segredos distintos, Deployment Protection |
-| 9 | Tokens de redefinição/convite em logs (Vercel, Sentry) | Token no fragmento da URL, `Referrer-Policy: no-referrer`, limpeza de logs |
+| 9 | Tokens de redefinição/convite em logs (Vercel) | Token no fragmento da URL, `Referrer-Policy: no-referrer`, limpeza de logs |
 | 10 | Rotas do Better Auth esquecidas abertas | Lista de permissão + teste de CI que falha se surgir rota não classificada |
 | 11 | Terminais continuam ativos após quem pareou sair | Registro de quem pareou, revogação em um clique, prazo absoluto do token |
 | 12 | Cookie de terminal e sessão de pessoa no mesmo tablet | Terminal em caminho próprio (`/terminal`), nunca combinado com sessão de pessoa |

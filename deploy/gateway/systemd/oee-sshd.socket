@@ -1,0 +1,19 @@
+# Pacote oee-gateway-remote-access. SSH do acesso remoto de manutenção (docs/12): escuta SÓ em
+# 127.0.0.1:22. Quem chega aqui de fora é o encaminhamento da VPN (oee-remote-access, só durante
+# uma sessão aprovada). Cada conexão sobe um sshd próprio (oee-sshd@.service, modo inetd), com a
+# configuração do pacote: só o usuário suporte, só certificado da CA Engemase para este gateway.
+# O ssh.service do sistema fica mascarado (nunca escuta nas redes da fábrica).
+[Unit]
+Description=Engemase OEE - SSH do acesso remoto (só 127.0.0.1)
+Documentation=file:/usr/share/doc/oee-gateway-remote-access/README.md
+Conflicts=ssh.service ssh.socket
+
+[Socket]
+ListenStream=127.0.0.1:22
+Accept=yes
+MaxConnections=8
+MaxConnectionsPerSource=8
+FreeBind=no
+
+[Install]
+WantedBy=sockets.target

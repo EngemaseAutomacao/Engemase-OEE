@@ -131,6 +131,8 @@ export async function dadosAcessoRemoto(slug: string) {
       bytes: s.bytesIn !== null || s.bytesOut !== null ? (s.bytesIn ?? 0) + (s.bytesOut ?? 0) : null,
       onsiteContact: null,
       changes: s.approvedDurationMin !== null && s.approvedDurationMin < s.requestedDurationMin ? [`Duração reduzida para ${s.approvedDurationMin} min`] : [],
+      vpnIp: s.vpnIp ?? null,
+      mine: s.requestedBy === ctx.user.id,
     }
   })
 
