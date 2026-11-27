@@ -19,6 +19,7 @@ import { MOCK_NOW } from "@/lib/mock"
 import { bancoObrigatorio } from "../admin/acesso"
 import { exigirCliente } from "./cliente"
 import { resumoDoComando } from "./comandos"
+import { emOrdem } from "@/lib/server/em-ordem"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -199,7 +200,7 @@ export async function dadosGateway(slug: string, gatewayId: string): Promise<{ d
   // Com banco: histórico de configuração, fila de comandos e os parâmetros reais de cada CLP.
   const db = bancoObrigatorio()
   const { versions, commands, rawDevices, enrollment } = await withTenant(db, ctx.organizationId, async (tx) => {
-    const [versions, commands, rawDevices, gw] = await Promise.all([
+    const [versions, commands, rawDevices, gw] = await emOrdem([
       tx
         .select({ version: gatewayConfigVersion.version, createdAt: gatewayConfigVersion.createdAt, createdBy: gatewayConfigVersion.createdBy, snapshot: gatewayConfigVersion.snapshot })
         .from(gatewayConfigVersion)

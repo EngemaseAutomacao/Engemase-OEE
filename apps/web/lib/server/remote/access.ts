@@ -14,7 +14,7 @@
  * Tudo sob a RLS do cliente, com `remote_access_event` (só inserção) e auditoria.
  */
 import { DEFAULT_COMMAND_TTL_S } from "@engemase/contracts"
-import { REMOTE_SESSION_LIVE_STATUSES, auditLog, gateway, gatewayCommand, remoteAccessEvent, remoteAccessPolicy, remoteAccessSession, withTenant } from "@engemase/db"
+import { REMOTE_SESSION_LIVE_STATUSES, auditLog, gateway, gatewayCommand, machine, remoteAccessEvent, remoteAccessPolicy, remoteAccessSession, withTenant } from "@engemase/db"
 import { and, eq, inArray, isNull } from "drizzle-orm"
 import { z } from "zod"
 import { assertPermission, hasPermission, type TenantContext } from "@/lib/server/access/context"
@@ -90,8 +90,9 @@ export async function pedirAcesso(db: GatewayDb, ctx: TenantContext, input: unkn
     const p = await politica(tx)
     if (p.mode === "disabled") return { ok: false, mensagem: "O cliente desativou o acesso remoto. Combine com o admin do cliente." }
     if (v.durationMin > p.maxDurationMin) return { ok: false, mensagem: `A política do cliente permite até ${p.maxDurationMin} minutos por sessão.` }
-    const [g] = await tx.select({ id: gateway.id, name: gateway.name }).from(gateway).where(eq(gateway.id, v.gatewayId)).limit(1)
-    if (g === undefined) return { ok: false, mensagem: "Gateway não encontrado. Atualize a página." }
+    const [g] = await tx.select({ id: gateway.id, name: gateway.name, unitId: gateway.unitId }).from(gateway).where(eq(gateway.id, v.gatewayId)).limit(1)
+    // Gateway de outro cliente (RLS) ou fora das unidades atribuídas a quem pede: "não encontrado".
+    if (g === undefined || !(await gatewayNoEscopo(tx, ctx, g.unitId))) return { ok: false, mensagem: "Gateway não encontrado. Atualize a página." }
     const JA_ABERTO = { ok: false, mensagem: "Você já tem um pedido ou uma sessão aberta neste gateway." } as const
     const [vivo] = await tx
       .select({ id: remoteAccessSession.id })
@@ -118,6 +119,21 @@ export async function pedirAcesso(db: GatewayDb, ctx: TenantContext, input: unkn
       throw error
     }
   })
+}
+
+/** A unidade do gateway está no escopo de quem age? (por máquinas: as unidades dessas máquinas) */
+export async function gatewayNoEscopo(tx: GatewayTx, ctx: TenantContext, unitId: string): Promise<boolean> {
+  switch (ctx.scope.kind) {
+    case "all":
+      return true
+    case "units":
+      return ctx.scope.unitIds.includes(unitId)
+    case "machines": {
+      if (ctx.scope.machineIds.length === 0) return false
+      const ms = await tx.select({ unitId: machine.unitId }).from(machine).where(inArray(machine.id, [...ctx.scope.machineIds]))
+      return ms.some((m) => m.unitId === unitId)
+    }
+  }
 }
 
 async function podeAprovar(tx: GatewayTx, ctx: TenantContext): Promise<string | null> {
@@ -185,6 +201,19 @@ export async function recusarAcesso(db: GatewayDb, ctx: TenantContext, input: un
   })
 }
 
+/** Põe `vpn.disable` na fila do gateway: ele fecha encaminhamentos, desconecta e devolve o resumo (docs/12). */
+async function pedirDesligar(tx: GatewayTx, ctx: TenantContext, gatewayId: string, sessionId: string, reason: "requested" | "revoked", now: Date): Promise<void> {
+  await tx.insert(gatewayCommand).values({
+    organizationId: ctx.organizationId,
+    gatewayId,
+    type: "vpn.disable",
+    payload: { session_id: sessionId, reason },
+    status: "pending",
+    createdBy: ctx.user.id,
+    expiresAt: new Date(now.getTime() + DEFAULT_COMMAND_TTL_S["vpn.disable"] * 1000),
+  })
+}
+
 /** Encerra (ou cancela o pedido). Aprovador ou quem pediu. */
 export async function encerrarAcesso(db: GatewayDb, ctx: TenantContext, id: unknown, now = new Date()): Promise<ConfigResult<{ id: string; status: string }>> {
   assertPermission(ctx, "data.read")
@@ -193,7 +222,8 @@ export async function encerrarAcesso(db: GatewayDb, ctx: TenantContext, id: unkn
     const [s] = await tx.select().from(remoteAccessSession).where(eq(remoteAccessSession.id, id)).for("update").limit(1)
     if (s === undefined) return NAO_ENCONTRADO
     const solicitante = s.requestedBy === ctx.user.id
-    if (!solicitante && (await podeAprovar(tx, ctx)) !== null) return { ok: false, mensagem: "Só o admin do cliente ou quem pediu encerra o acesso." }
+    // Encerrar só reduz acesso: qualquer admin do cliente pode, mesmo fora da lista de aprovadores.
+    if (!solicitante && !hasPermission(ctx, "remote_access.approve")) return { ok: false, mensagem: "Só o admin do cliente ou quem pediu encerra o acesso." }
     let status: "cancelled" | "denied" | "ended" | "stopping"
     switch (s.status) {
       case "requested":
@@ -214,25 +244,14 @@ export async function encerrarAcesso(db: GatewayDb, ctx: TenantContext, id: unkn
       .update(remoteAccessSession)
       .set({ status, ...fim, ...(s.status === "requested" && !solicitante ? { decidedBy: ctx.user.id, decidedAt: now } : {}), updatedAt: now })
       .where(eq(remoteAccessSession.id, s.id))
-    if (status === "stopping") {
-      // O gateway fecha encaminhamentos, desconecta e devolve o resumo (docs/12).
-      await tx.insert(gatewayCommand).values({
-        organizationId: ctx.organizationId,
-        gatewayId: s.gatewayId,
-        type: "vpn.disable",
-        payload: { session_id: s.id, reason: "requested" },
-        status: "pending",
-        createdBy: ctx.user.id,
-        expiresAt: new Date(now.getTime() + DEFAULT_COMMAND_TTL_S["vpn.disable"] * 1000),
-      })
-    }
+    if (status === "stopping") await pedirDesligar(tx, ctx, s.gatewayId, s.id, "requested", now)
     await evento(tx, ctx, s.id, status === "cancelled" ? "cancelled" : "end_requested", { from: s.status, to: status })
     await auditar(tx, ctx, "remote.end", s.id, { from: s.status, to: status })
     return { ok: true, dados: { id: s.id, status } }
   })
 }
 
-/** Política do cliente inteiro (admin do cliente). Desativar recusa os pedidos em aberto. */
+/** Política do cliente inteiro (admin do cliente). Desativar recusa os pedidos em aberto e encerra as sessões liberadas. */
 export async function salvarPolitica(db: GatewayDb, ctx: TenantContext, input: unknown, now = new Date()): Promise<ConfigResult<{ recusados: number }>> {
   assertPermission(ctx, "remote_access.approve")
   const parsed = PoliticaInput.safeParse(input)
@@ -241,14 +260,13 @@ export async function salvarPolitica(db: GatewayDb, ctx: TenantContext, input: u
   if (v.idleTimeoutMin > v.maxDurationMin) return { ok: false, mensagem: "A inatividade não pode passar da duração máxima." }
   return withTenant(db, ctx.organizationId, async (tx): Promise<ConfigResult<{ recusados: number }>> => {
     const set = { mode: v.mode, maxDurationMin: v.maxDurationMin, idleTimeoutMin: v.idleTimeoutMin, updatedBy: ctx.user.id, updatedAt: now }
-    const [atual] = await tx
-      .select({ id: remoteAccessPolicy.id })
-      .from(remoteAccessPolicy)
-      .where(and(isNull(remoteAccessPolicy.unitId), isNull(remoteAccessPolicy.gatewayId)))
-      .limit(1)
-    if (atual) await tx.update(remoteAccessPolicy).set(set).where(eq(remoteAccessPolicy.id, atual.id))
-    else await tx.insert(remoteAccessPolicy).values({ organizationId: ctx.organizationId, ...set })
+    // Uma linha por cliente (unidade e gateway nulos; a restrição única trata nulos como iguais).
+    await tx
+      .insert(remoteAccessPolicy)
+      .values({ organizationId: ctx.organizationId, ...set })
+      .onConflictDoUpdate({ target: [remoteAccessPolicy.organizationId, remoteAccessPolicy.unitId, remoteAccessPolicy.gatewayId], set })
     let recusados = 0
+    let encerradas = 0
     if (v.mode === "disabled") {
       const rows = await tx
         .update(remoteAccessSession)
@@ -257,13 +275,31 @@ export async function salvarPolitica(db: GatewayDb, ctx: TenantContext, input: u
         .returning({ id: remoteAccessSession.id })
       recusados = rows.length
       for (const r of rows) await evento(tx, ctx, r.id, "denied", { reason: "policy_disabled" })
+      // Desativar também derruba o que já foi liberado: aprovada que não ligou → encerrada; ligando/ligada →
+      // encerrando, com `vpn.disable` na fila do gateway.
+      const aprovadas = await tx
+        .update(remoteAccessSession)
+        .set({ status: "ended", endedAt: now, endedBy: ctx.user.id, endReason: "revoked", updatedAt: now })
+        .where(eq(remoteAccessSession.status, "approved"))
+        .returning({ id: remoteAccessSession.id })
+      for (const r of aprovadas) await evento(tx, ctx, r.id, "end_requested", { reason: "policy_disabled" })
+      const ligadas = await tx
+        .update(remoteAccessSession)
+        .set({ status: "stopping", updatedAt: now })
+        .where(inArray(remoteAccessSession.status, ["activating", "active"]))
+        .returning({ id: remoteAccessSession.id, gatewayId: remoteAccessSession.gatewayId })
+      for (const r of ligadas) {
+        await pedirDesligar(tx, ctx, r.gatewayId, r.id, "revoked", now)
+        await evento(tx, ctx, r.id, "end_requested", { reason: "policy_disabled" })
+      }
+      encerradas = aprovadas.length + ligadas.length
     }
     await tx.insert(auditLog).values({
       organizationId: ctx.organizationId,
       ...auditActor(ctx),
       action: "remote.policy_updated",
       entityType: "remote_access_policy",
-      after: { mode: v.mode, max_duration_min: v.maxDurationMin, idle_timeout_min: v.idleTimeoutMin, denied_requests: recusados },
+      after: { mode: v.mode, max_duration_min: v.maxDurationMin, idle_timeout_min: v.idleTimeoutMin, denied_requests: recusados, ended_sessions: encerradas },
     })
     return { ok: true, dados: { recusados } }
   })

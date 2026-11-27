@@ -96,7 +96,8 @@ export async function salvarOperador(db: GatewayDb, ctx: TenantContext, input: u
           .values({ organizationId: ctx.organizationId, unitId: u.id, name: v.name, employeeCode: v.employeeCode })
           .returning({ id: unitOperator.id })
         if (row === undefined) throw new Error("operador não gravado")
-        await auditar(tx, ctx, "unit_operator.created", row.id, u.id, { name: v.name, employee_code: v.employeeCode })
+        // LGPD: a matrícula fica só no cadastro (a auditoria guarda 5 anos); aqui, só se ela foi informada.
+        await auditar(tx, ctx, "unit_operator.created", row.id, u.id, { name: v.name, has_employee_code: v.employeeCode !== null })
         return { ok: true, dados: { id: row.id } }
       }
       const [row] = await tx
@@ -105,7 +106,7 @@ export async function salvarOperador(db: GatewayDb, ctx: TenantContext, input: u
         .where(and(eq(unitOperator.id, v.id), eq(unitOperator.unitId, u.id), isNull(unitOperator.deletedAt)))
         .returning({ id: unitOperator.id })
       if (row === undefined) return NAO_ENCONTRADO
-      await auditar(tx, ctx, "unit_operator.updated", row.id, u.id, { name: v.name, employee_code: v.employeeCode })
+      await auditar(tx, ctx, "unit_operator.updated", row.id, u.id, { name: v.name, has_employee_code: v.employeeCode !== null })
       return { ok: true, dados: { id: row.id } }
     })
   } catch (error) {

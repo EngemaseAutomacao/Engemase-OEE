@@ -51,6 +51,8 @@ export interface NavPerms {
   canManageUsers?: boolean
   /** `false`: sem `audit.read`, o item "Auditoria" some (a página responderia 404). */
   canReadAudit?: boolean
+  /** `false`: sem leitura técnica, o item "Acesso remoto" some (a página responderia 404). */
+  canSeeTechnical?: boolean
 }
 
 /** Menu da área do cliente. */
@@ -65,7 +67,7 @@ export function clientNav(slug: string, kiosk: { machineId?: string; lineId?: st
       { title: "Notificações", href: `${b}/notificacoes`, icon: BellIcon },
       ...(kiosk.machineId ? [{ title: "Tela do operador", href: `${b}/operador/${kiosk.machineId}`, icon: TabletSmartphoneIcon }] : []),
       ...(kiosk.lineId ? [{ title: "TV / Andon", href: `${b}/andon/${kiosk.lineId}`, icon: MonitorIcon }] : []),
-      { title: "Acesso remoto", href: `${b}/acesso-remoto`, icon: KeyRoundIcon },
+      ...(perms.canSeeTechnical === false ? [] : [{ title: "Acesso remoto", href: `${b}/acesso-remoto`, icon: KeyRoundIcon }]),
     ],
     config: [
       { title: "Unidades e linhas", href: `${b}/config/unidades`, icon: Building2Icon },

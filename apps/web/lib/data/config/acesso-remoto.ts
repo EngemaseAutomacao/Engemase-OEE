@@ -52,7 +52,8 @@ const FIM: Record<string, string> = {
 }
 
 export async function dadosAcessoRemoto(slug: string) {
-  const { r, client, ctx } = await exigirCliente(slug, "data.read")
+  // Ver o acesso remoto = leitura técnica (admin e engenheiro do cliente, equipe Engemase; docs/12).
+  const { r, client, ctx } = await exigirCliente(slug, "technical.read")
   if (ctx === null) return { client, banco: false as const, data: buildRemoteAccess(client), canApprove: true, canRequest: true }
 
   const db = bancoObrigatorio()
@@ -73,13 +74,19 @@ export async function dadosAcessoRemoto(slug: string) {
   const authDb = getAuthDb()
   if (authDb !== null && ids.length > 0) for (const u of await authDb.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, ids))) nomes.set(u.id, u.name)
 
-  const gateways = new Map(r.getGateways(client.id).map((g) => [g.id, g]))
+  // Escopo (docs/15, risco 14): só gateways das unidades que a pessoa vê. Por máquinas: as unidades delas.
+  const unidadesVisiveis =
+    ctx.scope.kind === "all"
+      ? null
+      : new Set(ctx.scope.kind === "units" ? ctx.scope.unitIds : r.getMachines(client.id).filter((m) => (ctx.scope.kind === "machines" ? ctx.scope.machineIds.includes(m.id) : false)).map((m) => m.unitId))
+  const gatewaysVisiveis = r.getGateways(client.id).filter((g) => unidadesVisiveis === null || unidadesVisiveis.has(g.unitId))
+  const gateways = new Map(gatewaysVisiveis.map((g) => [g.id, g]))
   const unidades = new Map(r.getUnits(client.id).map((u) => [u.id, u.name]))
   const members = r.getClientUsers(client.id)
   const roleOf = (id: string) => members.find((u) => u.id === id)?.memberships.find((m) => m.clientId === client.id)?.role
   const ms = (d: Date | null) => (d ? d.getTime() : null)
 
-  const sessions: RemoteSessionVM[] = rows.map((s) => {
+  const sessions: RemoteSessionVM[] = rows.filter((s) => gateways.has(s.gatewayId)).map((s) => {
     const gw = gateways.get(s.gatewayId)
     const anteriores = rows.filter((o) => o.id !== s.id && o.requestedBy === s.requestedBy && o.createdAt < s.createdAt && o.startsAt !== null)
     const status = statusDaTela(s.status)
@@ -151,6 +158,6 @@ export async function dadosAcessoRemoto(slug: string) {
     data,
     canApprove: hasPermission(ctx, "remote_access.approve"),
     canRequest: ctx.access.kind === "engemase" && hasPermission(ctx, "diagnostics.run"),
-    gateways: r.getGateways(client.id).map((g) => ({ id: g.id, name: g.name })),
+    gateways: gatewaysVisiveis.map((g) => ({ id: g.id, name: g.name })),
   }
 }

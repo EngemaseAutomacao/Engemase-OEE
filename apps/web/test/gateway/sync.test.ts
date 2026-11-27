@@ -12,6 +12,7 @@ import {
   SyncResponseSchema,
 } from "@engemase/contracts"
 import * as s from "@engemase/db"
+import { eq } from "drizzle-orm"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { handleSync } from "@/lib/server/gateway/handlers"
 import {
@@ -634,6 +635,14 @@ describe("POST /sync", () => {
     ])
     await syncOk(b.client, b.remap(REALISTIC))
     expect(await faultOf(b.client.organizationId)).toMatchObject({ reason_id: null, classified_at: null })
+
+    // Motivo desativado depois de mapear: não classifica (o operador escolhe).
+    const d = await freshClient()
+    const desligado = await motivo(d.client.organizationId, "Motivo antigo")
+    await t.db.insert(s.faultCodeMap).values({ organizationId: d.client.organizationId, faultCode: 47, faultText: "Antigo", reasonId: desligado })
+    await t.db.update(s.downtimeReason).set({ active: false }).where(eq(s.downtimeReason.id, desligado))
+    await syncOk(d.client, d.remap(REALISTIC))
+    expect(await faultOf(d.client.organizationId)).toMatchObject({ reason_id: null })
 
     // O mapa geral do cliente A (47) não vale para outro cliente (RLS).
     const c = await freshClient()

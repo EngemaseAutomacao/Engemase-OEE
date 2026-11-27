@@ -12,7 +12,8 @@ describe("appDatabaseUrl", () => {
     expect(url.password).toBe(PASSWORD)
     expect(url.host).toBe("ep-x-pooler.sa-east-1.aws.neon.tech")
     expect(url.pathname).toBe("/neondb")
-    expect(url.searchParams.get("sslmode")).toBe("require")
+    // `require` vira `verify-full` explícito: a mesma conferência de certificado que o pg já faz hoje.
+    expect(url.searchParams.get("sslmode")).toBe("verify-full")
   })
 
   it("APP_DB_USER troca o nome; APP_DATABASE_URL tem prioridade", () => {

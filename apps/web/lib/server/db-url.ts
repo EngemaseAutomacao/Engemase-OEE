@@ -51,7 +51,7 @@ function loginUrl(
       const url = new URL(base)
       url.username = nonEmpty(env[userVar]) ?? defaultUser
       url.password = password
-      return url.toString()
+      return comSslExplicito(url).toString()
     } catch {
       console.error(`[db] DATABASE_URL inválido: não foi possível montar o endereço com ${passwordVar}`)
       return null
@@ -60,6 +60,17 @@ function loginUrl(
 
   if (nonEmpty(env.VERCEL) !== undefined) return null
   return base ?? null
+}
+
+/**
+ * `sslmode=require` (padrão da Neon) já é tratado pelo `pg` como `verify-full` (confere o certificado e o
+ * nome); o pg@9 vai mudar isso para a semântica fraca do libpq. Deixar `verify-full` explícito mantém a
+ * proteção de hoje e tira o aviso do log.
+ */
+function comSslExplicito(url: URL): URL {
+  const mode = url.searchParams.get("sslmode")
+  if (mode === "require" || mode === "prefer" || mode === "verify-ca") url.searchParams.set("sslmode", "verify-full")
+  return url
 }
 
 /** Endereço do banco da aplicação (login membro de `app_user`), ou `null`. */

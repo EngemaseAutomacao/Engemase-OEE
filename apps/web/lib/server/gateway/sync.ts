@@ -38,6 +38,7 @@ import {
 import {
   auditLog,
   device,
+  downtimeReason,
   faultCodeMap,
   gateway,
   gatewayCommand,
@@ -60,6 +61,7 @@ import { ensureSystemRule, raiseAlert } from "../alerts/system"
 import { assertTokenStillValid, tokenStateInTx } from "./auth"
 import { GatewayApiError, MAX_ERROR_ISSUES, pathFromDotted } from "./errors"
 import { type GatewayPrincipal, type GatewayTx, type GatewayDb, type RequestMeta } from "./types"
+import { emOrdem } from "@/lib/server/em-ordem"
 
 /** Versão mínima do agente anunciada no /sync (o agente ainda não a aplica). */
 export const MIN_AGENT_VERSION = "0.1.0"
@@ -242,7 +244,7 @@ async function loadReferences(tx: GatewayTx, gatewayId: string, req: SyncRequest
   const sessionIds = uniqueKeys(remote.map((e) => e.session_id))
   const forwardIds = uniqueKeys(remote.map((e) => e.forward_id))
 
-  const [machines, tags, devices, commands, sessions, forwards] = await Promise.all([
+  const [machines, tags, devices, commands, sessions, forwards] = await emOrdem([
     machineIds.length === 0
       ? []
       : tx
@@ -416,9 +418,15 @@ async function faultReasons(w: Writer, events: readonly StateEvent[]): Promise<M
   if (faults.length === 0) return out
   const codes = [...new Set(faults.map((e) => Number(e.fault_code)))]
   const machines = [...new Set(faults.map((e) => e.machine_id))]
+  // Só motivo que ainda existe e está ativo (desativado depois de mapear → o operador escolhe).
   const rows = await w.tx
-    .select({ machineId: faultCodeMap.machineId, code: faultCodeMap.faultCode, reasonId: faultCodeMap.reasonId })
+    .select({
+      machineId: faultCodeMap.machineId,
+      code: faultCodeMap.faultCode,
+      reasonId: sql<string | null>`CASE WHEN ${downtimeReason.id} IS NOT NULL AND ${downtimeReason.active} AND ${downtimeReason.deletedAt} IS NULL THEN ${faultCodeMap.reasonId} END`,
+    })
     .from(faultCodeMap)
+    .leftJoin(downtimeReason, eq(downtimeReason.id, faultCodeMap.reasonId))
     .where(
       and(
         inArray(faultCodeMap.faultCode, codes),

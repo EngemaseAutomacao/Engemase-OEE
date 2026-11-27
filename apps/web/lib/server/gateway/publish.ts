@@ -44,6 +44,7 @@ import {
 import { and, asc, eq, isNull } from "drizzle-orm"
 import { type GatewayAdminActor, GatewayAdminError, SYSTEM_ACTOR } from "./admin-errors"
 import type { GatewayDb, GatewayTx } from "./types"
+import { emOrdem } from "@/lib/server/em-ordem"
 
 /** Uplink padrão quando o gateway não tem ajuste próprio (`gateway.uplink`). */
 export const DEFAULT_UPLINK: UplinkSettings = {
@@ -79,7 +80,7 @@ export async function buildGatewayConfig(
   version: number,
   now: Date,
 ): Promise<GatewayConfig> {
-  const [buses, devices, machines, tags] = await Promise.all([
+  const [buses, devices, machines, tags] = await emOrdem([
     tx
       .select()
       .from(serialBus)

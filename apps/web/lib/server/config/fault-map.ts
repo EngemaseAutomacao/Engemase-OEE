@@ -9,7 +9,7 @@
  * não têm tela: as linhas por modelo ficam como estão.
  */
 import { FAULT_CODE_MAX, auditLog, downtimeReason, faultCodeMap, machine, withTenant } from "@engemase/db"
-import { and, inArray, isNotNull, isNull } from "drizzle-orm"
+import { and, inArray, isNotNull, isNull, sql } from "drizzle-orm"
 import { z } from "zod"
 import { assertPermission, type TenantContext } from "@/lib/server/access/context"
 import type { GatewayDb, GatewayTx } from "@/lib/server/gateway/types"
@@ -88,6 +88,8 @@ export async function salvarMapaFalhas(db: GatewayDb, ctx: TenantContext, input:
   const rows = parsed.data.rows
 
   return withTenant(db, ctx.organizationId, async (tx): Promise<ConfigResult<{ codigos: number; comMotivo: number }>> => {
+    // Duas gravações ao mesmo tempo: a segunda espera a primeira terminar (sem erro de chave repetida).
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`fault_code_map:${ctx.organizationId}`}))`)
     const erro = await conferir(tx, rows)
     if (erro !== null) return { ok: false, mensagem: erro }
     const before = await tx.select({ id: faultCodeMap.id }).from(faultCodeMap).where(isNull(faultCodeMap.templateId))

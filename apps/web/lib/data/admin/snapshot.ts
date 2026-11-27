@@ -62,6 +62,7 @@ import type { CurrentSession } from "@/lib/server/auth/session"
 import { getAuthDb } from "@/lib/server/db"
 import { type GatewayDb, type GatewayTx, queryRows } from "@/lib/server/gateway/types"
 import type { Foto } from "./repositorio"
+import { emOrdem } from "@/lib/server/em-ordem"
 
 /** Gateway sem /sync há mais que isto aparece offline (mesmo limite do alerta, L17). */
 export const OFFLINE_APOS_MS = 6 * 60 * 1000
@@ -135,7 +136,7 @@ async function lerBruto(tx: GatewayTx, auditLimit: number): Promise<Bruto | null
     .from(clientAccount)
     .limit(1)
   const [units, areas, lines, machines, gateways, buses, devices, deviceStatus, links, tags, people, memberUnits, memberMachines, audit, shifts] =
-    await Promise.all([
+    await emOrdem([
       tx.select().from(unit).where(isNull(unit.deletedAt)).orderBy(unit.name),
       tx.select().from(area).where(isNull(area.deletedAt)).orderBy(area.name),
       tx.select().from(line).where(isNull(line.deletedAt)).orderBy(line.sortOrder, line.name),

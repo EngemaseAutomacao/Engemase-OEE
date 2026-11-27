@@ -10,7 +10,7 @@ import { AccessDeniedError, type TenantContext } from "@/lib/server/access/conte
 import { loadTenantContext } from "@/lib/server/access/load"
 import { aprovarAcesso, encerrarAcesso, lerPolitica, pedirAcesso, recusarAcesso, salvarPolitica } from "@/lib/server/remote/access"
 import { type AuthHarness, createAuthHarness } from "../auth/support"
-import { createPerson, type SeededClient, type SeededPerson, seedClient } from "./support"
+import { assignFieldEngineer, createPerson, type SeededClient, type SeededPerson, seedClient } from "./support"
 
 describe("acesso remoto: pedido, decisão e política", () => {
   let h: AuthHarness
@@ -120,5 +120,38 @@ describe("acesso remoto: pedido, decisão e política", () => {
     await salvarPolitica(h.t.db, admin, { mode: "approval", maxDurationMin: 240, idleTimeoutMin: 15 })
     expect(await pedirAcesso(h.t.db, eng, pedido(gwB))).toEqual({ ok: false, mensagem: "Gateway não encontrado. Atualize a página." })
     expect((await pedirAcesso(h.t.db, engB, pedido(gwB))).ok).toBe(true)
+  })
+
+  it("revisão de segurança: técnico só pede nas unidades atribuídas; desativar derruba o que foi liberado; admin fora da lista encerra", async () => {
+    // Técnico atribuído só à unidade 2: o gateway da unidade 1 "não existe" para ele.
+    const campo = await createPerson(h.t.db, "campo-remoto-u2", { role: "technician", twoFactor: true })
+    await assignFieldEngineer(h.t.db, a.organizationId, campo, new Date(), { unitIds: [a.unit2] })
+    const ctxCampo = await ctxOf(a.slug, campo)
+    expect(await pedirAcesso(h.t.db, ctxCampo, pedido(gw))).toEqual({ ok: false, mensagem: "Gateway não encontrado. Atualize a página." })
+
+    await salvarPolitica(h.t.db, admin, { mode: "approval", maxDurationMin: 240, idleTimeoutMin: 15 })
+    const g3 = await gateway(a, "GW Extra")
+    const aprovada = await pedirAcesso(h.t.db, eng, pedido(g3))
+    const idAprovada = aprovada.ok ? aprovada.dados.id : ""
+    await aprovarAcesso(h.t.db, admin, { id: idAprovada })
+    const g4 = await gateway(a, "GW Quatro")
+    const ligada = await pedirAcesso(h.t.db, eng, pedido(g4))
+    const idLigada = ligada.ok ? ligada.dados.id : ""
+    await aprovarAcesso(h.t.db, admin, { id: idLigada })
+    await h.t.db.update(s.remoteAccessSession).set({ status: "active", startsAt: new Date() }).where(eq(s.remoteAccessSession.id, idLigada))
+
+    await salvarPolitica(h.t.db, admin, { mode: "disabled", maxDurationMin: 240, idleTimeoutMin: 15 })
+    const status = async (id: string) => (await h.t.db.select().from(s.remoteAccessSession).where(eq(s.remoteAccessSession.id, id)))[0]?.status
+    expect(await status(idAprovada)).toBe("ended")
+    expect(await status(idLigada)).toBe("stopping")
+    const cmds = await h.t.db.select().from(s.gatewayCommand).where(and(eq(s.gatewayCommand.gatewayId, g4), eq(s.gatewayCommand.type, "vpn.disable")))
+    expect(cmds.map((c) => c.payload)).toContainEqual({ session_id: idLigada, reason: "revoked" })
+
+    // Política com lista de aprovadores que não inclui este admin: ainda assim ele pode ENCERRAR.
+    await h.t.db.update(s.remoteAccessPolicy).set({ mode: "approval", approverUserIds: [a.adminNo2fa.user.id] }).where(eq(s.remoteAccessPolicy.organizationId, a.organizationId))
+    const outro = await pedirAcesso(h.t.db, eng, pedido(g3))
+    const idOutro = outro.ok ? outro.dados.id : ""
+    expect(await aprovarAcesso(h.t.db, admin, { id: idOutro })).toEqual({ ok: false, mensagem: "A política do cliente define outros aprovadores." })
+    expect(await encerrarAcesso(h.t.db, admin, idOutro)).toMatchObject({ ok: true, dados: { status: "denied" } })
   })
 })

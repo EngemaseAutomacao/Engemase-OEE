@@ -74,7 +74,7 @@ async function ClientShell({ children, params }: { children: React.ReactNode; pa
   const { cliente } = await params
   const data = await getClientData(cliente, { somenteCadastro: true, notificacoes: true })
   const { client, viewer: me, access, branding } = data
-  const perms = { canConfigure: access.canConfigure, canManageUsers: access.canManageUsers, canReadAudit: access.canReadAudit }
+  const perms = { canConfigure: access.canConfigure, canManageUsers: access.canManageUsers, canReadAudit: access.canReadAudit, canSeeTechnical: access.canSeeTechnical }
   const firstMachine = data.machines[0]
   const firstLine = data.lines[0]
   const bellItems = data.getNotifications().map((n) => ({
