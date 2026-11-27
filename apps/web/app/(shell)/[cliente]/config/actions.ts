@@ -34,6 +34,7 @@ import { getDb } from "@/lib/server/db"
 import { excluirProduto, salvarMatrizCiclos, salvarProduto } from "@/lib/server/config/products"
 import { definirAtivo, definirCor, excluirMotivo, salvarGrupo, salvarMotivo } from "@/lib/server/config/reasons"
 import { cancelarParada, excluirTurno, salvarParada, salvarTurno } from "@/lib/server/config/shifts"
+import { definirOperadorAtivo, salvarOperador } from "@/lib/server/terminal/operators"
 import { criarTerminal, editarTerminal, gerarCodigoTerminal, revogarTerminal } from "@/lib/server/terminal/terminals"
 import { createActivationCode } from "@/lib/server/gateway/activation"
 import { GatewayAdminError } from "@/lib/server/gateway/admin-errors"
@@ -587,4 +588,16 @@ export async function gerarCodigoTerminalAction(input: unknown): Promise<Resulta
 
 export async function revogarTerminalAction(input: unknown): Promise<Resultado<{ id: string }>> {
   return cadastro(input, "revogarTerminal", (a) => revogarTerminal(a.db, a.ctx, (input as { id?: unknown } | null)?.id))
+}
+
+// ---------------------------------------------------------------------------
+// Operadores do chão (lista do tablet, D18; config.write; regras em lib/server/terminal/operators.ts)
+// ---------------------------------------------------------------------------
+
+export async function salvarOperadorAction(input: unknown): Promise<Resultado<{ id: string }>> {
+  return cadastro(input, "salvarOperador", (a) => salvarOperador(a.db, a.ctx, input))
+}
+
+export async function definirOperadorAtivoAction(input: unknown): Promise<Resultado<{ id: string }>> {
+  return cadastro(input, "definirOperadorAtivo", (a) => definirOperadorAtivo(a.db, a.ctx, input))
 }

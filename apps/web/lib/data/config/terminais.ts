@@ -10,6 +10,7 @@ import type { TerminalRow } from "@/components/settings/types"
 import { ago, date } from "@/lib/format"
 import { getCurrentUser, getTerminals } from "@/lib/mock"
 import { getAuthDb } from "@/lib/server/db"
+import { listarOperadores } from "@/lib/server/terminal/operators"
 import { toScreenKind } from "@/lib/server/terminal/terminals"
 import { bancoObrigatorio } from "../admin/acesso"
 import { exigirCliente } from "./cliente"
@@ -39,7 +40,16 @@ export async function dadosTerminais(slug: string) {
       lastSeen: ago(t.lastSeen),
       pairingCode: t.pairingCode ?? null,
     }))
-    return { client, banco: false, canEdit, units, lines, machines, terminals, currentUserName: me.platformRole ? `${me.name} (Engemase)` : me.name }
+    // Demonstração: alguns operadores do chão da primeira unidade.
+    const u0 = units[0]?.id
+    const operators = u0
+      ? [
+          { id: "op_demo_1", unitId: u0, name: "Ana Paula Souza", employeeCode: "1042", active: true },
+          { id: "op_demo_2", unitId: u0, name: "Carlos Henrique Lima", employeeCode: "1057", active: true },
+          { id: "op_demo_3", unitId: u0, name: "José Roberto Alves", employeeCode: null, active: false },
+        ]
+      : []
+    return { client, banco: false, canEdit, units, lines, machines, terminals, operators, currentUserName: me.platformRole ? `${me.name} (Engemase)` : me.name }
   }
 
   const now = Date.now()
@@ -87,5 +97,6 @@ export async function dadosTerminais(slug: string) {
       pairingCode: null,
     }
   })
-  return { client, banco: true, canEdit, units, lines, machines, terminals, currentUserName: ctx.user.name }
+  const operators = (await listarOperadores(bancoObrigatorio(), ctx)).map((o) => ({ ...o }))
+  return { client, banco: true, canEdit, units, lines, machines, terminals, operators, currentUserName: ctx.user.name }
 }

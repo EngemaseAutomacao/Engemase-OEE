@@ -11,6 +11,16 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 - **Fechamento de turno automático:** os números de cada turno são fechados no fim do turno e recalculados se chegarem dados atrasados ou se uma parada for reclassificada.
 - **Atualização do programa do gateway à distância**, enviada pela Engemase.
 
+## 27/11/2026 · Quem está operando no tablet
+
+**Para quem usa**
+- **O tablet pergunta "Quem está operando?"** e mostra a lista de operadores da unidade em botões grandes. É só tocar no próprio nome: paradas classificadas, refugo e troca de produto ficam registrados com ele.
+- A escolha vale até a troca de turno; no turno seguinte o tablet pergunta de novo. Para trocar antes, toque no nome no alto da tela.
+- Sem operadores cadastrados na unidade, o tablet continua apontando sem pedir o nome (como antes).
+
+**Para a equipe Engemase**
+- **"Configurações" › "Terminais" tem a seção "Operadores do chão"**: cadastrar nome e matrícula (opcional) por unidade, editar e desativar. Desativado sai da lista do tablet; os apontamentos antigos continuam com o nome. Tudo na auditoria.
+
 ## 27/11/2026 · TV e tablets pareados de verdade
 
 **Para quem usa**
@@ -21,7 +31,7 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 **Para a equipe Engemase**
 - **"Configurações" › "Terminais" funciona no sistema real**: cadastrar TV ou tablet com as linhas ou máquinas, gerar código, editar e revogar. Revogar corta o aparelho na hora.
 - O pareamento vale 12 meses. Cliente suspenso: os terminais param de abrir.
-- Ainda não tem: escolher o operador na lista da unidade ao apontar pelo tablet (os apontamentos ficam no nome do terminal) e o tema próprio de cada terminal.
+- Ainda não tem: o tema próprio de cada terminal.
 
 ## 27/11/2026 · Cadastro de turnos e paradas planejadas de verdade
 

@@ -16,7 +16,8 @@
  * (`production_run`, origem `operator`). Os minutos sem produto do CLP passam a usar o produto apontado
  * (`fillMinuteProducts`, em `runs.ts`), então o ciclo ideal do cálculo acompanha a troca.
  */
-import { auditLog, downtimeReason, machineStateEvent, product, productionRun, withTenant } from "@engemase/db"
+import { auditLog, downtimeReason, machineStateEvent, product, productionRun, unitOperator, withTenant } from "@engemase/db"
+import type { GatewayTx } from "@/lib/server/gateway/types"
 import { and, desc, eq, isNull, lte } from "drizzle-orm"
 import { z } from "zod"
 import type { GatewayDb } from "@/lib/server/gateway/types"
@@ -34,11 +35,26 @@ function actorUserId(actor: ProductionActor): string | null {
   return actor.type === "user" || actor.type === "engemase" ? actor.id : null
 }
 
+/** Operador do chão escolhido no tablet: precisa estar ativo e ser da unidade da máquina. */
+async function checkOperator(tx: GatewayTx, operatorId: string | null | undefined, unitId: string): Promise<string | null> {
+  if (operatorId === null || operatorId === undefined) return null
+  if (!UUID.safeParse(operatorId).success) throw new ProductionRuleError("not_found", "Operador não encontrado.")
+  const [op] = await tx
+    .select({ id: unitOperator.id })
+    .from(unitOperator)
+    .where(and(eq(unitOperator.id, operatorId), eq(unitOperator.unitId, unitId), eq(unitOperator.active, true), isNull(unitOperator.deletedAt)))
+    .limit(1)
+  if (op === undefined) throw new ProductionRuleError("not_found", "Operador não encontrado ou desativado. Escolha de novo quem está operando.")
+  return op.id
+}
+
 export interface ClassifyStopInput {
   readonly organizationId: string
   readonly eventId: string
   /** Motivo escolhido; `null` tira o motivo (desfazer). */
   readonly reasonId: string | null
+  /** Operador do chão escolhido no tablet (D18), quando houver. */
+  readonly operatorId?: string | null
   readonly actor: ProductionActor
   readonly allowMachine: MachineGuard
   readonly now?: Date
@@ -72,6 +88,7 @@ export async function classifyStop(db: GatewayDb, input: ClassifyStopInput): Pro
       if (reason === undefined) throw new ProductionRuleError("not_found", "Motivo não encontrado ou desativado.")
     }
     const late = await checkDeadline(tx, m, ev.startedAt, now, input.actor, "classificar a parada")
+    const operatorId = input.reasonId === null ? null : await checkOperator(tx, input.operatorId, m.unitId)
     if (ev.reasonId === input.reasonId) return { late }
 
     await tx
@@ -79,7 +96,7 @@ export async function classifyStop(db: GatewayDb, input: ClassifyStopInput): Pro
       .set(
         input.reasonId === null
           ? { reasonId: null, classifiedBy: null, classifiedAt: null, classifiedOperatorId: null }
-          : { reasonId: input.reasonId, classifiedBy: actorUserId(input.actor), classifiedAt: now, classifiedOperatorId: null },
+          : { reasonId: input.reasonId, classifiedBy: actorUserId(input.actor), classifiedAt: now, classifiedOperatorId: operatorId },
       )
       .where(eq(machineStateEvent.id, ev.id))
     await tx.insert(auditLog).values({
@@ -92,7 +109,7 @@ export async function classifyStop(db: GatewayDb, input: ClassifyStopInput): Pro
       entityId: ev.id,
       unitId: m.unitId,
       before: { reason_id: ev.reasonId },
-      after: { reason_id: input.reasonId, machine_id: m.id, started_at: ev.startedAt.toISOString(), late },
+      after: { reason_id: input.reasonId, operator_id: operatorId, machine_id: m.id, started_at: ev.startedAt.toISOString(), late },
       at: now,
     })
     await markShiftDirtyAt(tx, m.id, ev.startedAt, now)
@@ -104,6 +121,8 @@ export interface ChangeProductInput {
   readonly organizationId: string
   readonly machineId: string
   readonly productId: string
+  /** Operador do chão escolhido no tablet (D18), quando houver. */
+  readonly operatorId?: string | null
   readonly actor: ProductionActor
   readonly allowMachine: MachineGuard
   readonly now?: Date
@@ -124,6 +143,7 @@ export async function changeProduct(db: GatewayDb, input: ChangeProductInput): P
       .where(and(eq(product.id, input.productId), isNull(product.deletedAt)))
       .limit(1)
     if (p === undefined) throw new ProductionRuleError("not_found", "Produto não encontrado.")
+    const operatorId = await checkOperator(tx, input.operatorId, m.unitId)
 
     const [open] = await tx
       .select({ id: productionRun.id, productId: productionRun.productId, productCode: productionRun.productCode })
@@ -148,7 +168,7 @@ export async function changeProduct(db: GatewayDb, input: ChangeProductInput): P
         startedAt: now,
         source: "operator",
         createdBy: actorUserId(input.actor),
-        operatorId: null,
+        operatorId,
       })
       .returning({ id: productionRun.id })
     await tx.insert(auditLog).values({
@@ -161,7 +181,7 @@ export async function changeProduct(db: GatewayDb, input: ChangeProductInput): P
       entityId: run?.id ?? null,
       unitId: m.unitId,
       before: { product_code: open?.productCode ?? null },
-      after: { product_code: p.code, machine_id: m.id },
+      after: { product_code: p.code, machine_id: m.id, operator_id: operatorId },
       at: now,
     })
     await markShiftDirtyAt(tx, m.id, now, now)

@@ -50,7 +50,13 @@ async function machineOf(db: GatewayDb, ctx: TenantContext, machineId: unknown):
   return m
 }
 
-const ClassifyInput = z.object({ eventId: z.string(), reasonId: z.string().nullable() })
+/** Operador do chão escolhido no tablet (D18). Só vale no terminal: a pessoa logada é ela mesma. */
+const OperatorField = z.string().nullable().optional()
+function floorOperator(ctx: TenantContext, operatorId: string | null | undefined): string | null {
+  return ctx.access.kind === "terminal" ? (operatorId ?? null) : null
+}
+
+const ClassifyInput = z.object({ eventId: z.string(), reasonId: z.string().nullable(), operatorId: OperatorField })
 
 /** Classifica a parada (ou tira o motivo, com `reasonId: null`, para desfazer). */
 export async function classifyStop(db: GatewayDb | null, ctx: TenantContext, input: unknown): Promise<FloorResult<{ late: boolean }>> {
@@ -61,6 +67,7 @@ export async function classifyStop(db: GatewayDb | null, ctx: TenantContext, inp
       organizationId: ctx.organizationId,
       eventId: parsed.data.eventId,
       reasonId: parsed.data.reasonId,
+      operatorId: floorOperator(ctx, parsed.data.operatorId),
       actor: actorOf(ctx),
       allowMachine: (m) => machineInScope(ctx.scope, m),
     })
@@ -72,6 +79,7 @@ const RejectInput = z.object({
   quantity: z.number(),
   rejectReasonId: z.string().nullable(),
   productCode: z.string().nullable(),
+  operatorId: OperatorField,
 })
 
 /** Lança refugo manual agora (soma ao do CLP). Devolve o id, para o "Desfazer". */
@@ -88,6 +96,7 @@ export async function launchReject(db: GatewayDb | null, ctx: TenantContext, inp
         quantity: parsed.data.quantity,
         rejectReasonId: parsed.data.rejectReasonId,
         productCode: parsed.data.productCode,
+        operatorId: floorOperator(ctx, parsed.data.operatorId),
       },
       actor: actorOf(ctx),
     })
@@ -108,7 +117,7 @@ export async function undoReject(db: GatewayDb | null, ctx: TenantContext, entry
   })
 }
 
-const ProductInput = z.object({ machineId: z.string(), productId: z.string() })
+const ProductInput = z.object({ machineId: z.string(), productId: z.string(), operatorId: OperatorField })
 
 /** Troca o produto em produção. Devolve o produto anterior apontado pelo operador (para o "Desfazer"). */
 export async function changeProduct(db: GatewayDb | null, ctx: TenantContext, input: unknown): Promise<FloorResult<{ previousProductId: string | null }>> {
@@ -119,6 +128,7 @@ export async function changeProduct(db: GatewayDb | null, ctx: TenantContext, in
       organizationId: ctx.organizationId,
       machineId: parsed.data.machineId,
       productId: parsed.data.productId,
+      operatorId: floorOperator(ctx, parsed.data.operatorId),
       actor: actorOf(ctx),
       allowMachine: (m) => machineInScope(ctx.scope, m),
     })

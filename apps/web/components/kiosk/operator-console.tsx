@@ -15,10 +15,11 @@ import {
   ListChecksIcon,
   LogOutIcon,
   PackageXIcon,
+  UserRoundIcon,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { dec, duration, num, pct, time } from "@/lib/format"
+import { dec, duration, initials, num, pct, time } from "@/lib/format"
 import { STATE_META } from "@/lib/states"
 import type { MachineState } from "@/lib/mock"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -27,6 +28,7 @@ import { OeeBreakdown } from "@/components/oee/oee-breakdown"
 import { OeeRing } from "@/components/oee/oee-ring"
 import { KioskThemeToggle } from "@/components/kiosk/kiosk-theme-toggle"
 import type { OperatorData, PendingStop, ProductOption } from "@/components/kiosk/operator-types"
+import { FloorOperatorPicker, useFloorOperator } from "@/components/kiosk/floor-operator-picker"
 import { ProductDialog } from "@/components/kiosk/product-dialog"
 import { ReasonPicker, type PickedReason } from "@/components/kiosk/reason-picker"
 import { RejectDialog, type RejectDefect } from "@/components/kiosk/reject-dialog"
@@ -75,20 +77,25 @@ export interface TerminalMode {
 
 /** Tela do operador (tablet/celular): estado ao vivo, paradas a classificar, refugo e troca de produto. */
 export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorData; panelHref: string; terminal?: TerminalMode }) {
-  const { machine, live, shift, reasons, products, operator, timeZone, banco, clientSlug, viaTerminal } = data
+  const { machine, live, shift, reasons, products, operator, timeZone, banco, clientSlug, viaTerminal, floorOperators } = data
+  // Tablet pareado com operadores cadastrados (D18): quem está operando vai junto de cada apontamento.
+  const floorOp = useFloorOperator(clientSlug, floorOperators, shift?.name ?? "")
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const needsOperator = floorOp.required && floorOp.current === null
+  const withOp = (i: object) => ({ ...i, operatorId: floorOp.current?.id ?? null })
   // Pessoa logada: ações pela sessão e pelo cliente da URL. Tablet pareado: pelo token do aparelho.
   const acts = viaTerminal
     ? {
-        classify: (i: unknown) => classifyStopTerminalAction(i),
-        reject: (i: unknown) => launchRejectTerminalAction(i),
+        classify: (i: object) => classifyStopTerminalAction(withOp(i)),
+        reject: (i: object) => launchRejectTerminalAction(withOp(i)),
         undoReject: (id: unknown) => undoRejectTerminalAction(id),
-        product: (i: unknown) => changeProductTerminalAction(i),
+        product: (i: object) => changeProductTerminalAction(withOp(i)),
       }
     : {
-        classify: (i: unknown) => classifyStopAction(clientSlug, i),
-        reject: (i: unknown) => launchRejectAction(clientSlug, i),
+        classify: (i: object) => classifyStopAction(clientSlug, i),
+        reject: (i: object) => launchRejectAction(clientSlug, i),
         undoReject: (id: unknown) => undoRejectAction(clientSlug, id),
-        product: (i: unknown) => changeProductAction(clientSlug, i),
+        product: (i: object) => changeProductAction(clientSlug, i),
       }
   const { now, read } = useMockClock(10_000)
   const [saving, startSaving] = useTransition()
@@ -96,6 +103,11 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
   /** Grava no servidor (sistema real). Erro → aviso, nada muda na tela. Sem banco, só aplica na tela. */
   function save<T>(fn: () => Promise<FloorResult<T>>, onOk: (data: T | undefined) => void) {
     if (!banco) return onOk(undefined)
+    if (needsOperator) {
+      toast.error("Escolha quem está operando antes de apontar.")
+      setPickerOpen(true)
+      return
+    }
     startSaving(async () => {
       try {
         const r = await fn()
@@ -316,15 +328,37 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
             </div>
           </div>
 
-          <div className="hidden items-center gap-2 border-l pl-3 lg:flex">
-            <Avatar className="size-10">
-              <AvatarFallback className="bg-primary/10 text-sm font-semibold text-primary">{operator.initials}</AvatarFallback>
-            </Avatar>
-            <div className="grid max-w-40 leading-tight">
-              <span className="truncate text-sm font-medium">{operator.name}</span>
-              <span className="truncate text-xs text-muted-foreground">{operator.username ?? "Operador"}</span>
+          {floorOp.required ? (
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              aria-label={floorOp.current ? `Operador: ${floorOp.current.name}. Trocar operador` : "Escolher quem está operando"}
+              className={cn(
+                "inline-flex h-12 shrink-0 items-center gap-2 rounded-xl border bg-card px-2 text-left transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none lg:px-3",
+                needsOperator && "border-amber-500 bg-amber-500/10",
+              )}
+            >
+              <Avatar className="size-8">
+                <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+                  {floorOp.current ? initials(floorOp.current.name) : <UserRoundIcon className="size-4" />}
+                </AvatarFallback>
+              </Avatar>
+              <span className="hidden max-w-40 leading-tight md:grid">
+                <span className="truncate text-sm font-medium">{floorOp.current?.name ?? "Quem está operando?"}</span>
+                <span className="truncate text-xs text-muted-foreground">{floorOp.current ? "Trocar operador" : "Toque para escolher"}</span>
+              </span>
+            </button>
+          ) : (
+            <div className="hidden items-center gap-2 border-l pl-3 lg:flex">
+              <Avatar className="size-10">
+                <AvatarFallback className="bg-primary/10 text-sm font-semibold text-primary">{operator.initials}</AvatarFallback>
+              </Avatar>
+              <div className="grid max-w-40 leading-tight">
+                <span className="truncate text-sm font-medium">{operator.name}</span>
+                <span className="truncate text-xs text-muted-foreground">{operator.username ?? "Operador"}</span>
+              </div>
             </div>
-          </div>
+          )}
 
           {!terminal && (
             <Link
@@ -591,6 +625,20 @@ export function OperatorConsole({ data, panelHref, terminal }: { data: OperatorD
         submitting={saving}
         onConfirm={launchReject}
       />
+      {floorOp.required && (
+        <FloorOperatorPicker
+          open={pickerOpen || needsOperator}
+          onOpenChange={setPickerOpen}
+          operators={floorOperators}
+          currentId={floorOp.current?.id ?? null}
+          machineName={machine.name}
+          onChoose={(o) => {
+            floorOp.choose(o)
+            setPickerOpen(false)
+            toast.success(`Olá, ${o.name.split(" ")[0]}!`, { description: "Seus apontamentos ficam registrados com o seu nome." })
+          }}
+        />
+      )}
       <ProductDialog
         open={productOpen}
         onOpenChange={setProductOpen}

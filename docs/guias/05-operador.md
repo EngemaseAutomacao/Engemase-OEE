@@ -5,7 +5,7 @@
 - **Operador do chão de fábrica:** usa o **tablet da máquina** (ou da linha). **Não precisa de conta, e-mail nem senha:** o tablet já vem pareado pela Engemase e abre direto na tela da máquina.
 - **Líder de linha ou quem aponta no próprio celular ou computador:** tem conta com o papel **Operador** e entra com e-mail e senha (veja [Entrar e minha conta](00-entrar-e-minha-conta.md)). A tela é a mesma.
 
-**Em breve:** identificação do operador no tablet (escolher o nome numa lista e, depois, crachá ou PIN).
+**Quem está operando?** No tablet, antes do primeiro apontamento do turno, aparece a lista de operadores da unidade: toque no seu nome. Seus apontamentos ficam registrados com ele até a troca de turno. Para trocar antes (troca de operador no meio do turno), toque no nome no alto da tela. Não está na lista? Avise o supervisor. **Em breve:** crachá ou PIN.
 
 ## O que você faz
 

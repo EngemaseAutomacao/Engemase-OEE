@@ -62,3 +62,13 @@ Em "Configurações" › "Terminais (TV/tablet)" aparecem: "Online agora", "Agua
 - Tablet: prefira **Android**. No iPad, a tela não fica acesa sozinha com o app instalado.
 - O tema do terminal é dele: não muda o tema de nenhuma pessoa.
 - Operadores do chão não precisam de usuário: o tablet pareado é suficiente.
+
+## Operadores do chão (lista do tablet)
+
+Em "Configurações" › "Terminais", seção "Operadores do chão" (equipe Engemase):
+
+- **"Novo operador":** unidade, nome (como aparece no tablet) e matrícula, se quiser. A matrícula não pode repetir na mesma unidade.
+- **Editar** (lápis) muda nome e matrícula. Para mudar de unidade, cadastre de novo na unidade nova e desative o antigo.
+- **Desativar:** o operador sai da lista do tablet na próxima atualização da tela. O que ele já apontou continua com o nome dele. Dá para reativar.
+
+Com pelo menos um operador cadastrado na unidade, o tablet pergunta **"Quem está operando?"** antes do primeiro apontamento e a cada troca de turno. Sem nenhum, o tablet aponta sem pedir o nome.

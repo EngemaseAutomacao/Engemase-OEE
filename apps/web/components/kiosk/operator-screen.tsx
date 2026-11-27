@@ -9,6 +9,8 @@ import { OperatorConsole, type TerminalMode } from "@/components/kiosk/operator-
 import type { OperatorData, PendingStop } from "@/components/kiosk/operator-types"
 import { currentShift } from "@/components/kiosk/shift-info"
 import { ClockBase } from "@/components/kiosk/use-mock-clock"
+import { getDb } from "@/lib/server/db"
+import { operadoresDaUnidade } from "@/lib/server/terminal/operators"
 
 /** Esqueleto exibido enquanto a tela do operador carrega (navegação no app). */
 export function OperatorSkeleton() {
@@ -116,6 +118,10 @@ export async function OperatorScreen({
     data.now,
   )
 
+  // Tablet pareado (sistema real): lista dos operadores do chão da unidade da máquina (D18).
+  const db = ctx?.access.kind === "terminal" && data.fonte === "banco" ? getDb() : null
+  const floorOperators = ctx && db ? (await operadoresDaUnidade(db, ctx, machine.unitId)).map((o) => ({ id: o.id, name: o.name, employeeCode: o.employeeCode })) : []
+
   const operatorData: OperatorData = {
     machine: {
       id: machine.id,
@@ -160,6 +166,7 @@ export async function OperatorScreen({
     banco: data.fonte === "banco",
     clientSlug: client.slug,
     viaTerminal: ctx?.access.kind === "terminal",
+    floorOperators,
     rejectReasons: data.rejectReasons.map((r) => ({ id: r.id, name: r.name })),
   }
 

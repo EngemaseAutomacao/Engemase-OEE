@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Suspense } from "react"
 import { ConfigAccessProvider, EngemaseManagedNote } from "@/components/config/engemase-managed"
+import { FloorOperators } from "@/components/settings/floor-operators"
 import { TerminalsManager } from "@/components/settings/terminals-manager"
 import { CarregandoPagina } from "@/components/shell/carregando"
 import { dadosTerminais } from "@/lib/data/config/terminais"
@@ -25,6 +26,7 @@ async function Tela({ params }: { params: PageProps<"/[cliente]/config/terminais
           initialTerminals={d.terminals}
           banco={d.banco}
         />
+        <FloorOperators clientSlug={d.client.slug} units={d.units} initialOperators={d.operators} banco={d.banco} />
       </div>
     </ConfigAccessProvider>
   )

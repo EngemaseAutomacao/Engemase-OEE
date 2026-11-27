@@ -72,6 +72,15 @@ export interface OperatorData {
   clientSlug: string
   /** Aberta pelo tablet pareado: as ações vão pelo token do aparelho (`app/terminal/actions.ts`). */
   viaTerminal: boolean
+  /** Operadores do chão ativos da unidade (tablet pareado, D18). Vazio: não pede "quem está operando". */
+  floorOperators: FloorOperator[]
   /** Motivos de refugo cadastrados (sistema real). */
   rejectReasons: { id: string; name: string }[]
+}
+
+/** Operador do chão (sem conta de login), escolhido na lista do tablet. */
+export interface FloorOperator {
+  id: string
+  name: string
+  employeeCode: string | null
 }
