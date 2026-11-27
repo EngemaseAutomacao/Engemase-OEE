@@ -39,3 +39,12 @@ export const whatsappHref = (text: string) =>
 
 /** E-mail comercial (o mesmo e-mail geral da Engemase). */
 export const SALES_EMAIL = COMPANY.email
+
+/** Imagem da prévia do link (WhatsApp, LinkedIn…): 1200×630, JPG leve e endereço fixo, sem ?query. */
+export const SHARE_IMAGE = {
+  url: "/compartilhar/engemase-oee.jpg",
+  width: 1200,
+  height: 630,
+  type: "image/jpeg",
+  alt: "Engemase OEE: OEE em tempo real, direto do CLP",
+} as const

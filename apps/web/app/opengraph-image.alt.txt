@@ -1,1 +1,0 @@
-Engemase OEE: painel com o OEE das máquinas em tempo real, direto do CLP

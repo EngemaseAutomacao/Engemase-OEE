@@ -35,7 +35,7 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { BrandLogo } from "@/components/shell/brand"
-import { COMPANY, SALES_EMAIL, whatsappHref } from "@/lib/site"
+import { COMPANY, SALES_EMAIL, SHARE_IMAGE, whatsappHref } from "@/lib/site"
 
 import "./apresentacao.css"
 
@@ -50,6 +50,7 @@ export const metadata: Metadata = {
     url: "/",
     title: "Engemase OEE · OEE em tempo real direto do CLP",
     description: "Saiba quanto suas máquinas produzem de verdade, a cada minuto. A Engemase instala e cuida de tudo.",
+    images: [SHARE_IMAGE],
   },
 }
 

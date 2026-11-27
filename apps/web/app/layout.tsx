@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { SeloDemonstracao } from "@/components/shell/selo-demonstracao"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { SHARE_IMAGE } from "@/lib/site"
 
 import "./globals.css"
 
@@ -22,8 +23,9 @@ export const metadata: Metadata = {
     siteName: "Engemase OEE",
     title: "Engemase OEE · OEE em tempo real direto do CLP",
     description: "Saiba quanto suas máquinas produzem de verdade, a cada minuto. A Engemase instala e cuida de tudo.",
+    images: [SHARE_IMAGE],
   },
-  twitter: { card: "summary_large_image" },
+  twitter: { card: "summary_large_image", images: [SHARE_IMAGE] },
 }
 
 /**
