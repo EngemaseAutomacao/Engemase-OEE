@@ -15,8 +15,9 @@
  */
 import { DEFAULT_COMMAND_TTL_S } from "@engemase/contracts"
 import { gateway, gatewayCommand, remoteAccessEvent, remoteAccessForward, remoteAccessSession } from "@engemase/db"
-import { and, eq, inArray, isNull, lte, sql } from "drizzle-orm"
+import { and, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm"
 import type { GatewayTx } from "../gateway/types"
+import { tailscaleFromEnv } from "../remote/tailscale"
 import type { CronJob } from "./runner"
 import { minuteWindow } from "./windows"
 
@@ -25,6 +26,9 @@ export const UNDECIDED_REQUEST_TTL_MS = 24 * 3_600_000
 
 /** Folga depois do prazo antes de a nuvem mandar desligar (o gateway costuma desligar sozinho antes). */
 export const EXPIRY_GRACE_MS = 2 * 60_000
+
+/** Por quanto tempo depois do fim o cron ainda tenta apagar o nó da sessão (roda a cada 15 min). */
+export const NODE_CLEANUP_WINDOW_MS = 2 * 3_600_000
 
 async function hasOpenCommand(tx: GatewayTx, gatewayId: string, type: string, key: string, value: string): Promise<boolean> {
   const rows = await tx
@@ -150,8 +154,22 @@ export const vpnJob: CronJob = {
         closes++
       }
 
+      // Nós do Tailscale de sessões já terminadas (últimas 2 h): apagados fora da transação, abaixo.
+      const finished = await tx
+        .select({ id: remoteAccessSession.id, node: remoteAccessSession.vpnNodeId })
+        .from(remoteAccessSession)
+        .where(
+          and(
+            inArray(remoteAccessSession.status, ["ended", "denied", "cancelled", "expired_unapproved", "failed", "revoked"]),
+            isNotNull(remoteAccessSession.vpnNodeId),
+            gte(remoteAccessSession.endedAt, new Date(now.getTime() - NODE_CLEANUP_WINDOW_MS)),
+          ),
+        )
+      const nodes = finished.flatMap((f) => (f.node ? [f.node] : []))
+
       if (events.length > 0) await tx.insert(remoteAccessEvent).values(events)
       return {
+        nodes,
         expiredUnapproved: undecided.length,
         ended: neverStarted.length + overdue.filter((s) => s.gatewayStatus !== "active").length,
         disables,
@@ -159,7 +177,19 @@ export const vpnJob: CronJob = {
         closes,
       }
     })
-    const sum = (k: keyof (typeof run.results)[number]["value"]) => run.results.reduce((n, r) => n + r.value[k], 0)
+    // Tira da rede de manutenção os gateways das sessões terminadas (idempotente: nó que já saiu = 0).
+    const vpn = tailscaleFromEnv(ctx.env, ctx.fetch)
+    let nodesDeleted = 0
+    if (vpn) {
+      for (const node of new Set(run.results.flatMap((r) => r.value.nodes))) {
+        try {
+          nodesDeleted += await vpn.deleteNode(node)
+        } catch (error) {
+          ctx.log(`[vpn] não foi possível apagar o nó ${node}`, error)
+        }
+      }
+    }
+    const sum = (k: "expiredUnapproved" | "ended" | "disables" | "forwardsExpired" | "closes") => run.results.reduce((n, r) => n + r.value[k], 0)
     return {
       organizations: run.results.length,
       sessions_expired_unapproved: sum("expiredUnapproved"),
@@ -167,6 +197,7 @@ export const vpnJob: CronJob = {
       vpn_disable_queued: sum("disables"),
       forwards_expired: sum("forwardsExpired"),
       forward_close_queued: sum("closes"),
+      vpn_nodes_deleted: nodesDeleted,
       failures: run.failures,
       incomplete: run.incomplete,
     }

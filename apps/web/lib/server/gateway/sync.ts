@@ -61,6 +61,7 @@ import { ensureSystemRule, raiseAlert } from "../alerts/system"
 import { assertTokenStillValid, tokenStateInTx } from "./auth"
 import { GatewayApiError, MAX_ERROR_ISSUES, pathFromDotted } from "./errors"
 import { type GatewayPrincipal, type GatewayTx, type GatewayDb, type RequestMeta } from "./types"
+import type { VpnProvider } from "../remote/tailscale"
 import { emOrdem } from "@/lib/server/em-ordem"
 
 /** Versão mínima do agente anunciada no /sync (o agente ainda não a aplica). */
@@ -80,6 +81,10 @@ export interface SyncContext extends RequestMeta {
   /** Relógio do servidor (`server_time`); injetável nos testes. */
   readonly now: Date
   readonly minAgentVersion?: string
+  /** Provedor da VPN (Tailscale): cria a chave de uso único do `vpn.enable` na hora da entrega. */
+  readonly vpn?: VpnProvider | null
+  /** Log de falhas não fatais (padrão: console.error). */
+  readonly logError?: (message: string, error: unknown) => void
 }
 
 type EventOf<T extends Event["type"]> = Extract<Event, { type: T }>
@@ -134,7 +139,7 @@ export async function processSync(
     await markShiftsDirty(writer)
     await saveGatewayHealth(writer, req, refs)
 
-    const commands = await takeCommands(tx, principal.gatewayId, ctx.now)
+    const commands = await takeCommands(tx, principal.gatewayId, ctx.now, ctx)
     const interactive = await hasRecentOpenCommand(tx, principal.gatewayId, ctx.now)
 
     const response: SyncResponse = {
@@ -926,7 +931,7 @@ async function saveHealthSample(w: Writer, req: SyncRequest, devices: readonly N
  * perdida. Vencidos viram `expired`; os que não passam no `CommandSchema` (tipo desconhecido, payload
  * inválido, validade acima de 24 h) viram `rejected` aqui mesmo, sem ir ao agente.
  */
-async function takeCommands(tx: GatewayTx, gatewayId: string, now: Date): Promise<Command[]> {
+async function takeCommands(tx: GatewayTx, gatewayId: string, now: Date, ctx: Pick<SyncContext, "vpn" | "logError"> = {}): Promise<Command[]> {
   await tx
     .update(gatewayCommand)
     .set({ status: "expired", completedAt: now })
@@ -942,6 +947,7 @@ async function takeCommands(tx: GatewayTx, gatewayId: string, now: Date): Promis
       id: gatewayCommand.id,
       type: gatewayCommand.type,
       payload: gatewayCommand.payload,
+      status: gatewayCommand.status,
       createdAt: gatewayCommand.createdAt,
       expiresAt: gatewayCommand.expiresAt,
     })
@@ -958,10 +964,24 @@ async function takeCommands(tx: GatewayTx, gatewayId: string, now: Date): Promis
 
   const commands: Command[] = []
   for (const row of rows) {
+    let payload: unknown = row.payload
+    if (row.type === "vpn.enable") {
+      // A chave de entrada (segredo, uso único) é criada AGORA e só vai na resposta: nunca fica no banco.
+      // Só na primeira entrega: reenviar geraria outra chave a cada /sync.
+      if (row.status !== "pending") continue
+      if (!ctx.vpn) continue // VPN não configurada na plataforma: o comando espera (vence pelo prazo)
+      try {
+        const authKey = await ctx.vpn.mintAuthKey(`OEE sessao ${String((row.payload as { session_id?: unknown })?.session_id ?? "").slice(-12)}`)
+        payload = { ...(row.payload as Record<string, unknown>), auth_key: authKey }
+      } catch (error) {
+        ;(ctx.logError ?? console.error)("[vpn] não foi possível criar a chave de entrada; tenta no próximo /sync", error)
+        continue
+      }
+    }
     const parsed = CommandSchema.safeParse({
       id: row.id,
       type: row.type,
-      payload: row.payload,
+      payload,
       issued_at: iso(row.createdAt),
       expires_at: iso(row.expiresAt),
     })

@@ -104,7 +104,15 @@ A demonstração na Vercel não tem banco. Por isso as telas leem por `lib/data/
   `sandbox`). Server Actions aceitam até 2 MB (`next.config.ts`).
 - Acesso remoto (`lib/server/remote/access.ts`, docs/12): pedido (Engemase, `diagnostics.run`), aprovar/recusar e
   política (`remote_access.approve`; quem pede nunca decide), encerrar (ativa → `stopping` + `vpn.disable`).
-  `remote_access_event` e auditoria. Falta `vpn.enable` (chave do provedor + aprovação assinada JWS).
+  `remote_access_event` e auditoria.
+- VPN do acesso remoto (docs/12), lado da plataforma: com `VPN_HABILITADA=1`, `VPN_APPROVAL_SIGNING_KEY` (semente
+  Ed25519 de 32 bytes em base64 ou PEM PKCS#8, Sensitive) e `TAILSCALE_OAUTH_CLIENT_ID`/`_SECRET` (credencial OAuth
+  com só auth_keys e devices:core, tag `tag:oee-gateway`), aprovar põe `vpn.enable` na fila com a aprovação
+  assinada (`lib/server/remote/approval.ts`, JWS EdDSA + `kid`) e SEM a chave de entrada. A chave de uso único
+  (15 min, pré-autorizada, com a tag) é criada no `/sync` só na primeira entrega (`gateway/sync.ts`) e nunca vai
+  ao banco nem ao log. Encerrar e o cron `vpn` apagam o nó no Tailscale (`lib/server/remote/tailscale.ts`). A chave
+  pública para o pacote do gateway: `GET /api/gateway/v1/vpn-approval-key`. Falta o programa do gateway que liga
+  a VPN (tsnet) e confere a aprovação; até ele existir, `VPN_HABILITADA` fica desligada.
 - Mapa de falhas do CLP (`lib/server/config/fault-map.ts`, `config.write`): `fault_code_map` com `fault_text` e
   `reason_id` opcional (0019); alvo = uma máquina ou, com `machine_id` e `template_id` nulos, o cliente todo (o da
   máquina ganha). "Salvar mapa" troca o mapa inteiro numa transação (as linhas por modelo ficam). No `/sync`

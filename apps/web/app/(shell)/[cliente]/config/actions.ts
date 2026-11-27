@@ -35,6 +35,8 @@ import { excluirProduto, salvarMatrizCiclos, salvarProduto } from "@/lib/server/
 import { restaurarAparencia, salvarAparencia } from "@/lib/server/config/branding"
 import { blobStore, enviarLogo, removerLogo, removerTodosLogos } from "@/lib/server/config/logos"
 import { aprovarAcesso, encerrarAcesso, pedirAcesso, recusarAcesso, salvarPolitica } from "@/lib/server/remote/access"
+import { approvalSignerFromEnv } from "@/lib/server/remote/approval"
+import { tailscaleFromEnv } from "@/lib/server/remote/tailscale"
 import { salvarMapaFalhas } from "@/lib/server/config/fault-map"
 import { definirAtivo, definirCor, excluirMotivo, salvarGrupo, salvarMotivo } from "@/lib/server/config/reasons"
 import { cancelarParada, excluirTurno, salvarParada, salvarTurno } from "@/lib/server/config/shifts"
@@ -664,8 +666,12 @@ export async function pedirAcessoAction(input: unknown): Promise<Resultado<{ id:
   return remoto(input, "diagnostics.run", "pedirAcesso", (a) => pedirAcesso(a.db, a.ctx, input))
 }
 
-export async function aprovarAcessoAction(input: unknown): Promise<Resultado<{ id: string; durationMin: number }>> {
-  return remoto(input, "remote_access.approve", "aprovarAcesso", (a) => aprovarAcesso(a.db, a.ctx, input))
+export async function aprovarAcessoAction(input: unknown): Promise<Resultado<{ id: string; durationMin: number; vpnQueued: boolean }>> {
+  // VPN ligada na plataforma só com a chave liga/desliga (VPN_HABILITADA=1, quando o programa do gateway
+  // que liga a VPN estiver instalado) e as duas peças: quem assina a aprovação e o Tailscale.
+  const signer = process.env.VPN_HABILITADA === "1" ? approvalSignerFromEnv() : null
+  const vpn = signer !== null && tailscaleFromEnv() !== null ? { signer } : null
+  return remoto(input, "remote_access.approve", "aprovarAcesso", (a) => aprovarAcesso(a.db, a.ctx, input, new Date(), vpn))
 }
 
 export async function recusarAcessoAction(input: unknown): Promise<Resultado<{ id: string }>> {
@@ -673,7 +679,7 @@ export async function recusarAcessoAction(input: unknown): Promise<Resultado<{ i
 }
 
 export async function encerrarAcessoAction(input: unknown): Promise<Resultado<{ id: string; status: string }>> {
-  return remoto(input, "data.read", "encerrarAcesso", (a) => encerrarAcesso(a.db, a.ctx, (input as { id?: unknown } | null)?.id))
+  return remoto(input, "data.read", "encerrarAcesso", (a) => encerrarAcesso(a.db, a.ctx, (input as { id?: unknown } | null)?.id, new Date(), tailscaleFromEnv()))
 }
 
 export async function salvarPoliticaAcessoAction(input: unknown): Promise<Resultado<{ recusados: number }>> {

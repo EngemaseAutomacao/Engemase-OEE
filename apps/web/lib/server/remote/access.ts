@@ -21,6 +21,8 @@ import { assertPermission, hasPermission, type TenantContext } from "@/lib/serve
 import type { ConfigResult } from "@/lib/server/config/products"
 import type { GatewayDb, GatewayTx } from "@/lib/server/gateway/types"
 import { auditActor } from "@/lib/server/users/audit"
+import type { ApprovalSigner } from "./approval"
+import { nodeNameFor, type VpnProvider } from "./tailscale"
 
 export interface PoliticaCliente {
   readonly mode: "disabled" | "approval" | "preapproved_window" | "emergency"
@@ -144,12 +146,27 @@ async function podeAprovar(tx: GatewayTx, ctx: TenantContext): Promise<string | 
 }
 
 /** Aprova (pode reduzir a duração). */
-export async function aprovarAcesso(db: GatewayDb, ctx: TenantContext, input: unknown, now = new Date()): Promise<ConfigResult<{ id: string; durationMin: number }>> {
+/**
+ * VPN configurada na plataforma: assinador da aprovação e provedor (Tailscale) presentes. Sem ela, a
+ * aprovação fica só registrada (nenhum comando vai ao gateway).
+ */
+export interface VpnSetup {
+  readonly signer: ApprovalSigner
+}
+
+/** Aprova (pode reduzir a duração). Com a VPN configurada, põe o `vpn.enable` na fila do gateway. */
+export async function aprovarAcesso(
+  db: GatewayDb,
+  ctx: TenantContext,
+  input: unknown,
+  now = new Date(),
+  vpn: VpnSetup | null = null,
+): Promise<ConfigResult<{ id: string; durationMin: number; vpnQueued: boolean }>> {
   assertPermission(ctx, "remote_access.approve")
   const parsed = DecisaoInput.safeParse(input)
   if (!parsed.success) return NAO_ENCONTRADO
   const v = parsed.data
-  return withTenant(db, ctx.organizationId, async (tx): Promise<ConfigResult<{ id: string; durationMin: number }>> => {
+  return withTenant(db, ctx.organizationId, async (tx): Promise<ConfigResult<{ id: string; durationMin: number; vpnQueued: boolean }>> => {
     const sem = await podeAprovar(tx, ctx)
     if (sem !== null) return { ok: false, mensagem: sem }
     const [s] = await tx.select().from(remoteAccessSession).where(eq(remoteAccessSession.id, v.id)).for("update").limit(1)
@@ -159,22 +176,48 @@ export async function aprovarAcesso(db: GatewayDb, ctx: TenantContext, input: un
     const p = await politica(tx)
     if (p.mode === "disabled") return { ok: false, mensagem: "O acesso remoto está desativado na política. Mude a política para aprovar." }
     const durationMin = Math.min(v.durationMin ?? s.requestedDurationMin, s.requestedDurationMin, p.maxDurationMin)
+    const expiresAt = new Date(now.getTime() + durationMin * 60_000)
+    const nodeName = vpn ? nodeNameFor(s.gatewayId, s.id) : null
     await tx
       .update(remoteAccessSession)
       .set({
         status: "approved",
+        ...(nodeName ? { vpnNodeId: nodeName } : {}),
         decidedBy: ctx.user.id,
         decidedAt: now,
         decisionNote: v.note || null,
         approvedDurationMin: durationMin,
         // Sem a VPN ligada, o prazo conta da aprovação (o cron fecha o que não ligou).
-        expiresAt: new Date(now.getTime() + durationMin * 60_000),
+        expiresAt,
         updatedAt: now,
       })
       .where(eq(remoteAccessSession.id, s.id))
-    await evento(tx, ctx, s.id, "approved", { duration_min: durationMin, note: v.note ?? null })
+    if (vpn && nodeName) {
+      // Aprovação assinada (o gateway confere antes de ligar). A chave do Tailscale NÃO vai aqui: é
+      // criada na hora da entrega pelo /sync (`gateway/sync.ts`), para não ficar guardada no banco.
+      const approval = vpn.signer.sign({
+        typ: "engemase.vpn_approval.v1",
+        gateway_id: s.gatewayId,
+        session_id: s.id,
+        requested_by: `user:${s.requestedBy}`,
+        approved_by: `user:${ctx.user.id}`,
+        approved_at: now.toISOString(),
+        not_after: expiresAt.toISOString(),
+        allow_ot_forward: false,
+      })
+      await tx.insert(gatewayCommand).values({
+        organizationId: ctx.organizationId,
+        gatewayId: s.gatewayId,
+        type: "vpn.enable",
+        payload: { session_id: s.id, node_name: nodeName, session_expires_at: expiresAt.toISOString(), idle_timeout_s: p.idleTimeoutMin * 60, approval },
+        status: "pending",
+        createdBy: ctx.user.id,
+        expiresAt,
+      })
+    }
+    await evento(tx, ctx, s.id, "approved", { duration_min: durationMin, note: v.note ?? null, vpn_queued: vpn !== null })
     await auditar(tx, ctx, "remote.approve", s.id, { duration_min: durationMin, requested_duration_min: s.requestedDurationMin, note: v.note ?? null })
-    return { ok: true, dados: { id: s.id, durationMin } }
+    return { ok: true, dados: { id: s.id, durationMin, vpnQueued: vpn !== null } }
   })
 }
 
@@ -215,10 +258,17 @@ async function pedirDesligar(tx: GatewayTx, ctx: TenantContext, gatewayId: strin
 }
 
 /** Encerra (ou cancela o pedido). Aprovador ou quem pediu. */
-export async function encerrarAcesso(db: GatewayDb, ctx: TenantContext, id: unknown, now = new Date()): Promise<ConfigResult<{ id: string; status: string }>> {
+export async function encerrarAcesso(
+  db: GatewayDb,
+  ctx: TenantContext,
+  id: unknown,
+  now = new Date(),
+  vpn: VpnProvider | null = null,
+): Promise<ConfigResult<{ id: string; status: string }>> {
   assertPermission(ctx, "data.read")
   if (typeof id !== "string" || !z.uuid().safeParse(id).success) return NAO_ENCONTRADO
-  return withTenant(db, ctx.organizationId, async (tx): Promise<ConfigResult<{ id: string; status: string }>> => {
+  let noParaApagar: string | null = null
+  const r = await withTenant(db, ctx.organizationId, async (tx): Promise<ConfigResult<{ id: string; status: string }>> => {
     const [s] = await tx.select().from(remoteAccessSession).where(eq(remoteAccessSession.id, id)).for("update").limit(1)
     if (s === undefined) return NAO_ENCONTRADO
     const solicitante = s.requestedBy === ctx.user.id
@@ -247,8 +297,21 @@ export async function encerrarAcesso(db: GatewayDb, ctx: TenantContext, id: unkn
     if (status === "stopping") await pedirDesligar(tx, ctx, s.gatewayId, s.id, "requested", now)
     await evento(tx, ctx, s.id, status === "cancelled" ? "cancelled" : "end_requested", { from: s.status, to: status })
     await auditar(tx, ctx, "remote.end", s.id, { from: s.status, to: status })
+    if (s.vpnNodeId && (status === "ended" || status === "stopping")) noParaApagar = s.vpnNodeId
     return { ok: true, dados: { id: s.id, status } }
   })
+  // Garantia extra: tira o gateway da rede de manutenção agora (o gateway também desliga sozinho).
+  if (r.ok && noParaApagar && vpn) await apagarNo(vpn, noParaApagar)
+  return r
+}
+
+/** Apaga o nó do gateway no Tailscale; falha só vai para o log (o cron tenta de novo). */
+export async function apagarNo(vpn: VpnProvider, nodeName: string): Promise<void> {
+  try {
+    await vpn.deleteNode(nodeName)
+  } catch (error) {
+    console.error(`[vpn] não foi possível apagar o nó ${nodeName}; o cron tenta de novo`, error)
+  }
 }
 
 /** Política do cliente inteiro (admin do cliente). Desativar recusa os pedidos em aberto e encerra as sessões liberadas. */

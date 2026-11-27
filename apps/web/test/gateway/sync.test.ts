@@ -649,4 +649,39 @@ describe("POST /sync", () => {
     await syncOk(c.client, c.remap(REALISTIC))
     expect(await faultOf(c.client.organizationId)).toMatchObject({ reason_id: null })
   })
+
+  it("vpn.enable: a chave do Tailscale é criada na entrega, vai só na resposta e não é reenviada", async () => {
+    const { client, remap } = await freshClient()
+    const minted: string[] = []
+    const vpn = {
+      mintAuthKey: async () => {
+        const k = `tskey-auth-${"x".repeat(20)}${minted.length}`
+        minted.push(k)
+        return k
+      },
+      deleteNode: async () => 0,
+    }
+    const sessionId = "01a1cab3-2bea-7244-bb03-702b326efc01"
+    const approval = "aaa.bbb.ccc"
+    const cmdId = await addCommand(client, {
+      type: "vpn.enable",
+      payload: { session_id: sessionId, node_name: "oee-gw-abc-def", session_expires_at: new Date(FIXTURE_NOW.getTime() + 3_600_000).toISOString(), idle_timeout_s: 900, approval },
+    })
+    const syncWith = async (extra: { vpn?: typeof vpn | null }) => {
+      const res = await handleSync(syncRequest(remap(HEALTH_ONLY), { token: client.token }), { ...deps(t, FIXTURE_NOW), ...extra })
+      return SyncResponseSchema.parse(await res.json())
+    }
+    // Sem provedor: o comando espera.
+    expect((await syncWith({ vpn: null })).commands ?? []).toEqual([])
+    const r1 = await syncWith({ vpn })
+    const enviado = (r1.commands ?? []).find((c) => c.id === cmdId)
+    expect(enviado?.payload).toMatchObject({ auth_key: minted[0], approval })
+    // No banco, nunca a chave.
+    const [row] = await rows<{ payload: Record<string, unknown>; status: string }>(t, "SELECT payload, status FROM gateway_command WHERE id = $1", [cmdId])
+    expect(row?.payload).not.toHaveProperty("auth_key")
+    expect(row?.status).toBe("sent")
+    // Próximo /sync: não reenvia (não cria outra chave).
+    expect(((await syncWith({ vpn })).commands ?? []).find((c) => c.id === cmdId)).toBeUndefined()
+    expect(minted).toHaveLength(1)
+  })
 })

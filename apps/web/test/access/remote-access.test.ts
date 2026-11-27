@@ -9,6 +9,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { AccessDeniedError, type TenantContext } from "@/lib/server/access/context"
 import { loadTenantContext } from "@/lib/server/access/load"
 import { aprovarAcesso, encerrarAcesso, lerPolitica, pedirAcesso, recusarAcesso, salvarPolitica } from "@/lib/server/remote/access"
+import { approvalSigner } from "@/lib/server/remote/approval"
+import { generateKeyPairSync } from "node:crypto"
 import { type AuthHarness, createAuthHarness } from "../auth/support"
 import { assignFieldEngineer, createPerson, type SeededClient, type SeededPerson, seedClient } from "./support"
 
@@ -61,7 +63,7 @@ describe("acesso remoto: pedido, decisão e política", () => {
     expect(await pedirAcesso(h.t.db, eng, pedido(gw))).toEqual({ ok: false, mensagem: "Você já tem um pedido ou uma sessão aberta neste gateway." })
 
     const ap = await aprovarAcesso(h.t.db, admin, { id, durationMin: 60, note: "Só até o almoço" })
-    expect(ap).toEqual({ ok: true, dados: { id, durationMin: 60 } })
+    expect(ap).toEqual({ ok: true, dados: { id, durationMin: 60, vpnQueued: false } })
     const [row] = await h.t.db.select().from(s.remoteAccessSession).where(eq(s.remoteAccessSession.id, id))
     expect(row).toMatchObject({ status: "approved", approvedDurationMin: 60, decidedBy: a.admin.user.id })
     expect(row?.expiresAt).not.toBeNull()
@@ -153,5 +155,23 @@ describe("acesso remoto: pedido, decisão e política", () => {
     const idOutro = outro.ok ? outro.dados.id : ""
     expect(await aprovarAcesso(h.t.db, admin, { id: idOutro })).toEqual({ ok: false, mensagem: "A política do cliente define outros aprovadores." })
     expect(await encerrarAcesso(h.t.db, admin, idOutro)).toMatchObject({ ok: true, dados: { status: "denied" } })
+  })
+
+  it("VPN configurada: aprovar põe vpn.enable na fila com a aprovação assinada e SEM a chave do Tailscale", async () => {
+    await salvarPolitica(h.t.db, admin, { mode: "approval", maxDurationMin: 240, idleTimeoutMin: 15 })
+    await h.t.db.update(s.remoteAccessPolicy).set({ approverUserIds: [] }).where(eq(s.remoteAccessPolicy.organizationId, a.organizationId))
+    const { privateKey } = generateKeyPairSync("ed25519")
+    const signer = approvalSigner(privateKey.export({ format: "pem", type: "pkcs8" }).toString())!
+    const g5 = await gateway(a, "GW Cinco")
+    const r = await pedirAcesso(h.t.db, eng, pedido(g5))
+    const id = r.ok ? r.dados.id : ""
+    expect(await aprovarAcesso(h.t.db, admin, { id }, new Date(), { signer })).toMatchObject({ ok: true, dados: { vpnQueued: true } })
+    const [cmd] = await h.t.db.select().from(s.gatewayCommand).where(and(eq(s.gatewayCommand.gatewayId, g5), eq(s.gatewayCommand.type, "vpn.enable")))
+    const payload = cmd?.payload as Record<string, unknown>
+    expect(payload).toMatchObject({ session_id: id, idle_timeout_s: 900 })
+    expect(payload).not.toHaveProperty("auth_key")
+    expect(String(payload.approval)).toMatch(/^[\w-]+\.[\w-]+\.[\w-]+$/)
+    const [sess] = await h.t.db.select().from(s.remoteAccessSession).where(eq(s.remoteAccessSession.id, id))
+    expect(sess?.vpnNodeId).toBe(payload.node_name)
   })
 })

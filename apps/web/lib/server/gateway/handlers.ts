@@ -22,6 +22,7 @@ import { enrollGateway } from "./enroll"
 import { GatewayApiError } from "./errors"
 import { clientIp, errorResponse, jsonResponse, NO_STORE_HEADERS, readJsonBody } from "./http"
 import { DEFAULT_RATE_LIMITS, enforceRateLimit, type RateLimits, rateLimitKey } from "./rate-limit"
+import type { VpnProvider } from "../remote/tailscale"
 import { processSync } from "./sync"
 import type { GatewayDb } from "./types"
 
@@ -39,6 +40,8 @@ export interface GatewayApiDeps {
   readonly logError?: (message: string, error: unknown) => void
   /** Limites de taxa (padrão: os da L21, `DEFAULT_RATE_LIMITS`); `null` desliga (testes). */
   readonly rateLimits?: RateLimits | null
+  /** Provedor da VPN (Tailscale) para o `vpn.enable`; ausente/`null` = VPN desligada na plataforma. */
+  readonly vpn?: VpnProvider | null
 }
 
 function limitsOf(deps: GatewayApiDeps): RateLimits | null {
@@ -106,6 +109,8 @@ export function handleSync(request: Request, deps: GatewayApiDeps): Promise<Resp
     const result = await processSync(db, principal, input, {
       now,
       ...(deps.minAgentVersion !== undefined ? { minAgentVersion: deps.minAgentVersion } : {}),
+      ...(deps.vpn ? { vpn: deps.vpn } : {}),
+      ...(deps.logError ? { logError: deps.logError } : {}),
     })
     return jsonResponse(result)
   })

@@ -4,10 +4,14 @@
  */
 import { getDb } from "@/lib/server/db"
 import { handleSync } from "@/lib/server/gateway/handlers"
+import { tailscaleFromEnv } from "@/lib/server/remote/tailscale"
+
+/** Cliente do Tailscale (guarda o token de acesso entre pedidos na mesma instância). */
+const vpn = tailscaleFromEnv()
 
 /** O agente desiste da requisição em 30 s (timeout do uplink); não adianta a função passar disso. */
 export const maxDuration = 30
 
 export async function POST(request: Request): Promise<Response> {
-  return handleSync(request, { db: getDb() })
+  return handleSync(request, { db: getDb(), vpn })
 }
