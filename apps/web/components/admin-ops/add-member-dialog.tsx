@@ -128,7 +128,7 @@ export function AddMemberButton({ banco = false }: { banco?: boolean }) {
       })
     }
     toast.success(`Convite enviado para ${fullName}`, {
-      description: `${mail} recebe um link de uso único para definir a senha e cadastrar o 2FA.${role === "technician" && client ? ` Atribuído a ${client.name} por ${days} dias.` : ""}`,
+      description: `${mail} recebe um link de uso único para definir a senha (o 2FA é opcional).${role === "technician" && client ? ` Atribuído a ${client.name} por ${days} dias.` : ""}`,
     })
     setOpen(false)
   }

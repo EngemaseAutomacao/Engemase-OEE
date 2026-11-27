@@ -8,7 +8,6 @@ import {
   MailIcon,
   MoreHorizontalIcon,
   RotateCcwIcon,
-  ShieldAlertIcon,
   ShieldCheckIcon,
   UserCheckIcon,
   UserCogIcon,
@@ -209,13 +208,9 @@ export function TeamMembers() {
                         <SoftBadge tone="green" icon={ShieldCheckIcon}>
                           Ativo
                         </SoftBadge>
-                      ) : m.status === "invited" ? (
-                        <SoftBadge tone="slate" icon={FingerprintIcon}>
-                          No primeiro acesso
-                        </SoftBadge>
                       ) : (
-                        <SoftBadge tone="red" icon={ShieldAlertIcon} title="2FA é obrigatório para a equipe Engemase">
-                          Pendente · obrigatório
+                        <SoftBadge tone="slate" icon={FingerprintIcon} title="Opcional: a pessoa ativa em &quot;Segurança da conta&quot;, quando quiser">
+                          Não ativado
                         </SoftBadge>
                       )}
                     </td>
@@ -257,18 +252,6 @@ export function TeamMembers() {
                             >
                               <MailIcon />
                               Reenviar convite
-                            </DropdownMenuItem>
-                          )}
-                          {!banco && m.status === "active" && !m.twoFactor && (
-                            <DropdownMenuItem
-                              onSelect={() =>
-                                toast.success("Link de cadastro do 2FA enviado", {
-                                  description: `${m.name.split(" ")[0]} só volta a entrar depois de cadastrar o 2FA pelo link enviado para ${m.email}.`,
-                                })
-                              }
-                            >
-                              <FingerprintIcon />
-                              Enviar link para cadastrar 2FA
                             </DropdownMenuItem>
                           )}
                           {m.status === "active" && m.twoFactor && !m.isMe && (

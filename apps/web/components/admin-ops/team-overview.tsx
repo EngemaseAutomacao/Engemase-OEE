@@ -30,15 +30,15 @@ export function TeamStats() {
       <StatCard
         icon={FingerprintIcon}
         tone="teal"
-        label="2FA cadastrado"
+        label="2FA ativado"
         value={
           <>
             {with2fa}
             <span className="text-base font-semibold text-muted-foreground"> / {active.length}</span>
           </>
         }
-        hint={missing2fa.length > 0 ? `Pendente: ${missing2fa.map((m) => m.name.split(" ")[0]).join(", ")}` : "obrigatório para toda a equipe"}
-        aside={<Ring value={ratio} size={58} stroke={7} color={ratio < 1 ? "#e96549" : "#0e9384"} label={pct(ratio, 0)} />}
+        hint={missing2fa.length > 0 ? `Opcional · sem 2FA: ${missing2fa.map((m) => m.name.split(" ")[0]).join(", ")}` : "toda a equipe com 2FA"}
+        aside={<Ring value={ratio} size={58} stroke={7} color={ratio < 1 ? "#257bb4" : "#0e9384"} label={pct(ratio, 0)} />}
       />
       <StatCard
         icon={CalendarRangeIcon}
