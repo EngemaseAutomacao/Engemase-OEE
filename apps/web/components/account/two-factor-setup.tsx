@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+import { MfaCodeInput } from "@/components/support/mfa-code-input"
 
 import { QrCode } from "./qr-code"
 
@@ -41,6 +42,7 @@ export function TwoFactorSetup({ enabled }: { enabled: boolean }) {
   const [step, setStep] = useState<Step>({ kind: "password" })
   const [password, setPassword] = useState("")
   const [code, setCode] = useState("")
+  const [attempt, setAttempt] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   const [disabling, setDisabling] = useState(false)
@@ -141,19 +143,34 @@ export function TwoFactorSetup({ enabled }: { enabled: boolean }) {
     setPending(false)
   }
 
-  async function confirm(e: React.FormEvent) {
-    e.preventDefault()
-    if (step.kind !== "scan") return
+  async function verifyCode(value: string) {
+    if (step.kind !== "scan" || pending) return
+    const clean = value.replace(/\D/g, "")
+    if (clean.length !== 6) {
+      setError("Informe o código de 6 dígitos.")
+      return
+    }
     setPending(true)
     setError(null)
     try {
-      const result = await confirmTwoFactorSetupAction({ code: code.trim() })
-      if (result.status === "ok") setStep({ kind: "codes", backupCodes: step.backupCodes })
-      else setError(result.message)
+      const result = await confirmTwoFactorSetupAction({ code: clean })
+      if (result.status === "ok") {
+        setStep({ kind: "codes", backupCodes: step.backupCodes })
+        setPending(false)
+        return
+      }
+      setError(result.message)
     } catch {
       setError("Sem conexão com o servidor. Tente de novo.")
     }
     setPending(false)
+    setCode("")
+    setAttempt((n) => n + 1)
+  }
+
+  function confirm(e: React.FormEvent) {
+    e.preventDefault()
+    void verifyCode(code)
   }
 
   if (step.kind === "password") {
@@ -218,25 +235,23 @@ export function TwoFactorSetup({ enabled }: { enabled: boolean }) {
           </div>
         </div>
         <Field data-invalid={Boolean(error)}>
-          <FieldLabel htmlFor="twofa-code">Código do aplicativo</FieldLabel>
-          <Input
-            id="twofa-code"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            placeholder="000000"
-            className="h-11 max-w-40 text-lg tracking-widest"
-            value={code}
-            onChange={(e) => {
-              setError(null)
-              setCode(e.target.value.replace(/\D/g, ""))
-            }}
-            aria-invalid={Boolean(error)}
-            autoFocus
-          />
+          <FieldLabel>Código do aplicativo</FieldLabel>
+          <div className="w-fit">
+            <MfaCodeInput
+              key={attempt}
+              value={code}
+              onChange={(v) => {
+                setError(null)
+                setCode(v)
+              }}
+              onComplete={(v) => void verifyCode(v)}
+              invalid={Boolean(error)}
+              disabled={pending}
+            />
+          </div>
           {error && <FieldError>{error}</FieldError>}
         </Field>
-        <Button type="submit" size="lg" className="h-11 w-fit" disabled={pending || code.length !== 6}>
+        <Button type="submit" size="lg" className="h-11 w-fit" disabled={pending || !/^\d{6}$/.test(code)}>
           {pending && <Spinner aria-label="Carregando" />}
           Confirmar
         </Button>

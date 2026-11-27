@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { NumericKeypad } from "@/components/kiosk/numeric-keypad"
+import { MfaCodeInput } from "@/components/support/mfa-code-input"
 import { requestPasswordResetAction } from "@/app/(auth)/senha-actions"
 import { signInAction, type SignInResult, verifyTwoFactorAction } from "@/app/(auth)/login/actions"
 
@@ -223,24 +224,35 @@ function TwoFactorStep({ onDone, onBack }: { onDone: (result: SignInResult) => b
   const [code, setCode] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  // Muda a cada erro do código do aplicativo: os quadradinhos voltam vazios, com o cursor no primeiro.
+  const [attempt, setAttempt] = useState(0)
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!code.trim()) {
+  async function verify(value: string) {
+    const clean = method === "totp" ? value.replace(/\D/g, "") : value.trim()
+    if (method === "totp" ? clean.length !== 6 : !clean) {
       setError(method === "totp" ? "Informe o código de 6 dígitos." : "Informe um código de recuperação.")
       return
     }
+    if (pending) return
     setPending(true)
     setError(null)
     try {
-      const result = await verifyTwoFactorAction({ method, code: code.trim(), next: nextParam() })
+      const result = await verifyTwoFactorAction({ method, code: clean, next: nextParam() })
       if (onDone(result)) return
       if (result.status === "error") setError(result.message)
-      setPending(false)
     } catch {
       setError("Sem conexão com o servidor. Confira a internet e tente de novo.")
-      setPending(false)
     }
+    setPending(false)
+    if (method === "totp") {
+      setCode("")
+      setAttempt((n) => n + 1)
+    }
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault()
+    void verify(code)
   }
 
   return (
@@ -255,24 +267,42 @@ function TwoFactorStep({ onDone, onBack }: { onDone: (result: SignInResult) => b
         </AlertDescription>
       </Alert>
       <Field data-invalid={Boolean(error)}>
-        <FieldLabel htmlFor="login-2fa-code">{method === "totp" ? "Código do aplicativo" : "Código de recuperação"}</FieldLabel>
-        <Input
-          id="login-2fa-code"
-          inputMode={method === "totp" ? "numeric" : "text"}
-          autoComplete="one-time-code"
-          autoCapitalize="none"
-          spellCheck={false}
-          maxLength={method === "totp" ? 6 : 32}
-          placeholder={method === "totp" ? "000000" : "xxxxx-xxxxx"}
-          className="h-11 text-lg tracking-widest"
-          value={code}
-          onChange={(e) => {
-            setError(null)
-            setCode(e.target.value)
-          }}
-          aria-invalid={Boolean(error)}
-          autoFocus
-        />
+        {method === "totp" ? (
+          <>
+            <FieldLabel>Código do aplicativo</FieldLabel>
+            <MfaCodeInput
+              key={attempt}
+              value={code}
+              onChange={(v) => {
+                setError(null)
+                setCode(v)
+              }}
+              onComplete={(v) => void verify(v)}
+              invalid={Boolean(error)}
+              disabled={pending}
+            />
+          </>
+        ) : (
+          <>
+            <FieldLabel htmlFor="login-2fa-code">Código de recuperação</FieldLabel>
+            <Input
+              id="login-2fa-code"
+              autoComplete="one-time-code"
+              autoCapitalize="none"
+              spellCheck={false}
+              maxLength={32}
+              placeholder="xxxxx-xxxxx"
+              className="h-11 text-lg tracking-widest"
+              value={code}
+              onChange={(e) => {
+                setError(null)
+                setCode(e.target.value)
+              }}
+              aria-invalid={Boolean(error)}
+              autoFocus
+            />
+          </>
+        )}
         {error && <FieldError>{error}</FieldError>}
       </Field>
       <Button type="submit" size="lg" className="h-11 w-full text-base" disabled={pending}>
