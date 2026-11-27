@@ -41,7 +41,5 @@ export function cronsDoVercel(plano: "hobby" | "pro" = PLANO_VERCEL): { path: st
 export function handleCronRoute(request: Request, name: string): Promise<Response> {
   const job = CRON_JOBS.find((j) => j.name === name)
   if (job === undefined) throw new Error(`job desconhecido: ${name}`)
-  // Região em que a função rodou de fato (o campo "region" do log da Vercel pode ser a porta de entrada).
-  console.info(`[cron] ${name} rodando na região ${process.env.VERCEL_REGION ?? "local"}`)
   return runCronJob(request, job, { db: getDb(), secret: process.env.CRON_SECRET, maintenance: maintenanceDbRunner() })
 }
