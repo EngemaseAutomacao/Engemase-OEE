@@ -33,6 +33,7 @@ import { requireTenant } from "@/lib/server/access/require-tenant"
 import { getDb } from "@/lib/server/db"
 import { excluirProduto, salvarMatrizCiclos, salvarProduto } from "@/lib/server/config/products"
 import { definirAtivo, definirCor, excluirMotivo, salvarGrupo, salvarMotivo } from "@/lib/server/config/reasons"
+import { cancelarParada, excluirTurno, salvarParada, salvarTurno } from "@/lib/server/config/shifts"
 import { createActivationCode } from "@/lib/server/gateway/activation"
 import { GatewayAdminError } from "@/lib/server/gateway/admin-errors"
 import { enqueueGatewayCommand, getGatewayCommand } from "@/lib/server/gateway/commands"
@@ -545,4 +546,24 @@ export async function definirCorMotivoAction(input: unknown): Promise<Resultado<
 
 export async function excluirMotivoAction(input: unknown): Promise<Resultado<{ modo: "ocultado" | "excluido" }>> {
   return cadastro(input, "excluirMotivo", (a) => excluirMotivo(a.db, a.ctx, (input as { id?: unknown } | null)?.id))
+}
+
+// ---------------------------------------------------------------------------
+// Turnos e paradas planejadas (config.write = equipe Engemase, D12; regras em lib/server/config/shifts.ts)
+// ---------------------------------------------------------------------------
+
+export async function salvarTurnoAction(input: unknown): Promise<Resultado<{ id: string }>> {
+  return cadastro(input, "salvarTurno", (a) => salvarTurno(a.db, a.ctx, input))
+}
+
+export async function excluirTurnoAction(input: unknown): Promise<Resultado<{ id: string }>> {
+  return cadastro(input, "excluirTurno", (a) => excluirTurno(a.db, a.ctx, (input as { id?: unknown } | null)?.id))
+}
+
+export async function salvarParadaAction(input: unknown): Promise<Resultado<{ ids: string[] }>> {
+  return cadastro(input, "salvarParada", (a) => salvarParada(a.db, a.ctx, input))
+}
+
+export async function cancelarParadaAction(input: unknown): Promise<Resultado<{ id: string }>> {
+  return cadastro(input, "cancelarParada", (a) => cancelarParada(a.db, a.ctx, (input as { id?: unknown } | null)?.id))
 }

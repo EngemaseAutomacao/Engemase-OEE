@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import {
   Building2Icon,
   CalendarClockIcon,
@@ -43,6 +44,7 @@ import {
   type ShiftRow,
 } from "@/components/config/shift-utils"
 import { ConfirmDialog, IconAction, PageTitle } from "@/components/config/ui-bits"
+import { cancelarParadaAction, excluirTurnoAction, salvarParadaAction, salvarTurnoAction } from "@/app/(shell)/[cliente]/config/actions"
 import { EngemaseOnlyChip, useCanEdit } from "@/components/config/engemase-managed"
 
 export interface ShiftUnit {
@@ -76,16 +78,44 @@ export function ShiftsManager({
   initialStops,
   reasons,
   machines,
+  banco = false,
+  clientSlug = "",
 }: {
   units: ShiftUnit[]
   initialShifts: ShiftRow[]
   initialStops: PlannedStop[]
   reasons: StopReason[]
   machines: ShiftMachine[]
+  /** Sistema real: grava no banco (Server Actions) e os dados vêm do servidor. Sem banco: demonstração local. */
+  banco?: boolean
+  clientSlug?: string
 }) {
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  /** Turno a duplicar: abre o formulário de turno NOVO já preenchido (sistema real). */
+  const [copying, setCopying] = useState<ShiftRow | null>(null)
+
+  /** Grava no servidor; com sucesso, avisa e recarrega. Erro → aviso, nada muda. */
+  const gravar = (fn: () => Promise<{ ok: true } | { ok: false; mensagem: string }>, onOk: () => void) =>
+    startTransition(async () => {
+      try {
+        const r = await fn()
+        if (!r.ok) {
+          toast.error(r.mensagem)
+          return
+        }
+        onOk()
+        router.refresh()
+      } catch {
+        toast.error("Não foi possível gravar agora. Tente de novo.")
+      }
+    })
   const [unitId, setUnitId] = useState(units[0]?.id ?? "")
-  const [shifts, setShifts] = useState(initialShifts)
-  const [stops, setStops] = useState(initialStops)
+  const [localShifts, setShifts] = useState(initialShifts)
+  const [localStops, setStops] = useState(initialStops)
+  // Com banco, turnos e paradas são sempre os do servidor (recarregados depois de cada gravação).
+  const shifts = banco ? initialShifts : localShifts
+  const stops = banco ? initialStops : localStops
   const [editingShift, setEditingShift] = useState<ShiftRow | "new" | null>(null)
   const [editingStop, setEditingStop] = useState<PlannedStop | "new" | null>(null)
   const [deleting, setDeleting] = useState<{ kind: "shift"; item: ShiftRow } | { kind: "stop"; item: PlannedStop } | null>(null)
@@ -140,6 +170,19 @@ export function ShiftsManager({
   }
 
   const saveShift = (d: Omit<ShiftRow, "id" | "unitId"> & { id: string | null }) => {
+    if (banco) {
+      gravar(
+        () => salvarTurnoAction({ slug: clientSlug, unitId: unit.id, id: d.id, name: d.name, start: d.start, end: d.end, days: d.days, breaks: d.breaks }),
+        () => {
+          toast.success(d.id ? `${d.name} atualizado` : `${d.name} criado`, {
+            description: d.id ? "Vale a partir do próximo turno. Turnos já encerrados não são recalculados." : `${d.start}–${d.end} · ${daysSummary(d.days)} · ${unit.name}`,
+          })
+          setEditingShift(null)
+          setCopying(null)
+        },
+      )
+      return
+    }
     if (d.id) {
       setShifts((list) => list.map((s) => (s.id === d.id ? { ...s, ...d, id: s.id } : s)))
       toast.success(`${d.name} atualizado`, { description: "Vale a partir do próximo turno. Turnos já encerrados não são recalculados." })
@@ -152,6 +195,30 @@ export function ShiftsManager({
   }
 
   const saveStop = (d: Omit<PlannedStop, "id" | "unitId"> & { id: string | null }) => {
+    if (banco) {
+      gravar(
+        () =>
+          salvarParadaAction({
+            slug: clientSlug,
+            unitId: unit.id,
+            id: d.id,
+            title: d.title,
+            reasonId: d.reasonId,
+            scope: d.scope,
+            startDate: d.startDate,
+            startTime: d.startTime,
+            endDate: d.endDate,
+            endTime: d.endTime,
+          }),
+        () => {
+          toast.success(d.id ? "Parada planejada atualizada" : "Parada planejada agendada", {
+            description: d.id ? d.title : `${d.title} · ${dm(d.startDate)}. O intervalo sai do tempo planejado do OEE.`,
+          })
+          setEditingStop(null)
+        },
+      )
+      return
+    }
     if (d.id) {
       setStops((list) => list.map((p) => (p.id === d.id ? { ...p, ...d, id: p.id } : p)))
       toast.success("Parada planejada atualizada", { description: d.title })
@@ -164,6 +231,8 @@ export function ShiftsManager({
   }
 
   const duplicate = (s: ShiftRow) => {
+    // No sistema real a cópia idêntica sobreporia o original (L2): abre o formulário de turno novo preenchido.
+    if (banco) return setCopying(s)
     const copy = { ...s, id: `sft_copy_${s.id}_${shifts.length + 1}`, name: `${s.name} (cópia)` }
     setShifts((list) => [...list, copy])
     toast.success("Turno duplicado", { description: "Ajuste os dias ou o horário para não sobrepor o original." })
@@ -482,10 +551,16 @@ export function ShiftsManager({
       </div>
 
       <ShiftDialog
-        open={editingShift !== null}
-        onOpenChange={(o) => !o && setEditingShift(null)}
-        shift={editingShift === "new" ? null : editingShift}
+        open={editingShift !== null || copying !== null}
+        onOpenChange={(o) => {
+          if (o) return
+          setEditingShift(null)
+          setCopying(null)
+        }}
+        shift={editingShift === "new" || editingShift === null ? null : editingShift}
+        template={copying}
         unitName={unit.name}
+        saving={pending}
         onSave={saveShift}
       />
       <PlannedStopDialog
@@ -496,6 +571,8 @@ export function ShiftsManager({
         today={unit.today}
         reasons={reasons}
         machines={unitMachines}
+        allowRecurrence={!banco}
+        saving={pending}
         onSave={saveStop}
       />
       <ConfirmDialog
@@ -510,6 +587,19 @@ export function ShiftsManager({
         }
         onConfirm={() => {
           if (!deleting) return
+          if (banco) {
+            const target = deleting
+            setDeleting(null)
+            if (target.kind === "shift") {
+              gravar(() => excluirTurnoAction({ slug: clientSlug, id: target.item.id }), () => toast.success(`${target.item.name} excluído`))
+            } else {
+              gravar(
+                () => cancelarParadaAction({ slug: clientSlug, id: target.item.id }),
+                () => toast.success("Parada planejada cancelada", { description: target.item.title }),
+              )
+            }
+            return
+          }
           if (deleting.kind === "shift") {
             setShifts((list) => list.filter((s) => s.id !== deleting.item.id))
             toast.success(`${deleting.item.name} excluído`)

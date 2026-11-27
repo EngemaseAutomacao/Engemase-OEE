@@ -27,20 +27,36 @@ export function ShiftDialog({
   open,
   onOpenChange,
   shift,
+  template = null,
   unitName,
+  saving = false,
   onSave,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   /** null = novo turno */
   shift: ShiftRow | null
+  /** Novo turno já preenchido com estes dados (duplicar). */
+  template?: ShiftRow | null
   unitName: string
+  /** Gravando no servidor: o botão fica desativado e mostra "Salvando…". */
+  saving?: boolean
   onSave: (s: Omit<ShiftRow, "id" | "unitId"> & { id: string | null }) => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto p-0 sm:max-w-xl">
-        {open && <ShiftForm key={shift?.id ?? "new"} shift={shift} unitName={unitName} onSave={onSave} onCancel={() => onOpenChange(false)} />}
+        {open && (
+          <ShiftForm
+            key={shift?.id ?? (template ? `copia-${template.id}` : "new")}
+            shift={shift}
+            template={template}
+            unitName={unitName}
+            saving={saving}
+            onSave={onSave}
+            onCancel={() => onOpenChange(false)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -48,20 +64,25 @@ export function ShiftDialog({
 
 function ShiftForm({
   shift,
+  template,
   unitName,
+  saving,
   onSave,
   onCancel,
 }: {
   shift: ShiftRow | null
+  template: ShiftRow | null
   unitName: string
+  saving: boolean
   onSave: (s: Omit<ShiftRow, "id" | "unitId"> & { id: string | null }) => void
   onCancel: () => void
 }) {
-  const [name, setName] = useState(shift?.name ?? "")
-  const [start, setStart] = useState(shift?.start ?? "06:00")
-  const [end, setEnd] = useState(shift?.end ?? "14:00")
-  const [days, setDays] = useState<string[]>((shift?.days ?? [1, 2, 3, 4, 5]).map(String))
-  const [breaks, setBreaks] = useState(shift?.breaks ?? [{ name: "Refeição", start: "10:00", end: "10:30" }])
+  const base = shift ?? template
+  const [name, setName] = useState(shift?.name ?? (template ? `${template.name} (cópia)` : ""))
+  const [start, setStart] = useState(base?.start ?? "06:00")
+  const [end, setEnd] = useState(base?.end ?? "14:00")
+  const [days, setDays] = useState<string[]>((base?.days ?? [1, 2, 3, 4, 5]).map(String))
+  const [breaks, setBreaks] = useState(base?.breaks ?? [{ name: "Refeição", start: "10:00", end: "10:30" }])
   const [show, setShow] = useState(false)
 
   const timesOk = TIME_RE.test(start) && TIME_RE.test(end) && start !== end
@@ -200,7 +221,9 @@ function ShiftForm({
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button type="submit">{shift ? "Salvar turno" : "Criar turno"}</Button>
+        <Button type="submit" disabled={saving}>
+          {saving ? "Salvando…" : shift ? "Salvar turno" : "Criar turno"}
+        </Button>
       </DialogFooter>
     </form>
   )
@@ -224,6 +247,8 @@ export function PlannedStopDialog({
   today,
   reasons,
   machines,
+  allowRecurrence = true,
+  saving = false,
   onSave,
 }: {
   open: boolean
@@ -233,6 +258,10 @@ export function PlannedStopDialog({
   today: string
   reasons: { id: string; name: string; group: string }[]
   machines: { id: string; name: string; code: string }[]
+  /** Oferece a repetição semanal/mensal (o sistema real ainda não expande a repetição no cálculo). */
+  allowRecurrence?: boolean
+  /** Gravando no servidor: o botão fica desativado e mostra "Salvando…". */
+  saving?: boolean
   onSave: (p: Omit<PlannedStop, "id" | "unitId"> & { id: string | null }) => void
 }) {
   return (
@@ -246,6 +275,8 @@ export function PlannedStopDialog({
             today={today}
             reasons={reasons}
             machines={machines}
+            allowRecurrence={allowRecurrence}
+            saving={saving}
             onSave={onSave}
             onCancel={() => onOpenChange(false)}
           />
@@ -261,6 +292,8 @@ function StopForm({
   today,
   reasons,
   machines,
+  allowRecurrence,
+  saving,
   onSave,
   onCancel,
 }: {
@@ -269,6 +302,8 @@ function StopForm({
   today: string
   reasons: { id: string; name: string; group: string }[]
   machines: { id: string; name: string; code: string }[]
+  allowRecurrence: boolean
+  saving: boolean
   onSave: (p: Omit<PlannedStop, "id" | "unitId"> & { id: string | null }) => void
   onCancel: () => void
 }) {
@@ -348,6 +383,7 @@ function StopForm({
             </Select>
             {show && errors.reasonId && <FieldError>{errors.reasonId}</FieldError>}
           </Field>
+          {allowRecurrence && (
           <Field>
             <FieldLabel htmlFor="ps-rec">Repetição</FieldLabel>
             <Select value={recurrence} onValueChange={(v) => setRecurrence(v as Recurrence)}>
@@ -363,6 +399,7 @@ function StopForm({
               </SelectContent>
             </Select>
           </Field>
+          )}
         </div>
 
         <div className="flex flex-col gap-3 rounded-xl border p-3">
@@ -450,7 +487,9 @@ function StopForm({
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button type="submit">{stop ? "Salvar parada" : "Agendar parada"}</Button>
+        <Button type="submit" disabled={saving}>
+          {saving ? "Salvando…" : stop ? "Salvar parada" : "Agendar parada"}
+        </Button>
       </DialogFooter>
     </form>
   )

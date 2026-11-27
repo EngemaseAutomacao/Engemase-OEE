@@ -11,6 +11,14 @@ O que mudou na plataforma Engemase OEE, entrega por entrega, em linguagem de que
 - **Fechamento de turno automático:** os números de cada turno são fechados no fim do turno e recalculados se chegarem dados atrasados ou se uma parada for reclassificada.
 - **Atualização do programa do gateway à distância**, enviada pela Engemase.
 
+## 27/11/2026 · Cadastro de turnos e paradas planejadas de verdade
+
+**Para a equipe Engemase**
+- **"Configurações" › "Turnos" funciona no sistema real**: criar, alterar e excluir turnos com pausas (sem turnos que se sobreponham na mesma unidade) e agendar, alterar e cancelar paradas planejadas da unidade inteira ou de máquinas escolhidas.
+- **"Duplicar" turno** abre um turno novo já preenchido, para ajustar o dia ou o horário antes de salvar.
+- Mudar ou cancelar uma parada planejada de um período já fechado faz o OEE daquele turno ser recalculado.
+- O cliente vê a tela só para consulta. **A repetição** (semanal ou mensal) das paradas planejadas ainda não entra no cálculo e não aparece no sistema real: cadastre cada ocorrência.
+
 ## 27/11/2026 · Cadastro de motivos de parada de verdade
 
 **Para a equipe Engemase**
