@@ -1,0 +1,275 @@
+/*
+ * Telas de entrada (login, criar/redefinir senha, acesso suspenso): tokens e animações próprios.
+ * Mesma família visual da apresentação (/): azul quase preto, grade técnica, cartões flutuando e laranja
+ * escurecido no botão principal. Copiado (não importado) de app/apresentacao.css para as duas páginas
+ * evoluírem sem uma quebrar a outra.
+ *
+ * Regra das animações: o estado SEM animação é o estado final e visível (os keyframes só têm `from`).
+ * Tudo fica dentro de `prefers-reduced-motion: no-preference`; quem pediu menos movimento vê a tela parada.
+ */
+.au {
+  /* Azul quase preto do painel de marca: branco 16,6:1, branco/70 8,1:1, branco/60 6,1:1. */
+  --au-ink: #0c1c2e;
+  --au-ink-2: #12283f;
+  /* Laranja da marca escurecido para botão com texto branco: 5,3:1 (o #E96549 dá só 3,4:1). */
+  --au-cta: #b9472d;
+  --au-cta-hover: #a33d26;
+  /* Laranja claro para destaque em fundo escuro: 5,2:1 sobre --au-ink. */
+  --au-accent: #e96549;
+  --au-line: rgb(255 255 255 / 12%);
+}
+
+/* Grade técnica (papel milimetrado de projeto) no painel escuro. */
+.au-grid {
+  background-image:
+    linear-gradient(rgb(255 255 255 / 6%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 6%) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 70% at 40% 40%, black 25%, transparent 85%);
+}
+
+/* Mesma grade, bem mais fraca e na cor do tema, atrás do formulário. */
+.au-grid-soft {
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--foreground) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--foreground) 5%, transparent) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 60% 55% at 50% 45%, black 10%, transparent 75%);
+}
+
+/* Cartão de vidro do formulário: fio colorido da marca no topo. */
+.au-glass {
+  position: relative;
+  background: color-mix(in oklab, var(--card) 88%, transparent);
+  backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow:
+    0 1px 2px rgb(16 24 40 / 4%),
+    0 24px 64px -28px rgb(12 28 46 / 28%);
+}
+.dark .au-glass {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 30%),
+    0 30px 80px -30px rgb(0 0 0 / 70%);
+}
+.au-glass::before {
+  content: "";
+  position: absolute;
+  inset: -1px 28px auto;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: linear-gradient(90deg, transparent, var(--brand-blue) 20%, var(--brand-orange-light) 60%, transparent);
+  pointer-events: none;
+}
+
+/* Botão principal laranja (mesmo da apresentação), com microinterações de 200 ms. */
+.au-cta {
+  background: var(--au-cta);
+  color: #fff;
+  box-shadow: 0 10px 24px -12px rgb(185 71 45 / 70%);
+  transition:
+    background-color 200ms ease,
+    box-shadow 200ms ease,
+    transform 200ms ease;
+}
+.au-cta:hover {
+  background: var(--au-cta-hover);
+  box-shadow: 0 14px 30px -12px rgb(185 71 45 / 80%);
+}
+.au-cta:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.au-cta .au-arrow {
+  transition: transform 200ms ease;
+}
+
+/* Número que conta de 0 até o valor (--au-n no style). Sem suporte a @property, mostra o valor final. */
+@property --au-n {
+  syntax: "<integer>";
+  inherits: false;
+  initial-value: 0;
+}
+.au-num {
+  counter-reset: au var(--au-n);
+}
+.au-num::after {
+  content: counter(au);
+}
+
+@keyframes au-pan {
+  to {
+    background-position: 56px 56px;
+  }
+}
+@keyframes au-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+@keyframes au-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(4%, 6%) scale(1.08);
+  }
+}
+@keyframes au-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+@keyframes au-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+}
+@keyframes au-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+}
+@keyframes au-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+}
+@keyframes au-dot {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+}
+@keyframes au-count {
+  from {
+    --au-n: 0;
+  }
+}
+@keyframes au-ring {
+  from {
+    stroke-dashoffset: 264;
+  }
+}
+@keyframes au-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes au-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes au-cycle {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes au-ping {
+  75%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+@keyframes au-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Barras e anéis: ponto de origem das animações de crescer. */
+.au-bar {
+  transform-origin: bottom;
+}
+.au-meter {
+  transform-origin: left;
+}
+.au-cycle-bar {
+  transform-origin: left;
+  transform: scaleX(0.64);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .au-grid {
+    animation: au-pan 10s linear infinite;
+  }
+  .au-blob {
+    animation: au-drift 18s ease-in-out infinite;
+  }
+  .au-blob-2 {
+    animation: au-drift 22s ease-in-out -8s infinite reverse;
+  }
+  .au-float {
+    animation: au-float 6s ease-in-out infinite;
+  }
+  .au-float-2 {
+    animation: au-float 7s ease-in-out -2.5s infinite;
+  }
+  .au-float-3 {
+    animation: au-float 8s ease-in-out -5s infinite;
+  }
+  .au-ping {
+    animation: au-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+  .au-spin {
+    animation: au-spin 40s linear infinite;
+  }
+
+  /* Entrada escalonada ao abrir (atraso pelo --au-d no style). */
+  .au-in {
+    animation: au-rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) var(--au-d, 0s) both;
+  }
+  .au-card-in {
+    animation: au-pop-in 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) var(--au-d, 0.1s) both;
+  }
+  .au-count {
+    animation: au-count 1.8s cubic-bezier(0.2, 0.7, 0.2, 1) var(--au-d, 0.5s) both;
+  }
+  .au-ring {
+    animation: au-ring 1.8s cubic-bezier(0.2, 0.7, 0.2, 1) var(--au-d, 0.5s) both;
+  }
+  .au-bar {
+    animation: au-grow-y 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) var(--au-d, 0.6s) both;
+  }
+  .au-meter {
+    animation: au-grow-x 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) var(--au-d, 0.6s) both;
+  }
+  .au-cycle-bar {
+    animation: au-cycle 6s linear infinite;
+  }
+  .au-dot-in {
+    animation: au-dot 0.25s cubic-bezier(0.2, 0.7, 0.2, 1) var(--au-d, 0s) both;
+  }
+
+  /* Troca de aba e de etapa (E-mail ↔ Operador, senha → código): 250 ms, sem piscar. */
+  .au-swap-left {
+    animation: au-from-left 0.25s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .au-swap-right {
+    animation: au-from-right 0.25s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+
+  /* Microinterações dos botões. */
+  .au-cta:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+  .au-cta:active:not(:disabled) {
+    transform: translateY(0) scale(0.985);
+  }
+  .au-cta:hover .au-arrow {
+    transform: translateX(3px);
+  }
+}

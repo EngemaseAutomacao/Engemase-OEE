@@ -1,25 +1,35 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import { ArrowLeftIcon, PauseIcon } from "lucide-react"
 
-import { BrandLogo } from "@/components/shell/brand"
+import { AuthHeading, AuthShell, GlassCard } from "@/components/account/auth-card"
 
 export const metadata: Metadata = { title: "Acesso suspenso" }
 
 /** Cliente suspenso ou encerrado (docs/15, seção 6): mensagem clara, sem dados do cliente. */
 export default function Page() {
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md rounded-2xl border bg-card p-6 text-center shadow-[0_1px_2px_rgba(16,24,40,0.04)] sm:p-8">
-        <BrandLogo width={112} className="mx-auto mb-6" />
-        <h1 className="text-2xl font-bold tracking-tight">Acesso suspenso</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          O acesso da sua empresa à plataforma está suspenso no momento. Os dados das máquinas continuam sendo guardados. Fale com o
-          administrador da sua empresa ou com o suporte Engemase.
-        </p>
-        <Link href="/login" className="mt-6 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline">
+    <AuthShell>
+      <GlassCard>
+        <span
+          aria-hidden
+          className="mb-6 flex size-14 items-center justify-center rounded-2xl bg-[var(--state-stopped)]/15 text-[var(--state-stopped)] ring-1 ring-[var(--state-stopped)]/30"
+        >
+          <PauseIcon className="size-6" />
+        </span>
+        <AuthHeading
+          eyebrow="Conta Engemase OEE"
+          title="Acesso suspenso"
+          description="O acesso da sua empresa à plataforma está suspenso no momento. Os dados das máquinas continuam sendo guardados. Fale com o administrador da sua empresa ou com o suporte Engemase."
+        />
+        <Link
+          href="/login"
+          className="au-cta inline-flex h-11 w-full items-center justify-center gap-2 rounded-md text-base font-medium"
+        >
+          <ArrowLeftIcon className="size-4" aria-hidden />
           Voltar para o login
         </Link>
-      </div>
-    </main>
+      </GlassCard>
+    </AuthShell>
   )
 }

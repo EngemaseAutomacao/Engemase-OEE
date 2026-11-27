@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { EyeIcon, EyeOffIcon, Grid3x3Icon, LockIcon, MailIcon, ShieldCheckIcon, UserRoundIcon } from "lucide-react"
+import { ArrowRightIcon, EyeIcon, EyeOffIcon, Grid3x3Icon, LockIcon, MailIcon, ShieldCheckIcon, UserRoundIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -31,6 +31,14 @@ import { signInAction, type SignInResult, verifyTwoFactorAction } from "@/app/(a
 const PIN_MAX = 6
 const PIN_MIN = 4
 
+/** Visual das abas: sem fundo próprio quando ativas (o indicador deslizante faz esse papel). */
+const TRIGGER =
+  "relative z-10 h-full rounded-lg text-muted-foreground transition-colors duration-200 data-[state=active]:bg-transparent group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-transparent"
+/** Botão principal laranja (app/(auth)/auth.css): sobe 1 px no hover e a seta anda. */
+const CTA = "au-cta h-11 w-full text-base"
+/** Links de texto com área de toque de 44 px sem mudar o espaçamento. */
+const TEXT_LINK = "-my-3 inline-flex min-h-11 items-center rounded-sm font-medium text-primary underline-offset-4 hover:underline"
+
 /**
  * Formulário de login: e-mail/senha com o login real (Better Auth, via Server Actions de
  * app/(auth)/login/actions.ts), seguido do código do aplicativo autenticador quando a conta tem 2FA.
@@ -41,12 +49,20 @@ export function LoginForm({ operatorHref }: { operatorHref: string }) {
   const [tab, setTab] = useState("email")
   return (
     <Tabs value={tab} onValueChange={setTab} className="gap-6">
-      <TabsList className="grid h-11 w-full grid-cols-2">
-        <TabsTrigger value="email" className="h-full">
+      <TabsList className="relative grid h-12 w-full grid-cols-2 rounded-xl p-1">
+        {/* Indicador que desliza entre as abas (300 ms); as abas ficam transparentes por cima dele. */}
+        <span
+          aria-hidden
+          className={cn(
+            "absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-lg bg-background shadow-sm ring-1 ring-border transition-transform duration-300 ease-[cubic-bezier(0.2,0.7,0.2,1)] dark:bg-card dark:ring-white/10",
+            tab === "operator" && "translate-x-full",
+          )}
+        />
+        <TabsTrigger value="email" className={TRIGGER}>
           <MailIcon />
           E-mail e senha
         </TabsTrigger>
-        <TabsTrigger value="operator" className="h-full">
+        <TabsTrigger value="operator" className={TRIGGER}>
           <Grid3x3Icon />
           Operador
         </TabsTrigger>
@@ -126,7 +142,7 @@ function EmailLogin() {
   }
 
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-6">
+    <form onSubmit={submit} noValidate className="au-swap-left flex flex-col gap-6">
       <FieldGroup className="gap-5">
         <Field data-invalid={Boolean(errors.email)}>
           <FieldLabel htmlFor="login-email">E-mail</FieldLabel>
@@ -151,11 +167,7 @@ function EmailLogin() {
         <Field data-invalid={Boolean(errors.password)}>
           <div className="flex items-center justify-between gap-2">
             <FieldLabel htmlFor="login-password">Senha</FieldLabel>
-            <button
-              type="button"
-              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-              onClick={() => setForgotOpen(true)}
-            >
+            <button type="button" className={cn(TEXT_LINK, "text-sm")} onClick={() => setForgotOpen(true)}>
               Esqueci minha senha
             </button>
           </div>
@@ -186,9 +198,9 @@ function EmailLogin() {
           {errors.password && <FieldError>{errors.password}</FieldError>}
         </Field>
 
-        <div className="flex items-center gap-2.5">
+        <div className="-my-2 flex min-h-11 items-center gap-2.5">
           <Checkbox id="login-remember" checked={remember} onCheckedChange={(v) => setRemember(v === true)} />
-          <Label htmlFor="login-remember" className="font-normal">
+          <Label htmlFor="login-remember" className="min-h-11 font-normal">
             Manter conectado neste dispositivo
           </Label>
         </div>
@@ -200,12 +212,13 @@ function EmailLogin() {
         </p>
       )}
 
-      <Button type="submit" size="lg" className="h-11 w-full text-base" disabled={pending}>
+      <Button type="submit" size="lg" className={CTA} disabled={pending}>
         {pending && <Spinner aria-label="Carregando" />}
         {pending ? "Entrando…" : "Entrar"}
+        {!pending && <ArrowRightIcon className="au-arrow" aria-hidden />}
       </Button>
 
-      <Alert className="border-primary/20 bg-primary/5">
+      <Alert className="rounded-xl border-primary/20 bg-primary/5">
         <ShieldCheckIcon className="text-primary" />
         <AlertTitle>Verificação em duas etapas</AlertTitle>
         <AlertDescription>
@@ -256,8 +269,8 @@ function TwoFactorStep({ onDone, onBack }: { onDone: (result: SignInResult) => b
   }
 
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-6">
-      <Alert className="border-primary/20 bg-primary/5">
+    <form onSubmit={submit} noValidate className="au-swap-right flex flex-col gap-6">
+      <Alert className="rounded-xl border-primary/20 bg-primary/5">
         <ShieldCheckIcon className="text-primary" />
         <AlertTitle>Verificação em duas etapas</AlertTitle>
         <AlertDescription>
@@ -305,17 +318,18 @@ function TwoFactorStep({ onDone, onBack }: { onDone: (result: SignInResult) => b
         )}
         {error && <FieldError>{error}</FieldError>}
       </Field>
-      <Button type="submit" size="lg" className="h-11 w-full text-base" disabled={pending}>
+      <Button type="submit" size="lg" className={CTA} disabled={pending}>
         {pending && <Spinner aria-label="Carregando" />}
         {pending ? "Confirmando…" : "Confirmar"}
+        {!pending && <ArrowRightIcon className="au-arrow" aria-hidden />}
       </Button>
       <div className="flex items-center justify-between gap-2 text-sm">
-        <button type="button" className="font-medium text-primary underline-offset-4 hover:underline" onClick={onBack}>
+        <button type="button" className={TEXT_LINK} onClick={onBack}>
           Voltar
         </button>
         <button
           type="button"
-          className="font-medium text-primary underline-offset-4 hover:underline"
+          className={cn(TEXT_LINK, "text-right")}
           onClick={() => {
             setMethod((m) => (m === "totp" ? "backup" : "totp"))
             setCode("")
@@ -457,7 +471,7 @@ function OperatorLogin({ active, href }: { active: boolean; href: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="au-swap-right flex flex-col gap-5">
       <Field>
         <FieldLabel htmlFor="login-operator">Usuário</FieldLabel>
         <InputGroup className="h-14">
@@ -493,12 +507,12 @@ function OperatorLogin({ active, href }: { active: boolean; href: string }) {
             <div
               key={i}
               className={cn(
-                "flex h-14 items-center justify-center rounded-xl border-2 bg-card transition-colors",
+                "flex h-14 items-center justify-center rounded-xl border-2 bg-card transition-colors duration-200",
                 i < pin.length ? "border-primary" : "border-input",
                 i === pin.length && "border-primary/50 border-dashed",
               )}
             >
-              {i < pin.length && <span className="size-3.5 rounded-full bg-foreground" />}
+              {i < pin.length && <span className="au-dot-in size-3.5 rounded-full bg-foreground" />}
             </div>
           ))}
         </div>
@@ -511,9 +525,10 @@ function OperatorLogin({ active, href }: { active: boolean; href: string }) {
         </p>
       )}
 
-      <Button type="button" size="lg" className="h-14 w-full text-lg" onClick={submit} disabled={pending}>
+      <Button type="button" size="lg" className={cn(CTA, "h-14 text-lg")} onClick={submit} disabled={pending}>
         {pending && <Spinner aria-label="Carregando" />}
         {pending ? "Entrando…" : "Entrar"}
+        {!pending && <ArrowRightIcon className="au-arrow" aria-hidden />}
       </Button>
       <p className="text-center text-sm text-muted-foreground">Esqueceu o PIN? Peça ao supervisor do turno para gerar um novo.</p>
     </div>
