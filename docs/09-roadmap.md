@@ -81,7 +81,7 @@ gantt
 - **Templates de máquina** (incluindo o do bloco OEE padrão), importação de tags por CSV, **varredura Modbus** (unit ids e registradores).
 - Classificação automática por código de falha.
 - Relatórios: Pareto, MTBF/MTTR, tendências, exportação CSV/Excel.
-- **Alertas em canais externos** (e-mail e WhatsApp; Telegram só para a equipe Engemase, ver [13](13-notificacoes-e-alertas.md#canais)): máquina parada > X min, gateway offline, OEE abaixo da meta. Na Fase 1, esses alertas já aparecem na central do app.
+- **Alertas em canais externos** (e-mail; Telegram só para a equipe Engemase, ver [13](13-notificacoes-e-alertas.md#canais)): máquina parada > X min, gateway offline, OEE abaixo da meta. Na Fase 1, esses alertas já aparecem na central do app.
 - 2FA opcional para todos, conforme a decisão D14 ([17](17-backlog-e-pendencias.md#3-decisões)). A RLS no nível do cliente e o 2FA (opcional) já entram no MVP ([15](15-multi-cliente-e-acesso.md)).
 - **Acesso remoto (VPN) aos gateways** sob demanda, com aprovação do cliente e auditoria ([12](12-acesso-remoto-vpn.md)), depois da PoC com o Tailscale.
 - **Web Push** e escalonamento por e-mail ([13](13-notificacoes-e-alertas.md)); app instalável (PWA).

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { BellIcon, BellRingIcon, CheckCheckIcon, CircleCheckIcon, LockIcon, MailIcon, MessageCircleIcon, ShieldAlertIcon, SlidersHorizontalIcon, SmartphoneIcon } from "lucide-react"
+import { BellIcon, BellRingIcon, CheckCheckIcon, CircleCheckIcon, LockIcon, MailIcon, ShieldAlertIcon, SlidersHorizontalIcon, SmartphoneIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
@@ -61,7 +61,6 @@ function ChannelSummary({ activeDevices, email, onAdjust }: { activeDevices: num
       status: activeDevices > 0 ? ("on" as const) : ("off" as const),
     },
     { icon: MailIcon, tone: "navy" as const, title: "E-mail", text: email, status: "on" as const },
-    { icon: MessageCircleIcon, tone: "orange" as const, title: "WhatsApp", text: "Escalonamento de críticos", status: "soon" as const },
   ]
   return (
     <SectionCard
@@ -83,7 +82,6 @@ function ChannelSummary({ activeDevices, email, onAdjust }: { activeDevices: num
             </span>
             {r.status === "on" && <span className="rounded-full bg-state-running/12 px-2 py-px text-[11px] font-semibold text-state-running">Ligado</span>}
             {r.status === "off" && <span className="rounded-full bg-muted px-2 py-px text-[11px] font-semibold text-muted-foreground">Desligado</span>}
-            {r.status === "soon" && <span className="rounded-full bg-[#e96549]/12 px-2 py-px text-[11px] font-semibold text-[#cf5539]">Em breve</span>}
           </li>
         ))}
       </ul>

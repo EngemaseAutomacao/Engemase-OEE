@@ -94,7 +94,7 @@ export function ProfileForm({ name: initialName, email: initialEmail, roleLabel 
               value={form.phone}
               onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
             />
-            <p className="text-xs text-muted-foreground">Usado para alertas por WhatsApp quando o canal for liberado.</p>
+            <p className="text-xs text-muted-foreground">Usado só para o suporte falar com você, se precisar.</p>
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor={`${uid}-role`}>Papel</Label>

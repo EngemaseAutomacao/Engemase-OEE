@@ -358,7 +358,7 @@ export function StepAdmin({ data, errors, patch, ctx }: { data: WizardData; erro
   const known = ctx.knownEmails.find((k) => k.email === data.adminEmail.trim().toLowerCase())
   return (
     <div className="flex flex-col gap-6">
-      <StepHeading icon={UserRoundCheckIcon} title="Primeiro admin do cliente" description="Essa pessoa gerencia unidades, máquinas e a equipe do cliente. O escopo é sempre o cliente inteiro." />
+      <StepHeading icon={UserRoundCheckIcon} title="Primeiro admin do cliente" description="Alguém do cliente, nunca da equipe Engemase: gerencia a equipe do cliente e aprova os pedidos de acesso remoto da Engemase. O escopo é sempre o cliente inteiro." />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField id="adminName" label="Nome completo" error={errors.adminName} className="sm:col-span-2">

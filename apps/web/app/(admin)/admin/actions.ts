@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { RESERVED_SLUGS, isValidCnpj, onlyDigits } from "@/components/admin/labels"
 import { atorDaEquipe, equipeNaAcao, type Resultado } from "@/lib/data/admin/acesso"
+import { ehEmailDaEngemase } from "@/lib/server/access/engemase-email"
 import type { MetadadosCliente } from "@/lib/data/admin/snapshot"
 import { getAuthDb } from "@/lib/server/db"
 import { authSettings } from "@/lib/server/auth/env"
@@ -65,7 +66,9 @@ export async function criarClienteAction(input: unknown): Promise<Resultado<Clie
 
   // A pessoa é achada pelo e-mail no servidor (revisão W11). Equipe Engemase não vira membro de cliente.
   const [existente] = await authDb.select({ id: user.id, role: user.role }).from(user).where(eq(user.email, email)).limit(1)
-  if (existente?.role != null && (PLATFORM_ROLES as readonly string[]).includes(existente.role)) {
+  // Nem conta da equipe, nem e-mail dos domínios da Engemase: o admin do cliente aprova o acesso remoto que a
+  // Engemase pede (docs/12), então ele tem de ser alguém do cliente.
+  if ((existente?.role != null && (PLATFORM_ROLES as readonly string[]).includes(existente.role)) || ehEmailDaEngemase(email)) {
     return { ok: false, mensagem: "Este e-mail é da equipe Engemase: use o e-mail de alguém do cliente.", problemas: [{ campo: "adminEmail", mensagem: "E-mail da equipe Engemase." }] }
   }
 

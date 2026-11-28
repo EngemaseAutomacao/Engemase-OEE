@@ -49,7 +49,7 @@ Legenda: **MVP** = Fase 1 · **F2** = Fase 2 · **F3** = Fase 3 (ver [roadmap](0
 | RF13 | Pareto de paradas, MTBF/MTTR, tendências, exportação CSV/Excel | F2 |
 | RF14 | Modo TV/Andon por linha, num terminal pareado ([15](15-multi-cliente-e-acesso.md)) | MVP |
 | RF15a | Alertas na central do app (máquina parada > X min, gateway offline, OEE abaixo da meta), ver [13](13-notificacoes-e-alertas.md) | MVP |
-| RF15b | Alertas em canais externos: push, e-mail, WhatsApp | F2 |
+| RF15b | Alertas em canais externos: push e e-mail | F2 |
 | RF16 | Atualização remota do gateway (OTA) | F2 |
 | RF17 | Templates de máquina (reaproveitar o mapeamento de tags) e importação de tags por CSV | F2 |
 | RF18 | Varredura de escravos/registradores Modbus pela web (ajuda no comissionamento) | F2 |

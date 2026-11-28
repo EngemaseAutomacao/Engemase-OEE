@@ -17,7 +17,7 @@ import type { IconTone } from "@/components/dashboard/icon-circle"
 /** Tipos de alerta mostrados nas preferências (inclui o operacional da equipe Engemase). */
 export type PrefAlertType = AlertType | "engemase_ops"
 
-export type Channel = "push" | "email" | "whatsapp"
+export type Channel = "push" | "email"
 
 export const ALERT_TYPE_META: Record<
   PrefAlertType,
@@ -93,15 +93,15 @@ export const PREF_ALERT_TYPES = Object.keys(ALERT_TYPE_META) as PrefAlertType[]
 
 /** Canais padrão sugeridos por tipo (a central no app é sempre ligada). */
 export const DEFAULT_CHANNELS: Record<PrefAlertType, Record<Channel, boolean>> = {
-  machine_fault: { push: true, email: true, whatsapp: false },
-  machine_stopped: { push: true, email: false, whatsapp: false },
-  machine_no_comm: { push: true, email: false, whatsapp: false },
-  gateway_offline: { push: true, email: true, whatsapp: false },
-  oee_below_target: { push: false, email: true, whatsapp: false },
-  unclassified_stops: { push: false, email: false, whatsapp: false },
-  remote_access_request: { push: true, email: true, whatsapp: false },
-  remote_access_session: { push: false, email: true, whatsapp: false },
-  engemase_ops: { push: true, email: false, whatsapp: false },
+  machine_fault: { push: true, email: true },
+  machine_stopped: { push: true, email: false },
+  machine_no_comm: { push: true, email: false },
+  gateway_offline: { push: true, email: true },
+  oee_below_target: { push: false, email: true },
+  unclassified_stops: { push: false, email: false },
+  remote_access_request: { push: true, email: true },
+  remote_access_session: { push: false, email: true },
+  engemase_ops: { push: true, email: false },
 }
 
 export const SEVERITY_META: Record<AlertSeverity, { label: string; tone: IconTone; badge: string; dot: string }> = {

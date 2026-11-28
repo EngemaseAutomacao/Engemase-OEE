@@ -1,7 +1,7 @@
 "use client"
 
 import { useId, useState } from "react"
-import { BellIcon, LockIcon, MailIcon, MessageCircleIcon, MoonStarIcon, RotateCcwIcon, SaveIcon, SmartphoneIcon } from "lucide-react"
+import { BellIcon, LockIcon, MailIcon, MoonStarIcon, RotateCcwIcon, SaveIcon, SmartphoneIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
@@ -39,13 +39,12 @@ const DAYS = [
   { v: "0", l: "Dom" },
 ]
 
-function ColHead({ icon: Icon, label, soon }: { icon: typeof BellIcon; label: string; soon?: boolean }) {
+function ColHead({ icon: Icon, label }: { icon: typeof BellIcon; label: string }) {
   return (
     <th scope="col" className="w-20 px-2 pb-2 text-center align-bottom font-medium">
       <span className="inline-flex flex-col items-center gap-1">
         <Icon className="size-4 text-muted-foreground" aria-hidden />
         <span className="text-xs">{label}</span>
-        {soon && <span className="rounded-full bg-[#e96549]/12 px-1.5 text-[10px] font-semibold text-[#cf5539]">em breve</span>}
       </span>
     </th>
   )
@@ -122,7 +121,7 @@ export function NotificationPreferences({
         {/* Tipos × canais */}
         <SectionCard
           title="O que receber e por onde"
-          description={`${activeCount} de ${visibleTypes.length} tipos ligados · a central no app recebe sempre; push, e-mail e WhatsApp são canais de entrega`}
+          description={`${activeCount} de ${visibleTypes.length} tipos ligados · a central no app recebe sempre; push e e-mail são canais de entrega`}
           className="xl:col-span-8"
         >
           <div className="-mx-5 overflow-x-auto px-5">
@@ -138,7 +137,6 @@ export function NotificationPreferences({
                   <ColHead icon={BellIcon} label="Central" />
                   <ColHead icon={SmartphoneIcon} label="Push" />
                   <ColHead icon={MailIcon} label="E-mail" />
-                  <ColHead icon={MessageCircleIcon} label="WhatsApp" soon />
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -181,9 +179,6 @@ export function NotificationPreferences({
                       <td className="px-2 text-center">
                         <Checkbox checked={p.on && p.email} disabled={!p.on} onCheckedChange={(v) => setType(t, { email: v === true })} aria-label={`E-mail para ${meta.label}`} />
                       </td>
-                      <td className="px-2 text-center">
-                        <Checkbox checked={false} disabled aria-label={`WhatsApp para ${meta.label} (em breve)`} />
-                      </td>
                     </tr>
                   )
                 })}
@@ -191,8 +186,8 @@ export function NotificationPreferences({
             </table>
           </div>
           <p className="mt-3 rounded-xl bg-muted/60 p-3 text-xs text-muted-foreground">
-            <b className="text-foreground">Escalonamento:</b> alerta crítico sem reconhecimento em 15 min sobe para o próximo nível (supervisor → gerente). O WhatsApp entra
-            nessa etapa quando for liberado, com modelos aprovados e seu consentimento.
+            <b className="text-foreground">Escalonamento:</b> alerta crítico sem reconhecimento em 15 min sobe para o próximo nível (supervisor → gerente), por push e
+            e-mail.
           </p>
         </SectionCard>
 

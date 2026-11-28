@@ -4,7 +4,7 @@ Alertas avisam as pessoas certas quando algo exige ação: máquina parada há m
 
 ## Princípios
 
-1. **A central de notificações (o sino) é a fonte da verdade.** O push não chega em todo lugar (iPhone só com o app instalado, desktop só com o navegador aberto, modo "Não perturbe" silencia). Todo alerta fica na central; push, e-mail e WhatsApp são **canais de entrega**.
+1. **A central de notificações (o sino) é a fonte da verdade.** O push não chega em todo lugar (iPhone só com o app instalado, desktop só com o navegador aberto, modo "Não perturbe" silencia). Todo alerta fica na central; push e e-mail são **canais de entrega**.
 2. **Push próprio (Web Push padrão):** Push API + Service Worker + chaves VAPID, envio pelas próprias Vercel Functions com a biblioteca `web-push`, inscrições no Neon. Sem custo por mensagem e sem terceiros.
 3. **Respeitar o escopo:** ninguém recebe alerta de máquina que não pode ver (cliente e unidades do usuário).
 4. **Anti-spam é requisito.** Duração mínima, histerese, deduplicação, agrupamento, horário de silêncio e escalonamento. O Chrome revoga a permissão e limita a taxa de sites que mandam muitas notificações ignoradas.
@@ -36,9 +36,9 @@ Limitações que afetam o desenho:
 | **Central no app (sino)** | Sempre | — |
 | **Web Push** | Tempo real para quem está fora da tela | Gratuito |
 | **E-mail (Resend)** | Resumos (turno/dia), escalonamento, gateway offline para a TI do cliente | Plano a confirmar |
-| **WhatsApp Cloud API** | Escalonamento de **crítico sem reconhecimento** (F2b) | ~R$ 0,035 por mensagem de utilidade (confirmar com a Meta); exige templates aprovados e opt-in |
 | **Telegram** | Equipe interna Engemase (frota de gateways) | Gratuito |
-| SMS | Último nível, só se contratado | Cotação |
+
+WhatsApp: não será canal de alerta (decisão de 28/11/2026).
 
 ## Catálogo inicial de alertas (presets por cliente)
 
@@ -63,12 +63,12 @@ Falta no modelo atual uma **meta de OEE** por máquina/linha (`oee_target`), que
 - **Histerese:** só resolve depois de a condição sumir por um tempo mínimo, para não "piscar".
 - **Agrupamento:** várias máquinas paradas na mesma linha viram uma notificação.
 - **Horário de silêncio** por usuário, exceto para críticos se o usuário optar.
-- **Escalonamento:** crítico sem reconhecimento em N min → próximo nível (supervisor → gerente; push → e-mail → WhatsApp).
+- **Escalonamento:** crítico sem reconhecimento em N min → próximo nível (supervisor → gerente; push → e-mail).
 - **Reconhecer** pela própria notificação (botão no Chrome/Edge; nos outros, abre a tela do alerta) ou pela central.
 
 ## Preferências do usuário
 
-Por usuário: quais tipos de alerta, quais unidades/linhas/máquinas (dentro do seu escopo), canais (push, e-mail, WhatsApp), horário de silêncio e **dispositivos inscritos** (lista com nome do aparelho, data e botão "remover").
+Por usuário: quais tipos de alerta, quais unidades/linhas/máquinas (dentro do seu escopo), canais (push, e-mail), horário de silêncio e **dispositivos inscritos** (lista com nome do aparelho, data e botão "remover").
 
 Botão **"Ativar notificações neste dispositivo"** no perfil e no sino: explica o benefício, pede a permissão, registra a inscrição e envia uma notificação de teste. No iPhone/iPad, mostra antes o passo a passo de instalar o app na Tela de Início.
 
@@ -101,9 +101,9 @@ Botão **"Ativar notificações neste dispositivo"** no perfil e no sino: explic
 
 - **MVP:** central de notificações (sino) e página de alertas, com os alertas avaliados pelo cron; preferências básicas.
 - **F2a:** Web Push (Chrome/Edge/Firefox/Android + iPhone com app instalado), escalonamento e resumos por e-mail, reconhecimento, dispositivos inscritos.
-- **F2b:** WhatsApp (templates aprovados, opt-in), Telegram para a equipe Engemase, agrupamentos avançados.
-- **F3:** webhooks, Slack/Teams na API pública, SMS sob demanda.
+- **F2b:** Telegram para a equipe Engemase, agrupamentos avançados.
+- **F3:** webhooks, Slack/Teams na API pública.
 
 ## A confirmar
 
-Tabela oficial de preços do WhatsApp em BRL · plano do Resend para contas novas · limites de taxa do Chrome · push/tela sempre ligada em Smart TV e iPadOS recente · versão estável da biblioteca `web-push`.
+Plano do Resend para contas novas · limites de taxa do Chrome · push/tela sempre ligada em Smart TV e iPadOS recente · versão estável da biblioteca `web-push`.

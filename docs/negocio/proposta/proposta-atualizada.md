@@ -21,7 +21,7 @@ O que mudou é o *como*. Em um ano de planejamento, a proposta virou um projeto 
 - **Ao vivo:** estado de cada máquina, OEE do turno e linha do tempo de paradas, com atualização a cada poucos segundos.
 - **TV Andon** na linha e **tela do operador** no tablet, para classificar paradas, lançar refugo e trocar produto.
 - **Relatórios:** OEE por máquina, linha e unidade, Pareto de paradas e histórico. Exportação em CSV (abre direto no Excel).
-- **Alertas:** central no app e notificações push. E-mail e WhatsApp entram na Fase 2.
+- **Alertas:** central no app e notificações push. E-mail entra na Fase 2.
 - **Marca do cliente:** cores e logotipo por cliente, tema claro, escuro ou automático.
 - **Segurança:** cada cliente vê só os próprios dados, com acesso de cada pessoa por unidade ou por máquina, 2FA para administradores e auditoria de tudo.
 
@@ -101,7 +101,7 @@ Com acompanhamento semanal, atualizado às sextas-feiras, no [status do projeto]
 | Fase 0: fundação | Contrato gateway ↔ nuvem, cálculo do OEE, banco com isolamento por cliente, API real dos gateways, agente do gateway revisado, simulador de CLP, pacote de instalação, imagem do sistema e CI. Teste de ponta a ponta (simulador → gateway → nuvem → banco) passando | **Código pronto** (12/11/2026). Faltam contas na nuvem e a bancada |
 | Fase 1: MVP | Login real, cadastros, telas com dados reais, alertas no app, gateway instalável com atualização remota, testes de 72 h na bancada | ~15 semanas a partir de 16/11/2026 |
 | Piloto | 1 linha de 1 cliente por 2 semanas, com OEE conferido contra planilha (até 0,5 ponto de diferença) e contagem de peças igual à do CLP | **Semanas 14 a 16:** meados de fevereiro a início de março de 2027 |
-| Fase 2: produto | S7comm e EtherNet/IP nativos, alertas por e-mail e WhatsApp, acesso remoto por VPN, relatórios avançados (MTBF/MTTR), editor de marca | ~8 semanas depois do piloto |
+| Fase 2: produto | S7comm e EtherNet/IP nativos, alertas por e-mail, acesso remoto por VPN, relatórios avançados (MTBF/MTTR), editor de marca | ~8 semanas depois do piloto |
 | Fase 3: escala | API pública e integração com ERP/MES, ordens de produção, módulos de manutenção e qualidade | ~10 semanas |
 
 **Premissa do prazo:** 2 desenvolvedores (um na web, um no gateway). Com uma pessoa só, em tempo parcial, o piloto passa para o segundo semestre de 2027. A trilha do gateway é o caminho crítico.

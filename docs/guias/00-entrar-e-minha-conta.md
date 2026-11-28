@@ -68,7 +68,6 @@ O sino, no alto da tela, é a **central**: ela guarda todos os alertas (falha de
   - **iPhone e iPad (iOS 16.4 ou mais novo):** abra no Safari, toque em "Compartilhar" › "Adicionar à Tela de Início" e abra a plataforma pelo ícone criado. Sem isso o iPhone não recebe push.
   - **Computador:** chega com o navegador aberto (pode estar minimizado).
 - **Preferências** (em "Minha conta" › "Notificações"): de quais máquinas receber, por quais canais (central, push, e-mail), horário de silêncio e resumos por e-mail. Falha de máquina e gateway offline chegam a qualquer hora, mesmo no silêncio.
-- **WhatsApp:** em breve.
 
 Você só recebe alertas das máquinas que pode ver.
 

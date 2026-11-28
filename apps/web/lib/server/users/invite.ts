@@ -35,6 +35,7 @@ import {
   unit,
   user,
 } from "@engemase/db"
+import { ehEmailDaEngemase } from "@/lib/server/access/engemase-email"
 import { and, count, eq, inArray, isNull, sql } from "drizzle-orm"
 import { z } from "zod"
 import { assertPermission, type TenantContext } from "@/lib/server/access/context"
@@ -186,7 +187,7 @@ export async function inviteMember(deps: UsersDeps, ctx: TenantContext, raw: unk
     .from(user)
     .where(sql`lower(${user.email}) = ${input.email}`)
     .limit(1)
-  if (found !== undefined && found.role !== null && (PLATFORM_ROLES as readonly string[]).includes(found.role)) {
+  if ((found !== undefined && found.role !== null && (PLATFORM_ROLES as readonly string[]).includes(found.role)) || ehEmailDaEngemase(input.email)) {
     return { status: "error", code: "refused", message: "Pessoas da equipe Engemase não entram como usuários do cliente." }
   }
   if (found?.banned === true) return { status: "error", code: "refused", message: GENERIC_REFUSAL }

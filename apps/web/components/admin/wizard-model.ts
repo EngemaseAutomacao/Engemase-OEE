@@ -1,6 +1,7 @@
 /**
  * Modelo do assistente "Novo cliente" (docs/15 §7): estado, valores iniciais e validação por passo.
  */
+import { ehEmailDaEngemase } from "@/lib/server/access/engemase-email"
 import type { ClientPlan } from "@/lib/mock/types"
 import { PLAN_DEFAULTS, RESERVED_SLUGS, isEmail, isValidCnpj, onlyDigits, type PlanLimits } from "./labels"
 
@@ -36,7 +37,8 @@ export interface WizardContext {
   usedSlugs: string[]
   usedCnpjs: string[]
   knownEmails: { email: string; name: string; clients: string[] }[]
-  engemaseDomain: string
+  /** Domínios de e-mail da Engemase (ENGEMASE_EMAIL_DOMAINS no servidor): nunca o primeiro admin de um cliente. */
+  engemaseDomains: string[]
 }
 
 export const INITIAL_DATA: WizardData = {
@@ -114,7 +116,8 @@ export function validateAdmin(d: WizardData, ctx: WizardContext): WizardErrors {
   const email = d.adminEmail.trim().toLowerCase()
   if (!email) e.adminEmail = "Informe o e-mail."
   else if (!isEmail(email)) e.adminEmail = "E-mail inválido."
-  else if (email.endsWith(`@${ctx.engemaseDomain}`)) e.adminEmail = "Use o e-mail de alguém do cliente: a equipe Engemase não vira membro dos clientes."
+  else if (ehEmailDaEngemase(email, ctx.engemaseDomains))
+    e.adminEmail = "Use o e-mail de alguém do cliente: é o admin que aprova o acesso remoto da Engemase, então não pode ser da equipe Engemase."
   return e
 }
 

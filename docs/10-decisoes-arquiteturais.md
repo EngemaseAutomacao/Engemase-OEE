@@ -205,7 +205,7 @@ Registro curto das decisões. Para mudar uma decisão, adicione uma nova ADR que
 
 **Contexto.** O dono do produto quer notificações push. O push não chega em todos os aparelhos (iPhone só com o app instalado; desktop só com o navegador aberto) e o chão de fábrica precisa de alertas confiáveis.
 
-**Decisão.** **Central de notificações no app** como fonte da verdade; **Web Push padrão** (VAPID, biblioteca `web-push`, envio pelas Vercel Functions, inscrições no Neon) como canal; e-mail para resumos e escalonamento; WhatsApp para escalonamento de críticos na F2b. Alertas avaliados na ingestão e por cron de 1 minuto, com deduplicação, histerese, agrupamento, horário de silêncio e escalonamento. Detalhes em [13](13-notificacoes-e-alertas.md).
+**Decisão.** **Central de notificações no app** como fonte da verdade; **Web Push padrão** (VAPID, biblioteca `web-push`, envio pelas Vercel Functions, inscrições no Neon) como canal; e-mail para resumos e escalonamento (WhatsApp não será canal de alerta, decisão de 28/11/2026). Alertas avaliados na ingestão e por cron de 1 minuto, com deduplicação, histerese, agrupamento, horário de silêncio e escalonamento. Detalhes em [13](13-notificacoes-e-alertas.md).
 
 **Alternativas.** Firebase Cloud Messaging, OneSignal, Novu, Knock, Courier: úteis em escala ou para apps nativos, mas adicionam dependência e custo sem necessidade agora.
 

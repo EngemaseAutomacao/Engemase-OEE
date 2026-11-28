@@ -185,6 +185,19 @@ describe("usuários do cliente: convite, definir senha, reenvio e 2FA", () => {
       expect(result).toMatchObject({ status: "error", code: "refused" })
     })
 
+    it("e-mail dos domínios da Engemase também não, mesmo sem conta (nem como admin pelo super admin)", async () => {
+      const ctx = await ctxOf(a.slug, a.admin)
+      expect(await inviteMember(deps(), ctx, { email: "novo.tecnico@engemase.com.br", name: "Novo Técnico", role: "viewer", scope: "all" })).toMatchObject({
+        status: "error",
+        code: "refused",
+      })
+      const sup = await ctxOf(b.slug, superAdmin)
+      expect(await inviteMember(deps(), sup, { email: "alguem@filial.engemase.com.br", name: "Alguém", role: "client_admin", scope: "all" })).toMatchObject({
+        status: "error",
+        code: "refused",
+      })
+    })
+
     it("super admin convida (primeiro admin do cliente) e aparece como Engemase na auditoria", async () => {
       const ctx = await ctxOf(b.slug, superAdmin)
       const result = await inviteMember(deps(), ctx, { email: "admin2@beta.test", name: "Admin 2", role: "client_admin", scope: "all" })

@@ -59,7 +59,6 @@ O mínimo de 5 máquinas segue o mercado (a FourJaw exige 5 em todos os planos) 
 | Central de notificações no app (MVP) | ✓ | ✓ | ✓ |
 | Web Push no celular e no computador (F2a) | ✓ | ✓ | ✓ |
 | Escalonamento e resumos por e-mail (F2a) | — | ✓ | ✓ |
-| WhatsApp para crítico sem reconhecimento (F2b) | — | Adicional | ✓ até ___ mensagens/mês |
 | **Pessoas e acesso** | | | |
 | Usuários incluídos (padrão do console) | 15 | 30 | 100 |
 | Escopo por cliente, unidades ou máquinas (MVP, D11) | ✓ | ✓ | ✓ |
@@ -183,7 +182,6 @@ Valores a definir pelo dono do produto. As faixas saem da base de custo (seção
 | Mensalidade por máquina | R$ ___ | R$ ___ | R$ ___ | Starter R$ 200–260 · Pro R$ 280–380 · Enterprise R$ 360–480 (antes dos descontos). Todas começam no piso com hardware da seção 10 ou acima dele |
 | Terminal adicional, por mês | R$ ___ | R$ ___ | R$ ___ | R$ 40–80 (seção 8.2: a TV é o maior custo de nuvem) |
 | Bloco de 10 usuários a mais, por mês | R$ ___ | R$ ___ | R$ ___ | R$ 50–100 |
-| WhatsApp, por mês (F2b) | — | R$ ___ | Incluído até ___ | Custo da Meta ~R$ 0,035 por mensagem de utilidade ([docs/13](../13-notificacoes-e-alertas.md#canais)) |
 | API pública e webhooks, por mês (F3) | — | R$ ___ | Incluído | — |
 | Gateway reserva no local, por mês | — | — | R$ ___ | Custo do kit em 36 meses + margem (seção 7) |
 

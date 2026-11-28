@@ -302,7 +302,6 @@ Consultado em 12/11/2026. **Todos os itens [CONFIRMAR] precisam ser conferidos n
 | Serviço | Quando | Dados |
 |---|---|---|
 | Armazenamento da cópia lógica externa do banco ([docs/06](../../06-banco-de-dados.md#backup-e-recuperação)) [DECIDIR o fornecedor e a região] | Fase 1 | Todos os dados do Apêndice 1, com o prazo máximo da cláusula 14.2 |
-| WhatsApp Cloud API (Meta Platforms) para alertas | Fase 2b | Telefone e nome de quem recebe alertas |
 
 ## Apêndice 4 — Contatos
 

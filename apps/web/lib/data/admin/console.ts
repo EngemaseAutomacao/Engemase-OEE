@@ -13,6 +13,7 @@ import { buildRemoteAccess } from "@/components/admin-ops/remote-data"
 import { buildTeam } from "@/components/admin-ops/team-data"
 import { ago, initials } from "@/lib/format"
 import { PLATFORM_ROLE_LABEL } from "@/lib/roles"
+import { dominiosDaEngemase } from "@/lib/server/access/engemase-email"
 import { usarBanco } from "../fonte"
 import { exigirEquipe } from "./acesso"
 import { getAuthDb } from "@/lib/server/db"
@@ -125,7 +126,6 @@ export async function dadosAcessoRemoto() {
 export async function dadosNovoCliente(): Promise<WizardContext> {
   const r = await repositorioDoConsole()
   const clients = r.getClients()
-  const me = r.getCurrentUser()
   return {
     usedSlugs: clients.map((c) => c.slug),
     usedCnpjs: clients.map((c) => onlyDigits(c.cnpj)).filter((c) => c !== ""),
@@ -137,6 +137,6 @@ export async function dadosNovoCliente(): Promise<WizardContext> {
         name: u.name,
         clients: u.memberships.map((m) => clients.find((c) => c.id === m.clientId)?.name ?? m.clientId),
       })),
-    engemaseDomain: me.email?.split("@")[1] ?? "engemase.com.br",
+    engemaseDomains: dominiosDaEngemase(),
   }
 }

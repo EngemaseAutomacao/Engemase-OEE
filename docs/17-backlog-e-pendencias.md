@@ -101,7 +101,7 @@ Em 12/11/2026 o dono do produto decidiu D1, D5, D6, D7, D11, D12, D13, D26, D28 
 | D30 | Página local no MVP | **Sim, reduzida** | Comissionar sem internet |
 | D31 | Mudança de rede pela nuvem | **F2**; no MVP, só local | Risco de perder um gateway remoto |
 | D32 | VPN | **Tailscale Standard** depois da PoC; NetBird self-hosted como plano B | Menor esforço; plano B se a residência de dados exigir |
-| D33 | WhatsApp e SMS | **WhatsApp na F2b**; SMS não | Canal que o chão de fábrica usa; SMS caro e pouco lido |
+| D33 | WhatsApp e SMS | **Não** (decidido em 28/11/2026) | Alertas pelo app, push e e-mail |
 | D34 | Subdomínio por cliente e white label | **F3** | Depende de domínio próprio (D28) |
 | D35 | Escala do primeiro ano | Contas para **100 máquinas**; meta de **500** | Define os planos da Neon e da Vercel |
 | D36 | Prazo | **Aceita:** reforço parcial + corte de MVP; piloto nas semanas 14 a 16 (meados de fevereiro a início de março de 2027) | — |

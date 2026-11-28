@@ -74,7 +74,7 @@
 - **Finalidade:** avisar as pessoas certas sobre máquinas paradas, falhas, gateway offline e outros eventos.
 - **Dados:** notificações (destinatário, título, texto, lida em), preferências, inscrições de push (endereço do serviço, chaves, aparelho), tentativas de entrega.
 - **Sistema:** `notification`, `notification_delivery`, `notification_preference`, `push_subscription`, `alert_event`.
-- **Compartilhamento:** Vercel, Neon; serviços de push dos navegadores (conteúdo cifrado); Resend (e-mail, Fase 2); WhatsApp (Fase 2b, a incluir).
+- **Compartilhamento:** Vercel, Neon; serviços de push dos navegadores (conteúdo cifrado); Resend (e-mail, Fase 2).
 
 **OP-05 · E-mails de alertas e resumos (Fase 2)**
 - **Finalidade:** alertas, escalonamentos e resumos por e-mail. Os e-mails de conta (definir e redefinir senha) e de contrato são da Engemase (CT-01 e CT-04).
